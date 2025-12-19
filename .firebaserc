@@ -1,0 +1,25 @@
+{
+  "projects": {
+    "default": "sebratel-hub"
+  },
+  "targets": {
+    "sebratel-hub": {
+      "hosting": {
+        "hub": [
+          "sebratel-hub"
+        ],
+        "splitters": [
+          "app-splitters-sebratel-ceb1f"
+        ]
+      }
+    },
+    "splitters": {
+      "hosting": {
+        "splitters": [
+          "app-splitters-sebratel-ceb1f"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
