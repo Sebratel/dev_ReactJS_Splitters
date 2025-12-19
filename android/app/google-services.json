@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "184476298837",
+    "project_id": "sebratel-hub",
+    "storage_bucket": "sebratel-hub.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184476298837:android:c5147e94af6b24988deedc",
+        "android_client_info": {
+          "package_name": "app.splitter.sebratel"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "184476298837-h43t4aucvq26nrrfidjotjg4pej0k2md.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsUKtkL7mAjYUuR7qw3r1D5CxDgDBsu7g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "184476298837-h43t4aucvq26nrrfidjotjg4pej0k2md.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "184476298837-mamgh8rdaa06tlghpkttni37costh4jk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184476298837:android:397e1dca50a7057b8deedc",
+        "android_client_info": {
+          "package_name": "com.sebratel.hub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "184476298837-tu2lj33na2qvd9e0uek9rfgd5hf3oesn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sebratel.hub",
+            "certificate_hash": "317e163f10e6eecc66994c77737a943ac330043b"
+          }
+        },
+        {
+          "client_id": "184476298837-h43t4aucvq26nrrfidjotjg4pej0k2md.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsUKtkL7mAjYUuR7qw3r1D5CxDgDBsu7g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "184476298837-h43t4aucvq26nrrfidjotjg4pej0k2md.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "184476298837-mamgh8rdaa06tlghpkttni37costh4jk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
