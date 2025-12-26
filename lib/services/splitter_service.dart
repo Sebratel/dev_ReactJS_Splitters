@@ -7,6 +7,8 @@ import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class SplitterService {
   final AuthService auth;
@@ -53,6 +55,14 @@ class SplitterService {
   bool _isExpired(DateTime? at) {
     if (at == null) return true;
     return DateTime.now().isAfter(at.add(cacheTtl));
+  }
+
+  bool clientesCacheValido() {
+    final updatedAt = boxClientesIndex.get("updatedAt") as int?;
+    if (updatedAt == null) return false;
+
+    final lastUpdate = DateTime.fromMillisecondsSinceEpoch(updatedAt);
+    return DateTime.now().difference(lastUpdate) < cacheTtl;
   }
 
   Future<http.Response> _authedGet(String url) async {
@@ -147,10 +157,12 @@ class SplitterService {
       final end = min(start + chunkSize, total);
       final slice = all.sublist(start, end);
 
-      // salva chunk
-      final box = await Hive.openBox(_chunkBoxName(i));
-      await box.put("data", slice);
-      await box.close();
+      // salva chunk APENAS em debug (evita IO pesado em produção)
+      if (kDebugMode) {
+        final box = await Hive.openBox(_chunkBoxName(i));
+        await box.put("data", slice);
+        await box.close();
+      }
 
       // processa índice global + ocupação
       for (final m in slice) {
@@ -189,6 +201,9 @@ class SplitterService {
     // salvar índice global
     clientesPorSplitterCache = indexTemp;
     await boxClientesPorSplitter.put("map", indexTemp);
+
+    final box = Hive.box(_boxClientesIndex);
+    debugPrint('📦 HIVE clientes_index keys: ${box.keys}');
 
     return total;
   }
@@ -272,5 +287,64 @@ class SplitterService {
     return clientesPorSplitterCache.map(
       (k, v) => MapEntry(k, v.length),
     );
+  }
+
+  Future<String?> getStreetFromLatLng(double lat, double lng) async {
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=$lat&lon=$lng&format=json&addressdetails=1',
+      );
+
+      final response = await http.get(
+        url,
+        headers: {
+          // 🔥 obrigatório para o Nominatim
+          'User-Agent': 'NexaView/1.0 (contato@sebratel.com.br)',
+        },
+      );
+
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final address = data['address'] as Map<String, dynamic>?;
+
+      if (address == null) return null;
+
+      // Prioridade de retorno
+      return address['road'] ??
+          address['street'] ??
+          address['pedestrian'] ??
+          address['residential'];
+    } catch (e) {
+      debugPrint('❌ Erro ao resolver endereço: $e');
+      return null;
+    }
+  }
+
+  /// Retorna o índice completo de clientes por splitter
+  /// Map<splitterCode, List<ClienteModel>>
+  Map<String, List<ClienteModel>> getClientesIndex() {
+    final box = Hive.box(boxClientesPorSplitter.name);
+
+    final raw = box.get("map");
+    if (raw is! Map) return {};
+
+    final Map<String, List<ClienteModel>> result = {};
+
+    raw.forEach((key, value) {
+      if (value is List) {
+        result[key.toString()] = value
+            .whereType<Map>()
+            .map(
+              (e) => ClienteModel.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+      }
+    });
+
+    return result;
   }
 }

@@ -26,6 +26,7 @@ dependencies:
   google_maps_flutter: ^2.14.0
   flutter_map: ^6.1.0
   latlong2: ^0.9.1
+  flutter_svg: ^2.0.10
 
 dev_dependencies:
   flutter_test:
@@ -36,15 +37,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/icons/logo_icon2.jpeg
-    - assets/animations/notFound.json
-    - assets/animations/notClients.json
-    - assets/icons/logo-circular-sebratel.png
-
+    - assets/icons/
+    - assets/animations/
+    - assets/images/
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/icons/logo_icon2.jpeg
+  image_path: assets/icons/logo-sebratel.png
   remove_alpha_ios: true
   

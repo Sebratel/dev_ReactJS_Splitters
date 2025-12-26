@@ -1,20 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:nexaview/models/address_model.dart';
+import 'package:nexaview/models/olt_model.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/models/cliente_model.dart';
+import 'package:nexaview/services/geocoding_service.dart';
 import 'package:nexaview/widgets/cliente_card.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter_map/flutter_map.dart' as osm;
 import 'package:latlong2/latlong.dart';
+import 'package:nexaview/services/splitter_service.dart';
+import 'package:nexaview/services/olt_service.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class SplitterDetailPage extends StatefulWidget {
   final SplitterModel splitter;
   final List<ClienteModel> clientes;
+  final OltModel? olt; // 👈 ESTE CAMPO TEM QUE EXISTIR
+  final List<SplitterModel> allSplitters;
+  final SplitterService splitterService;
+  final OltService oltService;
+  final Map<String, int> ocupacaoSnapshot;
 
   const SplitterDetailPage({
     super.key,
     required this.splitter,
     required this.clientes,
+    this.olt, // 👈 ESTE PARÂMETRO TEM QUE EXISTIR
+    required this.allSplitters, // 👈 NOVO
+    required this.splitterService, // 👈 NOVO
+    required this.oltService, // 👈 NOVO
+    required this.ocupacaoSnapshot, // 👈 AQUI
   });
 
   @override
@@ -25,16 +41,97 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
   late final double? lat;
   late final double? lng;
   late final bool hasValidLocation;
+  late final osm.MapController _mapController;
+  late final GeocodingService _geoService;
+  AddressModel? _address;
+  bool _loadingAddress = true;
 
   @override
   void initState() {
     super.initState();
+    _mapController = osm.MapController();
+    _geoService = GeocodingService();
+    _loadAddress();
 
     lat = double.tryParse(widget.splitter.latitude);
     lng = double.tryParse(widget.splitter.longitude);
     hasValidLocation = lat != null && lng != null;
 
     debugPrint('LAT: "$lat" | LNG: "$lng"');
+  }
+
+  final Distance _distance = const Distance();
+
+  bool _isWithinRadius({
+    required double lat1,
+    required double lng1,
+    required double lat2,
+    required double lng2,
+    required double radiusInMeters,
+  }) {
+    final meters = _distance(
+      LatLng(lat1, lng1),
+      LatLng(lat2, lng2),
+    );
+    return meters <= radiusInMeters;
+  }
+
+  void _fitMapBounds(double splitterLat, double splitterLng, OltModel? olt) {
+    if (olt?.lat == null || olt?.lng == null) return;
+
+    final bounds = osm.LatLngBounds(
+      LatLng(splitterLat, splitterLng),
+      LatLng(olt!.lat!, olt.lng!),
+    );
+
+    _mapController.fitCamera(
+      osm.CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(60),
+        maxZoom: 17,
+        minZoom: 12,
+      ),
+    );
+  }
+
+  Future<void> _loadAddress() async {
+    if (!widget.splitter.hasLocation) {
+      setState(() => _loadingAddress = false);
+      return;
+    }
+
+    final result = await _geoService.resolveAddress(
+      splitterCode: widget.splitter.code,
+      lat: widget.splitter.lat!,
+      lng: widget.splitter.lng!,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _address = result;
+      _loadingAddress = false;
+    });
+  }
+
+  Color _getSplitterColor(SplitterModel splitter) {
+    final ocupacao = widget.ocupacaoSnapshot[splitter.code] ?? 0;
+    final totalPortas = splitter.outPorts;
+
+    if (totalPortas == 0) {
+      return Colors.grey;
+    }
+
+    final percentual = (ocupacao / totalPortas) * 100;
+
+    if (percentual >= 90) {
+      return Colors.redAccent; // 🔴 crítico
+    }
+    if (percentual >= 70) {
+      return Colors.orangeAccent; // 🟠 atenção
+    }
+
+    return Colors.green; // 🟢 ok
   }
 
   Widget _portaVazia(int porta, bool isDark) {
@@ -105,6 +202,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final OltModel? olt = widget.olt;
+    final hasOltLocation = olt?.lat != null && olt?.lng != null;
 
     // 🔹 CORES DO HEADER
     final headerBg = const Color.fromARGB(255, 255, 174, 0);
@@ -164,16 +263,38 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
       // ================= HEADER =================
       appBar: AppBar(
         elevation: 0,
-        toolbarHeight: 92,
+        toolbarHeight: 120,
         backgroundColor: Colors.transparent,
         foregroundColor: headerText,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            color: headerBg,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(22),
-              bottomRight: Radius.circular(22),
-            ),
+        automaticallyImplyLeading: true,
+        flexibleSpace: ClipRRect(
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(22),
+            bottomRight: Radius.circular(22),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 🖼️ IMAGEM DE FUNDO
+              Image.asset(
+                'assets/images/sebratelimagem.jpg', // 👈 troque se quiser
+                fit: BoxFit.cover,
+              ),
+
+              // 🎨 OVERLAY TRANSLÚCIDO (COR DO HEADER)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
+                      const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         title: Column(
@@ -184,48 +305,77 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
               "Splitter",
               style: TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color:
-                    const Color.fromARGB(255, 253, 253, 253).withOpacity(0.8),
+                fontWeight: FontWeight.w800,
+                color: Colors.white.withOpacity(0.95),
+                shadows: [
+                  Shadow(
+                    offset: const Offset(0, 2), // posição da sombra
+                    blurRadius: 4, // suavidade
+                    color: Colors.black.withOpacity(0.65),
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(height: 4),
 
             // 🔹 NOME DO SPLITTER + OLT
             Wrap(
-              spacing: 8,
-              runSpacing: 4,
+              spacing: 10,
+              runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(
+                SelectableText(
                   widget.splitter.title.isNotEmpty
                       ? widget.splitter.title
                       : widget.splitter.code,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: const Color.fromARGB(255, 255, 255, 255)
-                        .withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.95),
+                    shadows: [
+                      Shadow(
+                        offset: const Offset(0, 2), // posição da sombra
+                        blurRadius: 4, // suavidade
+                        color: Colors.black.withOpacity(0.65),
+                      ),
+                    ],
                   ),
                 ),
-                if (widget.splitter.oltDescription != null &&
-                    widget.splitter.oltDescription!.isNotEmpty)
+                if (olt != null)
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 95, 95, 95),
+                      color: Colors.black.withOpacity(0.45),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Text(
-                      widget.splitter.oltDescription!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: const Color.fromARGB(255, 255, 255, 255),
-                      ),
+                    child: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SelectableText(
+                          olt.title,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        ),
+                        _dot(),
+                        SelectableText(
+                          "Slot ${olt.slotsNumber}",
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white),
+                        ),
+                        _dot(),
+                        SelectableText(
+                          "Porta ${olt.portsFirstNumber}",
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -238,6 +388,22 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final bool isWide = constraints.maxWidth > 900;
+          final nearbySplitters = widget.allSplitters.where((s) {
+            if (s.code == widget.splitter.code) return false;
+
+            final sLat = double.tryParse(s.latitude);
+            final sLng = double.tryParse(s.longitude);
+
+            if (sLat == null || sLng == null) return false;
+
+            return _isWithinRadius(
+              lat1: lat!,
+              lng1: lng!,
+              lat2: sLat,
+              lng2: sLng,
+              radiusInMeters: 200,
+            );
+          }).toList();
 
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
@@ -270,6 +436,62 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 12),
+
+                          // 📍 ENDEREÇO (resolvido por geocoding)
+                          if (_loadingAddress)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    "Carregando endereço…",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (_address?.street != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    size: 18,
+                                    color: Colors.orange,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _address!.street!,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark
+                                            ? Colors.grey.shade300
+                                            : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                          const SizedBox(height: 12),
+
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -302,6 +524,9 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                         isDark: isDark,
                         lat: lat!,
                         lng: lng!,
+                        olt: olt,
+                        nearbySplitters: nearbySplitters,
+                        // 👈 NOVO
                       )
                     else
                       _locationFallback(isDark),
@@ -414,11 +639,37 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     );
   }
 
+  Widget _dot() {
+    return const Text(
+      "•",
+      style: TextStyle(
+        color: Colors.white70,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
   Widget _mapCardOSM({
     required bool isDark,
     required double lat,
     required double lng,
+    OltModel? olt,
+    required List<SplitterModel> nearbySplitters,
   }) {
+    final hasOltLocation = olt?.lat != null && olt?.lng != null;
+
+    final cameraFit = hasOltLocation
+        ? osm.CameraFit.bounds(
+            bounds: osm.LatLngBounds(
+              LatLng(lat, lng),
+              LatLng(olt!.lat!, olt.lng!),
+            ),
+            padding: const EdgeInsets.all(60),
+            maxZoom: 17,
+            minZoom: 12,
+          )
+        : null;
+
     return Container(
       width: double.infinity,
       height: 220,
@@ -456,18 +707,51 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                 options: osm.MapOptions(
                   initialCenter: LatLng(lat, lng),
                   initialZoom: 16,
+                  initialCameraFit: cameraFit,
                   interactionOptions: const osm.InteractionOptions(
                     flags: osm.InteractiveFlag.all,
                   ),
                 ),
                 children: [
+                  // 🗺️ BASE MAP
                   osm.TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.appsera.splitters',
                   ),
+
+                  // 🟢 RAIO DE 200 METROS
+                  osm.CircleLayer(
+                    circles: [
+                      osm.CircleMarker(
+                        point: LatLng(lat, lng),
+                        radius: 200, // metros
+                        color: Colors.green.withOpacity(0.15),
+                        borderStrokeWidth: 2,
+                        borderColor: Colors.green,
+                      ),
+                    ],
+                  ),
+
+                  // 🔶 LINHA OLT ↔ SPLITTER
+                  if (hasOltLocation)
+                    osm.PolylineLayer(
+                      polylines: [
+                        osm.Polyline(
+                          points: [
+                            LatLng(olt!.lat!, olt.lng!),
+                            LatLng(lat, lng),
+                          ],
+                          strokeWidth: 3,
+                          color: Colors.orangeAccent,
+                        ),
+                      ],
+                    ),
+
+                  // 📍 MARKERS
                   osm.MarkerLayer(
                     markers: [
+                      // 🔴 SPLITTER ATUAL
                       osm.Marker(
                         point: LatLng(lat, lng),
                         width: 40,
@@ -478,13 +762,76 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                           size: 40,
                         ),
                       ),
+
+                      // 🟦 OLT
+                      if (hasOltLocation)
+                        osm.Marker(
+                          point: LatLng(olt!.lat!, olt.lng!),
+                          width: 36,
+                          height: 36,
+                          child: const Icon(
+                            Icons.router,
+                            color: Colors.blue,
+                            size: 34,
+                          ),
+                        ),
+
+                      // 🟢 SPLITTERS PRÓXIMOS (200m)
+                      for (final s in nearbySplitters)
+                        osm.Marker(
+                          point: LatLng(
+                            double.parse(s.latitude),
+                            double.parse(s.longitude),
+                          ),
+                          width: 34,
+                          height: 34,
+                          child: Tooltip(
+                            message: s.title.isNotEmpty
+                                ? s.title
+                                : 'Splitter ${s.code}',
+                            child: GestureDetector(
+                              onTap: () async {
+                                // 🔥 BUSCA CLIENTES DO SPLITTER CLICADO
+                                final clientes = await widget.splitterService
+                                    .getClientesInstant(s.code);
+
+                                if (!mounted) return;
+
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SplitterDetailPage(
+                                      splitter: s,
+                                      clientes: clientes,
+                                      olt: widget.oltService
+                                          .getBySplitterCode(s.oltCode),
+                                      allSplitters: widget.allSplitters,
+                                      ocupacaoSnapshot: widget.ocupacaoSnapshot,
+                                      splitterService: widget.splitterService,
+                                      oltService: widget.oltService,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: SvgPicture.asset(
+                                'assets/icons/splitterlogo.svg',
+                                width: 26,
+                                height: 26,
+                                colorFilter: ColorFilter.mode(
+                                  _getSplitterColor(
+                                      s), // 🔥 muda conforme ocupação
+                                  BlendMode.srcIn,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ],
               ),
             ),
           ),
-          // 🗺️ OpenStreetMa      p
         ],
       ),
     );
