@@ -83,7 +83,12 @@ void main() async {
   );
 
   // 8) Iniciar App
-  runApp(MyApp(splitterService: splitterService));
+  runApp(
+    MyApp(
+      splitterService: splitterService,
+      authService: auth,
+    ),
+  );
 }
 
 // =============================================================
@@ -129,8 +134,13 @@ TokenValidationResult validateToken(String? token) {
 // APP PRINCIPAL
 // =============================================================
 class MyApp extends StatefulWidget {
+  final AuthService authService; // ✅ ADICIONA
   final SplitterService splitterService;
-  const MyApp({super.key, required this.splitterService});
+  const MyApp({
+    super.key,
+    required this.splitterService,
+    required this.authService,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -157,6 +167,7 @@ class _MyAppState extends State<MyApp> {
       home: HomePage(
         onThemeToggle: _toggleTheme,
         splitterService: widget.splitterService,
+        authService: widget.authService,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nexaview/models/cliente_model.dart';
+import 'package:flutter/services.dart';
 
 class ClienteCard extends StatelessWidget {
   final ClienteModel cliente;
@@ -111,31 +112,39 @@ class ClienteCard extends StatelessWidget {
           const SizedBox(width: 16),
 
           // ================= NOME + USUÁRIO =================
+
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end, // 🔒 mantém à direita
               children: [
-                Text(
-                  cliente.name.isNotEmpty ? cliente.name : "Cliente sem nome",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
+                GestureDetector(
+                  onLongPress: () => _copy(context, cliente.name),
+                  child: SelectableText(
+                    cliente.name.isNotEmpty ? cliente.name : "Cliente sem nome",
+                    maxLines: 1,
+                    //overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right, // 🔒 mantém à direita
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 5),
-                Text(
-                  cliente.user.isNotEmpty ? cliente.user : "-",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                GestureDetector(
+                  onLongPress: () => _copy(context, cliente.user),
+                  child: SelectableText(
+                    cliente.user.isNotEmpty ? cliente.user : "-",
+                    maxLines: 1,
+                    //overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right, // 🔒 mantém à direita
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color:
+                          isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                    ),
                   ),
                 ),
               ],
@@ -170,6 +179,20 @@ class ClienteCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _copy(BuildContext context, String value) {
+    if (value.trim().isEmpty) return;
+
+    Clipboard.setData(ClipboardData(text: value));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Copiado: $value'),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

@@ -70,6 +70,9 @@ class FontSizes {
 }
 
 ThemeData get lightTheme => ThemeData(
+      chipTheme: ChipThemeData(
+        side: BorderSide.none,
+      ),
       useMaterial3: true,
       brightness: Brightness.light,
 
@@ -166,6 +169,9 @@ ThemeData get lightTheme => ThemeData(
     );
 
 ThemeData get darkTheme => ThemeData(
+      chipTheme: ChipThemeData(
+        side: BorderSide.none,
+      ),
       useMaterial3: true,
       // 🔹 FUNDOS GLOBAIS (ESSENCIAL)
       scaffoldBackgroundColor: DarkModeColors.darkBackground,

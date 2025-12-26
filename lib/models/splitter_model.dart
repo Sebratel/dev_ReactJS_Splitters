@@ -51,14 +51,14 @@ class SplitterModel {
     final olt = json['olt'] as Map<String, dynamic>?;
 
     // 🔍 DEBUG CONTROLADO
-    if (kDebugMode && (olt == null || olt['description'] == null)) {
-      debugPrint(
-        '⚠️ SPLITTER SEM OLT → '
-        'code=${json['code']} | '
-        'title=${json['title']} | '
-        'oltRaw=$olt',
-      );
-    }
+    // if (kDebugMode && (olt == null || olt['title'] == null)) {
+    //  debugPrint(
+    //    '⚠️ SPLITTER SEM OLT → '
+    //    'code=${json['code']} | '
+    //    'title=${json['title']} | '
+    //   'oltRaw=$olt',
+    // );
+    // }
 
     return SplitterModel(
       id: json['id'] ?? 0,
