@@ -10,8 +10,9 @@ import 'package:lottie/lottie.dart';
 import 'package:nexaview/widgets/responsive_container.dart';
 import 'package:nexaview/models/olt_model.dart'; // ✅ IMPORTANTE
 import 'package:nexaview/services/auth_service.dart';
-
-enum SplitterStatus { Normal, Alerta, Critico, Excedente }
+import 'package:nexaview/services/splitter_status_service.dart';
+import 'package:nexaview/enums/splitter_status.dart';
+import 'package:nexaview/services/splitter_ocupacao_service.dart';
 
 class HomePage extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -33,35 +34,170 @@ class _HomePageState extends State<HomePage> {
   late final SplitterService _service;
   late final AuthService _authService;
   late final OltService _oltService;
+
   final TextEditingController _searchController = TextEditingController();
   Map<String, int> _ocupacaoSnapshot = {};
   final Map<String, String> _streetBySplitter = {};
   final Map<String, List<String>> _clientesPorSplitter = {};
 
+  // final Map<String, SplitterStatus> _statusCache = {};
+  //final Map<String, int> _ocupacaoRealCache = {};
+
   List<SplitterModel> _splitters = [];
   List<SplitterModel> _filtered = [];
   bool _loadingSplitters = true;
+  List<String>? _ruasCacheOrdenadas;
 
   int _totalOcupacaoFiltrada = 0;
   bool _cacheReady = false;
   int _totalClientesSnapshot = 0;
   bool _clientesLoading = true;
-  bool _primeiraCarga = true;
+  bool _splittersReady = false;
+  bool _clientesReady = false;
+  bool _bootstrapFinalizado = false;
 
   // 🔥 filtros
   String? _oltSelecionada;
   SplitterStatus? _statusSelecionado;
   String? _ruaSelecionada;
 
+  // ✅ INDICA SE HÁ FILTRO ATIVO (estado lógico, não visual)
+  bool get _hasFiltroAtivo {
+    return _oltSelecionada != null ||
+        _statusSelecionado != null ||
+        _ruaSelecionada != null ||
+        _searchController.text.trim().isNotEmpty;
+  }
+
   @override
   void initState() {
     super.initState();
+
     _service = widget.splitterService;
     _authService = widget.authService;
-
     _oltService = OltService(_authService);
 
-    _bootstrap(); // 🔥 fluxo correto
+    // 🔥 Bootstrap assíncrono (obrigatório no Web)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrap();
+    });
+  }
+
+  Future<void> _bootstrap() async {
+    debugPrint("🚀 BOOTSTRAP SEGURO INICIADO");
+
+    try {
+      // =====================================================
+      // 1️⃣ RESTAURA CACHE LOCAL DE CLIENTES (IMEDIATO)
+      // =====================================================
+      final snapshot = _service.getOcupacaoSnapshot();
+      final cacheValido =
+          snapshot.isNotEmpty && _service.clientesCacheValidoParaBootstrap();
+
+      if (cacheValido) {
+        debugPrint("⚡ Cache válido restaurado");
+
+        _buildClientesIndex();
+
+        setState(() {
+          _ocupacaoSnapshot = snapshot;
+          _totalClientesSnapshot = snapshot.values.fold(0, (a, b) => a + b);
+          _cacheReady = true;
+          _clientesReady = true;
+          _clientesLoading = false;
+        });
+      } else {
+        debugPrint("🧨 Cache inexistente ou vencido");
+      }
+
+      // =====================================================
+      // 2️⃣ SPLITTERS (CACHE → API)
+      // =====================================================
+      setState(() => _loadingSplitters = true);
+
+      final splitters = await _service.fetchSplitters();
+      if (!mounted) return;
+
+      setState(() {
+        _splitters = splitters;
+        _filtered = splitters;
+        _splittersReady = splitters.isNotEmpty;
+        _loadingSplitters = false;
+      });
+
+      // =====================================================
+      // 2.5️⃣ CARREGA OLTs (OBRIGATÓRIO PARA FILTROS)
+      // =====================================================
+      if (!_oltService.isLoaded) {
+        debugPrint("📡 Carregando OLTs...");
+        await _oltService.loadOlts();
+        if (!mounted) return;
+      }
+
+      // =====================================================
+      // 3️⃣ PRIMEIRA CARGA REAL DE CLIENTES (SE NECESSÁRIO)
+      // =====================================================
+      if (!_clientesReady) {
+        debugPrint("🌐 Primeira carga real de clientes");
+
+        setState(() => _clientesLoading = true);
+
+        await _service.refreshClientesCache();
+        if (!mounted) return;
+
+        final novoSnapshot = _service.getOcupacaoSnapshot();
+
+        setState(() {
+          _ocupacaoSnapshot = novoSnapshot;
+          _totalClientesSnapshot = novoSnapshot.values.fold(0, (a, b) => a + b);
+          _cacheReady = true;
+          _clientesReady = true;
+          _clientesLoading = false;
+        });
+
+        _buildClientesIndex();
+      }
+
+      // =====================================================
+      // 4️⃣ RESTAURA CACHE DE RUAS (ANTES DOS FILTROS)
+      // =====================================================
+      await _service.loadStreetCache();
+
+      setState(() {
+        _streetBySplitter
+          ..clear()
+          ..addAll(_service.streetCache);
+      });
+
+      // =====================================================
+      // 5️⃣ APLICA FILTROS (TUDO PRONTO)
+      // =====================================================
+      _applyFilters();
+
+      // =====================================================
+      // 6️⃣ RESOLUÇÃO DE ENDEREÇOS (BACKGROUND)
+      // =====================================================
+      _resolveAddressesInBackground();
+
+      // =====================================================
+      // ✅ BOOTSTRAP FINALIZADO (ESTADO ESTÁVEL)
+      // =====================================================
+      if (mounted) {
+        setState(() {
+          _bootstrapFinalizado = true;
+        });
+      }
+    } catch (e, s) {
+      debugPrint("❌ ERRO NO BOOTSTRAP: $e\n$s");
+
+      if (!mounted) return;
+
+      setState(() {
+        _loadingSplitters = false;
+        _clientesLoading = false;
+        _bootstrapFinalizado = true;
+      });
+    }
   }
 
   int _calcularOcupacaoFiltrada() {
@@ -75,45 +211,41 @@ class _HomePageState extends State<HomePage> {
   }
 
   SplitterStatus _getStatus(SplitterModel splitter) {
-    final ocupacao = _ocupacaoSnapshot[splitter.code] ?? 0;
-    final total = splitter.outPorts;
+    final ocupacaoReal = _ocupacaoSnapshot[splitter.code] ?? 0;
 
-    if (total == 0) return SplitterStatus.Normal;
-
-    final percentual = (ocupacao / total) * 100;
-
-    if (percentual > 100) return SplitterStatus.Excedente; // 🔥 NOVO
-    if (percentual >= 100) return SplitterStatus.Critico;
-    if (percentual >= 80) return SplitterStatus.Alerta;
-    return SplitterStatus.Normal;
+    return SplitterStatusService.resolve(
+      ocupacaoReal: ocupacaoReal,
+      totalPortas: splitter.outPorts,
+    );
   }
 
   void _applyFilters() {
+    // 🚫 BLOQUEIO ABSOLUTO
+    if (!_splittersReady) return;
+    if (!_clientesReady) return;
+    if (_splitters.isEmpty) return;
+    if (_clientesPorSplitter.isEmpty && _cacheReady) return;
+
     final query = _searchController.text.trim().toLowerCase();
 
     setState(() {
       _filtered = _splitters.where((s) {
-        // 🔍 CLIENTES DO SPLITTER (NUNCA NULL)
         final List<String> clientes = _clientesPorSplitter[s.code] ?? const [];
 
-        // 🔎 MATCH POR CLIENTE
-        final bool matchCliente = clientes.any((nome) => nome.contains(query));
+        final bool matchCliente =
+            query.isNotEmpty && clientes.any((n) => n.contains(query));
 
-        // 🔍 BUSCA GERAL
         final bool matchBusca = query.isEmpty ||
             s.code.toLowerCase().contains(query) ||
             s.title.toLowerCase().contains(query) ||
             matchCliente;
 
-        // 🧩 FILTRO POR OLT
         final bool matchOlt =
             _oltSelecionada == null || s.oltCode == _oltSelecionada;
 
-        // 🚦 FILTRO POR STATUS
         final bool matchStatus =
             _statusSelecionado == null || _getStatus(s) == _statusSelecionado;
 
-        // 🛣️ FILTRO POR RUA
         final String? street = _streetBySplitter[s.code];
         final bool matchRua = _ruaSelecionada == null ||
             (street != null &&
@@ -126,111 +258,11 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> _bootstrap() async {
-    debugPrint("🚀 BOOTSTRAP INICIADO");
-    try {
-      await _oltService.loadOlts();
-      debugPrint("✅ OLTs OK");
-
-      await _loadInitialData();
-      debugPrint("✅ SPLITTERS OK");
-    } catch (e, s) {
-      debugPrint("❌ ERRO BOOTSTRAP: $e\n$s");
-    }
-  }
-
-  Future<void> _loadInitialData() async {
-    try {
-      debugPrint("📦 CARREGANDO SPLITTERS...");
-
-      final snapshotAntigo = _service.getOcupacaoSnapshot();
-
-      if (_primeiraCarga) {
-        setState(() {
-          _clientesLoading = true;
-        });
-      }
-
-      // 1️⃣ Carrega splitters (rápido)
-      final splitters = await _service.fetchSplitters();
-      if (!mounted) return;
-
-      final totalAntigo = snapshotAntigo.values.fold<int>(0, (a, b) => a + b);
-
-      setState(() {
-        _splitters = splitters;
-        _filtered = splitters;
-        _ocupacaoSnapshot = snapshotAntigo;
-        _totalClientesSnapshot = totalAntigo;
-        _cacheReady = snapshotAntigo.isNotEmpty;
-        _loadingSplitters = false;
-        _totalOcupacaoFiltrada = _calcularOcupacaoFiltrada();
-        _primeiraCarga = false;
-      });
-
-      // 🔄 Atualização silenciosa em background (SEM TRAVAR UI)
-      if (_service.clientesCacheValido()) {
-        Future.microtask(() async {
-          await _service.refreshClientesCache();
-          if (!mounted) return;
-          _buildClientesIndex();
-        });
-      }
-      // 2️⃣ Atualiza cache pesado (clientes)
-      final bool cacheValido = _service.clientesCacheValido();
-
-// 🔥 1. SEMPRE usa cache existente (rápido)
-      _buildClientesIndex();
-
-// 🔥 2. Só mostra loading se NÃO houver cache
-      if (!cacheValido) {
-        setState(() => _clientesLoading = true);
-
-        await _service.refreshClientesCache();
-
-        if (!mounted) return;
-
-        _buildClientesIndex();
-
-        setState(() => _clientesLoading = false);
-      }
-
-      debugPrint(_clientesPorSplitter.toString());
-
-      if (!mounted) return;
-
-      // 🔥 INDEXA CLIENTES PARA BUSCA
-      _buildClientesIndex();
-
-      // 3️⃣ Atualiza ocupação após cache completo
-      final snapshotNovo = _service.getOcupacaoSnapshot();
-      final totalNovo = snapshotNovo.values.fold<int>(0, (a, b) => a + b);
-
-      setState(() {
-        _ocupacaoSnapshot = snapshotNovo;
-        _totalClientesSnapshot = totalNovo;
-        _cacheReady = true;
-        _clientesLoading = false; // 🔥 SEMPRE desligar aqui
-        _totalOcupacaoFiltrada = _calcularOcupacaoFiltrada();
-      });
-
-      // 4️⃣ Resolve endereços em background
-      _resolveAddressesInBackground();
-    } catch (e, s) {
-      debugPrint("❌ Erro ao carregar HomePage: $e\n$s");
-      if (!mounted) return;
-
-      setState(() {
-        _clientesLoading = false;
-        _loadingSplitters = false;
-      });
-    }
-  }
-
   void _buildClientesIndex() {
     _clientesPorSplitter.clear();
 
-    final clientesIndex = _service.getClientesIndex();
+    //  final clientesIndex = _service.getClientesIndex();
+    final clientesIndex = _service.getClientesIndexFromMemory();
 
     for (final entry in clientesIndex.entries) {
       _clientesPorSplitter[entry.key] =
@@ -242,22 +274,35 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _resolveAddressesInBackground() async {
     for (final s in _splitters) {
-      if (!_streetBySplitter.containsKey(s.code) && s.hasLocation) {
-        final street = await _service.getStreetFromLatLng(
-          s.lat!,
-          s.lng!,
-        );
+      if (!s.hasLocation) continue;
 
-        if (!mounted) return;
+      final cachedStreet = _service.getStreet(s.code);
+      if (cachedStreet != null) {
+        setState(() {
+          _streetBySplitter[s.code] = cachedStreet;
+        });
+        continue;
+      }
 
-        if (street != null) {
+      try {
+        final street = await _service.getStreetFromLatLng(s.lat!, s.lng!);
+        if (!mounted || street == null) continue;
+
+        await _service.saveStreet(s.code, street);
+
+        setState(() {
           _streetBySplitter[s.code] = street;
+          _ruasCacheOrdenadas = null; // 🔥 invalida o micro-cache
+        });
 
-          // 🔥 força reavaliar filtros quando novas ruas entram
-          if (_ruaSelecionada != null) {
-            _applyFilters();
-          }
+        if (_ruaSelecionada != null) {
+          _applyFilters();
         }
+
+        await Future.delayed(const Duration(milliseconds: 1200));
+      } catch (e) {
+        debugPrint('❌ Falha endereço (${s.code}): $e');
+        await Future.delayed(const Duration(milliseconds: 1500));
       }
     }
   }
@@ -398,9 +443,17 @@ class _HomePageState extends State<HomePage> {
 
     final splitter = match.first;
     final clientes = await _service.getClientesInstant(splitter.code);
+    debugPrint('🧪 DEBUG HOME → SPLITTER ${splitter.code}');
+    debugPrint('Total clientes: ${clientes.length}');
+
+    for (final c in clientes) {
+      debugPrint(
+        'Cliente: ${c.name} | porta=${c.port} | totalPortas=${splitter.outPorts}',
+      );
+    }
     if (!mounted) return;
 
-    Navigator.push(
+    final updated = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => SplitterDetailPage(
@@ -413,13 +466,19 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+    if (updated == true) {
+      await _service.refreshClientesPorSplitter(splitter.code);
+      _atualizarSnapshotLocal(splitterCode: splitter.code); // 🔥 força UI
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_loadingSplitters) {
+    final bool headerReady = _splittersReady && _clientesReady;
+
+    if (_loadingSplitters && _splitters.isEmpty) {
       return Scaffold(
         backgroundColor: Theme.of(context).colorScheme.surface,
         body: Center(
@@ -430,11 +489,16 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final int totalClientes = _cacheReady ? _totalClientesSnapshot : 0;
-    final bool isFiltered = _filtered.length != _splitters.length;
+    final int totalClientes = headerReady ? _totalClientesSnapshot : 0;
+
+    final bool isFiltered =
+        headerReady && _bootstrapFinalizado && _hasFiltroAtivo;
+
     final int totalClientesFiltrados =
         isFiltered ? _totalOcupacaoFiltrada : totalClientes;
 
+    final int splittersExibidos =
+        isFiltered ? _filtered.length : _splitters.length;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
@@ -442,7 +506,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             // ================= CONTEÚDO PRINCIPAL (SCROLL)
             RefreshIndicator(
-              onRefresh: _loadInitialData,
+              onRefresh: _refreshSilencioso,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final width = constraints.maxWidth;
@@ -465,8 +529,10 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             _header(
                               isDark,
+                              headerReady: headerReady,
                               totalClientes: totalClientes,
                               totalClientesFiltrados: totalClientesFiltrados,
+                              splittersExibidos: splittersExibidos, // 🔥 NOVO
                               isFiltered: isFiltered,
                             ),
                             const SizedBox(height: 20),
@@ -523,13 +589,34 @@ class _HomePageState extends State<HomePage> {
                                         .getClientesInstant(splitter.code);
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
+
+                                    final totalPortas = splitter.outPorts;
+                                    final excedentes = clientes
+                                        .where((c) =>
+                                            c.port != null &&
+                                            c.port! > totalPortas)
+                                        .toList();
+
+                                    debugPrint('🧪 DEBUG SPLITTER SELECIONADO');
+                                    debugPrint('Código: ${splitter.code}');
+                                    debugPrint('Portas: $totalPortas');
+                                    debugPrint(
+                                        'Clientes totais: ${clientes.length}');
+                                    debugPrint(
+                                        'Excedentes: ${excedentes.length}');
+
+                                    for (final c in excedentes) {
+                                      debugPrint(
+                                        '⚠️ EXCEDENTE → ${c.name} | porta=${c.port}',
+                                      );
+                                    }
                                     debugPrint(
                                         '🧩 SPLITTER OLT CODE: "${splitter.oltCode}"');
                                     debugPrint(
                                         '🧩 OLT RESOLVIDA: ${olt?.title}');
 
                                     if (!mounted) return;
-                                    Navigator.push(
+                                    final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => SplitterDetailPage(
@@ -547,6 +634,12 @@ class _HomePageState extends State<HomePage> {
                                         ),
                                       ),
                                     );
+                                    if (updated == true) {
+                                      await _service.refreshClientesPorSplitter(
+                                          splitter.code);
+                                      _atualizarSnapshotLocal(
+                                          splitterCode: splitter.code);
+                                    }
                                   },
                                 ),
                               );
@@ -573,12 +666,32 @@ class _HomePageState extends State<HomePage> {
                                     // 🔥 RESOLVE A OLT AQUI
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
+                                    final totalPortas = splitter.outPorts;
+                                    final excedentes = clientes
+                                        .where((c) =>
+                                            c.port != null &&
+                                            c.port! > totalPortas)
+                                        .toList();
+
+                                    debugPrint('🧪 DEBUG SPLITTER SELECIONADO');
+                                    debugPrint('Código: ${splitter.code}');
+                                    debugPrint('Portas: $totalPortas');
+                                    debugPrint(
+                                        'Clientes totais: ${clientes.length}');
+                                    debugPrint(
+                                        'Excedentes: ${excedentes.length}');
+
+                                    for (final c in excedentes) {
+                                      debugPrint(
+                                        '⚠️ EXCEDENTE → ${c.name} | porta=${c.port}',
+                                      );
+                                    }
                                     debugPrint(
                                         '🧩 SPLITTER OLT CODE: "${splitter.oltCode}"');
                                     debugPrint(
                                         '🧩 OLT RESOLVIDA: ${olt?.title}');
                                     if (!mounted) return;
-                                    Navigator.push(
+                                    final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => SplitterDetailPage(
@@ -596,6 +709,12 @@ class _HomePageState extends State<HomePage> {
                                         ),
                                       ),
                                     );
+                                    if (updated == true) {
+                                      await _service.refreshClientesPorSplitter(
+                                          splitter.code);
+                                      _atualizarSnapshotLocal(
+                                          splitterCode: splitter.code);
+                                    }
                                   },
                                 );
                               },
@@ -617,7 +736,7 @@ class _HomePageState extends State<HomePage> {
             ),
 
             // ================= OVERLAY DE LOADING (SEM ANIMAÇÃO)
-            if (_clientesLoading)
+            if (_clientesLoading && !_cacheReady)
               IgnorePointer(
                 ignoring: true,
                 child: Container(
@@ -673,13 +792,17 @@ class _HomePageState extends State<HomePage> {
 
   Widget _header(
     bool isDark, {
+    required bool headerReady,
     required int totalClientes,
     required int totalClientesFiltrados,
+    required int splittersExibidos, // 🔥 NOVO
     required bool isFiltered,
   }) {
     final width = MediaQuery.of(context).size.width;
     final bool isDesktop = width >= 900; // ajuste se quiser
-    final double headerHeight = isDesktop ? 330 : 490;
+    // 🔹 ALTURA COM 3ª CONDIÇÃO (filtro ativo)
+    final double headerHeight =
+        isDesktop ? (isFiltered ? 360 : 340) : (isFiltered ? 570 : 470);
 
     return ClipRRect(
       borderRadius: const BorderRadius.only(
@@ -803,17 +926,21 @@ class _HomePageState extends State<HomePage> {
                             final bool isTablet = constraints.maxWidth >= 600 &&
                                 constraints.maxWidth < 1000;
 
-                            final int totalOlts = _splitters
-                                .map((s) => s.oltCode)
-                                .whereType<String>()
-                                .toSet()
-                                .length;
+                            final int totalOlts = !headerReady
+                                ? 0
+                                : _splitters
+                                    .map((s) => s.oltCode)
+                                    .whereType<String>()
+                                    .toSet()
+                                    .length;
 
-                            final int totalOltsFiltradas = _filtered
-                                .map((s) => s.oltCode)
-                                .whereType<String>()
-                                .toSet()
-                                .length;
+                            final int totalOltsFiltradas = !headerReady
+                                ? 0
+                                : _filtered
+                                    .map((s) => s.oltCode)
+                                    .whereType<String>()
+                                    .toSet()
+                                    .length;
 
                             final widgets = [
                               _buildStatWrapper(
@@ -822,7 +949,7 @@ class _HomePageState extends State<HomePage> {
                                   title: isFiltered
                                       ? "Splitters filtrados"
                                       : "Splitters",
-                                  value: _filtered.length,
+                                  value: headerReady ? splittersExibidos : 0,
                                   subtitle: isFiltered
                                       ? "de ${_splitters.length}"
                                       : null,
@@ -1037,22 +1164,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<String?> _selectOltDialog() async {
-    // 🔹 coleta os códigos únicos de OLT
-    final List<String> oltCodes = _splitters
-        .map((s) => s.oltCode)
-        .whereType<String>()
-        .toSet()
-        .toList()
-      ..sort();
+    // 🔹 pega todas as OLTs resolvidas a partir dos splitters
+    final Map<String, OltModel> oltsMap = {};
 
-    return _showSearchDialog<String>(
+    for (final s in _splitters) {
+      if (s.oltCode == null) continue;
+
+      final olt = _oltService.getBySplitterCode(s.oltCode);
+      if (olt != null) {
+        oltsMap[s.oltCode!] = olt;
+      }
+    }
+
+    final List<OltModel> olts = oltsMap.values.toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+
+    return _showSearchDialog<OltModel>(
       title: 'Filtrar por OLT',
-      items: oltCodes,
-      label: (code) {
-        final olt = _oltService.getBySplitterCode(code);
-        return olt?.title ?? code; // 👈 mostra NOME, não ID
-      },
-    );
+      items: olts,
+      label: (olt) => olt.title, // ✅ DESCRIÇÃO
+    ).then((olt) => olt?.code); // 🔥 retorna o code internamente
   }
 
   Future<SplitterStatus?> _selectStatusDialog() {
@@ -1064,7 +1195,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<String?> _selectRuaDialog() async {
-    final ruas = _streetBySplitter.values.toSet().toList()..sort();
+    _ruasCacheOrdenadas ??= _streetBySplitter.values.toSet().toList()..sort();
+
+    final ruas = _ruasCacheOrdenadas!;
 
     return _showSearchDialog<String>(
       title: 'Filtrar por Rua',
@@ -1304,5 +1437,37 @@ class _HomePageState extends State<HomePage> {
         side: BorderSide.none, // ❌ REMOVE A BORDA
       ),
     );
+  }
+
+  bool _refreshing = false;
+
+  Future<void> _refreshSilencioso() async {
+    if (_refreshing) return;
+    _refreshing = true;
+
+    try {
+      // ❌ NÃO faz refresh global aqui
+      _atualizarSnapshotLocal();
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  void _atualizarSnapshotLocal({String? splitterCode}) {
+    final snapshot = _service.getOcupacaoSnapshot();
+
+    setState(() {
+      if (splitterCode != null) {
+        _ocupacaoSnapshot[splitterCode] = snapshot[splitterCode] ?? 0;
+      } else {
+        _ocupacaoSnapshot = snapshot;
+      }
+
+      _totalClientesSnapshot =
+          _ocupacaoSnapshot.values.fold(0, (a, b) => a + b);
+    });
+
+    _buildClientesIndex();
+    _applyFilters();
   }
 }

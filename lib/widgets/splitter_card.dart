@@ -117,7 +117,7 @@ class SplitterCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
-                      value: (pct / 100).clamp(0.0, 1.0),
+                      value: pct > 100 ? 1.0 : pct / 100,
                       minHeight: 7,
                       backgroundColor:
                           isDark ? Colors.grey.shade800 : Colors.grey.shade200,
