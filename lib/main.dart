@@ -13,24 +13,33 @@ import 'package:nexaview/services/splitter_service.dart';
 
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
+// 🔥 IMPORT EXCLUSIVO PARA WEB (limpar URL)
+import 'dart:html' as html;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  print("🔥 INICIANDO SPLITTERS VIA TOKEN DO HUB 🔥");
+  debugPrint("🔥 INICIANDO SPLITTERS VIA TOKEN DO HUB 🔥");
 
-  // 1) Firebase
+  // =============================================================
+  // 1️⃣ Firebase
+  // =============================================================
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 2) Captura token da URL
+  // =============================================================
+  // 2️⃣ Token via URL (Web)
+  // =============================================================
   final params = WebUtils.queryParams;
   final token = params['token'];
 
-  print("📥 TOKEN RECEBIDO PELO SPLITTERS >>> $token");
+  debugPrint("📥 TOKEN RECEBIDO >>> $token");
 
-  // 3) Detecta ambiente local
+  // =============================================================
+  // 3️⃣ Ambiente local vs produção
+  // =============================================================
   final host = Uri.base.host;
 
   final isLocal = host == "localhost" ||
@@ -40,30 +49,35 @@ void main() async {
       host.startsWith("10.") ||
       host.startsWith("172.");
 
-  if (isLocal) {
-    print("🌐 Ambiente local detectado — ignorando validação de token");
-  } else {
-    // 4) Validar token SOMENTE EM PRODUÇÃO
+  if (!isLocal) {
     final tokenResult = validateToken(token);
 
     if (!tokenResult.isValid) {
-      print("⛔ ACESSO BLOQUEADO >>> ${tokenResult.reason}");
+      debugPrint("⛔ ACESSO BLOQUEADO → ${tokenResult.reason}");
 
       Future.microtask(() {
         WebUtils.redirect("https://sebratel-hub.web.app");
       });
-
       return;
     }
 
-    print("✅ TOKEN ACEITO — 🔓 App liberado!");
+    debugPrint("✅ TOKEN ACEITO — App liberado");
+
+    // 🔥 REMOVE O TOKEN DA URL (SEM RELOAD)
+    _limparTokenDaUrl();
+  } else {
+    debugPrint("🌐 Ambiente local — validação de token ignorada");
   }
 
-  // 5) Hive
+  // =============================================================
+  // 4️⃣ Hive (cache local)
+  // =============================================================
   await Hive.initFlutter();
   await SplitterService.initHive();
 
-  // 6) Auth ERP
+  // =============================================================
+  // 5️⃣ Auth ERP
+  // =============================================================
   final auth = AuthService(
     clientId: "ad0c5d9a-fad1-4ca9-8d1e-cff2cedb3146",
     clientSecret: "cb53bd13-5305-4306-b03b-b00cf05f2e34",
@@ -73,7 +87,9 @@ void main() async {
     scope: "syngw",
   );
 
-  // 7) Serviços
+  // =============================================================
+  // 6️⃣ Serviços principais
+  // =============================================================
   final splitterService = SplitterService(
     auth: auth,
     splittersEndpoint:
@@ -82,7 +98,9 @@ void main() async {
         "https://erp.sebratel.net.br:45715/external/map/connection/all",
   );
 
-  // 8) Iniciar App
+  // =============================================================
+  // 7️⃣ Start App
+  // =============================================================
   runApp(
     MyApp(
       splitterService: splitterService,
@@ -92,7 +110,7 @@ void main() async {
 }
 
 // =============================================================
-// 🔐 VALIDAÇÃO DO TOKEN — Versão corrigida e estável
+// 🔐 Validação do Token JWT
 // =============================================================
 class TokenValidationResult {
   final bool isValid;
@@ -109,21 +127,19 @@ TokenValidationResult validateToken(String? token) {
   try {
     final jwt = JWT.verify(
       token,
-      SecretKey("MINHACHAVESECRETA123"), // mesma chave do Hub
+      SecretKey("MINHACHAVESECRETA123"),
     );
 
     final payload = jwt.payload;
-    print("📦 PAYLOAD RECEBIDO: $payload");
+    debugPrint("📦 PAYLOAD JWT → $payload");
 
-    // 🔥 Verificação básica: emissor correto
     if (payload["iss"] != "sebratel-hub") {
       return TokenValidationResult(
         false,
-        reason: "Token emitido por origem não autorizada",
+        reason: "Emissor não autorizado",
       );
     }
 
-    // 🔥 Tudo ok
     return TokenValidationResult(true);
   } catch (e) {
     return TokenValidationResult(false, reason: "Token inválido: $e");
@@ -131,11 +147,28 @@ TokenValidationResult validateToken(String? token) {
 }
 
 // =============================================================
-// APP PRINCIPAL
+// 🔥 LIMPA ?token= DA URL (WEB)
+// =============================================================
+void _limparTokenDaUrl() {
+  final uri = Uri.base;
+
+  if (uri.queryParameters.containsKey('token')) {
+    final cleanUri = uri.replace(queryParameters: {});
+    html.window.history.replaceState(
+      null,
+      '',
+      cleanUri.toString(),
+    );
+  }
+}
+
+// =============================================================
+// APP ROOT
 // =============================================================
 class MyApp extends StatefulWidget {
-  final AuthService authService; // ✅ ADICIONA
+  final AuthService authService;
   final SplitterService splitterService;
+
   const MyApp({
     super.key,
     required this.splitterService,
@@ -159,7 +192,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Listagem de Splitters',
+      title: 'Splitters',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

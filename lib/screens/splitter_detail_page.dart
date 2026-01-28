@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:nexaview/services/splitter_service.dart';
 import 'package:nexaview/services/olt_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:nexaview/utils/string_utils.dart';
 
 class SplitterDetailPage extends StatefulWidget {
   final SplitterModel splitter;
@@ -43,19 +44,35 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
   late final bool hasValidLocation;
   late final osm.MapController _mapController;
   late final GeocodingService _geoService;
+  late final ValueNotifier<List<ClienteModel>> _clientesNotifier;
+
+  bool _refreshing = false;
+  bool _atualizouSplitter = false;
+
   AddressModel? _address;
   bool _loadingAddress = true;
 
   @override
   void initState() {
     super.initState();
+
     _mapController = osm.MapController();
     _geoService = GeocodingService();
+
     _loadAddress();
+
+    // 🔹 conecta notifier (cache imediato)
+    _clientesNotifier =
+        widget.splitterService.watchClientes(widget.splitter.code);
 
     lat = double.tryParse(widget.splitter.latitude);
     lng = double.tryParse(widget.splitter.longitude);
     hasValidLocation = lat != null && lng != null;
+
+    // 🔥 REFRESH EM BACKGROUND (UMA ÚNICA VEZ)
+    Future.microtask(() {
+      widget.splitterService.refreshClientesPorSplitter(widget.splitter.code);
+    });
 
     debugPrint('LAT: "$lat" | LNG: "$lng"');
   }
@@ -115,7 +132,9 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
   }
 
   Color _getSplitterColor(SplitterModel splitter) {
-    final ocupacao = widget.ocupacaoSnapshot[splitter.code] ?? 0;
+    final ocupacao =
+        widget.splitterService.getClientesCountFromCache(splitter.code);
+
     final totalPortas = splitter.outPorts;
 
     if (totalPortas == 0) {
@@ -218,425 +237,482 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     // ================= DADOS DO SPLITTER =================
     final totalPortas = widget.splitter.outPorts;
 
-// ordena apenas para visual
-    final sortedClientes = [...widget.clientes]
-      ..sort((a, b) => (a.port ?? 0).compareTo(b.port ?? 0));
-
-// ✅ clientes com porta válida dentro da capacidade
-    final clientesComPortaValida = sortedClientes
-        .where((c) => c.port != null && c.port! > 0 && c.port! <= totalPortas)
-        .toList();
-
-// ⚠️ clientes sem porta (problema de cadastro)
-    final clientesSemPorta =
-        sortedClientes.where((c) => c.port == null || c.port! <= 0).toList();
-
-// 🔴 excedentes reais (porta maior que a capacidade)
-    final clientesExcedentes = sortedClientes
-        .where((c) => c.port != null && c.port! > totalPortas)
-        .toList();
-
-// 📊 métricas corretas
-    final ocupadasReal = clientesComPortaValida.length +
-        clientesExcedentes.length +
-        clientesSemPorta.length;
-
-    final percentualReal =
-        totalPortas == 0 ? 0 : (ocupadasReal / totalPortas) * 100;
-
-// usado SOMENTE para a barra
-    final percentualVisual = (percentualReal / 100).clamp(0.0, 1.0);
-
-    Color getStatusColor() {
-      if (percentualReal >= 100)
-        return const Color(0xFFB91C1C); // 🔴 overbooking crítico
-      if (percentualReal >= 90) return const Color(0xFFEF4444);
-      if (percentualReal >= 70) return const Color(0xFFF97316);
-      return const Color(0xFF10B981);
-    }
-
     // ⬇️ continua o Scaffold normalmente
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+    return WillPopScope(
+        onWillPop: () async {
+          Navigator.pop(context, _atualizouSplitter);
+          return false; // 🔥 impede pop automático
+        },
+        child: Scaffold(
+            backgroundColor: theme.colorScheme.surface,
 
-      // ================= HEADER =================
-      appBar: AppBar(
-        elevation: 0,
-        toolbarHeight: 120,
-        backgroundColor: Colors.transparent,
-        foregroundColor: headerText,
-        automaticallyImplyLeading: true,
-        flexibleSpace: ClipRRect(
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(22),
-            bottomRight: Radius.circular(22),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 🖼️ IMAGEM DE FUNDO
-              Image.asset(
-                'assets/images/sebratelimagem.jpg', // 👈 troque se quiser
-                fit: BoxFit.cover,
+            // ================= HEADER =================
+            appBar: AppBar(
+              elevation: 0,
+              toolbarHeight: 120,
+              backgroundColor: Colors.transparent,
+              foregroundColor: headerText,
+              // 🔥 CONTROLE TOTAL DO BOTÃO VOLTAR
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                color: Colors.white,
+                onPressed: () {
+                  Navigator.pop(context, _atualizouSplitter);
+                },
               ),
 
-              // 🎨 OVERLAY TRANSLÚCIDO (COR DO HEADER)
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
-                      const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+              flexibleSpace: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(22),
+                  bottomRight: Radius.circular(22),
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 🖼️ IMAGEM DE FUNDO
+                    Image.asset(
+                      'assets/images/sebratelimagem.jpg', // 👈 troque se quiser
+                      fit: BoxFit.cover,
+                    ),
+
+                    // 🎨 OVERLAY TRANSLÚCIDO (COR DO HEADER)
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color.fromARGB(255, 255, 174, 0)
+                                .withOpacity(0.35),
+                            const Color.fromARGB(255, 255, 174, 0)
+                                .withOpacity(0.35),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "Splitter",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: Colors.white.withOpacity(0.95),
-                shadows: [
-                  Shadow(
-                    offset: const Offset(0, 2), // posição da sombra
-                    blurRadius: 4, // suavidade
-                    color: Colors.black.withOpacity(0.65),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Splitter",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white.withOpacity(0.95),
+                      shadows: [
+                        Shadow(
+                          offset: const Offset(0, 2), // posição da sombra
+                          blurRadius: 4, // suavidade
+                          color: Colors.black.withOpacity(0.65),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // 🔹 NOME DO SPLITTER + OLT
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SelectableText(
+                        widget.splitter.title.isNotEmpty
+                            ? widget.splitter.title
+                            : widget.splitter.code,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withOpacity(0.95),
+                          shadows: [
+                            Shadow(
+                              offset: const Offset(0, 2), // posição da sombra
+                              blurRadius: 4, // suavidade
+                              color: Colors.black.withOpacity(0.65),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (olt != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.45),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              SelectableText(
+                                olt.title,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              _dot(),
+                              SelectableText(
+                                "Slot ${olt.slotsNumber}",
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white),
+                              ),
+                              _dot(),
+                              SelectableText(
+                                "Porta ${olt.portsFirstNumber}",
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.white),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 4),
+            // 🔥 TUDO ROLA JUNTO
+            body: LayoutBuilder(builder: (context, constraints) {
+              final bool isWide = constraints.maxWidth > 900;
 
-            // 🔹 NOME DO SPLITTER + OLT
-            Wrap(
-              spacing: 10,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SelectableText(
-                  widget.splitter.title.isNotEmpty
-                      ? widget.splitter.title
-                      : widget.splitter.code,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white.withOpacity(0.95),
-                    shadows: [
-                      Shadow(
-                        offset: const Offset(0, 2), // posição da sombra
-                        blurRadius: 4, // suavidade
-                        color: Colors.black.withOpacity(0.65),
-                      ),
-                    ],
-                  ),
-                ),
-                if (olt != null)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.45),
-                      borderRadius: BorderRadius.circular(10),
+              final nearbySplitters = widget.allSplitters.where((s) {
+                if (s.code == widget.splitter.code) return false;
+
+                final sLat = double.tryParse(s.latitude);
+                final sLng = double.tryParse(s.longitude);
+
+                if (sLat == null || sLng == null) return false;
+
+                return _isWithinRadius(
+                  lat1: lat!,
+                  lng1: lng!,
+                  lat2: sLat,
+                  lng2: sLng,
+                  radiusInMeters: 200,
+                );
+              }).toList();
+
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isWide ? 1200 : double.infinity,
                     ),
-                    child: Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    child: Column(
                       children: [
-                        SelectableText(
-                          olt.title,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
+                        // ================= INFO =================
+                        Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color:
+                                isDark ? const Color(0xFF1C1C1C) : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Informações do Splitter",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.grey.shade300
+                                      : Colors.grey.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // 📍 ENDEREÇO
+                              if (_loadingAddress)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        "Carregando endereço…",
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: isDark
+                                              ? Colors.grey.shade400
+                                              : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else if (_address?.street != null)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.location_on_outlined,
+                                        size: 18,
+                                        color: Colors.orange,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _address!.street!,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: isDark
+                                                ? Colors.grey.shade300
+                                                : Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                              const SizedBox(height: 16),
+
+                              // 🔥 MÉTRICAS REATIVAS
+                              ValueListenableBuilder<List<ClienteModel>>(
+                                valueListenable: _clientesNotifier,
+                                builder: (context, clientes, _) {
+                                  final ocupadasReal = clientes.length;
+
+                                  final percentualReal = totalPortas == 0
+                                      ? 0.0
+                                      : (ocupadasReal / totalPortas) * 100;
+
+                                  final percentualVisual =
+                                      (percentualReal / 100).clamp(0.0, 1.0);
+
+                                  Color getStatusColor() {
+                                    if (percentualReal >= 100) {
+                                      return const Color(
+                                          0xFFB91C1C); // 🔴 overbooking
+                                    }
+                                    if (percentualReal >= 90) {
+                                      return const Color(0xFFEF4444);
+                                    }
+                                    if (percentualReal >= 70) {
+                                      return const Color(0xFFF97316);
+                                    }
+                                    return const Color(0xFF10B981);
+                                  }
+
+                                  return Column(
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          _infoBox(
+                                            "Portas",
+                                            totalPortas.toString(),
+                                            Colors.blue,
+                                          ),
+                                          _infoBox(
+                                            "Ocupadas",
+                                            ocupadasReal.toString(),
+                                            Colors.orange,
+                                          ),
+                                          _infoBox(
+                                            "Uso",
+                                            "${percentualReal.toStringAsFixed(1)}%",
+                                            percentualReal > 100
+                                                ? const Color(0xFFDC2626)
+                                                : getStatusColor(),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      LinearProgressIndicator(
+                                        value: percentualVisual,
+                                        color: getStatusColor(),
+                                        minHeight: 6,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                        _dot(),
-                        SelectableText(
-                          "Slot ${olt.slotsNumber}",
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white),
-                        ),
-                        _dot(),
-                        SelectableText(
-                          "Porta ${olt.portsFirstNumber}",
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white),
+
+                        // ================= LOCALIZAÇÃO =================
+                        if (hasValidLocation)
+                          _mapCardOSM(
+                            isDark: isDark,
+                            lat: lat!,
+                            lng: lng!,
+                            olt: olt,
+                            nearbySplitters: nearbySplitters,
+                          )
+                        else
+                          _locationFallback(isDark),
+
+// ================= PORTAS / CLIENTES =================
+                        ValueListenableBuilder<List<ClienteModel>>(
+                          valueListenable: _clientesNotifier,
+                          builder: (context, clientes, _) {
+                            // 🔹 ordena apenas para visual
+                            final sortedClientes = [...clientes]..sort(
+                                (a, b) => (a.port ?? 0).compareTo(b.port ?? 0));
+
+                            // ✅ clientes com porta válida dentro da capacidade
+                            final clientesComPortaValida = sortedClientes
+                                .where((c) =>
+                                    c.port != null &&
+                                    c.port! > 0 &&
+                                    c.port! <= totalPortas)
+                                .toList();
+
+                            // ⚠️ clientes sem porta (problema de cadastro)
+                            final clientesSemPorta = sortedClientes
+                                .where((c) => c.port == null || c.port! <= 0)
+                                .toList();
+
+                            // 🔴 excedentes reais (porta maior que a capacidade)
+                            final clientesExcedentes = sortedClientes
+                                .where((c) =>
+                                    c.port != null && c.port! > totalPortas)
+                                .toList();
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 24),
+                              child: totalPortas == 0
+                                  ? Column(
+                                      children: [
+                                        Lottie.asset(
+                                          'assets/animations/notClients.json',
+                                          width: 200,
+                                        ),
+                                        const SizedBox(height: 24),
+                                        Text(
+                                          "Nenhuma porta configurada",
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.grey.shade300
+                                                : Colors.grey.shade700,
+                                            fontSize: 18,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : ListView(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      children: [
+                                        // ================= PORTAS (1 até capacidade)
+                                        for (int porta = 1;
+                                            porta <= totalPortas;
+                                            porta++)
+                                          () {
+                                            final ClienteModel cliente =
+                                                clientesComPortaValida
+                                                    .firstWhere(
+                                              (c) => c.port == porta,
+                                              orElse: () => ClienteModel(
+                                                id: -porta, // 🔥 ID negativo = porta vazia
+                                                name: "Porta $porta vazia",
+                                                user: "-",
+                                                port: porta,
+                                                status: 0,
+                                                splitterCode:
+                                                    widget.splitter.code,
+                                              ),
+                                            );
+
+                                            // 🔹 Porta vazia
+                                            if (cliente.id < 0) {
+                                              return _portaVazia(porta, isDark);
+                                            }
+
+                                            // 🔹 Porta ocupada
+                                            return ClienteCard(
+                                                cliente: cliente);
+                                          }(),
+
+                                        // ================= CLIENTES SEM PORTA
+                                        if (clientesSemPorta.isNotEmpty) ...[
+                                          const SizedBox(height: 20),
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Text(
+                                              "Clientes sem porta atribuída",
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.orange,
+                                              ),
+                                            ),
+                                          ),
+                                          for (final cliente
+                                              in clientesSemPorta)
+                                            ClienteCard(
+                                              cliente: cliente,
+                                              isNoPort: true,
+                                            ),
+                                        ],
+
+                                        // ================= EXCEDENTES (OVERBOOKING REAL)
+                                        if (clientesExcedentes.isNotEmpty) ...[
+                                          const SizedBox(height: 20),
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 8),
+                                            child: Text(
+                                              "Clientes excedentes (overbooking)",
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.redAccent,
+                                              ),
+                                            ),
+                                          ),
+                                          for (final cliente
+                                              in clientesExcedentes)
+                                            ClienteCard(
+                                              cliente: cliente,
+                                              isOverflow: true,
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-              ],
-            ),
-          ],
-        ),
-      ),
-
-      // 🔥 TUDO ROLA JUNTO
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final bool isWide = constraints.maxWidth > 900;
-          final nearbySplitters = widget.allSplitters.where((s) {
-            if (s.code == widget.splitter.code) return false;
-
-            final sLat = double.tryParse(s.latitude);
-            final sLng = double.tryParse(s.longitude);
-
-            if (sLat == null || sLng == null) return false;
-
-            return _isWithinRadius(
-              lat1: lat!,
-              lng1: lng!,
-              lat2: sLat,
-              lng2: sLng,
-              radiusInMeters: 200,
-            );
-          }).toList();
-
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: isWide ? 1200 : double.infinity,
                 ),
-                child: Column(
-                  children: [
-                    // ================= INFO =================
-                    Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1C1C1C) : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Informações do Splitter",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? Colors.grey.shade300
-                                  : Colors.grey.shade800,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // 📍 ENDEREÇO (resolvido por geocoding)
-                          if (_loadingAddress)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                children: [
-                                  const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    "Carregando endereço…",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else if (_address?.street != null)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.location_on_outlined,
-                                    size: 18,
-                                    color: Colors.orange,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _address!.street!,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark
-                                            ? Colors.grey.shade300
-                                            : Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                          const SizedBox(height: 12),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _infoBox("Portas", totalPortas.toString(),
-                                  Colors.blue),
-                              _infoBox("Ocupadas", ocupadasReal.toString(),
-                                  Colors.orange),
-                              _infoBox(
-                                "Uso",
-                                "${percentualReal.toStringAsFixed(1)}%",
-                                percentualReal > 100
-                                    ? const Color(0xFFDC2626) // 🔴 overbooking
-                                    : getStatusColor(),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          LinearProgressIndicator(
-                            value: percentualVisual, // 👈 agora só visual
-                            color: getStatusColor(),
-                            minHeight: 6,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ================= LOCALIZAÇÃO =================
-                    if (hasValidLocation)
-                      _mapCardOSM(
-                        isDark: isDark,
-                        lat: lat!,
-                        lng: lng!,
-                        olt: olt,
-                        nearbySplitters: nearbySplitters,
-                        // 👈 NOVO
-                      )
-                    else
-                      _locationFallback(isDark),
-
-                    // ================= PORTAS / CLIENTES =================
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: totalPortas == 0
-                          ? Column(
-                              children: [
-                                Lottie.asset(
-                                  'assets/animations/notClients.json',
-                                  width: 200,
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  "Nenhuma porta configurada",
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.grey.shade300
-                                        : Colors.grey.shade700,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : ListView(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              children: [
-                                // ================= PORTAS NORMAIS (1 até capacidade)
-                                for (int porta = 1;
-                                    porta <= totalPortas;
-                                    porta++) ...[
-                                  () {
-                                    final cliente =
-                                        clientesComPortaValida.firstWhere(
-                                      (c) => c.port == porta,
-                                      orElse: () => ClienteModel(
-                                        id: -porta,
-                                        name: "Porta $porta vazia",
-                                        user: "-",
-                                        port: porta,
-                                        status: 0,
-                                        splitterCode: widget.splitter.code,
-                                      ),
-                                    );
-
-                                    if (!cliente.name.contains("vazia")) {
-                                      return ClienteCard(cliente: cliente);
-                                    }
-
-                                    return _portaVazia(porta, isDark);
-                                  }(),
-                                ],
-
-                                // ================= CLIENTES SEM PORTA
-                                if (clientesSemPorta.isNotEmpty) ...[
-                                  const SizedBox(height: 20),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 8),
-                                    child: Text(
-                                      "Clientes sem porta atribuída",
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ),
-                                  for (final cliente in clientesSemPorta)
-                                    ClienteCard(
-                                      cliente: cliente,
-                                      isNoPort: true,
-                                    ),
-                                ],
-
-                                // ================= EXCEDENTES (OVERBOOKING REAL)
-                                if (clientesExcedentes.isNotEmpty) ...[
-                                  const SizedBox(height: 20),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 8),
-                                    child: Text(
-                                      "Clientes excedentes (overbooking)",
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.redAccent,
-                                      ),
-                                    ),
-                                  ),
-                                  for (final cliente in clientesExcedentes)
-                                    ClienteCard(
-                                      cliente: cliente,
-                                      isOverflow: true,
-                                    ),
-                                ],
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+              );
+            })));
   }
 
   Widget _dot() {
@@ -797,7 +873,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
                                 if (!mounted) return;
 
-                                Navigator.push(
+                                Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => SplitterDetailPage(
@@ -874,5 +950,22 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey)),
       ],
     );
+  }
+
+  Future<void> _refreshClientesSplitter() async {
+    if (_refreshing) return;
+
+    setState(() => _refreshing = true);
+
+    try {
+      await widget.splitterService
+          .refreshClientesPorSplitter(widget.splitter.code);
+
+      _atualizouSplitter = true;
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
   }
 }

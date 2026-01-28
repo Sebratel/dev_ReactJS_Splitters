@@ -18,7 +18,8 @@ class SplitterModel {
   // 🔹 OLT
   final String? oltCode;
   final String? oltIntegrationCode;
-  final String? oltDescription; // 👈 NOME DA OLT
+  final String? oltDescription; // Nome da OLT
+  final String integrationCode; // ID do equipamento na GeoGrid
 
   final String latitude;
   final String longitude;
@@ -26,6 +27,7 @@ class SplitterModel {
   const SplitterModel({
     required this.id,
     required this.code,
+    required this.integrationCode,
     required this.title,
     required this.outPorts,
     required this.active,
@@ -45,37 +47,36 @@ class SplitterModel {
   double? get lng => double.tryParse(longitude);
   bool get hasLocation => lat != null && lng != null;
 
-  factory SplitterModel.fromJson(Map<String, dynamic> json) {
-    final address = json['address'] as Map<String, dynamic>? ?? {};
-    final networkBox = json['networkBox'] as Map<String, dynamic>?;
-    final olt = json['olt'] as Map<String, dynamic>?;
+  // 🔐 NORMALIZA MAP (EVITA LinkedMap<dynamic, dynamic>)
+  static Map<String, dynamic> _safeMap(dynamic raw) {
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return {};
+  }
 
-    // 🔍 DEBUG CONTROLADO
-    // if (kDebugMode && (olt == null || olt['title'] == null)) {
-    //  debugPrint(
-    //    '⚠️ SPLITTER SEM OLT → '
-    //    'code=${json['code']} | '
-    //    'title=${json['title']} | '
-    //   'oltRaw=$olt',
-    // );
-    // }
+  factory SplitterModel.fromJson(Map<String, dynamic> json) {
+    final address = _safeMap(json['address']);
+    final networkBox = _safeMap(json['networkBox']);
+    final olt = _safeMap(json['olt']);
 
     return SplitterModel(
-      id: json['id'] ?? 0,
+      id: json['id'] is int ? json['id'] : int.tryParse('${json['id']}') ?? 0,
       code: json['code']?.toString() ?? '',
+      integrationCode: json['integrationCode']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       outPorts: int.tryParse(json['outPorts']?.toString() ?? '0') ?? 0,
-      active: json['active'] ?? false,
-      typeText: json['type']?['text']?.toString() ?? '',
+      active: json['active'] == true,
+      typeText: _safeMap(json['type'])['text']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
       latitude: address['latitude']?.toString().trim() ?? '',
       longitude: address['longitude']?.toString().trim() ?? '',
-      networkBoxCode: networkBox?['code']?.toString(),
-      networkBoxTitle: networkBox?['title']?.toString(),
-      networkBoxType: networkBox?['type']?['text']?.toString(),
-      oltCode: olt?['code']?.toString(),
-      oltIntegrationCode: olt?['integrationCode']?.toString(),
-      oltDescription: olt?['description']?.toString(),
+      networkBoxCode: networkBox['code']?.toString(),
+      networkBoxTitle: networkBox['title']?.toString(),
+      networkBoxType: _safeMap(networkBox['type'])['text']?.toString(),
+      oltCode: olt['code']?.toString(),
+      oltIntegrationCode: olt['integrationCode']?.toString(),
+      oltDescription: olt['description']?.toString(),
     );
   }
 }

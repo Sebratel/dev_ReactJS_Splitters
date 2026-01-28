@@ -7,8 +7,6 @@ import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 class SplitterService {
   final AuthService auth;
@@ -22,6 +20,9 @@ class SplitterService {
   static const _boxClientesIndex = "clientes_index";
   static const _boxOcupacoes = "ocupacoes_splitter";
   static const _boxClientesPorSplitter = "clientes_por_splitter";
+  static const _clientesReadyKey = "clientes_ready";
+  static const _boxStreetCache = "street_cache";
+  static late Box boxStreetCache;
 
   static String _chunkBoxName(int i) => "clientes_chunk_$i";
 
@@ -31,9 +32,64 @@ class SplitterService {
   static late Box boxOcupacoes;
   static late Box boxClientesPorSplitter;
 
+  int? getLastClientesUpdate() {
+    return boxClientesIndex.get("updatedAt") as int?;
+  }
+
   // Cache em memória
   Map<String, int> ocupacoesCache = {};
   Map<String, List<Map>> clientesPorSplitterCache = {};
+
+  Map<String, dynamic> _safeMap(dynamic raw) {
+    if (raw is Map) {
+      return raw.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+    return {};
+  }
+
+// 🔥 NOTIFIERS REATIVOS POR SPLITTER
+  final Map<String, ValueNotifier<List<ClienteModel>>> _clientesNotifier = {};
+
+  List<ClienteModel> getClientesInstantSync(String code) {
+    if (clientesPorSplitterCache.isEmpty) {
+      clientesPorSplitterCache = _readClientesMapFromHive();
+    }
+
+    final list = clientesPorSplitterCache[code] ?? [];
+
+    return list.map((e) => ClienteModel.fromJson(_safeMap(e))).toList();
+  }
+
+// 🔥 OBSERVADOR REATIVO DE CLIENTES POR SPLITTER
+  ValueNotifier<List<ClienteModel>> watchClientes(String splitterCode) {
+    return _clientesNotifier.putIfAbsent(
+      splitterCode,
+      () => ValueNotifier<List<ClienteModel>>(
+        getClientesInstantSync(splitterCode),
+      ),
+    );
+  }
+
+  Map<String, List<Map<String, dynamic>>> _readClientesMapFromHive() {
+    final raw = boxClientesPorSplitter.get("map");
+
+    final Map<String, List<Map<String, dynamic>>> safe = {};
+
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        if (key != null && value is List) {
+          safe[key.toString()] = value
+              .whereType<Map>()
+              .map((e) => _safeMap(e)) // ✅ CORRETO
+              .toList();
+        }
+      });
+    }
+
+    return safe;
+  }
 
   SplitterService({
     required this.auth,
@@ -49,6 +105,15 @@ class SplitterService {
     boxClientesIndex = await Hive.openBox(_boxClientesIndex);
     boxOcupacoes = await Hive.openBox(_boxOcupacoes);
     boxClientesPorSplitter = await Hive.openBox(_boxClientesPorSplitter);
+    boxStreetCache = await Hive.openBox(_boxStreetCache);
+  }
+
+  bool clientesJaCarregados() {
+    final ready = boxClientesIndex.get(_clientesReadyKey) == true;
+
+    final raw = boxClientesPorSplitter.get("map");
+
+    return ready && raw is Map && raw.isNotEmpty;
   }
 
   // Utils
@@ -57,12 +122,19 @@ class SplitterService {
     return DateTime.now().isAfter(at.add(cacheTtl));
   }
 
-  bool clientesCacheValido() {
-    final updatedAt = boxClientesIndex.get("updatedAt") as int?;
+  bool clientesCacheValidoParaBootstrap() {
+    final updatedAt = getLastClientesUpdate();
     if (updatedAt == null) return false;
 
     final lastUpdate = DateTime.fromMillisecondsSinceEpoch(updatedAt);
     return DateTime.now().difference(lastUpdate) < cacheTtl;
+  }
+
+// Cache em memória (🔥 ESSENCIAL NO WEB)
+  List<SplitterModel> _splittersCache = [];
+
+  List<SplitterModel> getSplittersFromMemory() {
+    return _splittersCache;
   }
 
   Future<http.Response> _authedGet(String url) async {
@@ -81,37 +153,42 @@ class SplitterService {
   // ✅ SPLITTERS
 // ===================================================================
   Future<List<SplitterModel>> fetchSplitters() async {
-    await boxSplitters.clear(); // 👈 APENAS PARA TESTE
     final saved = boxSplitters.get("data") as List?;
     final updatedAt = boxSplitters.get("updatedAt") as int?;
 
-    // 🔹 Usa cache se não estiver expirado
     if (saved != null &&
         updatedAt != null &&
         !_isExpired(DateTime.fromMillisecondsSinceEpoch(updatedAt))) {
-      return saved
-          .map((e) => SplitterModel.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      debugPrint("⚡ Splitters vindos do cache");
+
+      final result =
+          saved.map((e) => SplitterModel.fromJson(_safeMap(e))).toList();
+
+      _splittersCache = result;
+      return result;
     }
 
-    // 🔹 Busca na API
+    debugPrint("🌐 Buscando splitters da API");
+
     final r = await _authedGet(splittersEndpoint);
-    if (r.statusCode != 200) throw Exception("Erro splitters");
+    if (r.statusCode != 200) {
+      throw Exception("Erro ao buscar splitters");
+    }
 
-    // 🔹 Decodifica JSON
     final body = jsonDecode(r.body);
-
-    // 🔹 Aqui está a lista real de splitters
     final List list = body["response"] as List;
 
-    // 🔹 Salva cache
     await boxSplitters.put("data", list);
-    await boxSplitters.put("updatedAt", DateTime.now().millisecondsSinceEpoch);
+    await boxSplitters.put(
+      "updatedAt",
+      DateTime.now().millisecondsSinceEpoch,
+    );
 
-    // 🔹 Converte para model
-    return list
-        .map((e) => SplitterModel.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    final result =
+        list.map((e) => SplitterModel.fromJson(_safeMap(e))).toList();
+
+    _splittersCache = result;
+    return result;
   }
 
   // ===================================================================
@@ -127,7 +204,8 @@ class SplitterService {
     final body = jsonDecode(r.body);
     final response = body["response"] as List;
 
-    final all = response.map((e) => Map<String, dynamic>.from(e)).toList();
+    final all = response.map((e) => _safeMap(e)).toList();
+
     final total = all.length;
 
     final chunks = (total + chunkSize - 1) ~/ chunkSize;
@@ -143,10 +221,6 @@ class SplitterService {
         await b.deleteFromDisk();
       }
     }
-
-    // ✅ limpa índice global antigo
-    await boxClientesPorSplitter.clear();
-    clientesPorSplitterCache.clear();
 
     // ✅ processa chunks E cria índice global
     Map<String, int> occTemp = {};
@@ -166,11 +240,7 @@ class SplitterService {
 
       // processa índice global + ocupação
       for (final m in slice) {
-        final code = (m["splitter"]?["integrationCode"] ??
-                m["splitterCode"] ??
-                m["integrationCodeMap"] ??
-                m["integrationCode"])
-            ?.toString();
+        final code = m["splitter"]?["code"]?.toString();
 
         if (code == null) continue;
 
@@ -193,7 +263,8 @@ class SplitterService {
     await boxClientesIndex.put("chunks", chunks);
     await boxClientesIndex.put(
         "updatedAt", DateTime.now().millisecondsSinceEpoch);
-
+// 🔥 FLAG DE PRONTO (ESSENCIAL)
+    await boxClientesIndex.put(_clientesReadyKey, true);
     // salvar ocupações
     ocupacoesCache = occTemp;
     await boxOcupacoes.put("map", occTemp);
@@ -230,10 +301,7 @@ class SplitterService {
 // ===================================================================
   Future<List<ClienteModel>> getClientesInstant(String code) async {
     if (clientesPorSplitterCache.isEmpty) {
-      final raw =
-          (boxClientesPorSplitter.get("map") as Map?)?.cast<String, List>() ??
-              {};
-      clientesPorSplitterCache = raw.map((k, v) => MapEntry(k, v.cast<Map>()));
+      clientesPorSplitterCache = _readClientesMapFromHive();
     }
 
     final list = clientesPorSplitterCache[code] ?? [];
@@ -251,9 +319,7 @@ class SplitterService {
           .toList(),
     )}");
 
-    return list
-        .map((e) => ClienteModel.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+    return list.map((e) => ClienteModel.fromJson(_safeMap(e))).toList();
   }
 
   // ===================================================================
@@ -266,9 +332,7 @@ class SplitterService {
     }
 
     // Fallback: cache persistido no Hive
-    final raw =
-        (boxClientesPorSplitter.get("map") as Map?)?.cast<String, List>() ?? {};
-
+    final raw = _readClientesMapFromHive();
     return raw[splitterCode]?.length ?? 0;
   }
 
@@ -276,11 +340,7 @@ class SplitterService {
   Map<String, int> getOcupacaoSnapshot() {
     // 🔒 garante que o cache em memória esteja carregado
     if (clientesPorSplitterCache.isEmpty) {
-      final raw =
-          (boxClientesPorSplitter.get("map") as Map?)?.cast<String, List>() ??
-              {};
-
-      clientesPorSplitterCache = raw.map((k, v) => MapEntry(k, v.cast<Map>()));
+      clientesPorSplitterCache = _readClientesMapFromHive();
     }
 
     // 🔒 snapshot imutável
@@ -325,26 +385,157 @@ class SplitterService {
   /// Retorna o índice completo de clientes por splitter
   /// Map<splitterCode, List<ClienteModel>>
   Map<String, List<ClienteModel>> getClientesIndex() {
-    final box = Hive.box(boxClientesPorSplitter.name);
-
-    final raw = box.get("map");
+    final raw = boxClientesPorSplitter.get("map");
     if (raw is! Map) return {};
 
     final Map<String, List<ClienteModel>> result = {};
 
     raw.forEach((key, value) {
       if (value is List) {
-        result[key.toString()] = value
-            .whereType<Map>()
-            .map(
-              (e) => ClienteModel.fromJson(
-                Map<String, dynamic>.from(e),
-              ),
-            )
-            .toList();
+        result[key.toString()] =
+            value.map((e) => ClienteModel.fromJson(_safeMap(e))).toList();
       }
     });
 
     return result;
   }
+
+  Map<String, List<ClienteModel>> getClientesIndexFromMemory() {
+    if (clientesPorSplitterCache.isEmpty) {
+      final raw = boxClientesPorSplitter.get("map");
+
+      final Map<String, List<Map<String, dynamic>>> safe = {};
+
+      if (raw is Map) {
+        raw.forEach((key, value) {
+          if (key != null && value is List) {
+            safe[key.toString()] = value
+                .whereType<Map>()
+                .map((e) => _safeMap(e)) // ✅
+                .toList();
+          }
+        });
+      }
+
+      clientesPorSplitterCache = safe;
+    }
+
+    return clientesPorSplitterCache.map(
+      (k, v) => MapEntry(
+          k, v.map((e) => ClienteModel.fromJson(_safeMap(e))).toList()),
+    );
+  }
+
+  void restoreSplittersFromHive() {
+    final saved = boxSplitters.get("data") as List?;
+    if (saved == null) return;
+
+    _splittersCache =
+        saved.map((e) => SplitterModel.fromJson(_safeMap(e))).toList();
+  }
+
+  // ===================================================================
+// 🛣️ CACHE DE RUAS (MEMÓRIA + HIVE)
+// ===================================================================
+
+  final Map<String, String> _streetCache = {};
+
+  /// Getter público (read-only)
+  Map<String, String> get streetCache => Map.unmodifiable(_streetCache);
+
+  Future<void> loadStreetCache() async {
+    final raw = boxStreetCache.get('map');
+
+    _streetCache.clear();
+
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        if (key != null && value is String && value.isNotEmpty) {
+          _streetCache[key.toString()] = value;
+        }
+      });
+    }
+
+    debugPrint('🛣️ Ruas restauradas do Hive: ${_streetCache.length}');
+  }
+
+  Future<void> saveStreet(String splitterCode, String street) async {
+    _streetCache[splitterCode] = street;
+
+    await boxStreetCache.put(
+      'map',
+      Map<String, String>.from(_streetCache),
+    );
+  }
+
+  String? getStreet(String splitterCode) {
+    return _streetCache[splitterCode];
+  }
+
+  Future<void> refreshClientesPorSplitter(String splitterCode) async {
+    debugPrint('🔄 Refresh LOCAL do splitter $splitterCode');
+
+    // =====================================================
+    // 1️⃣ BUSCA TODOS OS CLIENTES (API NÃO SUPORTA FILTRO)
+    // =====================================================
+    final r = await _authedGet(clientesEndpoint);
+    if (r.statusCode != 200) {
+      throw Exception('Erro ao atualizar clientes do splitter');
+    }
+
+    final body = jsonDecode(r.body);
+    final response = body['response'] as List;
+
+    // =====================================================
+    // 2️⃣ FILTRA APENAS O SPLITTER DESEJADO
+    // =====================================================
+    final filtrados = response
+        .map((e) => _safeMap(e))
+        .where((c) => c['splitter']?['code']?.toString() == splitterCode)
+        .toList();
+
+    // =====================================================
+    // 3️⃣ ATUALIZA CACHE EM MEMÓRIA (IMEDIATO PARA UI)
+    // =====================================================
+    clientesPorSplitterCache[splitterCode] = filtrados;
+
+    // 🔥 ATUALIZA STREAM REATIVO (TEMPO REAL)
+    if (_clientesNotifier.containsKey(splitterCode)) {
+      _clientesNotifier[splitterCode]!.value =
+          filtrados.map((e) => ClienteModel.fromJson(_safeMap(e))).toList();
+    }
+
+    // =====================================================
+    // 4️⃣ ATUALIZA CACHE PERSISTENTE (HIVE)
+    // =====================================================
+    final raw = boxClientesPorSplitter.get('map');
+    final Map<String, dynamic> map =
+        raw is Map ? Map<String, dynamic>.from(raw) : {};
+
+    map[splitterCode] = filtrados;
+
+    await boxClientesPorSplitter.put('map', map);
+
+    // =====================================================
+    // 5️⃣ ATUALIZA OCUPAÇÃO LOCAL (SEM AFETAR GLOBAL)
+    // =====================================================
+    ocupacoesCache[splitterCode] = filtrados.length;
+    await boxOcupacoes.put(splitterCode, filtrados.length);
+
+    // =====================================================
+    // 6️⃣ (OPCIONAL, RECOMENDADO) MARCA UPDATE LOCAL
+    // =====================================================
+    await boxClientesPorSplitter.put(
+      'last_update_$splitterCode',
+      DateTime.now().millisecondsSinceEpoch,
+    );
+
+    debugPrint(
+      '✅ Splitter $splitterCode atualizado (${filtrados.length} clientes)',
+    );
+  }
+
+  // ===================================================================
+// 🛣️ RESTAURA CACHE DE RUAS DO HIVE
+// ===================================================================
 }

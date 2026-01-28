@@ -13,21 +13,35 @@ class User {
     required this.updatedAt,
   });
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'nome': nome,
-    'email': email,
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
-  };
+  // 🔐 NORMALIZA MAP (EVITA LinkedMap<dynamic, dynamic>)
+  static Map<String, dynamic> _safeMap(dynamic raw) {
+    if (raw is Map) {
+      return raw.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return {};
+  }
 
-  factory User.fromJson(Map<String, dynamic> json) => User(
-    id: json['id'] as String,
-    nome: json['nome'] as String,
-    email: json['email'] as String,
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    updatedAt: DateTime.parse(json['updatedAt'] as String),
-  );
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'nome': nome,
+        'email': email,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+      };
+
+  factory User.fromJson(Map<String, dynamic> raw) {
+    final json = _safeMap(raw);
+
+    return User(
+      id: json['id']?.toString() ?? '',
+      nome: json['nome']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
 
   User copyWith({
     String? id,
@@ -35,11 +49,12 @@ class User {
     String? email,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) => User(
-    id: id ?? this.id,
-    nome: nome ?? this.nome,
-    email: email ?? this.email,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
+  }) =>
+      User(
+        id: id ?? this.id,
+        nome: nome ?? this.nome,
+        email: email ?? this.email,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
 }
