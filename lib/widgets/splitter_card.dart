@@ -65,7 +65,7 @@ class SplitterCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 🔵 Indicador circular
+            // Indicador circular
             Container(
               width: 70,
               height: 70,
@@ -79,7 +79,7 @@ class SplitterCard extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  "$pct%",
+                  '$pct%',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -91,7 +91,7 @@ class SplitterCard extends StatelessWidget {
 
             const SizedBox(width: 10),
 
-            // 📊 Informações
+            // Informacoes
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -126,7 +126,7 @@ class SplitterCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "$ocupacao / $total portas ocupadas",
+                    '$ocupacao / $total portas ocupadas',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
