@@ -7,23 +7,53 @@ import 'package:nexaview/screens/splitter_detail_page.dart';
 import 'package:nexaview/screens/qr_scanner_page.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
-import 'package:nexaview/widgets/responsive_container.dart';
 import 'package:nexaview/models/olt_model.dart'; // ✅ IMPORTANTE
 import 'package:nexaview/services/auth_service.dart';
 import 'package:nexaview/services/splitter_status_service.dart';
 import 'package:nexaview/enums/splitter_status.dart';
-import 'package:nexaview/services/splitter_ocupacao_service.dart';
+import 'package:nexaview/services/geogrid_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:nexaview/models/app_session_user.dart';
+import 'package:nexaview/screens/massiva_page.dart';
+import 'package:nexaview/services/autoisp_auth_service.dart';
+import 'package:nexaview/services/autoisp_event_service.dart';
+import 'package:nexaview/services/massiva_elleven_service.dart';
+import 'package:nexaview/services/massiva_middleware_service.dart';
+import 'dart:ui';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   final VoidCallback onThemeToggle;
   final SplitterService splitterService;
   final AuthService authService; // ✅
+  final AppSessionUser sessionUser;
+  final String middlewareMassivaBaseUrl;
+  final String ellevenMassivaEndpoint;
+  final String ellevenMassivaListEndpoint;
+  final String ellevenMassivaListBearerToken;
+  final String ellevenMassivaListHeaderName;
+  final String ellevenMassivaListHeaderValue;
+  final String autoIspEventsEndpoint;
+  final String autoIspAuthEndpoint;
+  final String autoIspUsername;
+  final String autoIspPassword;
 
   const HomePage({
     super.key,
     required this.onThemeToggle,
     required this.splitterService,
     required this.authService,
+    required this.sessionUser,
+    required this.middlewareMassivaBaseUrl,
+    required this.ellevenMassivaEndpoint,
+    required this.ellevenMassivaListEndpoint,
+    required this.ellevenMassivaListBearerToken,
+    required this.ellevenMassivaListHeaderName,
+    required this.ellevenMassivaListHeaderValue,
+    required this.autoIspEventsEndpoint,
+    required this.autoIspAuthEndpoint,
+    required this.autoIspUsername,
+    required this.autoIspPassword,
   });
 
   @override
@@ -34,13 +64,22 @@ class _HomePageState extends State<HomePage> {
   late final SplitterService _service;
   late final AuthService _authService;
   late final OltService _oltService;
+  late final GeoGridService _geoGridService;
+  Timer? _clientesAutoRefreshTimer;
+
+  @override
+  void dispose() {
+    _clientesAutoRefreshTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   final TextEditingController _searchController = TextEditingController();
   Map<String, int> _ocupacaoSnapshot = {};
   final Map<String, String> _streetBySplitter = {};
   final Map<String, List<String>> _clientesPorSplitter = {};
 
-  // final Map<String, SplitterStatus> _statusCache = {};
+  final Map<String, SplitterStatus> _statusCache = {};
   //final Map<String, int> _ocupacaoRealCache = {};
 
   List<SplitterModel> _splitters = [];
@@ -55,17 +94,21 @@ class _HomePageState extends State<HomePage> {
   bool _splittersReady = false;
   bool _clientesReady = false;
   bool _bootstrapFinalizado = false;
+  int _totalClientesAtivos = 0;
+  int _totalClientesInativos = 0;
+  bool _bootstrapJaExecutado = false;
+  bool _resolvingAddresses = false;
 
   // 🔥 filtros
-  String? _oltSelecionada;
-  SplitterStatus? _statusSelecionado;
-  String? _ruaSelecionada;
+  Set<String> _oltsSelecionadas = {};
+  Set<SplitterStatus> _statusSelecionados = {};
+  Set<String> _ruasSelecionadas = {};
 
   // ✅ INDICA SE HÁ FILTRO ATIVO (estado lógico, não visual)
   bool get _hasFiltroAtivo {
-    return _oltSelecionada != null ||
-        _statusSelecionado != null ||
-        _ruaSelecionada != null ||
+    return _oltsSelecionadas.isNotEmpty ||
+        _statusSelecionados.isNotEmpty ||
+        _ruasSelecionadas.isNotEmpty ||
         _searchController.text.trim().isNotEmpty;
   }
 
@@ -77,27 +120,121 @@ class _HomePageState extends State<HomePage> {
     _authService = widget.authService;
     _oltService = OltService(_authService);
 
+    _geoGridService = GeoGridService(
+      baseUrl: 'https://eros.geogridmaps.com.br/sebratel/api/v3',
+      apiKey: '***REMOVED***',
+    );
+
     // 🔥 Bootstrap assíncrono (obrigatório no Web)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bootstrap();
     });
+
+    _iniciarAutoRefreshClientes();
+  }
+
+  void _iniciarAutoRefreshClientes() {
+    _clientesAutoRefreshTimer?.cancel();
+
+    _clientesAutoRefreshTimer = Timer.periodic(
+      SplitterService.cacheTtl,
+      (_) async {
+        if (!mounted || !_bootstrapFinalizado) return;
+        try {
+          debugPrint('⏱️ Auto-refresh (5 min) iniciado');
+          await _refreshSilencioso();
+          debugPrint('✅ Auto-refresh (5 min) concluído');
+        } catch (e, s) {
+          debugPrint('Erro no auto-refresh de clientes: $e\n$s');
+        }
+      },
+    );
+  }
+
+  Future<void> _openMassivaPage() async {
+    if (!widget.sessionUser.canOpenMassiva) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MassivaPage(
+          middlewareService: MassivaMiddlewareService(
+            baseUrl: widget.middlewareMassivaBaseUrl,
+            authService: _authService,
+          ),
+          ellevenService: MassivaEllevenService(
+            endpoint: widget.ellevenMassivaEndpoint,
+            listEndpoint: widget.ellevenMassivaListEndpoint,
+            listBearerToken: widget.ellevenMassivaListBearerToken,
+            listHeaderName: widget.ellevenMassivaListHeaderName,
+            listHeaderValue: widget.ellevenMassivaListHeaderValue,
+            authService: _authService,
+          ),
+          autoIspService: AutoIspEventService(
+            baseUrl: widget.autoIspEventsEndpoint,
+            authService: AutoIspAuthService(
+              authEndpoint: widget.autoIspAuthEndpoint,
+              username: widget.autoIspUsername,
+              password: widget.autoIspPassword,
+            ),
+          ),
+          sessionUser: widget.sessionUser,
+          splitters: _splitters,
+          cachedSplitterCodes: const [],
+          getClientesForSplitter: _service.getClientesInstantSync,
+          getOltIdByCode: (oltCode) =>
+              _oltService.getBySplitterCode(oltCode)?.id,
+        ),
+      ),
+    );
+  }
+
+  void _recalcularStatusClientes() {
+    int ativos = 0;
+    int inativos = 0;
+
+    final clientesIndex = _service.getClientesIndexFromMemory();
+
+    for (final entry in clientesIndex.entries) {
+      for (final cliente in entry.value) {
+        if (cliente.status == 1) {
+          ativos++;
+        } else {
+          inativos++;
+        }
+      }
+    }
+
+    _totalClientesAtivos = ativos;
+    _totalClientesInativos = inativos;
   }
 
   Future<void> _bootstrap() async {
+    // 🔒 Garante que o bootstrap roda apenas UMA vez por sessão
+    if (_bootstrapJaExecutado) {
+      debugPrint("♻️ Bootstrap ignorado (sessão ativa)");
+      return;
+    }
+
     debugPrint("🚀 BOOTSTRAP SEGURO INICIADO");
 
     try {
       // =====================================================
-      // 1️⃣ RESTAURA CACHE LOCAL DE CLIENTES (IMEDIATO)
+      // 1️⃣ RESTAURA CACHE LOCAL (STALE-WHILE-REVALIDATE)
       // =====================================================
       final snapshot = _service.getOcupacaoSnapshot();
       final cacheValido =
           snapshot.isNotEmpty && _service.clientesCacheValidoParaBootstrap();
 
-      if (cacheValido) {
-        debugPrint("⚡ Cache válido restaurado");
+      if (snapshot.isNotEmpty) {
+        debugPrint(
+          cacheValido
+              ? "⚡ Cache válido restaurado"
+              : "♻️ Cache vencido restaurado (refresh em background)",
+        );
 
         _buildClientesIndex();
+        _recalcularStatusClientes();
 
         setState(() {
           _ocupacaoSnapshot = snapshot;
@@ -106,8 +243,15 @@ class _HomePageState extends State<HomePage> {
           _clientesReady = true;
           _clientesLoading = false;
         });
-      } else {
-        debugPrint("🧨 Cache inexistente ou vencido");
+
+        // 🔄 Cache vencido → atualiza em BACKGROUND (sem await)
+        if (!cacheValido) {
+          _service.refreshClientesCache().then((_) {
+            if (!mounted) return;
+            debugPrint("✅ Refresh silencioso concluído");
+            _atualizarSnapshotLocal();
+          });
+        }
       }
 
       // =====================================================
@@ -125,8 +269,14 @@ class _HomePageState extends State<HomePage> {
         _loadingSplitters = false;
       });
 
+      for (final s in splitters) {
+        final streetFromApi = s.street;
+        if (streetFromApi == null || streetFromApi.isEmpty) continue;
+        await _service.saveStreet(s.code, streetFromApi);
+      }
+
       // =====================================================
-      // 2.5️⃣ CARREGA OLTs (OBRIGATÓRIO PARA FILTROS)
+      // 2.5️⃣ CARREGA OLTs (FILTROS)
       // =====================================================
       if (!_oltService.isLoaded) {
         debugPrint("📡 Carregando OLTs...");
@@ -135,10 +285,10 @@ class _HomePageState extends State<HomePage> {
       }
 
       // =====================================================
-      // 3️⃣ PRIMEIRA CARGA REAL DE CLIENTES (SE NECESSÁRIO)
+      // 3️⃣ PRIMEIRA CARGA REAL (SOMENTE SE NÃO EXISTE CACHE)
       // =====================================================
-      if (!_clientesReady) {
-        debugPrint("🌐 Primeira carga real de clientes");
+      if (!_clientesReady && snapshot.isEmpty) {
+        debugPrint("🌐 Primeira carga REAL (sem cache)");
 
         setState(() => _clientesLoading = true);
 
@@ -156,10 +306,11 @@ class _HomePageState extends State<HomePage> {
         });
 
         _buildClientesIndex();
+        _recalcularStatusClientes();
       }
 
       // =====================================================
-      // 4️⃣ RESTAURA CACHE DE RUAS (ANTES DOS FILTROS)
+      // 4️⃣ CACHE DE RUAS
       // =====================================================
       await _service.loadStreetCache();
 
@@ -167,26 +318,30 @@ class _HomePageState extends State<HomePage> {
         _streetBySplitter
           ..clear()
           ..addAll(_service.streetCache);
+        _ruasCacheOrdenadas = null;
       });
 
       // =====================================================
-      // 5️⃣ APLICA FILTROS (TUDO PRONTO)
+      // 5️⃣ FILTROS
       // =====================================================
       _applyFilters();
 
       // =====================================================
-      // 6️⃣ RESOLUÇÃO DE ENDEREÇOS (BACKGROUND)
+      // 6️⃣ ENDEREÇOS EM BACKGROUND
       // =====================================================
       _resolveAddressesInBackground();
 
       // =====================================================
-      // ✅ BOOTSTRAP FINALIZADO (ESTADO ESTÁVEL)
+      // ✅ BOOTSTRAP FINALIZADO
       // =====================================================
       if (mounted) {
         setState(() {
+          _clientesLoading = false;
           _bootstrapFinalizado = true;
         });
       }
+
+      _bootstrapJaExecutado = true; // 🔥 ESSENCIAL
     } catch (e, s) {
       debugPrint("❌ ERRO NO BOOTSTRAP: $e\n$s");
 
@@ -211,49 +366,54 @@ class _HomePageState extends State<HomePage> {
   }
 
   SplitterStatus _getStatus(SplitterModel splitter) {
-    final ocupacaoReal = _ocupacaoSnapshot[splitter.code] ?? 0;
-
-    return SplitterStatusService.resolve(
-      ocupacaoReal: ocupacaoReal,
-      totalPortas: splitter.outPorts,
+    return _statusCache.putIfAbsent(
+      splitter.code,
+      () => SplitterStatusService.resolve(
+        ocupacaoReal: _ocupacaoSnapshot[splitter.code] ?? 0,
+        totalPortas: splitter.outPorts,
+      ),
     );
   }
 
   void _applyFilters() {
-    // 🚫 BLOQUEIO ABSOLUTO
-    if (!_splittersReady) return;
-    if (!_clientesReady) return;
+    if (!mounted) return;
+    if (!_bootstrapFinalizado) return;
+    if (!_splittersReady || !_clientesReady) return;
     if (_splitters.isEmpty) return;
-    if (_clientesPorSplitter.isEmpty && _cacheReady) return;
 
     final query = _searchController.text.trim().toLowerCase();
 
+    final newFiltered = _splitters.where((s) {
+      final clientes = _clientesPorSplitter[s.code] ?? const [];
+
+      final matchCliente =
+          query.isNotEmpty && clientes.any((n) => n.contains(query));
+
+      final matchBusca = query.isEmpty ||
+          s.code.toLowerCase().contains(query) ||
+          s.title.toLowerCase().contains(query) ||
+          matchCliente;
+
+      final matchOlt = _oltsSelecionadas.isEmpty ||
+          (s.oltCode != null && _oltsSelecionadas.contains(s.oltCode));
+
+      final matchStatus = _statusSelecionados.isEmpty ||
+          _statusSelecionados.contains(_getStatus(s));
+
+      final street = _streetBySplitter[s.code];
+      final matchRua = _ruasSelecionadas.isEmpty ||
+          (street != null &&
+              _ruasSelecionadas.any(
+                (rua) => street.toLowerCase().contains(rua.toLowerCase()),
+              ));
+
+      return matchBusca && matchOlt && matchStatus && matchRua;
+    }).toList();
+
+    if (listEquals(newFiltered, _filtered)) return;
+
     setState(() {
-      _filtered = _splitters.where((s) {
-        final List<String> clientes = _clientesPorSplitter[s.code] ?? const [];
-
-        final bool matchCliente =
-            query.isNotEmpty && clientes.any((n) => n.contains(query));
-
-        final bool matchBusca = query.isEmpty ||
-            s.code.toLowerCase().contains(query) ||
-            s.title.toLowerCase().contains(query) ||
-            matchCliente;
-
-        final bool matchOlt =
-            _oltSelecionada == null || s.oltCode == _oltSelecionada;
-
-        final bool matchStatus =
-            _statusSelecionado == null || _getStatus(s) == _statusSelecionado;
-
-        final String? street = _streetBySplitter[s.code];
-        final bool matchRua = _ruaSelecionada == null ||
-            (street != null &&
-                street.toLowerCase().contains(_ruaSelecionada!.toLowerCase()));
-
-        return matchBusca && matchOlt && matchStatus && matchRua;
-      }).toList();
-
+      _filtered = newFiltered;
       _totalOcupacaoFiltrada = _calcularOcupacaoFiltrada();
     });
   }
@@ -273,18 +433,34 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _resolveAddressesInBackground() async {
-    for (final s in _splitters) {
-      if (!s.hasLocation) continue;
+    if (_resolvingAddresses) return;
+    _resolvingAddresses = true;
 
-      final cachedStreet = _service.getStreet(s.code);
-      if (cachedStreet != null) {
-        setState(() {
-          _streetBySplitter[s.code] = cachedStreet;
-        });
-        continue;
-      }
+    try {
+      for (final s in _splitters) {
+        if (!mounted) return;
 
-      try {
+        final streetFromApi = s.street;
+        if (streetFromApi != null && streetFromApi.isNotEmpty) {
+          if (_streetBySplitter[s.code] != streetFromApi) {
+            await _service.saveStreet(s.code, streetFromApi);
+            setState(() {
+              _streetBySplitter[s.code] = streetFromApi;
+              _ruasCacheOrdenadas = null;
+            });
+            if (_ruasSelecionadas.isNotEmpty) _applyFilters();
+          }
+          continue;
+        }
+
+        final cached = _service.getStreet(s.code);
+        if (cached != null) {
+          _streetBySplitter[s.code] = cached;
+          continue;
+        }
+
+        if (s.lat == null || s.lng == null) continue;
+
         final street = await _service.getStreetFromLatLng(s.lat!, s.lng!);
         if (!mounted || street == null) continue;
 
@@ -292,33 +468,34 @@ class _HomePageState extends State<HomePage> {
 
         setState(() {
           _streetBySplitter[s.code] = street;
-          _ruasCacheOrdenadas = null; // 🔥 invalida o micro-cache
+          _ruasCacheOrdenadas = null;
         });
 
-        if (_ruaSelecionada != null) {
-          _applyFilters();
-        }
+        if (_ruasSelecionadas.isNotEmpty) _applyFilters();
 
         await Future.delayed(const Duration(milliseconds: 1200));
-      } catch (e) {
-        debugPrint('❌ Falha endereço (${s.code}): $e');
-        await Future.delayed(const Duration(milliseconds: 1500));
       }
+    } finally {
+      _resolvingAddresses = false;
     }
   }
 
-  Future<T?> _showSearchDialog<T>({
+  Future<Set<T>?> _showMultiSelectSearchDialog<T>({
     required String title,
     required List<T> items,
     required String Function(T) label,
+    required Set<T> initialSelected,
   }) {
     List<T> filtered = List.from(items);
     final controller = TextEditingController();
+    final selected = Set<T>.from(initialSelected);
 
-    return showDialog<T>(
+    return showDialog<Set<T>>(
       context: context,
+      barrierDismissible: true,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
+        const headerYellow = Color.fromARGB(255, 255, 174, 0);
 
         return StatefulBuilder(
           builder: (context, setState) {
@@ -336,92 +513,187 @@ class _HomePageState extends State<HomePage> {
                   color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
-              content: SizedBox(
-                width: 420,
-                height: 420,
-                child: Column(
-                  children: [
-                    // 🔍 CAMPO DE BUSCA
-                    TextField(
-                      controller: controller,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar...',
-                        hintStyle: TextStyle(
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? const Color(0xFF2A2A2A)
-                            : const Color(0xFFEDEDED),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          filtered = items
-                              .where(
-                                (e) => label(e)
-                                    .toLowerCase()
-                                    .contains(value.toLowerCase()),
-                              )
-                              .toList();
-                        });
-                      },
+
+              // 🔥 CONTEÚDO RESPONSIVO AO TECLADO
+              content: Padding(
+                padding: EdgeInsets.only(
+                  bottom:
+                      MediaQuery.of(context).viewInsets.bottom, // 🔑 CRÍTICO
+                ),
+                child: SizedBox(
+                  width: 420,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 420, // 🔥 NÃO fixa, apenas limita
                     ),
-
-                    const SizedBox(height: 12),
-
-                    // 📋 LISTA DE RESULTADOS
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (_, index) {
-                          final item = filtered[index];
-
-                          return Card(
-                            elevation: 0,
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            color:
-                                isDark ? const Color(0xFF2A2A2A) : Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      children: [
+                        // 🔍 CAMPO DE BUSCA
+                        TextField(
+                          controller: controller,
+                          autofocus: true,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar...',
+                            hintStyle: TextStyle(
+                              color: isDark ? Colors.white54 : Colors.black54,
                             ),
-                            child: ListTile(
-                              title: Text(
-                                label(item),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                            filled: true,
+                            fillColor: isDark
+                                ? const Color(0xFF2A2A2A)
+                                : const Color(0xFFEDEDED),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              filtered = items
+                                  .where(
+                                    (e) => label(e)
+                                        .toLowerCase()
+                                        .contains(value.toLowerCase()),
+                                  )
+                                  .toList();
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // 📋 LISTA DE RESULTADOS (SCROLL CONTROLADO)
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'Nenhum resultado',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white54
+                                          : Colors.black54,
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  itemCount: filtered.length,
+                                  itemBuilder: (_, index) {
+                                    final item = filtered[index];
+
+                                    return Card(
+                                      elevation: 0,
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      color: isDark
+                                          ? const Color(0xFF2A2A2A)
+                                          : Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ListTile(
+                                        leading: Checkbox(
+                                          value: selected.contains(item),
+                                          side: BorderSide(
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.grey.shade600,
+                                            width: 1.4,
+                                          ),
+                                          fillColor: WidgetStateProperty
+                                              .resolveWith<Color?>(
+                                            (states) {
+                                              if (states.contains(
+                                                  WidgetState.selected)) {
+                                                return headerYellow;
+                                              }
+                                              return isDark
+                                                  ? const Color(0xFF3A3A3A)
+                                                  : Colors.grey.shade300;
+                                            },
+                                          ),
+                                          checkColor: Colors.black87,
+                                          onChanged: (_) {
+                                            setState(() {
+                                              if (selected.contains(item)) {
+                                                selected.remove(item);
+                                              } else {
+                                                selected.add(item);
+                                              }
+                                            });
+                                          },
+                                        ),
+                                        title: Text(
+                                          label(item),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        onTap: () {
+                                          setState(() {
+                                            if (selected.contains(item)) {
+                                              selected.remove(item);
+                                            } else {
+                                              selected.add(item);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  },
                                 ),
-                              ),
-                              onTap: () => Navigator.pop(context, item),
-                            ),
-                          );
-                        },
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
+              actions: [
+                TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: headerYellow,
+                    foregroundColor: Colors.black87,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: headerYellow,
+                    foregroundColor: Colors.black87,
+                  ),
+                  onPressed: () => setState(() => selected.clear()),
+                  child: const Text('Limpar'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: headerYellow,
+                    foregroundColor: Colors.black87,
+                  ),
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text('Aplicar'),
+                ),
+              ],
             );
           },
         );
       },
-    );
+    ).whenComplete(controller.dispose);
   }
 
   Future<void> _openQR() async {
@@ -462,7 +734,9 @@ class _HomePageState extends State<HomePage> {
           allSplitters: _splitters, // 👈 passa todos
           splitterService: _service, // 👈 PASSA AQUI
           oltService: _oltService, // 👈 PASSA AQUI
-          ocupacaoSnapshot: _ocupacaoSnapshot, // 🔥 FALTAVA ISSO
+          ocupacaoSnapshot: _ocupacaoSnapshot,
+          geoGridService: _geoGridService,
+          authService: widget.authService, // 🔥 FALTAVA ISSO
         ),
       ),
     );
@@ -478,13 +752,13 @@ class _HomePageState extends State<HomePage> {
 
     final bool headerReady = _splittersReady && _clientesReady;
 
-    if (_loadingSplitters && _splitters.isEmpty) {
+    // 🔹 LOADING INICIAL ÚNICO (somente antes do bootstrap)
+    if (!_bootstrapFinalizado && _splitters.isEmpty) {
       return Scaffold(
+        resizeToAvoidBottomInset: true, // 🔥 FUNDAMENTAL
         backgroundColor: Theme.of(context).colorScheme.surface,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
+        body: const Center(
+          child: CircularProgressIndicator(),
         ),
       );
     }
@@ -499,12 +773,15 @@ class _HomePageState extends State<HomePage> {
 
     final int splittersExibidos =
         isFiltered ? _filtered.length : _splitters.length;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
+        // ❌ REMOVER
         child: Stack(
           children: [
-            // ================= CONTEÚDO PRINCIPAL (SCROLL)
+            // ================= CONTEÚDO PRINCIPAL
             RefreshIndicator(
               onRefresh: _refreshSilencioso,
               child: LayoutBuilder(
@@ -520,7 +797,12 @@ class _HomePageState extends State<HomePage> {
 
                   const double gridSpacing = 10;
 
+                  // 🔥 ALTURA DO TECLADO
+                  //final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
                   return CustomScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       // ================= HEADER
@@ -532,7 +814,7 @@ class _HomePageState extends State<HomePage> {
                               headerReady: headerReady,
                               totalClientes: totalClientes,
                               totalClientesFiltrados: totalClientesFiltrados,
-                              splittersExibidos: splittersExibidos, // 🔥 NOVO
+                              splittersExibidos: splittersExibidos,
                               isFiltered: isFiltered,
                             ),
                             const SizedBox(height: 20),
@@ -575,6 +857,7 @@ class _HomePageState extends State<HomePage> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final splitter = _filtered[index];
+
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 24,
@@ -590,50 +873,25 @@ class _HomePageState extends State<HomePage> {
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
 
-                                    final totalPortas = splitter.outPorts;
-                                    final excedentes = clientes
-                                        .where((c) =>
-                                            c.port != null &&
-                                            c.port! > totalPortas)
-                                        .toList();
-
-                                    debugPrint('🧪 DEBUG SPLITTER SELECIONADO');
-                                    debugPrint('Código: ${splitter.code}');
-                                    debugPrint('Portas: $totalPortas');
-                                    debugPrint(
-                                        'Clientes totais: ${clientes.length}');
-                                    debugPrint(
-                                        'Excedentes: ${excedentes.length}');
-
-                                    for (final c in excedentes) {
-                                      debugPrint(
-                                        '⚠️ EXCEDENTE → ${c.name} | porta=${c.port}',
-                                      );
-                                    }
-                                    debugPrint(
-                                        '🧩 SPLITTER OLT CODE: "${splitter.oltCode}"');
-                                    debugPrint(
-                                        '🧩 OLT RESOLVIDA: ${olt?.title}');
-
                                     if (!mounted) return;
+
                                     final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => SplitterDetailPage(
                                           splitter: splitter,
                                           clientes: clientes,
-                                          olt: olt, // ✅ PASSA O MODEL
-                                          allSplitters:
-                                              _splitters, // 👈 passa todos
-                                          splitterService:
-                                              _service, // 👈 PASSA AQUI
-                                          oltService:
-                                              _oltService, // 👈 PASSA AQUI
-                                          ocupacaoSnapshot:
-                                              _ocupacaoSnapshot, // 🔥 FALTAVA ISSO
+                                          olt: olt,
+                                          allSplitters: _splitters,
+                                          splitterService: _service,
+                                          oltService: _oltService,
+                                          ocupacaoSnapshot: _ocupacaoSnapshot,
+                                          geoGridService: _geoGridService,
+                                          authService: widget.authService,
                                         ),
                                       ),
                                     );
+
                                     if (updated == true) {
                                       await _service.refreshClientesPorSplitter(
                                           splitter.code);
@@ -656,6 +914,7 @@ class _HomePageState extends State<HomePage> {
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
                                 final splitter = _filtered[index];
+
                                 return SplitterCard(
                                   splitter: splitter,
                                   ocupacao:
@@ -663,52 +922,28 @@ class _HomePageState extends State<HomePage> {
                                   onTap: () async {
                                     final clientes = await _service
                                         .getClientesInstant(splitter.code);
-                                    // 🔥 RESOLVE A OLT AQUI
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
-                                    final totalPortas = splitter.outPorts;
-                                    final excedentes = clientes
-                                        .where((c) =>
-                                            c.port != null &&
-                                            c.port! > totalPortas)
-                                        .toList();
 
-                                    debugPrint('🧪 DEBUG SPLITTER SELECIONADO');
-                                    debugPrint('Código: ${splitter.code}');
-                                    debugPrint('Portas: $totalPortas');
-                                    debugPrint(
-                                        'Clientes totais: ${clientes.length}');
-                                    debugPrint(
-                                        'Excedentes: ${excedentes.length}');
-
-                                    for (final c in excedentes) {
-                                      debugPrint(
-                                        '⚠️ EXCEDENTE → ${c.name} | porta=${c.port}',
-                                      );
-                                    }
-                                    debugPrint(
-                                        '🧩 SPLITTER OLT CODE: "${splitter.oltCode}"');
-                                    debugPrint(
-                                        '🧩 OLT RESOLVIDA: ${olt?.title}');
                                     if (!mounted) return;
+
                                     final updated = await Navigator.push<bool>(
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => SplitterDetailPage(
                                           splitter: splitter,
                                           clientes: clientes,
-                                          olt: olt, // ✅ passa pronto
-                                          allSplitters:
-                                              _splitters, // 👈 passa todos
-                                          splitterService:
-                                              _service, // 👈 PASSA AQUI
-                                          oltService:
-                                              _oltService, // 👈 PASSA AQUI
-                                          ocupacaoSnapshot:
-                                              _ocupacaoSnapshot, // 🔥 FALTAVA ISSO
+                                          olt: olt,
+                                          allSplitters: _splitters,
+                                          splitterService: _service,
+                                          oltService: _oltService,
+                                          ocupacaoSnapshot: _ocupacaoSnapshot,
+                                          geoGridService: _geoGridService,
+                                          authService: widget.authService,
                                         ),
                                       ),
                                     );
+
                                     if (updated == true) {
                                       await _service.refreshClientesPorSplitter(
                                           splitter.code);
@@ -735,8 +970,8 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // ================= OVERLAY DE LOADING (SEM ANIMAÇÃO)
-            if (_clientesLoading && !_cacheReady)
+            // ================= OVERLAY DE LOADING
+            if (_clientesLoading && !_bootstrapFinalizado)
               IgnorePointer(
                 ignoring: true,
                 child: Container(
@@ -746,7 +981,6 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 🔄 LOTTIE
                       SizedBox(
                         width: 280,
                         height: 280,
@@ -756,10 +990,7 @@ class _HomePageState extends State<HomePage> {
                           fit: BoxFit.contain,
                         ),
                       ),
-
                       const SizedBox(height: 12),
-
-                      // 🏷️ TEXTO EM BADGE (OPÇÃO 2)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 22,
@@ -771,12 +1002,10 @@ class _HomePageState extends State<HomePage> {
                         ),
                         child: const Text(
                           "Carregando clientes…",
-                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
-                            letterSpacing: 0.4,
                           ),
                         ),
                       ),
@@ -795,14 +1024,18 @@ class _HomePageState extends State<HomePage> {
     required bool headerReady,
     required int totalClientes,
     required int totalClientesFiltrados,
-    required int splittersExibidos, // 🔥 NOVO
+    required int splittersExibidos,
     required bool isFiltered,
   }) {
     final width = MediaQuery.of(context).size.width;
-    final bool isDesktop = width >= 900; // ajuste se quiser
-    // 🔹 ALTURA COM 3ª CONDIÇÃO (filtro ativo)
+    final bool isDesktop = width >= 900;
+
+    // 🔥 ALTURA AJUSTADA (agora com 5 cards)
     final double headerHeight =
-        isDesktop ? (isFiltered ? 360 : 340) : (isFiltered ? 570 : 470);
+        isDesktop ? (isFiltered ? 330 : 320) : (isFiltered ? 800 : 710);
+
+    final clientesAtivos = headerReady ? _totalClientesAtivos : 0;
+    final clientesInativos = headerReady ? _totalClientesInativos : 0;
 
     return ClipRRect(
       borderRadius: const BorderRadius.only(
@@ -815,13 +1048,13 @@ class _HomePageState extends State<HomePage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 🖼️ IMAGEM DE FUNDO
+            // 🖼️ FUNDO
             Image.asset(
               'assets/images/sebratelimagem.jpg',
               fit: BoxFit.cover,
             ),
 
-            // 🎨 OVERLAY AMARELO TRANSPARENTE
+            // 🎨 OVERLAY
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -832,12 +1065,6 @@ class _HomePageState extends State<HomePage> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 10,
-                    color: Colors.black.withOpacity(0.15),
-                  ),
-                ],
               ),
             ),
 
@@ -862,67 +1089,99 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(width: 15),
                             Expanded(
-                              child: ShaderMask(
-                                shaderCallback: (bounds) =>
-                                    const LinearGradient(
-                                  colors: [
-                                    Color.fromARGB(255, 255, 255, 123),
-                                    Color.fromARGB(255, 211, 66, 63),
-                                    Color.fromARGB(255, 0, 0, 0),
+                              child: Text(
+                                "SPLITTERS",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 36,
+                                  letterSpacing: 0.9,
+                                  color:
+                                      const Color.fromARGB(255, 255, 255, 255),
+                                  shadows: [
+                                    Shadow(
+                                      offset: const Offset(0, 3),
+                                      blurRadius: 2,
+                                      color: Colors.black.withOpacity(0.3),
+                                    ),
                                   ],
-                                ).createShader(bounds),
-                                child: Text(
-                                  "SPLITTERS",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 34,
-                                    letterSpacing: 0.9,
-                                    color: const Color.fromARGB(
-                                        255, 255, 255, 255),
-                                    shadows: [
-                                      Shadow(
-                                        offset: const Offset(0, 3),
-                                        blurRadius: 2,
-                                        color: Colors.black.withOpacity(0.3),
-                                      )
-                                    ],
-                                  ),
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            if (widget.sessionUser.canOpenMassiva)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: Tooltip(
+                                  message: 'Abertura de massivas',
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isDark
+                                          ? Colors.white.withOpacity(0.5)
+                                          : Colors.black.withOpacity(0.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: (isDark
+                                                  ? const Color.fromARGB(
+                                                      255, 253, 179, 18)
+                                                  : Colors.orange)
+                                              .withOpacity(0.8),
+                                          blurRadius: 18,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: IconButton(
+                                      onPressed: _openMassivaPage,
+                                      icon: const Icon(
+                                        Icons.campaign_outlined,
+                                        color:
+                                            Color.fromARGB(255, 255, 255, 255),
+                                        size: 35,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isDark
-                                    ? Colors.white.withOpacity(0.12)
-                                    : const Color.fromARGB(255, 0, 0, 0)
-                                        .withOpacity(0.16),
+                                    ? Colors.white.withOpacity(0.5)
+                                    : Colors.black.withOpacity(0.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (isDark
+                                            ? const Color.fromARGB(
+                                                255, 253, 179, 18)
+                                            : Colors.orange)
+                                        .withOpacity(0.8),
+                                    blurRadius: 18,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
                               child: IconButton(
                                 onPressed: widget.onThemeToggle,
                                 icon: Icon(
                                   isDark ? Icons.light_mode : Icons.dark_mode,
-                                  size: 30,
-                                  color: isDark
-                                      ? const Color.fromARGB(255, 253, 236, 181)
-                                      : Colors.redAccent,
+                                  color:
+                                      const Color.fromARGB(255, 255, 255, 255),
+                                  size: 36,
                                 ),
                               ),
                             ),
                           ],
                         ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
 
-                        // ================= CONTADORES (ANTI-QUEBRA)
+                        // ================= CARDS
                         LayoutBuilder(
                           builder: (context, constraints) {
-                            final isSmall = constraints.maxWidth < 420;
-                            final bool isMobile = width < 600;
+                            final bool isMobile = constraints.maxWidth < 600;
                             final bool isTablet = constraints.maxWidth >= 600 &&
                                 constraints.maxWidth < 1000;
 
@@ -942,7 +1201,29 @@ class _HomePageState extends State<HomePage> {
                                     .toSet()
                                     .length;
 
-                            final widgets = [
+                            final cards = [
+                              _buildStatWrapper(
+                                isDark: isDark,
+                                child: _statCard(
+                                  title: "Clientes ativos",
+                                  value: clientesAtivos,
+                                  icon: Icons.check_circle_outline,
+                                  accent:
+                                      const Color.fromARGB(255, 192, 31, 31),
+                                  isDark: isDark,
+                                ),
+                              ),
+                              _buildStatWrapper(
+                                isDark: isDark,
+                                child: _statCard(
+                                  title: "Clientes bloqueados",
+                                  value: clientesInativos,
+                                  icon: Icons.block,
+                                  accent:
+                                      const Color.fromARGB(255, 192, 31, 31),
+                                  isDark: isDark,
+                                ),
+                              ),
                               _buildStatWrapper(
                                 isDark: isDark,
                                 child: _statCard(
@@ -955,7 +1236,7 @@ class _HomePageState extends State<HomePage> {
                                       : null,
                                   icon: Icons.device_hub,
                                   accent:
-                                      const Color.fromARGB(255, 218, 22, 22),
+                                      const Color.fromARGB(255, 192, 31, 31),
                                   isDark: isDark,
                                 ),
                               ),
@@ -972,7 +1253,7 @@ class _HomePageState extends State<HomePage> {
                                       isFiltered ? "de $totalClientes" : null,
                                   icon: Icons.people_alt_rounded,
                                   accent:
-                                      const Color.fromARGB(255, 218, 22, 22),
+                                      const Color.fromARGB(255, 192, 31, 31),
                                   isDark: isDark,
                                 ),
                               ),
@@ -986,56 +1267,64 @@ class _HomePageState extends State<HomePage> {
                                   subtitle: isFiltered ? "de $totalOlts" : null,
                                   icon: Icons.router,
                                   accent:
-                                      const Color.fromARGB(255, 218, 22, 22),
+                                      const Color.fromARGB(255, 192, 31, 31),
                                   isDark: isDark,
                                 ),
                               ),
                             ];
 
-                            // 📱 MOBILE → UM EMBAIXO DO OUTRO
+                            // 📱 MOBILE → 1 por linha
                             if (isMobile) {
                               return Column(
-                                children: widgets
-                                    .map(
-                                      (w) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 12),
-                                        child: w,
-                                      ),
-                                    )
+                                children: cards
+                                    .map((c) => Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 12),
+                                          child: c,
+                                        ))
                                     .toList(),
                               );
                             }
-                            // 📲 TABLET → 2 + 1
+
+                            // 📲 TABLET → 2 + 2 + 1
                             if (isTablet) {
                               return Column(
                                 children: [
                                   Row(
                                     children: [
-                                      Expanded(child: widgets[0]),
+                                      Expanded(child: cards[0]),
                                       const SizedBox(width: 12),
-                                      Expanded(child: widgets[1]),
+                                      Expanded(child: cards[1]),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
-                                  widgets[2],
+                                  Row(
+                                    children: [
+                                      Expanded(child: cards[2]),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: cards[3]),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  cards[4],
                                 ],
                               );
                             }
-                            // 🖥️ DESKTOP → 3 LADO A LADO
+
+                            // 🖥️ DESKTOP → 5 lado a lado
                             return Row(
                               children: [
-                                Expanded(child: widgets[0]),
-                                const SizedBox(width: 16),
-                                Expanded(child: widgets[1]),
-                                const SizedBox(width: 16),
-                                Expanded(child: widgets[2]),
+                                for (int i = 0; i < cards.length; i++) ...[
+                                  Expanded(child: cards[i]),
+                                  if (i < cards.length - 1)
+                                    const SizedBox(width: 14),
+                                ]
                               ],
                             );
                           },
                         ),
 
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
 
                         // ================= BUSCA
                         _searchBar(isDark),
@@ -1092,15 +1381,20 @@ class _HomePageState extends State<HomePage> {
         _filterChip(
           isDark: isDark,
           icon: Icons.router,
-          label: _oltSelecionada == null
+          label: _oltsSelecionadas.isEmpty
               ? 'OLT'
-              : (_oltService.getBySplitterCode(_oltSelecionada!)?.title ??
-                  _oltSelecionada!),
-          selected: _oltSelecionada != null,
+              : _oltsSelecionadas.length == 1
+                  ? (_oltService
+                          .getBySplitterCode(_oltsSelecionadas.first)
+                          ?.title ??
+                      _oltsSelecionadas.first)
+                  : 'OLT (${_oltsSelecionadas.length})',
+          selected: _oltsSelecionadas.isNotEmpty,
           activeColor: Colors.blueAccent,
           onTap: () async {
-            final selected = await _selectOltDialog();
-            setState(() => _oltSelecionada = selected);
+            final selected = await _selectOltsDialog();
+            if (selected == null || !mounted) return;
+            setState(() => _oltsSelecionadas = selected);
             _applyFilters();
           },
         ),
@@ -1109,18 +1403,23 @@ class _HomePageState extends State<HomePage> {
         _filterChip(
           isDark: isDark,
           icon: Icons.warning_amber_rounded,
-          label: _statusSelecionado?.name ?? 'Status',
-          selected: _statusSelecionado != null,
-          activeColor: _statusSelecionado == SplitterStatus.Excedente
+          label: _statusSelecionados.isEmpty
+              ? 'Status'
+              : _statusSelecionados.length == 1
+                  ? _statusSelecionados.first.name
+                  : 'Status (${_statusSelecionados.length})',
+          selected: _statusSelecionados.isNotEmpty,
+          activeColor: _statusSelecionados.contains(SplitterStatus.Excedente)
               ? const Color.fromARGB(255, 117, 6, 6) // ou vermelho escuro
-              : _statusSelecionado == SplitterStatus.Critico
+              : _statusSelecionados.contains(SplitterStatus.Critico)
                   ? Colors.redAccent
-                  : _statusSelecionado == SplitterStatus.Alerta
+                  : _statusSelecionados.contains(SplitterStatus.Alerta)
                       ? Colors.orangeAccent
                       : Colors.green,
           onTap: () async {
             final selected = await _selectStatusDialog();
-            setState(() => _statusSelecionado = selected);
+            if (selected == null || !mounted) return;
+            setState(() => _statusSelecionados = selected);
             _applyFilters();
           },
         ),
@@ -1129,21 +1428,25 @@ class _HomePageState extends State<HomePage> {
         _filterChip(
           isDark: isDark,
           icon: Icons.signpost_outlined,
-          label: _ruaSelecionada ?? 'Rua',
-          selected: _ruaSelecionada != null,
+          label: _ruasSelecionadas.isEmpty
+              ? 'Rua'
+              : _ruasSelecionadas.length == 1
+                  ? _ruasSelecionadas.first
+                  : 'Rua (${_ruasSelecionadas.length})',
+          selected: _ruasSelecionadas.isNotEmpty,
           activeColor: Colors.blueAccent,
           onTap: () async {
             final selected = await _selectRuaDialog();
-            if (!mounted) return;
-            setState(() => _ruaSelecionada = selected);
+            if (selected == null || !mounted) return;
+            setState(() => _ruasSelecionadas = selected);
             _applyFilters();
           },
         ),
 
         // ❌ LIMPAR FILTROS
-        if (_oltSelecionada != null ||
-            _statusSelecionado != null ||
-            _ruaSelecionada != null)
+        if (_oltsSelecionadas.isNotEmpty ||
+            _statusSelecionados.isNotEmpty ||
+            _ruasSelecionadas.isNotEmpty)
           _filterChip(
             isDark: isDark,
             icon: Icons.clear_all_rounded,
@@ -1152,9 +1455,9 @@ class _HomePageState extends State<HomePage> {
             activeColor: Colors.redAccent,
             onTap: () {
               setState(() {
-                _oltSelecionada = null;
-                _statusSelecionado = null;
-                _ruaSelecionada = null;
+                _oltsSelecionadas.clear();
+                _statusSelecionados.clear();
+                _ruasSelecionadas.clear();
               });
               _applyFilters();
             },
@@ -1163,7 +1466,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<String?> _selectOltDialog() async {
+  Future<Set<String>?> _selectOltsDialog() async {
     // 🔹 pega todas as OLTs resolvidas a partir dos splitters
     final Map<String, OltModel> oltsMap = {};
 
@@ -1179,30 +1482,37 @@ class _HomePageState extends State<HomePage> {
     final List<OltModel> olts = oltsMap.values.toList()
       ..sort((a, b) => a.title.compareTo(b.title));
 
-    return _showSearchDialog<OltModel>(
+    final selected = await _showMultiSelectSearchDialog<OltModel>(
       title: 'Filtrar por OLT',
       items: olts,
       label: (olt) => olt.title, // ✅ DESCRIÇÃO
-    ).then((olt) => olt?.code); // 🔥 retorna o code internamente
+      initialSelected:
+          olts.where((olt) => _oltsSelecionadas.contains(olt.code)).toSet(),
+    );
+
+    return selected?.map((olt) => olt.code).toSet();
   }
 
-  Future<SplitterStatus?> _selectStatusDialog() {
-    return _showSearchDialog<SplitterStatus>(
+  Future<Set<SplitterStatus>?> _selectStatusDialog() {
+    return _showMultiSelectSearchDialog<SplitterStatus>(
       title: 'Filtrar por Status',
       items: SplitterStatus.values,
       label: (s) => s.name,
+      initialSelected: Set<SplitterStatus>.from(_statusSelecionados),
     );
   }
 
-  Future<String?> _selectRuaDialog() async {
-    _ruasCacheOrdenadas ??= _streetBySplitter.values.toSet().toList()..sort();
+  Future<Set<String>?> _selectRuaDialog() async {
+    _ruasCacheOrdenadas = _streetBySplitter.values.toSet().toList()..sort();
 
     final ruas = _ruasCacheOrdenadas!;
 
-    return _showSearchDialog<String>(
+    return _showMultiSelectSearchDialog<String>(
       title: 'Filtrar por Rua',
       items: ruas,
       label: (r) => r,
+      initialSelected:
+          _ruasSelecionadas.where((rua) => ruas.contains(rua)).toSet(),
     );
   }
 
@@ -1219,11 +1529,9 @@ class _HomePageState extends State<HomePage> {
         final bool isMobile = constraints.maxWidth < 460;
         final bool hasSubtitle = subtitle != null;
 
-        // 🔢 valor principal
         final String valueFormatted =
             NumberFormat.decimalPattern('pt_BR').format(value);
 
-        // 🔢 subtítulo formatado
         final String? subtitleFormatted = hasSubtitle
             ? 'de ${NumberFormat.decimalPattern('pt_BR').format(
                 int.tryParse(
@@ -1235,98 +1543,118 @@ class _HomePageState extends State<HomePage> {
 
         return ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: isMobile ? 30 : 96, // 🔥 encolhe no mobile
+            minHeight: isMobile ? 72 : 96,
           ),
-          child: Container(
-            padding:
-                EdgeInsets.all(isMobile ? 10 : 20), // 🔥 padding adaptativo
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [accent.withOpacity(0.50), accent.withOpacity(0.15)]
-                    : [accent.withOpacity(0.55), accent.withOpacity(0.15)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              border: Border.all(
-                color: accent.withOpacity(0.25),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: accent.withOpacity(isDark ? 0.15 : 0.10),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 🔹 ÍCONE
-                Container(
-                  width: isMobile ? 44 : 54,
-                  height: isMobile ? 44 : 54,
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.95),
-                    borderRadius: BorderRadius.circular(14),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+              child: Container(
+                padding: EdgeInsets.all(isMobile ? 12 : 20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      accent.withOpacity(isDark ? 0.55 : 0.60),
+                      accent.withOpacity(0.18),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Icon(
-                    icon,
-                    color: Colors.white,
-                    size: isMobile ? 20 : 28,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(isDark ? 0.08 : 0.12),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
                 ),
-
-                const SizedBox(width: 12),
-
-                // 🔹 TEXTO
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min, // 🔥 evita overflow
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        valueFormatted,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: isMobile ? 18 : 22,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // 🔹 ÍCONE PREMIUM
+                    Container(
+                      width: isMobile ? 52 : 58,
+                      height: isMobile ? 52 : 58,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            accent.withOpacity(0.95),
+                            accent.withOpacity(0.75),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withOpacity(0.6),
+                            blurRadius: 14,
+                            spreadRadius: 1,
+                          ),
+                        ],
                       ),
-                      if (hasSubtitle)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            subtitleFormatted!,
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: isMobile ? 22 : 30,
+                      ),
+                    ),
+
+                    const SizedBox(width: 14),
+
+                    // 🔹 TEXTO
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            valueFormatted,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: isMobile ? 10 : 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.75),
+                              fontSize: isMobile ? 20 : 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                              color: Colors.white,
+                              height: 1,
                             ),
                           ),
-                        ),
-                      const SizedBox(height: 4),
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: isMobile ? 12 : 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
+                          if (hasSubtitle)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                subtitleFormatted!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 11 : 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white.withOpacity(0.75),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: isMobile ? 12 : 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -1425,7 +1753,7 @@ class _HomePageState extends State<HomePage> {
       label: Text(
         label,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: FontWeight.w600,
           color: textColor,
         ),
@@ -1446,7 +1774,8 @@ class _HomePageState extends State<HomePage> {
     _refreshing = true;
 
     try {
-      // ❌ NÃO faz refresh global aqui
+      await _service.refreshClientesCache();
+      if (!mounted) return;
       _atualizarSnapshotLocal();
     } finally {
       _refreshing = false;
@@ -1467,7 +1796,9 @@ class _HomePageState extends State<HomePage> {
           _ocupacaoSnapshot.values.fold(0, (a, b) => a + b);
     });
 
+    _statusCache.clear(); // 🔥 IMPORTANTE
     _buildClientesIndex();
+    _recalcularStatusClientes();
     _applyFilters();
   }
 }

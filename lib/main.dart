@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:nexaview/utils/web_utils.dart';
 
@@ -7,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 import 'package:nexaview/theme.dart';
+import 'package:nexaview/models/app_session_user.dart';
 import 'package:nexaview/screens/home_page.dart';
 import 'package:nexaview/services/auth_service.dart';
 import 'package:nexaview/services/splitter_service.dart';
@@ -35,7 +37,7 @@ void main() async {
   final params = WebUtils.queryParams;
   final token = params['token'];
 
-  debugPrint("📥 TOKEN RECEBIDO >>> $token");
+  debugPrint("📥 Token recebido via URL");
 
   // =============================================================
   // 3️⃣ Ambiente local vs produção
@@ -49,6 +51,26 @@ void main() async {
       host.startsWith("10.") ||
       host.startsWith("172.");
 
+  final allowedMassivaEmails = _parseCsvEnv(
+    const String.fromEnvironment('MASSIVA_ALLOWED_EMAILS', defaultValue: ''),
+  );
+  final allowedMassivaRoles = _parseCsvEnv(
+    const String.fromEnvironment(
+      'MASSIVA_ALLOWED_ROLES',
+      defaultValue: 'massiva_admin,cor_massiva',
+    ),
+  );
+  final localMassivaEnabled = const bool.fromEnvironment(
+    'LOCAL_MASSIVA_ENABLED',
+    defaultValue: true,
+  );
+  final localUserEmail = const String.fromEnvironment(
+    'LOCAL_USER_EMAIL',
+    defaultValue: 'dev@local',
+  );
+
+  var sessionUser = AppSessionUser.guest();
+
   if (!isLocal) {
     final tokenResult = validateToken(token);
 
@@ -61,12 +83,22 @@ void main() async {
       return;
     }
 
+    sessionUser = AppSessionUser.fromJwtPayload(
+      tokenResult.payload ?? const <String, dynamic>{},
+      allowedEmails: allowedMassivaEmails,
+      allowedRoles: allowedMassivaRoles,
+    );
+
     debugPrint("✅ TOKEN ACEITO — App liberado");
 
     // 🔥 REMOVE O TOKEN DA URL (SEM RELOAD)
     _limparTokenDaUrl();
   } else {
     debugPrint("🌐 Ambiente local — validação de token ignorada");
+    sessionUser = AppSessionUser.local(
+      email: localUserEmail,
+      canOpenMassiva: localMassivaEnabled,
+    );
   }
 
   // =============================================================
@@ -90,13 +122,63 @@ void main() async {
   // =============================================================
   // 6️⃣ Serviços principais
   // =============================================================
+  const reverseGeocodeEndpoint = String.fromEnvironment(
+    'REVERSE_GEOCODE_ENDPOINT',
+    defaultValue: '',
+  );
+  const middlewareMassivaBaseUrl = String.fromEnvironment(
+    'MIDDLEWARE_MASSIVA_BASE_URL',
+    defaultValue: '',
+  );
+  const ellevenMassivaEndpoint = String.fromEnvironment(
+    'ELLEVEN_MASSIVA_ENDPOINT',
+    defaultValue: '',
+  );
+  const ellevenMassivaListEndpoint = String.fromEnvironment(
+    'ELLEVEN_MASSIVA_LIST_ENDPOINT',
+    defaultValue: '',
+  );
+  const ellevenMassivaListBearerToken = String.fromEnvironment(
+    'ELLEVEN_MASSIVA_LIST_BEARER',
+    defaultValue: '',
+  );
+  const ellevenMassivaListHeaderName = String.fromEnvironment(
+    'ELLEVEN_MASSIVA_LIST_HEADER_NAME',
+    defaultValue: '',
+  );
+  const ellevenMassivaListHeaderValue = String.fromEnvironment(
+    'ELLEVEN_MASSIVA_LIST_HEADER_VALUE',
+    defaultValue: '',
+  );
+  const autoIspEventsEndpoint = String.fromEnvironment(
+    'AUTOISP_EVENTS_ENDPOINT',
+    defaultValue: '',
+  );
+  const autoIspAuthEndpoint = String.fromEnvironment(
+    'AUTOISP_AUTH_ENDPOINT',
+    defaultValue: '',
+  );
+  const autoIspUsername = String.fromEnvironment(
+    'AUTOISP_USERNAME',
+    defaultValue: '',
+  );
+  const autoIspPassword = String.fromEnvironment(
+    'AUTOISP_PASSWORD',
+    defaultValue: '',
+  );
+
   final splitterService = SplitterService(
     auth: auth,
     splittersEndpoint:
         "https://erp.sebratel.net.br:45715/external/map/splitter/all",
     clientesEndpoint:
         "https://erp.sebratel.net.br:45715/external/map/connection/all",
+    reverseGeocodeEndpoint:
+        reverseGeocodeEndpoint.isEmpty ? null : reverseGeocodeEndpoint,
   );
+
+// 🔥 RESTAURA METADADOS PERSISTIDOS
+  splitterService.restoreLastUpdatesFromHive();
 
   // =============================================================
   // 7️⃣ Start App
@@ -105,6 +187,17 @@ void main() async {
     MyApp(
       splitterService: splitterService,
       authService: auth,
+      sessionUser: sessionUser,
+      middlewareMassivaBaseUrl: middlewareMassivaBaseUrl,
+      ellevenMassivaEndpoint: ellevenMassivaEndpoint,
+      ellevenMassivaListEndpoint: ellevenMassivaListEndpoint,
+      ellevenMassivaListBearerToken: ellevenMassivaListBearerToken,
+      ellevenMassivaListHeaderName: ellevenMassivaListHeaderName,
+      ellevenMassivaListHeaderValue: ellevenMassivaListHeaderValue,
+      autoIspEventsEndpoint: autoIspEventsEndpoint,
+      autoIspAuthEndpoint: autoIspAuthEndpoint,
+      autoIspUsername: autoIspUsername,
+      autoIspPassword: autoIspPassword,
     ),
   );
 }
@@ -115,8 +208,9 @@ void main() async {
 class TokenValidationResult {
   final bool isValid;
   final String? reason;
+  final Map<String, dynamic>? payload;
 
-  TokenValidationResult(this.isValid, {this.reason});
+  TokenValidationResult(this.isValid, {this.reason, this.payload});
 }
 
 TokenValidationResult validateToken(String? token) {
@@ -131,7 +225,7 @@ TokenValidationResult validateToken(String? token) {
     );
 
     final payload = jwt.payload;
-    debugPrint("📦 PAYLOAD JWT → $payload");
+    debugPrint("📦 JWT validado com sucesso");
 
     if (payload["iss"] != "sebratel-hub") {
       return TokenValidationResult(
@@ -140,10 +234,21 @@ TokenValidationResult validateToken(String? token) {
       );
     }
 
-    return TokenValidationResult(true);
+    return TokenValidationResult(
+      true,
+      payload: payload.map((k, v) => MapEntry(k.toString(), v)),
+    );
   } catch (e) {
     return TokenValidationResult(false, reason: "Token inválido: $e");
   }
+}
+
+Set<String> _parseCsvEnv(String value) {
+  return value
+      .split(',')
+      .map((it) => it.trim().toLowerCase())
+      .where((it) => it.isNotEmpty)
+      .toSet();
 }
 
 // =============================================================
@@ -168,11 +273,33 @@ void _limparTokenDaUrl() {
 class MyApp extends StatefulWidget {
   final AuthService authService;
   final SplitterService splitterService;
+  final AppSessionUser sessionUser;
+  final String middlewareMassivaBaseUrl;
+  final String ellevenMassivaEndpoint;
+  final String ellevenMassivaListEndpoint;
+  final String ellevenMassivaListBearerToken;
+  final String ellevenMassivaListHeaderName;
+  final String ellevenMassivaListHeaderValue;
+  final String autoIspEventsEndpoint;
+  final String autoIspAuthEndpoint;
+  final String autoIspUsername;
+  final String autoIspPassword;
 
   const MyApp({
     super.key,
     required this.splitterService,
     required this.authService,
+    required this.sessionUser,
+    required this.middlewareMassivaBaseUrl,
+    required this.ellevenMassivaEndpoint,
+    required this.ellevenMassivaListEndpoint,
+    required this.ellevenMassivaListBearerToken,
+    required this.ellevenMassivaListHeaderName,
+    required this.ellevenMassivaListHeaderValue,
+    required this.autoIspEventsEndpoint,
+    required this.autoIspAuthEndpoint,
+    required this.autoIspUsername,
+    required this.autoIspPassword,
   });
 
   @override
@@ -194,6 +321,15 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Splitters',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('pt', 'BR'),
+        Locale('en', 'US'),
+      ],
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,
@@ -201,6 +337,17 @@ class _MyAppState extends State<MyApp> {
         onThemeToggle: _toggleTheme,
         splitterService: widget.splitterService,
         authService: widget.authService,
+        sessionUser: widget.sessionUser,
+        middlewareMassivaBaseUrl: widget.middlewareMassivaBaseUrl,
+        ellevenMassivaEndpoint: widget.ellevenMassivaEndpoint,
+        ellevenMassivaListEndpoint: widget.ellevenMassivaListEndpoint,
+        ellevenMassivaListBearerToken: widget.ellevenMassivaListBearerToken,
+        ellevenMassivaListHeaderName: widget.ellevenMassivaListHeaderName,
+        ellevenMassivaListHeaderValue: widget.ellevenMassivaListHeaderValue,
+        autoIspEventsEndpoint: widget.autoIspEventsEndpoint,
+        autoIspAuthEndpoint: widget.autoIspAuthEndpoint,
+        autoIspUsername: widget.autoIspUsername,
+        autoIspPassword: widget.autoIspPassword,
       ),
     );
   }
