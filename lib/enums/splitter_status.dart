@@ -1,6 +1,6 @@
 enum SplitterStatus {
-  Normal,
-  Alerta,
-  Critico,
-  Excedente,
+  normal,
+  alerta,
+  critico,
+  excedente,
 }

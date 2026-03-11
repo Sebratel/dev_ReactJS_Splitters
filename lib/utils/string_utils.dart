@@ -1,33 +1,25 @@
-library string_utils;
-
-/// Normalização FORTE de nomes para COMPARAÇÃO entre APIs
+/// Normalizacao FORTE de nomes para COMPARACAO entre APIs
 ///
 /// Resolve:
 /// - Acentos
-/// - Espaços extras
-/// - Pontuação, hífens, barras
-/// - Sufixos jurídicos/comerciais
-/// - Diferenças como: "BECKER-ME" vs "BECKER"
+/// - Espacos extras
+/// - Pontuacao, hifens, barras
+/// - Sufixos juridicos/comerciais
+/// - Diferencas como: "BECKER-ME" vs "BECKER"
 ///
-/// ⚠️ NÃO usar para chamadas HTTP
-/// ⚠️ Apenas para comparação interna
+/// Nao usar para chamadas HTTP
+/// Apenas para comparacao interna
 String normalizeName(String value) {
   return value
       .toLowerCase()
       .trim()
-
-      // 🔹 remove acentos
       .replaceAll(RegExp(r'[áàãâä]'), 'a')
       .replaceAll(RegExp(r'[éèêë]'), 'e')
       .replaceAll(RegExp(r'[íìîï]'), 'i')
       .replaceAll(RegExp(r'[óòõôö]'), 'o')
       .replaceAll(RegExp(r'[úùûü]'), 'u')
       .replaceAll(RegExp(r'ç'), 'c')
-
-      // 🔹 substitui pontuações por espaço
       .replaceAll(RegExp(r'[-–—_/\\.,()]'), ' ')
-
-      // 🔹 remove sufixos jurídicos/comerciais
       .replaceAll(
         RegExp(
           r'\b('
@@ -37,31 +29,20 @@ String normalizeName(String value) {
         ),
         '',
       )
-
-      // 🔹 remove palavras de ligação pouco relevantes
       .replaceAll(
         RegExp(r'\b(de|da|do|das|dos|e)\b'),
         '',
       )
-
-      // 🔹 remove qualquer coisa que não seja letra ou espaço
       .replaceAll(RegExp(r'[^a-z\s]'), '')
-
-      // 🔹 normaliza espaços
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 }
 
-/// Verifica se dois nomes são "suficientemente parecidos"
+/// Verifica se dois nomes sao "suficientemente parecidos"
 ///
 /// Usado como fallback quando:
 /// - Porta bate
-/// - Nome não bate 100%
-///
-/// Exemplo:
-/// "sociedade beneficencia caridade brochier"
-/// vs
-/// "beneficencia caridade brochier"
+/// - Nome nao bate 100%
 bool isSimilarName(String a, String b, {double threshold = 0.7}) {
   if (a.isEmpty || b.isEmpty) return false;
 

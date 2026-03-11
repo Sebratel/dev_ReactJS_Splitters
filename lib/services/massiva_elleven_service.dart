@@ -64,7 +64,9 @@ class MassivaEllevenService {
     debugPrint('➡️ POST $uri');
 
     if (kDebugMode) {
-      final prettyPayload = const JsonEncoder.withIndent('  ').convert(payload);
+      final prettyPayload = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(_sanitizePayload(payload));
       debugPrint(
         'Payload enviado (Abrir Massiva):\n$prettyPayload',
         wrapWidth: 4096,
@@ -78,10 +80,7 @@ class MassivaEllevenService {
             .timeout(timeout);
 
         if (kDebugMode) {
-          debugPrint(
-            'Resposta Abrir Massiva: status=${response.statusCode} body=${response.body}',
-            wrapWidth: 4096,
-          );
+          debugPrint('Resposta Abrir Massiva: status=${response.statusCode}');
         }
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -132,10 +131,7 @@ class MassivaEllevenService {
             await _client.get(uri, headers: headers).timeout(timeout);
 
         if (kDebugMode) {
-          debugPrint(
-            'Resposta Listar Massivas: status=${response.statusCode} body=${response.body}',
-            wrapWidth: 4096,
-          );
+          debugPrint('Resposta Listar Massivas: status=${response.statusCode}');
         }
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -396,5 +392,21 @@ class MassivaEllevenService {
       return {'data': raw};
     }
     return {};
+  }
+
+  dynamic _sanitizePayload(dynamic raw) {
+    if (raw is Map) {
+      final sanitized = <String, dynamic>{};
+      for (final entry in raw.entries) {
+        final key = entry.key.toString();
+        sanitized[key] =
+            key == 'cookieString' ? '***' : _sanitizePayload(entry.value);
+      }
+      return sanitized;
+    }
+    if (raw is List) {
+      return raw.map(_sanitizePayload).toList();
+    }
+    return raw;
   }
 }

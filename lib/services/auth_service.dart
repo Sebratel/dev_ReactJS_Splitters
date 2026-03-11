@@ -1,4 +1,5 @@
-import 'dart:convert';
+﻿import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,21 +20,28 @@ class AuthService {
     required this.scope,
   });
 
+  bool get isConfigured =>
+      clientId.trim().isNotEmpty &&
+      clientSecret.trim().isNotEmpty &&
+      syndata.trim().isNotEmpty &&
+      grantType.trim().isNotEmpty &&
+      scope.trim().isNotEmpty;
+
   // STORAGE KEYS
   static const _kAccessToken = "access_token";
   static const _kExpiresAt = "access_token_expires_at";
 
-  // ✅ Headers padrão para API JSON
+  // âœ… Headers padrÃ£o para API JSON
   Future<Map<String, String>> getAuthHeaders() async {
-    final token = await _ensureValidToken();
+    final token = await ensureValidToken();
     return {
       "Authorization": "Bearer $token",
       "Content-Type": "application/json",
     };
   }
 
-  // ✅ Garante token válido
-  Future<String> _ensureValidToken() async {
+  // âœ… Garante token vÃ¡lido
+  Future<String> ensureValidToken() async {
     final prefs = await SharedPreferences.getInstance();
     final savedToken = prefs.getString(_kAccessToken);
     final expiresAt = prefs.getInt(_kExpiresAt) ?? 0;
@@ -46,9 +54,13 @@ class AuthService {
     return await _fetchToken();
   }
 
-  // ✅ Chama o endpoint /connect/token
+  // âœ… Chama o endpoint /connect/token
   Future<String> _fetchToken() async {
-    print("🔵 Solicitando novo token...");
+    if (!isConfigured) {
+      throw Exception("Credenciais do ERP nao configuradas.");
+    }
+
+    debugPrint("Solicitando novo token...");
 
     final response = await http.post(
       Uri.parse(tokenUrl),
@@ -62,18 +74,22 @@ class AuthService {
       },
     );
 
-    print("🔵 STATUS TOKEN: ${response.statusCode}");
-    print("🔵 BODY: ${response.body}");
+    debugPrint("STATUS TOKEN: ${response.statusCode}");
+    debugPrint(
+      "TOKEN content-type: ${response.headers['content-type'] ?? '(sem content-type)'}",
+    );
 
     if (response.statusCode != 200) {
-      throw Exception("Erro ao obter token: ${response.body}");
+      throw Exception("Erro ao obter token (status ${response.statusCode}).");
     }
 
     Map json;
     try {
       json = jsonDecode(response.body);
     } catch (_) {
-      throw Exception("Resposta inválida do servidor ao obter token.");
+      final preview = _bodyPreview(response.body);
+      debugPrint("TOKEN body preview: $preview");
+      throw Exception("Resposta invalida do servidor ao obter token.");
     }
 
     final token = json["access_token"];
@@ -86,20 +102,28 @@ class AuthService {
     await prefs.setString(_kAccessToken, token);
     await prefs.setInt(_kExpiresAt, expiresAt);
 
-    print("✅ Novo token salvo. Expira em $expiresIn segundos.");
+    debugPrint("Novo token salvo. Expira em $expiresIn segundos.");
 
     return token;
   }
 
-  // ✅ Força renovação manual
+  // âœ… ForÃ§a renovaÃ§Ã£o manual
   Future<void> forceRefresh() async {
     await _fetchToken();
   }
 
-  // ✅ Logout
+  // âœ… Logout
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kAccessToken);
     await prefs.remove(_kExpiresAt);
+  }
+
+  String _bodyPreview(String body, {int maxLength = 180}) {
+    final normalized = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+    return '${normalized.substring(0, maxLength)}...';
   }
 }

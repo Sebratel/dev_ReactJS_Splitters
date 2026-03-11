@@ -32,6 +32,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+.env
+.env.local
+run-local.ps1
 
 # Symbolication related
 app.*.symbols

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -15,32 +15,31 @@ import 'package:nexaview/services/splitter_service.dart';
 
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
-// 🔥 IMPORT EXCLUSIVO PARA WEB (limpar URL)
-import 'dart:html' as html;
+// Import exclusivo para web (limpar URL)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  debugPrint("🔥 INICIANDO SPLITTERS VIA TOKEN DO HUB 🔥");
+  debugPrint("INICIANDO SPLITTERS VIA TOKEN DO HUB");
 
   // =============================================================
-  // 1️⃣ Firebase
+  // 1. Firebase
   // =============================================================
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   // =============================================================
-  // 2️⃣ Token via URL (Web)
+  // 2. Token via URL (Web)
   // =============================================================
   final params = WebUtils.queryParams;
   final token = params['token'];
 
-  debugPrint("📥 Token recebido via URL");
+  debugPrint("Token recebido via URL");
 
   // =============================================================
-  // 3️⃣ Ambiente local vs produção
+  // 3. Ambiente local vs produ??o
   // =============================================================
   final host = Uri.base.host;
 
@@ -68,6 +67,18 @@ void main() async {
     'LOCAL_USER_EMAIL',
     defaultValue: 'dev@local',
   );
+  const erpClientId = String.fromEnvironment(
+    'ERP_CLIENT_ID',
+    defaultValue: '',
+  );
+  const erpClientSecret = String.fromEnvironment(
+    'ERP_CLIENT_SECRET',
+    defaultValue: '',
+  );
+  const erpSyndata = String.fromEnvironment(
+    'ERP_SYNDATA',
+    defaultValue: '',
+  );
 
   var sessionUser = AppSessionUser.guest();
 
@@ -75,7 +86,7 @@ void main() async {
     final tokenResult = validateToken(token);
 
     if (!tokenResult.isValid) {
-      debugPrint("⛔ ACESSO BLOQUEADO → ${tokenResult.reason}");
+      debugPrint("ACESSO BLOQUEADO -> ${tokenResult.reason}");
 
       Future.microtask(() {
         WebUtils.redirect("https://sebratel-hub.web.app");
@@ -89,12 +100,12 @@ void main() async {
       allowedRoles: allowedMassivaRoles,
     );
 
-    debugPrint("✅ TOKEN ACEITO — App liberado");
+    debugPrint("TOKEN ACEITO - App liberado");
 
-    // 🔥 REMOVE O TOKEN DA URL (SEM RELOAD)
+    // Remove o token da URL (sem reload)
     _limparTokenDaUrl();
   } else {
-    debugPrint("🌐 Ambiente local — validação de token ignorada");
+    debugPrint("Ambiente local - valida??o de token ignorada");
     sessionUser = AppSessionUser.local(
       email: localUserEmail,
       canOpenMassiva: localMassivaEnabled,
@@ -102,25 +113,24 @@ void main() async {
   }
 
   // =============================================================
-  // 4️⃣ Hive (cache local)
+  // 4. Hive (cache local)
   // =============================================================
   await Hive.initFlutter();
   await SplitterService.initHive();
 
   // =============================================================
-  // 5️⃣ Auth ERP
+  // 5. Auth ERP
   // =============================================================
   final auth = AuthService(
-    clientId: "ad0c5d9a-fad1-4ca9-8d1e-cff2cedb3146",
-    clientSecret: "cb53bd13-5305-4306-b03b-b00cf05f2e34",
-    syndata:
-        "TWpNMU9EYzVaakk1T0dSaU1USmxaalprWldFd00ySTFZV1JsTTJRMFptUT06WlhsS1ZHVlhOVWxpTTA0d1NXcHZhVTFVWnpKTWFrbDRUMU0wZUUxcVozVk5hbFY0U1dsM2FWVXpiSFZTUjBscFQybEthMWx0Vm5SalJFRjNUVlJCZDBscGQybFNSMHBWWlZoQ2JFbHFiMmxqUnpsNlpFZGtlVnBZVFdsbVVUMDk6WlRoa01qTTFZamswWXpsaU5ETm1aRGczTURsa01qWTJZekF4TUdNM01HVT0=",
+    clientId: erpClientId,
+    clientSecret: erpClientSecret,
+    syndata: erpSyndata,
     grantType: "client_credentials",
     scope: "syngw",
   );
 
   // =============================================================
-  // 6️⃣ Serviços principais
+  // 6. Servi?os principais
   // =============================================================
   const reverseGeocodeEndpoint = String.fromEnvironment(
     'REVERSE_GEOCODE_ENDPOINT',
@@ -166,6 +176,10 @@ void main() async {
     'AUTOISP_PASSWORD',
     defaultValue: '',
   );
+  const massivaCookieString = String.fromEnvironment(
+    'MASSIVA_COOKIE_STRING',
+    defaultValue: '',
+  );
 
   final splitterService = SplitterService(
     auth: auth,
@@ -177,11 +191,11 @@ void main() async {
         reverseGeocodeEndpoint.isEmpty ? null : reverseGeocodeEndpoint,
   );
 
-// 🔥 RESTAURA METADADOS PERSISTIDOS
+// RESTAURA METADADOS PERSISTIDOS
   splitterService.restoreLastUpdatesFromHive();
 
   // =============================================================
-  // 7️⃣ Start App
+  // 7. Start App
   // =============================================================
   runApp(
     MyApp(
@@ -194,16 +208,17 @@ void main() async {
       ellevenMassivaListBearerToken: ellevenMassivaListBearerToken,
       ellevenMassivaListHeaderName: ellevenMassivaListHeaderName,
       ellevenMassivaListHeaderValue: ellevenMassivaListHeaderValue,
-      autoIspEventsEndpoint: autoIspEventsEndpoint,
-      autoIspAuthEndpoint: autoIspAuthEndpoint,
-      autoIspUsername: autoIspUsername,
-      autoIspPassword: autoIspPassword,
-    ),
-  );
+        autoIspEventsEndpoint: autoIspEventsEndpoint,
+        autoIspAuthEndpoint: autoIspAuthEndpoint,
+        autoIspUsername: autoIspUsername,
+        autoIspPassword: autoIspPassword,
+        massivaCookieString: massivaCookieString,
+      ),
+    );
 }
 
 // =============================================================
-// 🔐 Validação do Token JWT
+// Valida??o do Token JWT
 // =============================================================
 class TokenValidationResult {
   final bool isValid;
@@ -219,18 +234,29 @@ TokenValidationResult validateToken(String? token) {
   }
 
   try {
+    const hubJwtSecret = String.fromEnvironment(
+      'HUB_JWT_SECRET',
+      defaultValue: '',
+    );
+    if (hubJwtSecret.trim().isEmpty) {
+      return TokenValidationResult(
+        false,
+        reason: "Segredo JWT do hub nao configurado",
+      );
+    }
+
     final jwt = JWT.verify(
       token,
-      SecretKey("MINHACHAVESECRETA123"),
+      SecretKey(hubJwtSecret),
     );
 
     final payload = jwt.payload;
-    debugPrint("📦 JWT validado com sucesso");
+    debugPrint("JWT validado com sucesso");
 
     if (payload["iss"] != "sebratel-hub") {
       return TokenValidationResult(
         false,
-        reason: "Emissor não autorizado",
+        reason: "Emissor n\u00e3o autorizado",
       );
     }
 
@@ -239,7 +265,7 @@ TokenValidationResult validateToken(String? token) {
       payload: payload.map((k, v) => MapEntry(k.toString(), v)),
     );
   } catch (e) {
-    return TokenValidationResult(false, reason: "Token inválido: $e");
+    return TokenValidationResult(false, reason: "Token inv\u00e1lido: $e");
   }
 }
 
@@ -252,18 +278,14 @@ Set<String> _parseCsvEnv(String value) {
 }
 
 // =============================================================
-// 🔥 LIMPA ?token= DA URL (WEB)
+// LIMPA ?token= DA URL (WEB)
 // =============================================================
 void _limparTokenDaUrl() {
   final uri = Uri.base;
 
   if (uri.queryParameters.containsKey('token')) {
     final cleanUri = uri.replace(queryParameters: {});
-    html.window.history.replaceState(
-      null,
-      '',
-      cleanUri.toString(),
-    );
+    WebUtils.replaceUrl(cleanUri.toString());
   }
 }
 
@@ -284,6 +306,7 @@ class MyApp extends StatefulWidget {
   final String autoIspAuthEndpoint;
   final String autoIspUsername;
   final String autoIspPassword;
+  final String massivaCookieString;
 
   const MyApp({
     super.key,
@@ -300,6 +323,7 @@ class MyApp extends StatefulWidget {
     required this.autoIspAuthEndpoint,
     required this.autoIspUsername,
     required this.autoIspPassword,
+    required this.massivaCookieString,
   });
 
   @override
@@ -348,6 +372,7 @@ class _MyAppState extends State<MyApp> {
         autoIspAuthEndpoint: widget.autoIspAuthEndpoint,
         autoIspUsername: widget.autoIspUsername,
         autoIspPassword: widget.autoIspPassword,
+        massivaCookieString: widget.massivaCookieString,
       ),
     );
   }

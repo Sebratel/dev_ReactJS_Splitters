@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nexaview/models/address_model.dart';
 import 'package:nexaview/models/olt_model.dart';
@@ -12,26 +12,34 @@ import 'package:latlong2/latlong.dart';
 import 'package:nexaview/services/splitter_service.dart';
 import 'package:nexaview/services/olt_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:nexaview/utils/string_utils.dart';
+import 'package:nexaview/models/porta_geogrid_model.dart';
+import 'package:nexaview/services/geogrid_service.dart';
+import 'package:nexaview/widgets/geogrid_refresh_button.dart';
+import 'package:nexaview/widgets/reserva_lock_badge.dart';
+import 'package:nexaview/services/auth_service.dart';
 
 class SplitterDetailPage extends StatefulWidget {
   final SplitterModel splitter;
   final List<ClienteModel> clientes;
-  final OltModel? olt; // 👈 ESTE CAMPO TEM QUE EXISTIR
+  final OltModel? olt; // Este campo tem que existir
   final List<SplitterModel> allSplitters;
   final SplitterService splitterService;
   final OltService oltService;
   final Map<String, int> ocupacaoSnapshot;
+  final GeoGridService geoGridService;
+  final AuthService authService;
 
   const SplitterDetailPage({
     super.key,
     required this.splitter,
     required this.clientes,
-    this.olt, // 👈 ESTE PARÂMETRO TEM QUE EXISTIR
-    required this.allSplitters, // 👈 NOVO
-    required this.splitterService, // 👈 NOVO
-    required this.oltService, // 👈 NOVO
-    required this.ocupacaoSnapshot, // 👈 AQUI
+    this.olt, // Este parametro tem que existir
+    required this.allSplitters, // Novo
+    required this.splitterService, // Novo
+    required this.oltService, // Novo
+    required this.ocupacaoSnapshot, // Aqui
+    required this.geoGridService,
+    required this.authService,
   });
 
   @override
@@ -42,37 +50,40 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
   late final double? lat;
   late final double? lng;
   late final bool hasValidLocation;
-  late final osm.MapController _mapController;
   late final GeocodingService _geoService;
   late final ValueNotifier<List<ClienteModel>> _clientesNotifier;
 
   bool _refreshing = false;
   bool _atualizouSplitter = false;
+  bool _reservasLoading = false;
 
   AddressModel? _address;
   bool _loadingAddress = true;
+  Map<int, PortaGeoGrid> _reservasGeoGrid = {};
+  Map<String, String> _nomesClientesReservaGeoGrid = {};
+
+  bool get _temAlgumaReservaGeoGrid {
+    return _reservasGeoGrid.values.any((p) => p.hasReservaComCadeado);
+  }
 
   @override
   void initState() {
     super.initState();
 
-    _mapController = osm.MapController();
     _geoService = GeocodingService();
 
     _loadAddress();
+    if (widget.splitter.integrationCode.isNotEmpty) {
+      _loadReservasGeoGrid();
+    }
 
-    // 🔹 conecta notifier (cache imediato)
+    // Conecta notifier (cache imediato)
     _clientesNotifier =
         widget.splitterService.watchClientes(widget.splitter.code);
 
     lat = double.tryParse(widget.splitter.latitude);
     lng = double.tryParse(widget.splitter.longitude);
     hasValidLocation = lat != null && lng != null;
-
-    // 🔥 REFRESH EM BACKGROUND (UMA ÚNICA VEZ)
-    Future.microtask(() {
-      widget.splitterService.refreshClientesPorSplitter(widget.splitter.code);
-    });
 
     debugPrint('LAT: "$lat" | LNG: "$lng"');
   }
@@ -93,22 +104,24 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     return meters <= radiusInMeters;
   }
 
-  void _fitMapBounds(double splitterLat, double splitterLng, OltModel? olt) {
-    if (olt?.lat == null || olt?.lng == null) return;
+  ({int? slot, int? porta}) _extractSlotAndPort(String title) {
+    try {
+      // Ex: SLE-C-1971-4-9-13/3 -> slot=4, porta=13
+      // Regra: penultimo e ultimo numero antes da barra.
+      final beforeSlash = title.split('/').first;
+      final dashParts = beforeSlash.split('-');
 
-    final bounds = osm.LatLngBounds(
-      LatLng(splitterLat, splitterLng),
-      LatLng(olt!.lat!, olt.lng!),
-    );
+      if (dashParts.length < 2) {
+        return (slot: null, porta: null);
+      }
 
-    _mapController.fitCamera(
-      osm.CameraFit.bounds(
-        bounds: bounds,
-        padding: const EdgeInsets.all(60),
-        maxZoom: 17,
-        minZoom: 12,
-      ),
-    );
+      final slot = int.tryParse(dashParts[dashParts.length - 2]);
+      final porta = int.tryParse(dashParts.last);
+
+      return (slot: slot, porta: porta);
+    } catch (_) {
+      return (slot: null, porta: null);
+    }
   }
 
   Future<void> _loadAddress() async {
@@ -117,18 +130,30 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
       return;
     }
 
-    final result = await _geoService.resolveAddress(
-      splitterCode: widget.splitter.code,
-      lat: widget.splitter.lat!,
-      lng: widget.splitter.lng!,
-    );
+    try {
+      final result = await _geoService.resolveAddress(
+        splitterCode: widget.splitter.code,
+        lat: widget.splitter.lat!,
+        lng: widget.splitter.lng!,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _address = result;
-      _loadingAddress = false;
-    });
+      setState(() {
+        _address = result;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _address = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingAddress = false;
+        });
+      }
+    }
   }
 
   Color _getSplitterColor(SplitterModel splitter) {
@@ -144,16 +169,58 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     final percentual = (ocupacao / totalPortas) * 100;
 
     if (percentual >= 90) {
-      return Colors.redAccent; // 🔴 crítico
+      return Colors.redAccent; // critico
     }
     if (percentual >= 70) {
-      return Colors.orangeAccent; // 🟠 atenção
+      return Colors.orangeAccent; // atencao
     }
 
-    return Colors.green; // 🟢 ok
+    return Colors.green; // ok
   }
 
-  Widget _portaVazia(int porta, bool isDark) {
+  String? _buildReservaInfo(PortaGeoGrid? reserva) {
+    if (reserva == null || !reserva.hasReserva) return null;
+
+    final nomeCliente = reserva.idCliente != null
+        ? _nomesClientesReservaGeoGrid[reserva.idCliente!]
+        : null;
+    final buffer = StringBuffer();
+
+    if (nomeCliente != null && nomeCliente.isNotEmpty) {
+      buffer.writeln('Cliente: $nomeCliente');
+    }
+
+    if (reserva.dataReserva == null) {
+      final textoBase = 'Reserva GeoGrid';
+      if (buffer.isEmpty) return textoBase;
+      buffer.write(textoBase);
+      return buffer.toString();
+    }
+
+    final data = reserva.dataReserva!;
+    final hoje = DateTime.now();
+    final dias =
+        hoje.difference(DateTime(data.year, data.month, data.day)).inDays;
+
+    final tempo = dias <= 0
+        ? 'hoje'
+        : dias == 1
+            ? 'h\u00e1 1 dia'
+            : 'h\u00e1 $dias dias';
+
+    final dataFormatada =
+        '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}/${data.year}';
+
+    buffer.write('Reservada em $dataFormatada ($tempo)');
+    return buffer.toString();
+  }
+
+  Widget _portaVazia(
+    int porta,
+    bool isDark, {
+    bool temReserva = false,
+    String? reservaInfo,
+  }) {
     return Opacity(
       opacity: 0.6,
       child: Container(
@@ -172,7 +239,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.15),
+                    color: Colors.grey.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
@@ -205,11 +272,40 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            const Icon(
-              Icons.radio_button_unchecked,
-              color: Colors.grey,
-              size: 30,
+            const SizedBox(width: 20),
+            Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                const Icon(
+                  Icons.radio_button_unchecked,
+                  color: Colors.grey,
+                  size: 50,
+                ),
+                if (temReserva)
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: Tooltip(
+                      message: reservaInfo ?? 'Reserva GeoGrid',
+                      child: GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(reservaInfo ?? 'Reserva GeoGrid'),
+                              duration: Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        child: const ReservaLockBadge(
+                          size: 28,
+                          iconSize: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -222,27 +318,23 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final OltModel? olt = widget.olt;
-    final hasOltLocation = olt?.lat != null && olt?.lng != null;
+    final splitterTitle = widget.splitter.title.isNotEmpty
+        ? widget.splitter.title
+        : widget.splitter.code;
+    final oltInfo = _extractSlotAndPort(splitterTitle);
 
-    // 🔹 CORES DO HEADER
-    final headerBg = const Color.fromARGB(255, 255, 174, 0);
     final headerText = isDark ? Colors.white : const Color(0xFF1F1F1F);
-
-    final badgeBg = isDark
-        ? Colors.black.withOpacity(0.35)
-        : Colors.black.withOpacity(0.08);
-
-    final badgeText = isDark ? Colors.white : const Color(0xFF1F1F1F);
 
     // ================= DADOS DO SPLITTER =================
     final totalPortas = widget.splitter.outPorts;
 
-    // ⬇️ continua o Scaffold normalmente
+    // Continua o Scaffold normalmente
 
-    return WillPopScope(
-        onWillPop: () async {
+    return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
           Navigator.pop(context, _atualizouSplitter);
-          return false; // 🔥 impede pop automático
         },
         child: Scaffold(
             backgroundColor: theme.colorScheme.surface,
@@ -253,7 +345,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
               toolbarHeight: 120,
               backgroundColor: Colors.transparent,
               foregroundColor: headerText,
-              // 🔥 CONTROLE TOTAL DO BOTÃO VOLTAR
+              // Controle total do botao voltar
               automaticallyImplyLeading: false,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -262,6 +354,15 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                   Navigator.pop(context, _atualizouSplitter);
                 },
               ),
+              actions: [
+                if (widget.splitter.integrationCode.isNotEmpty)
+                  GeoGridRefreshButton(
+                    loading: _reservasLoading,
+                    hasReserva: _temAlgumaReservaGeoGrid,
+                    onPressed: _refreshReservasGeoGrid,
+                  ),
+                const SizedBox(width: 8),
+              ],
 
               flexibleSpace: ClipRRect(
                 borderRadius: const BorderRadius.only(
@@ -271,21 +372,21 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // 🖼️ IMAGEM DE FUNDO
+                    // Imagem de fundo
                     Image.asset(
-                      'assets/images/sebratelimagem.jpg', // 👈 troque se quiser
+                      'assets/images/sebratelimagem.jpg', // Troque se quiser
                       fit: BoxFit.cover,
                     ),
 
-                    // 🎨 OVERLAY TRANSLÚCIDO (COR DO HEADER)
+                    // Overlay translucido (cor do header)
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
                             const Color.fromARGB(255, 255, 174, 0)
-                                .withOpacity(0.35),
+                                .withValues(alpha: 0.35),
                             const Color.fromARGB(255, 255, 174, 0)
-                                .withOpacity(0.35),
+                                .withValues(alpha: 0.35),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -304,12 +405,12 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white.withValues(alpha: 0.95),
                       shadows: [
                         Shadow(
-                          offset: const Offset(0, 2), // posição da sombra
+                          offset: const Offset(0, 2), // posicao da sombra
                           blurRadius: 4, // suavidade
-                          color: Colors.black.withOpacity(0.65),
+                          color: Colors.black.withValues(alpha: 0.65),
                         ),
                       ],
                     ),
@@ -317,26 +418,24 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
                   const SizedBox(height: 4),
 
-                  // 🔹 NOME DO SPLITTER + OLT
+                      // OLT
                   Wrap(
                     spacing: 10,
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       SelectableText(
-                        widget.splitter.title.isNotEmpty
-                            ? widget.splitter.title
-                            : widget.splitter.code,
+                        splitterTitle,
                         maxLines: 1,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
-                          color: Colors.white.withOpacity(0.95),
+                          color: Colors.white.withValues(alpha: 0.95),
                           shadows: [
                             Shadow(
-                              offset: const Offset(0, 2), // posição da sombra
+                          offset: const Offset(0, 2), // posicao da sombra
                               blurRadius: 4, // suavidade
-                              color: Colors.black.withOpacity(0.65),
+                              color: Colors.black.withValues(alpha: 0.65),
                             ),
                           ],
                         ),
@@ -346,7 +445,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.45),
+                            color: Colors.black.withValues(alpha: 0.45),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Wrap(
@@ -363,13 +462,13 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                               ),
                               _dot(),
                               SelectableText(
-                                "Slot ${olt.slotsNumber}",
+                                "Slot ${oltInfo.slot}",
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.white),
                               ),
                               _dot(),
                               SelectableText(
-                                "Porta ${olt.portsFirstNumber}",
+                                "Porta ${oltInfo.porta}",
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.white),
                               ),
@@ -382,7 +481,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
               ),
             ),
 
-            // 🔥 TUDO ROLA JUNTO
+            // Tudo rola junto
             body: LayoutBuilder(builder: (context, constraints) {
               final bool isWide = constraints.maxWidth > 900;
 
@@ -425,7 +524,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Informações do Splitter",
+                                "Informa\u00e7\u00f5es do Splitter",
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -436,7 +535,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                               ),
                               const SizedBox(height: 12),
 
-                              // 📍 ENDEREÇO
+                              // Endereco
                               if (_loadingAddress)
                                 Padding(
                                   padding:
@@ -451,7 +550,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                       ),
                                       const SizedBox(width: 10),
                                       Text(
-                                        "Carregando endereço…",
+                                        "Carregando endere\u00e7o...",
                                         style: TextStyle(
                                           fontSize: 13,
                                           color: isDark
@@ -494,7 +593,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
                               const SizedBox(height: 16),
 
-                              // 🔥 MÉTRICAS REATIVAS
+                              // Metricas reativas
                               ValueListenableBuilder<List<ClienteModel>>(
                                 valueListenable: _clientesNotifier,
                                 builder: (context, clientes, _) {
@@ -510,7 +609,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                   Color getStatusColor() {
                                     if (percentualReal >= 100) {
                                       return const Color(
-                                          0xFFB91C1C); // 🔴 overbooking
+                                          0xFFB91C1C); // Overbooking
                                     }
                                     if (percentualReal >= 90) {
                                       return const Color(0xFFEF4444);
@@ -560,7 +659,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                           ),
                         ),
 
-                        // ================= LOCALIZAÇÃO =================
+                        // ================= LOCALIZACAO =================
                         if (hasValidLocation)
                           _mapCardOSM(
                             isDark: isDark,
@@ -576,11 +675,11 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                         ValueListenableBuilder<List<ClienteModel>>(
                           valueListenable: _clientesNotifier,
                           builder: (context, clientes, _) {
-                            // 🔹 ordena apenas para visual
+                            // Ordena apenas para visual
                             final sortedClientes = [...clientes]..sort(
                                 (a, b) => (a.port ?? 0).compareTo(b.port ?? 0));
 
-                            // ✅ clientes com porta válida dentro da capacidade
+                            // clientes com porta valida dentro da capacidade
                             final clientesComPortaValida = sortedClientes
                                 .where((c) =>
                                     c.port != null &&
@@ -588,16 +687,55 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                     c.port! <= totalPortas)
                                 .toList();
 
-                            // ⚠️ clientes sem porta (problema de cadastro)
+                            // Clientes sem porta (problema de cadastro)
                             final clientesSemPorta = sortedClientes
                                 .where((c) => c.port == null || c.port! <= 0)
                                 .toList();
 
-                            // 🔴 excedentes reais (porta maior que a capacidade)
+                            // Excedentes reais (porta maior que a capacidade)
                             final clientesExcedentes = sortedClientes
                                 .where((c) =>
                                     c.port != null && c.port! > totalPortas)
                                 .toList();
+
+                            final portaCards =
+                                List<Widget>.generate(totalPortas, (index) {
+                              final porta = index + 1;
+                              final portaGeoGrid = _reservasGeoGrid[porta];
+                              final bool temReserva =
+                                  portaGeoGrid?.hasReservaComCadeado == true;
+                              final reservaInfo =
+                                  _buildReservaInfo(portaGeoGrid);
+                              final ClienteModel cliente =
+                                  clientesComPortaValida.firstWhere(
+                                (c) => c.port == porta,
+                                orElse: () => ClienteModel(
+                                  clientId: -porta, // ID negativo = porta vazia
+                                  authenticationId: 0,
+                                  name: "Porta $porta vazia",
+                                  user: "-",
+                                  port: porta,
+                                  status: 0,
+                                  splitterCode: widget.splitter.code,
+                                ),
+                              );
+
+                              if (cliente.clientId < 0) {
+                                return _portaVazia(
+                                  porta,
+                                  isDark,
+                                  temReserva: temReserva,
+                                  reservaInfo: reservaInfo,
+                                );
+                              }
+
+                              return ClienteCard(
+                                cliente: cliente,
+                                authService: widget.authService,
+                                temReserva: temReserva,
+                                reservaInfo: reservaInfo,
+                              );
+                            });
 
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 24),
@@ -627,44 +765,19 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 16),
                                       children: [
-                                        // ================= PORTAS (1 até capacidade)
-                                        for (int porta = 1;
-                                            porta <= totalPortas;
-                                            porta++)
-                                          () {
-                                            final ClienteModel cliente =
-                                                clientesComPortaValida
-                                                    .firstWhere(
-                                              (c) => c.port == porta,
-                                              orElse: () => ClienteModel(
-                                                id: -porta, // 🔥 ID negativo = porta vazia
-                                                name: "Porta $porta vazia",
-                                                user: "-",
-                                                port: porta,
-                                                status: 0,
-                                                splitterCode:
-                                                    widget.splitter.code,
-                                              ),
-                                            );
+                                        // ================= PORTAS (1 ate capacidade)
+                                        if (kIsWeb)
+                                          _buildPortasGrid(portaCards),
+                                        if (!kIsWeb) ...portaCards,
 
-                                            // 🔹 Porta vazia
-                                            if (cliente.id < 0) {
-                                              return _portaVazia(porta, isDark);
-                                            }
-
-                                            // 🔹 Porta ocupada
-                                            return ClienteCard(
-                                                cliente: cliente);
-                                          }(),
-
-                                        // ================= CLIENTES SEM PORTA
+                            // Clientes sem porta (problema de cadastro)
                                         if (clientesSemPorta.isNotEmpty) ...[
                                           const SizedBox(height: 20),
                                           const Padding(
                                             padding: EdgeInsets.symmetric(
                                                 vertical: 8),
                                             child: Text(
-                                              "Clientes sem porta atribuída",
+                                              "Clientes sem porta atribu\u00edda",
                                               style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w700,
@@ -676,6 +789,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                               in clientesSemPorta)
                                             ClienteCard(
                                               cliente: cliente,
+                                              authService: widget.authService,
                                               isNoPort: true,
                                             ),
                                         ],
@@ -699,6 +813,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                               in clientesExcedentes)
                                             ClienteCard(
                                               cliente: cliente,
+                                              authService: widget.authService,
                                               isOverflow: true,
                                             ),
                                         ],
@@ -713,6 +828,31 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                 ),
               );
             })));
+  }
+
+  Widget _buildPortasGrid(List<Widget> portaCards) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = 16.0;
+        final crossAxisCount = constraints.maxWidth >= 980 ? 2 : 1;
+        final cardWidth =
+            (constraints.maxWidth - (spacing * (crossAxisCount - 1))) /
+                crossAxisCount;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: 4,
+          children: portaCards
+              .map(
+                (card) => SizedBox(
+                  width: cardWidth,
+                  child: card,
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
   }
 
   Widget _dot() {
@@ -756,7 +896,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -766,7 +906,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Localização",
+            "Localiza\u00e7\u00e3o",
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -775,7 +915,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
           ),
           const SizedBox(height: 10),
 
-          // 🗺️ OpenStreetMap
+          // OpenStreetMap
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -789,27 +929,27 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                   ),
                 ),
                 children: [
-                  // 🗺️ BASE MAP
+                  // Base map
                   osm.TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.appsera.splitters',
                   ),
 
-                  // 🟢 RAIO DE 200 METROS
+                  // Raio de 200 metros
                   osm.CircleLayer(
                     circles: [
                       osm.CircleMarker(
                         point: LatLng(lat, lng),
                         radius: 200, // metros
-                        color: Colors.green.withOpacity(0.15),
+                        color: Colors.green.withValues(alpha: 0.15),
                         borderStrokeWidth: 2,
                         borderColor: Colors.green,
                       ),
                     ],
                   ),
 
-                  // 🔶 LINHA OLT ↔ SPLITTER
+                  // Linha OLT -> splitter
                   if (hasOltLocation)
                     osm.PolylineLayer(
                       polylines: [
@@ -824,10 +964,10 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                       ],
                     ),
 
-                  // 📍 MARKERS
+                  // Markers
                   osm.MarkerLayer(
                     markers: [
-                      // 🔴 SPLITTER ATUAL
+                      // Splitter atual
                       osm.Marker(
                         point: LatLng(lat, lng),
                         width: 40,
@@ -839,7 +979,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                         ),
                       ),
 
-                      // 🟦 OLT
+                      // OLT
                       if (hasOltLocation)
                         osm.Marker(
                           point: LatLng(olt!.lat!, olt.lng!),
@@ -852,7 +992,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                           ),
                         ),
 
-                      // 🟢 SPLITTERS PRÓXIMOS (200m)
+                      // Splitters proximos (200m)
                       for (final s in nearbySplitters)
                         osm.Marker(
                           point: LatLng(
@@ -867,7 +1007,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                 : 'Splitter ${s.code}',
                             child: GestureDetector(
                               onTap: () async {
-                                // 🔥 BUSCA CLIENTES DO SPLITTER CLICADO
+                                // Busca clientes do splitter clicado
                                 final clientes = await widget.splitterService
                                     .getClientesInstant(s.code);
 
@@ -885,6 +1025,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                       ocupacaoSnapshot: widget.ocupacaoSnapshot,
                                       splitterService: widget.splitterService,
                                       oltService: widget.oltService,
+                                      geoGridService: widget.geoGridService,
+                                      authService: widget.authService,
                                     ),
                                   ),
                                 );
@@ -895,7 +1037,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                 height: 26,
                                 colorFilter: ColorFilter.mode(
                                   _getSplitterColor(
-                                      s), // 🔥 muda conforme ocupação
+                                      s), // Muda conforme ocupacao
                                   BlendMode.srcIn,
                                 ),
                               ),
@@ -928,8 +1070,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
           Expanded(
             child: Text(
               kIsWeb
-                  ? "Mapa disponível apenas no aplicativo móvel"
-                  : "Localização não disponível para este splitter",
+                  ? "Mapa dispon\u00edvel apenas no aplicativo m\u00f3vel"
+                  : "Localiza\u00e7\u00e3o n\u00e3o dispon\u00edvel para este splitter",
               style: TextStyle(
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               ),
@@ -952,14 +1094,14 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     );
   }
 
+  // ignore: unused_element
   Future<void> _refreshClientesSplitter() async {
-    if (_refreshing) return;
+    if (!mounted || _refreshing) return;
 
     setState(() => _refreshing = true);
 
     try {
-      await widget.splitterService
-          .refreshClientesPorSplitter(widget.splitter.code);
+      await widget.splitterService.refreshClientesPorSplitter(widget.splitter.code);
 
       _atualizouSplitter = true;
     } finally {
@@ -968,4 +1110,115 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
       }
     }
   }
+
+  Future<void> _loadReservasGeoGrid() async {
+    if (widget.splitter.integrationCode.isEmpty) return;
+
+    setState(() => _reservasLoading = true);
+    try {
+      final reservas = await widget.geoGridService.fetchReservasPorSplitter(
+        widget.splitter.integrationCode,
+      );
+      if (!mounted) return;
+      setState(() => _reservasGeoGrid = reservas);
+      await _loadNomesClientesReservaGeoGrid(reservas);
+    } catch (e) {
+      debugPrint('Erro GeoGrid: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _reservasLoading = false);
+      }
+    }
+  }
+
+  Future<void> _refreshReservasGeoGrid() async {
+    if (_reservasLoading || widget.splitter.integrationCode.isEmpty) return;
+
+    setState(() => _reservasLoading = true);
+    try {
+      widget.geoGridService.clearCache(
+        splitterIntegrationCode: widget.splitter.integrationCode,
+      );
+
+      final reservas = await widget.geoGridService.fetchReservasPorSplitter(
+        widget.splitter.integrationCode,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _reservasGeoGrid = reservas;
+        _atualizouSplitter = true;
+      });
+      await _loadNomesClientesReservaGeoGrid(reservas);
+      if (!mounted) return;
+
+      widget.splitterService.markSplitterDirty(widget.splitter.code);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.splitterService.refreshClientesPorSplitter(widget.splitter.code);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Atualizando portas do splitter (aguarde um minuto...)',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          duration: Duration(seconds: 3),
+          backgroundColor: Colors.white,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Falha ao atualizar reservas GeoGrid',
+            style: TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _reservasLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadNomesClientesReservaGeoGrid(
+    Map<int, PortaGeoGrid> reservas,
+  ) async {
+    final ids = reservas.values
+        .where((p) => p.hasReservaComCadeado && p.idCliente != null)
+        .map((p) => p.idCliente!.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    if (ids.isEmpty) {
+      if (mounted) {
+        setState(() => _nomesClientesReservaGeoGrid = {});
+      }
+      return;
+    }
+
+    final nomes = <String, String>{};
+    await Future.wait(
+      ids.map((id) async {
+        final nome = await widget.geoGridService.fetchClienteNomeById(id);
+        if (nome != null && nome.isNotEmpty) {
+          nomes[id] = nome;
+        }
+      }),
+    );
+
+    if (!mounted) return;
+    setState(() => _nomesClientesReservaGeoGrid = nomes);
+  }
 }
+

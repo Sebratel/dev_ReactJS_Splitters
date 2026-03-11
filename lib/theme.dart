@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LightModeColors {
@@ -22,7 +22,7 @@ class LightModeColors {
   static const lightOnSurface = Color.fromARGB(255, 255, 255, 255);
   static const lightAppBarBackground = Color.fromARGB(255, 255, 255, 255);
   static const lightCardBackground = Color(0xFFFFFFFF);
-  // 🔹 FUNDO GERAL (off-white)
+  // FUNDO GERAL (off-white)
   static const lightBackground = Color.fromARGB(255, 109, 109, 109);
 }
 
@@ -76,18 +76,17 @@ ThemeData get lightTheme => ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
 
-      // 🔥 FUNDOS GLOBAIS
+      // FUNDOS GLOBAIS
       scaffoldBackgroundColor: const Color.fromARGB(255, 241, 241, 241),
       canvasColor: const Color.fromARGB(255, 255, 255, 255),
       cardColor: const Color.fromARGB(255, 255, 255, 255),
 
-      // 🔥 ESQUEMA DE CORES
+      // ESQUEMA DE CORES
       colorScheme: ColorScheme.light(
         primary: LightModeColors.lightPrimary,
         secondary: LightModeColors.lightSecondary,
         tertiary: LightModeColors.lightTertiary,
         error: LightModeColors.lightError,
-        background: LightModeColors.lightBackground,
         surface: const Color.fromARGB(255, 230, 230, 230),
         onSurface: LightModeColors.lightOnSurface,
         onPrimary: LightModeColors.lightOnPrimary,
@@ -98,7 +97,7 @@ ThemeData get lightTheme => ThemeData(
         shadow: LightModeColors.lightShadow,
       ),
 
-      // 🔹 APP BAR
+      // APP BAR
       appBarTheme: const AppBarTheme(
         backgroundColor: Color.fromARGB(255, 100, 99, 99),
         foregroundColor: Color.fromARGB(255, 92, 91, 91),
@@ -173,7 +172,7 @@ ThemeData get darkTheme => ThemeData(
         side: BorderSide.none,
       ),
       useMaterial3: true,
-      // 🔹 FUNDOS GLOBAIS (ESSENCIAL)
+      // FUNDOS GLOBAIS (ESSENCIAL)
       scaffoldBackgroundColor: DarkModeColors.darkBackground,
       canvasColor: DarkModeColors.darkBackground,
       cardColor: DarkModeColors.darkCardBackground,
@@ -193,8 +192,7 @@ ThemeData get darkTheme => ThemeData(
         inversePrimary: DarkModeColors.darkInversePrimary,
         shadow: DarkModeColors.darkShadow,
 
-        // 🔥 AQUI ESTÁ O CORAÇÃO DO DARK MODE
-        background: const Color.fromARGB(255, 51, 51, 51),
+        // AQUI EST? O CORA??O DO DARK MODE
         surface: const Color.fromARGB(255, 54, 54, 54),
         onSurface: DarkModeColors.darkOnSurface,
       ),
