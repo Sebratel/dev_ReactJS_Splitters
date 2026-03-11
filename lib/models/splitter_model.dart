@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class SplitterModel {
   final int id;
   final String code;
@@ -23,6 +21,7 @@ class SplitterModel {
 
   final String latitude;
   final String longitude;
+  final String? street;
 
   const SplitterModel({
     required this.id,
@@ -35,6 +34,7 @@ class SplitterModel {
     required this.description,
     required this.latitude,
     required this.longitude,
+    this.street,
     this.networkBoxCode,
     this.networkBoxTitle,
     this.networkBoxType,
@@ -43,8 +43,14 @@ class SplitterModel {
     this.oltDescription,
   });
 
-  double? get lat => double.tryParse(latitude);
-  double? get lng => double.tryParse(longitude);
+  double? _parseCoordinate(String value) {
+    final normalized = value.replaceAll(',', '.').trim();
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
+  }
+
+  double? get lat => _parseCoordinate(latitude);
+  double? get lng => _parseCoordinate(longitude);
   bool get hasLocation => lat != null && lng != null;
 
   // 🔐 NORMALIZA MAP (EVITA LinkedMap<dynamic, dynamic>)
@@ -71,6 +77,14 @@ class SplitterModel {
       description: json['description']?.toString() ?? '',
       latitude: address['latitude']?.toString().trim() ?? '',
       longitude: address['longitude']?.toString().trim() ?? '',
+      street: () {
+        final value = address['street'] ??
+            address['road'] ??
+            address['pedestrian'] ??
+            address['residential'];
+        final text = value?.toString().trim();
+        return (text == null || text.isEmpty) ? null : text;
+      }(),
       networkBoxCode: networkBox['code']?.toString(),
       networkBoxTitle: networkBox['title']?.toString(),
       networkBoxType: _safeMap(networkBox['type'])['text']?.toString(),

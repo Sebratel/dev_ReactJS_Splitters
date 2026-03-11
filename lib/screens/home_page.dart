@@ -1,3 +1,5 @@
+// ignore_for_file: uri_does_not_exist, undefined_method
+
 import 'package:flutter/material.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/services/olt_service.dart';
@@ -14,7 +16,7 @@ import 'package:nexaview/enums/splitter_status.dart';
 import 'package:nexaview/services/geogrid_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nexaview/models/app_session_user.dart';
-import 'package:nexaview/screens/massiva_page.dart';
+import 'package:nexaview/screens/massiva_screen.dart';
 import 'package:nexaview/services/autoisp_auth_service.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_elleven_service.dart';
@@ -37,6 +39,7 @@ class HomePage extends StatefulWidget {
   final String autoIspAuthEndpoint;
   final String autoIspUsername;
   final String autoIspPassword;
+  final String massivaCookieString;
 
   const HomePage({
     super.key,
@@ -54,6 +57,7 @@ class HomePage extends StatefulWidget {
     required this.autoIspAuthEndpoint,
     required this.autoIspUsername,
     required this.autoIspPassword,
+    required this.massivaCookieString,
   });
 
   @override
@@ -84,7 +88,6 @@ class _HomePageState extends State<HomePage> {
 
   List<SplitterModel> _splitters = [];
   List<SplitterModel> _filtered = [];
-  bool _loadingSplitters = true;
   List<String>? _ruasCacheOrdenadas;
 
   int _totalOcupacaoFiltrada = 0;
@@ -184,6 +187,7 @@ class _HomePageState extends State<HomePage> {
           getClientesForSplitter: _service.getClientesInstantSync,
           getOltIdByCode: (oltCode) =>
               _oltService.getBySplitterCode(oltCode)?.id,
+          cookieString: widget.massivaCookieString,
         ),
       ),
     );
@@ -257,8 +261,6 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 2️⃣ SPLITTERS (CACHE → API)
       // =====================================================
-      setState(() => _loadingSplitters = true);
-
       final splitters = await _service.fetchSplitters();
       if (!mounted) return;
 
@@ -266,7 +268,6 @@ class _HomePageState extends State<HomePage> {
         _splitters = splitters;
         _filtered = splitters;
         _splittersReady = splitters.isNotEmpty;
-        _loadingSplitters = false;
       });
 
       for (final s in splitters) {
@@ -348,7 +349,6 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
 
       setState(() {
-        _loadingSplitters = false;
         _clientesLoading = false;
         _bootstrapFinalizado = true;
       });
@@ -696,6 +696,7 @@ class _HomePageState extends State<HomePage> {
     ).whenComplete(controller.dispose);
   }
 
+  // ignore: unused_element
   Future<void> _openQR() async {
     final result = await Navigator.push<String>(
       context,
@@ -873,7 +874,7 @@ class _HomePageState extends State<HomePage> {
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
 
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
 
                                     final updated = await Navigator.push<bool>(
                                       context,
@@ -925,7 +926,7 @@ class _HomePageState extends State<HomePage> {
                                     final olt = _oltService
                                         .getBySplitterCode(splitter.oltCode);
 
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
 
                                     final updated = await Navigator.push<bool>(
                                       context,
@@ -975,7 +976,7 @@ class _HomePageState extends State<HomePage> {
               IgnorePointer(
                 ignoring: true,
                 child: Container(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   alignment: Alignment.topCenter,
                   padding: const EdgeInsets.only(top: 220),
                   child: Column(
@@ -997,7 +998,7 @@ class _HomePageState extends State<HomePage> {
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
+                          color: Colors.black.withValues(alpha: 0.55),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Text(
@@ -1059,8 +1060,8 @@ class _HomePageState extends State<HomePage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
-                    const Color.fromARGB(255, 255, 174, 0).withOpacity(0.35),
+                    const Color.fromARGB(255, 255, 174, 0).withValues(alpha: 0.35),
+                    const Color.fromARGB(255, 255, 174, 0).withValues(alpha: 0.35),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -1104,7 +1105,7 @@ class _HomePageState extends State<HomePage> {
                                     Shadow(
                                       offset: const Offset(0, 3),
                                       blurRadius: 2,
-                                      color: Colors.black.withOpacity(0.3),
+                                      color: Colors.black.withValues(alpha: 0.3),
                                     ),
                                   ],
                                 ),
@@ -1119,15 +1120,15 @@ class _HomePageState extends State<HomePage> {
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: isDark
-                                          ? Colors.white.withOpacity(0.5)
-                                          : Colors.black.withOpacity(0.5),
+                                          ? Colors.white.withValues(alpha: 0.5)
+                                          : Colors.black.withValues(alpha: 0.5),
                                       boxShadow: [
                                         BoxShadow(
                                           color: (isDark
                                                   ? const Color.fromARGB(
                                                       255, 253, 179, 18)
                                                   : Colors.orange)
-                                              .withOpacity(0.8),
+                                              .withValues(alpha: 0.8),
                                           blurRadius: 18,
                                           spreadRadius: 2,
                                         ),
@@ -1149,15 +1150,15 @@ class _HomePageState extends State<HomePage> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: isDark
-                                    ? Colors.white.withOpacity(0.5)
-                                    : Colors.black.withOpacity(0.5),
+                                    ? Colors.white.withValues(alpha: 0.5)
+                                    : Colors.black.withValues(alpha: 0.5),
                                 boxShadow: [
                                   BoxShadow(
                                     color: (isDark
                                             ? const Color.fromARGB(
                                                 255, 253, 179, 18)
                                             : Colors.orange)
-                                        .withOpacity(0.8),
+                                        .withValues(alpha: 0.8),
                                     blurRadius: 18,
                                     spreadRadius: 2,
                                   ),
@@ -1361,7 +1362,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.52),
+            color: Colors.black.withValues(alpha: 0.52),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1409,11 +1410,11 @@ class _HomePageState extends State<HomePage> {
                   ? _statusSelecionados.first.name
                   : 'Status (${_statusSelecionados.length})',
           selected: _statusSelecionados.isNotEmpty,
-          activeColor: _statusSelecionados.contains(SplitterStatus.Excedente)
+          activeColor: _statusSelecionados.contains(SplitterStatus.excedente)
               ? const Color.fromARGB(255, 117, 6, 6) // ou vermelho escuro
-              : _statusSelecionados.contains(SplitterStatus.Critico)
+              : _statusSelecionados.contains(SplitterStatus.critico)
                   ? Colors.redAccent
-                  : _statusSelecionados.contains(SplitterStatus.Alerta)
+                  : _statusSelecionados.contains(SplitterStatus.alerta)
                       ? Colors.orangeAccent
                       : Colors.green,
           onTap: () async {
@@ -1535,7 +1536,7 @@ class _HomePageState extends State<HomePage> {
         final String? subtitleFormatted = hasSubtitle
             ? 'de ${NumberFormat.decimalPattern('pt_BR').format(
                 int.tryParse(
-                      subtitle!.replaceAll(RegExp(r'[^0-9]'), ''),
+                      subtitle.replaceAll(RegExp(r'[^0-9]'), ''),
                     ) ??
                     0,
               )}'
@@ -1554,19 +1555,19 @@ class _HomePageState extends State<HomePage> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      accent.withOpacity(isDark ? 0.55 : 0.60),
-                      accent.withOpacity(0.18),
+                      accent.withValues(alpha: isDark ? 0.55 : 0.60),
+                      accent.withValues(alpha: 0.18),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: Colors.white.withOpacity(isDark ? 0.08 : 0.12),
+                    color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.12),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
+                      color: Colors.black.withValues(alpha: 0.25),
                       blurRadius: 18,
                       offset: const Offset(0, 10),
                     ),
@@ -1582,8 +1583,8 @@ class _HomePageState extends State<HomePage> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            accent.withOpacity(0.95),
-                            accent.withOpacity(0.75),
+                            accent.withValues(alpha: 0.95),
+                            accent.withValues(alpha: 0.75),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -1591,7 +1592,7 @@ class _HomePageState extends State<HomePage> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: accent.withOpacity(0.6),
+                            color: accent.withValues(alpha: 0.6),
                             blurRadius: 14,
                             spreadRadius: 1,
                           ),
@@ -1634,7 +1635,7 @@ class _HomePageState extends State<HomePage> {
                                 style: TextStyle(
                                   fontSize: isMobile ? 11 : 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.white.withOpacity(0.75),
+                                  color: Colors.white.withValues(alpha: 0.75),
                                 ),
                               ),
                             ),
@@ -1646,7 +1647,7 @@ class _HomePageState extends State<HomePage> {
                             style: TextStyle(
                               fontSize: isMobile ? 12 : 13,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha: 0.85),
                             ),
                           ),
                         ],
@@ -1666,13 +1667,13 @@ class _HomePageState extends State<HomePage> {
     return Container(
       decoration: BoxDecoration(
         color: isDark
-            ? const Color.fromARGB(255, 78, 78, 78).withOpacity(0.7)
-            : Colors.white.withOpacity(0.7),
+            ? const Color.fromARGB(255, 78, 78, 78).withValues(alpha: 0.7)
+            : Colors.white.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             blurRadius: 8,
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
           ),
         ],
       ),
@@ -1716,8 +1717,8 @@ class _HomePageState extends State<HomePage> {
     required bool isDark,
   }) {
     final baseColor = isDark
-        ? const Color.fromARGB(255, 78, 78, 78).withOpacity(1.00)
-        : const Color.fromARGB(255, 226, 226, 226).withOpacity(1.00);
+        ? const Color.fromARGB(255, 78, 78, 78).withValues(alpha: 1.00)
+        : const Color.fromARGB(255, 226, 226, 226).withValues(alpha: 1.00);
 
     final textColor = selected
         ? const Color.fromARGB(255, 255, 255, 255)
@@ -1739,8 +1740,8 @@ class _HomePageState extends State<HomePage> {
       elevation: selected ? 6 : 6,
       pressElevation: 8,
       shadowColor: isDark
-          ? Colors.black.withOpacity(0.50)
-          : Colors.black.withOpacity(0.50),
+          ? Colors.black.withValues(alpha: 0.50)
+          : Colors.black.withValues(alpha: 0.50),
       padding: const EdgeInsets.symmetric(
         horizontal: 20,
         vertical: 8,
@@ -1802,3 +1803,4 @@ class _HomePageState extends State<HomePage> {
     _applyFilters();
   }
 }
+

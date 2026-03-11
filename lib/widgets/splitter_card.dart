@@ -31,15 +31,15 @@ class SplitterCard extends StatelessWidget {
         : const Color.fromARGB(188, 65, 65, 65);
 
     final shadowColor =
-        isDark ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.15);
+        isDark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.15);
 
     final Color circleBgColor = pct > 100
         ? (isDark
             ? const Color.fromARGB(255, 117, 27, 27)
             : const Color.fromARGB(255, 252, 180, 180))
         : (isDark
-            ? const Color.fromARGB(255, 58, 58, 58).withOpacity(0.90)
-            : Colors.white.withOpacity(0.90));
+            ? const Color.fromARGB(255, 58, 58, 58).withValues(alpha: 0.90)
+            : Colors.white.withValues(alpha: 0.90));
 
     return GestureDetector(
       onTap: onTap,
@@ -52,8 +52,8 @@ class SplitterCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.grey.withOpacity(0.15),
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.grey.withValues(alpha: 0.15),
           ),
           boxShadow: [
             BoxShadow(
@@ -142,3 +142,4 @@ class SplitterCard extends StatelessWidget {
     );
   }
 }
+

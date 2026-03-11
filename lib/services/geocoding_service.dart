@@ -12,37 +12,43 @@ class GeocodingService {
     required double lat,
     required double lng,
   }) async {
-    // 🔥 1) tenta cache primeiro
-    final cached = await _cache.get(splitterCode);
-    if (cached != null) return cached;
+    try {
+      // 1) tenta cache primeiro
+      final cached = await _cache.get(splitterCode);
+      if (cached != null) return cached;
 
-    final uri = Uri.parse(
-      '$_baseUrl?format=json&lat=$lat&lon=$lng&addressdetails=1',
-    );
+      final uri = Uri.parse(
+        '$_baseUrl?format=json&lat=$lat&lon=$lng&addressdetails=1',
+      );
 
-    final response = await http.get(
-      uri,
-      headers: {
-        'User-Agent': 'SplitterApp/1.0 (contato@sebratel.com.br)',
-      },
-    );
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'SplitterApp/1.0 (contato@sebratel.com.br)',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
-    if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) return null;
 
-    final json = jsonDecode(response.body);
-    final address = json['address'] ?? {};
+      final json = jsonDecode(response.body);
+      final address = json['address'] ?? {};
 
-    final model = AddressModel(
-      street: address['road'] ?? address['pedestrian'],
-      neighborhood: address['suburb'] ?? address['neighbourhood'],
-      city: address['city'] ?? address['town'],
-      state: address['state'],
-      postalCode: address['postcode'],
-    );
+      final model = AddressModel(
+        street: address['road'] ?? address['pedestrian'],
+        neighborhood: address['suburb'] ?? address['neighbourhood'],
+        city: address['city'] ?? address['town'],
+        state: address['state'],
+        postalCode: address['postcode'],
+      );
 
-    // 💾 salva cache
-    await _cache.save(splitterCode, model);
+      // salva cache
+      await _cache.save(splitterCode, model);
 
-    return model;
+      return model;
+    } catch (_) {
+      return null;
+    }
   }
 }

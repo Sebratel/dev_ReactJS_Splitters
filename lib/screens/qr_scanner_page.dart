@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'qr_scanner_page_mobile.dart'
     if (dart.library.html) 'qr_scanner_page_web.dart';

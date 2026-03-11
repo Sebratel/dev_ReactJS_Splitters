@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -24,17 +24,16 @@ class SolicitationService {
       '$authenticationId?allAssignments=false',
     );
 
-    debugPrint('➡️ GET $uri');
-    debugPrint('🔐 Headers: ${_sanitizeHeaders(headers)}');
+    debugPrint('GET $uri');
+    debugPrint('Headers: ${_sanitizeHeaders(headers)}');
 
     final response = await http.get(uri, headers: headers);
 
-    debugPrint('⬅️ Status: ${response.statusCode}');
-    debugPrint('⬅️ Body: ${response.body}');
+    debugPrint('Status: ${response.statusCode}');
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Erro ao buscar solicitações '
+        'Erro ao buscar solicitacoes '
         '(status ${response.statusCode})',
       );
     }

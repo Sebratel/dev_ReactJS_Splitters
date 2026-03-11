@@ -6,19 +6,27 @@ class SplitterStatusService {
     required int totalPortas,
   }) {
     if (totalPortas <= 0) {
-      return SplitterStatus.Normal;
+      return SplitterStatus.normal;
     }
 
-    // 🔥 EXCEDENTE REAL → percentual > 100%
+    // 🚨 Excedente real
     if (ocupacaoReal > totalPortas) {
-      return SplitterStatus.Excedente;
+      return SplitterStatus.excedente;
     }
 
-    final percentual = (ocupacaoReal / totalPortas) * 100;
+    final double percentual = (ocupacaoReal / totalPortas) * 100;
 
-    if (percentual >= 100) return SplitterStatus.Critico;
-    if (percentual >= 80) return SplitterStatus.Alerta;
+    // 🔴 100% exatamente
+    if (percentual == 100) {
+      return SplitterStatus.critico;
+    }
 
-    return SplitterStatus.Normal;
+    // ⚠️ 51% até 99%
+    if (percentual > 70) {
+      return SplitterStatus.alerta;
+    }
+
+    // ✅ até 50%
+    return SplitterStatus.normal;
   }
 }
