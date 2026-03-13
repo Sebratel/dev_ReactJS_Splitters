@@ -9,7 +9,7 @@ import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
-import 'package:nexaview/services/massiva_elleven_service.dart';
+import 'package:nexaview/services/massiva_gateway_service.dart';
 import 'package:nexaview/services/massiva_middleware_service.dart';
 import 'package:nexaview/services/massiva_orchestrator_service.dart';
 
@@ -31,7 +31,7 @@ class _ResolvedAutoIspRoute {
 
 class MassivaPage extends StatefulWidget {
   final MassivaMiddlewareService middlewareService;
-  final MassivaEllevenService ellevenService;
+  final MassivaGatewayService gatewayService;
   final AutoIspEventService autoIspService;
   final AppSessionUser sessionUser;
   final List<SplitterModel> splitters;
@@ -43,7 +43,7 @@ class MassivaPage extends StatefulWidget {
   const MassivaPage({
     super.key,
     required this.middlewareService,
-    required this.ellevenService,
+    required this.gatewayService,
     required this.autoIspService,
     required this.sessionUser,
     required this.splitters,
@@ -1476,9 +1476,9 @@ class _MassivaPageState extends State<MassivaPage> {
       return;
     }
 
-    if (!widget.ellevenService.isConfigured) {
+    if (!widget.gatewayService.isConfigured) {
       setState(() {
-        _error = 'Configure ELLEVEN_MASSIVA_ENDPOINT.';
+        _error = 'Configure MASSIVA_API_GATEWAY_ENDPOINT.';
       });
       return;
     }
@@ -1494,7 +1494,7 @@ class _MassivaPageState extends State<MassivaPage> {
       if (widget.middlewareService.isConfigured) {
         final orchestrator = MassivaOrchestratorService(
           middlewareService: widget.middlewareService,
-          ellevenService: widget.ellevenService,
+          gatewayService: widget.gatewayService,
         );
         final result = await orchestrator.execute(
           request: request,
@@ -1522,7 +1522,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
         setState(() => _lastPreview = result.filtered);
       } else {
-        final response = await widget.ellevenService.openMassiva(
+        final response = await widget.gatewayService.openMassiva(
           incident: request,
           authenticationIds: const [],
           individualTickets: _forceFallback,
@@ -1618,7 +1618,7 @@ class _MassivaPageState extends State<MassivaPage> {
   }
 
   Future<void> _loadMassivas() async {
-    if (!widget.ellevenService.isListConfigured) {
+    if (!widget.gatewayService.isListConfigured) {
       if (mounted) {
         setState(() {
           _loadedMassivas = true;
@@ -1633,7 +1633,7 @@ class _MassivaPageState extends State<MassivaPage> {
     });
 
     try {
-      final rows = await widget.ellevenService.fetchMassivas();
+      final rows = await widget.gatewayService.fetchMassivas();
       if (!mounted) return;
       setState(() {
         _massivas = rows;
@@ -2381,7 +2381,7 @@ class _MassivaPageState extends State<MassivaPage> {
             },
           ),
           const SizedBox(height: 10),
-          if (!widget.ellevenService.isListConfigured)
+          if (!widget.gatewayService.isListConfigured)
             _buildMessageCard(
               isDark: isDark,
               icon: Icons.settings_ethernet_outlined,
@@ -2389,7 +2389,7 @@ class _MassivaPageState extends State<MassivaPage> {
               backgroundLight: const Color(0xFFFFF8E1),
               backgroundDark: const Color(0xFF2E2E2E),
               text:
-                  'Configure ELLEVEN_MASSIVA_LIST_ENDPOINT para habilitar monitoramento.',
+                  'Configure MASSIVA_API_GATEWAY_LIST_ENDPOINT para habilitar monitoramento.',
             )
           else ...[
             LayoutBuilder(

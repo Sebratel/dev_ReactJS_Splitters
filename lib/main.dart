@@ -140,13 +140,21 @@ void main() async {
     'MIDDLEWARE_MASSIVA_BASE_URL',
     defaultValue: '',
   );
-  const ellevenMassivaEndpoint = String.fromEnvironment(
+  const legacyEllevenMassivaEndpoint = String.fromEnvironment(
     'ELLEVEN_MASSIVA_ENDPOINT',
     defaultValue: '',
+  );
+  const massivaApiGatewayEndpoint = String.fromEnvironment(
+    'MASSIVA_API_GATEWAY_ENDPOINT',
+    defaultValue: legacyEllevenMassivaEndpoint,
   );
   const ellevenMassivaListEndpoint = String.fromEnvironment(
     'ELLEVEN_MASSIVA_LIST_ENDPOINT',
     defaultValue: '',
+  );
+  const massivaApiGatewayListEndpoint = String.fromEnvironment(
+    'MASSIVA_API_GATEWAY_LIST_ENDPOINT',
+    defaultValue: ellevenMassivaListEndpoint,
   );
   const ellevenMassivaListBearerToken = String.fromEnvironment(
     'ELLEVEN_MASSIVA_LIST_BEARER',
@@ -203,8 +211,8 @@ void main() async {
       authService: auth,
       sessionUser: sessionUser,
       middlewareMassivaBaseUrl: middlewareMassivaBaseUrl,
-      ellevenMassivaEndpoint: ellevenMassivaEndpoint,
-      ellevenMassivaListEndpoint: ellevenMassivaListEndpoint,
+      massivaApiGatewayEndpoint: massivaApiGatewayEndpoint,
+      ellevenMassivaListEndpoint: massivaApiGatewayListEndpoint,
       ellevenMassivaListBearerToken: ellevenMassivaListBearerToken,
       ellevenMassivaListHeaderName: ellevenMassivaListHeaderName,
       ellevenMassivaListHeaderValue: ellevenMassivaListHeaderValue,
@@ -297,7 +305,7 @@ class MyApp extends StatefulWidget {
   final SplitterService splitterService;
   final AppSessionUser sessionUser;
   final String middlewareMassivaBaseUrl;
-  final String ellevenMassivaEndpoint;
+  final String massivaApiGatewayEndpoint;
   final String ellevenMassivaListEndpoint;
   final String ellevenMassivaListBearerToken;
   final String ellevenMassivaListHeaderName;
@@ -314,7 +322,7 @@ class MyApp extends StatefulWidget {
     required this.authService,
     required this.sessionUser,
     required this.middlewareMassivaBaseUrl,
-    required this.ellevenMassivaEndpoint,
+    required this.massivaApiGatewayEndpoint,
     required this.ellevenMassivaListEndpoint,
     required this.ellevenMassivaListBearerToken,
     required this.ellevenMassivaListHeaderName,
@@ -363,7 +371,7 @@ class _MyAppState extends State<MyApp> {
         authService: widget.authService,
         sessionUser: widget.sessionUser,
         middlewareMassivaBaseUrl: widget.middlewareMassivaBaseUrl,
-        ellevenMassivaEndpoint: widget.ellevenMassivaEndpoint,
+        massivaApiGatewayEndpoint: widget.massivaApiGatewayEndpoint,
         ellevenMassivaListEndpoint: widget.ellevenMassivaListEndpoint,
         ellevenMassivaListBearerToken: widget.ellevenMassivaListBearerToken,
         ellevenMassivaListHeaderName: widget.ellevenMassivaListHeaderName,

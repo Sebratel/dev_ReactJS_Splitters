@@ -42,11 +42,13 @@ class ClienteAddress {
 // 🔌 PONTO DE ACESSO (OLT)
 // ===============================
 class AuthenticationAccessPoint {
+  final String code;
   final String title;
   final int slotOlt;
   final int portOlt;
 
   AuthenticationAccessPoint({
+    required this.code,
     required this.title,
     required this.slotOlt,
     required this.portOlt,
@@ -54,6 +56,7 @@ class AuthenticationAccessPoint {
 
   factory AuthenticationAccessPoint.fromJson(Map<String, dynamic> json) {
     return AuthenticationAccessPoint(
+      code: json['code']?.toString() ?? '',
       title: json['title'] ?? '',
       slotOlt: json['slotOlt'] ?? 0,
       portOlt: json['portOlt'] ?? 0,
