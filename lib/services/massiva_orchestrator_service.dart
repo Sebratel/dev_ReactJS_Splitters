@@ -1,14 +1,14 @@
 import 'package:nexaview/models/massiva_models.dart';
-import 'package:nexaview/services/massiva_elleven_service.dart';
+import 'package:nexaview/services/massiva_gateway_service.dart';
 import 'package:nexaview/services/massiva_middleware_service.dart';
 
 class MassivaOrchestratorService {
   final MassivaMiddlewareService middlewareService;
-  final MassivaEllevenService ellevenService;
+  final MassivaGatewayService gatewayService;
 
   MassivaOrchestratorService({
     required this.middlewareService,
-    required this.ellevenService,
+    required this.gatewayService,
   });
 
   Future<MassivaExecutionResult> execute({
@@ -29,7 +29,7 @@ class MassivaOrchestratorService {
     }
 
     if (forceIndividualFallback) {
-      final fallback = await ellevenService.openMassiva(
+      final fallback = await gatewayService.openMassiva(
         incident: request,
         authenticationIds: filtered.cleanAuthenticationIds,
         individualTickets: true,
@@ -43,7 +43,7 @@ class MassivaOrchestratorService {
     }
 
     try {
-      final massiva = await ellevenService.openMassiva(
+      final massiva = await gatewayService.openMassiva(
         incident: request,
         authenticationIds: filtered.cleanAuthenticationIds,
         individualTickets: false,
@@ -55,7 +55,7 @@ class MassivaOrchestratorService {
         usedFallback: false,
       );
     } catch (_) {
-      final fallback = await ellevenService.openMassiva(
+      final fallback = await gatewayService.openMassiva(
         incident: request,
         authenticationIds: filtered.cleanAuthenticationIds,
         individualTickets: true,

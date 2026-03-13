@@ -25,7 +25,7 @@ class MassivaIncidentRequest {
   final List<int> accessPointIds;
   final List<int> slotOlt;
   final List<int> portaOlt;
-  final List<int> addressListId;
+  final List<int>? addressListId;
   final int companyPlaceId;
   final int assignmentTypeId;
   final String assignmentDescription;
@@ -39,7 +39,7 @@ class MassivaIncidentRequest {
     required this.accessPointIds,
     required this.slotOlt,
     required this.portaOlt,
-    required this.addressListId,
+    this.addressListId,
     required this.companyPlaceId,
     required this.assignmentTypeId,
     required this.assignmentDescription,
@@ -54,13 +54,86 @@ class MassivaIncidentRequest {
         'accessPointIds': accessPointIds,
         'slotOlt': slotOlt,
         'portaOlt': portaOlt,
-        'addressListId': addressListId,
+        if (addressListId != null && addressListId!.isNotEmpty)
+          'addressListId': addressListId,
         'companyPlaceId': companyPlaceId,
         'assignmentTypeId': assignmentTypeId,
         'assignmentDescription': assignmentDescription,
         'maintenanceDate': maintenanceDate,
         'maintenanceTime': maintenanceTime,
         'cookieString': cookieString,
+      };
+}
+
+class ApiGatewayMassivaAssignment {
+  final String title;
+  final String description;
+  final String finalDate;
+  final int companyPlaceId;
+
+  const ApiGatewayMassivaAssignment({
+    required this.title,
+    required this.description,
+    required this.finalDate,
+    required this.companyPlaceId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'description': description,
+        'finalDate': finalDate,
+        'companyPlaceId': companyPlaceId,
+      };
+}
+
+class ApiGatewayMassivaRequest {
+  final int incidentStatusId;
+  final int personId;
+  final int incidentTypeId;
+  final int catalogServiceId;
+  final int serviceLevelAgreementId;
+  final int matrixType;
+  final String teamCode;
+  final String solicitationServiceCategory1;
+  final String solicitationServiceCategory2;
+  final String solicitationServiceCategory3;
+  final String solicitationServiceCategory4;
+  final String solicitationServiceCategory5;
+  final String authenticationAccessPointCode;
+  final ApiGatewayMassivaAssignment assignment;
+
+  const ApiGatewayMassivaRequest({
+    required this.incidentStatusId,
+    required this.personId,
+    required this.incidentTypeId,
+    required this.catalogServiceId,
+    required this.serviceLevelAgreementId,
+    required this.matrixType,
+    required this.teamCode,
+    required this.solicitationServiceCategory1,
+    required this.solicitationServiceCategory2,
+    required this.solicitationServiceCategory3,
+    required this.solicitationServiceCategory4,
+    required this.solicitationServiceCategory5,
+    required this.authenticationAccessPointCode,
+    required this.assignment,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'incidentStatusId': incidentStatusId,
+        'personId': personId,
+        'incidentTypeId': incidentTypeId,
+        'catalogServiceId': catalogServiceId,
+        'serviceLevelAgreementId': serviceLevelAgreementId,
+        'matrixType': matrixType,
+        'teamCode': teamCode,
+        'solicitationServiceCategory1': solicitationServiceCategory1,
+        'solicitationServiceCategory2': solicitationServiceCategory2,
+        'solicitationServiceCategory3': solicitationServiceCategory3,
+        'solicitationServiceCategory4': solicitationServiceCategory4,
+        'solicitationServiceCategory5': solicitationServiceCategory5,
+        'authenticationAccessPointCode': authenticationAccessPointCode,
+        'assignment': assignment.toJson(),
       };
 }
 
@@ -92,6 +165,7 @@ class MiddlewareFilterResponse {
 class EllevenMassivaResponse {
   final bool success;
   final int? protocol;
+  final int? assignmentId;
   final String message;
   final List<int> createdProtocols;
 
@@ -99,6 +173,7 @@ class EllevenMassivaResponse {
     required this.success,
     required this.message,
     this.protocol,
+    this.assignmentId,
     this.createdProtocols = const [],
   });
 
@@ -111,9 +186,11 @@ class EllevenMassivaResponse {
     }
 
     final data = nestedMap(json['data']);
+    final dataResponse = nestedMap(data['response']);
     final response = nestedMap(json['response']);
     final result = nestedMap(json['result']);
     final merged = <String, dynamic>{
+      ...dataResponse,
       ...result,
       ...response,
       ...data,
@@ -130,11 +207,18 @@ class EllevenMassivaResponse {
               .toString(),
         ) ??
         (created.isNotEmpty ? created.first : null);
+    final assignmentId =
+        int.tryParse((merged['assignmentId'] ?? '').toString());
 
     return EllevenMassivaResponse(
       success: merged['success'] == false ? false : true,
       protocol: protocol,
-      message: (merged['message'] ?? merged['mensagem'] ?? '').toString(),
+      assignmentId: assignmentId,
+      message: (dataResponse['message'] ??
+              merged['message'] ??
+              merged['mensagem'] ??
+              '')
+          .toString(),
       createdProtocols: created,
     );
   }
@@ -163,6 +247,9 @@ class MassivaTicket {
   final String title;
   final String apCode;
   final String splitterCode;
+  final String team;
+  final String createdBy;
+  final String responsible;
   final MassivaStatus status;
   final DateTime? openedAt;
   final DateTime? closedAt;
@@ -174,6 +261,9 @@ class MassivaTicket {
     required this.title,
     required this.apCode,
     required this.splitterCode,
+    required this.team,
+    required this.createdBy,
+    required this.responsible,
     required this.status,
     required this.openedAt,
     required this.closedAt,
@@ -229,6 +319,7 @@ class MassivaTicket {
       protocol: int.tryParse((protocolRaw ?? '').toString()) ?? 0,
       title: (merged['title'] ??
               assignment['title'] ??
+              merged['tituloIncidente'] ??
               merged['descricao'] ??
               merged['description'] ??
               merged['subject'] ??
@@ -244,11 +335,16 @@ class MassivaTicket {
               merged['networkBoxCode'] ??
               '')
           .toString(),
+      team: (merged['team'] ?? merged['equipe'] ?? '').toString(),
+      createdBy: (merged['createdBy'] ?? merged['criadoPor'] ?? '').toString(),
+      responsible:
+          (merged['responsible'] ?? merged['responsavel'] ?? '').toString(),
       status: status,
       openedAt: _parseDate(
         merged['openedAt'] ??
             assignment['beginningDate'] ??
             merged['beginningDate'] ??
+            merged['criacao'] ??
             merged['creationDate'] ??
             merged['createdAt'] ??
             merged['openingDate'],
@@ -257,6 +353,7 @@ class MassivaTicket {
         merged['closedAt'] ??
             assignment['finalDate'] ??
             merged['finalDate'] ??
+            merged['finalizado'] ??
             merged['finalizationDate'] ??
             merged['closedDate'] ??
             merged['closureDate'],

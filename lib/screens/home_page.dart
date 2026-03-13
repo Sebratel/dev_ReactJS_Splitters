@@ -19,7 +19,7 @@ import 'package:nexaview/models/app_session_user.dart';
 import 'package:nexaview/screens/massiva_screen.dart';
 import 'package:nexaview/services/autoisp_auth_service.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
-import 'package:nexaview/services/massiva_elleven_service.dart';
+import 'package:nexaview/services/massiva_gateway_service.dart';
 import 'package:nexaview/services/massiva_middleware_service.dart';
 import 'dart:ui';
 import 'dart:async';
@@ -30,7 +30,7 @@ class HomePage extends StatefulWidget {
   final AuthService authService; // ✅
   final AppSessionUser sessionUser;
   final String middlewareMassivaBaseUrl;
-  final String ellevenMassivaEndpoint;
+  final String massivaApiGatewayEndpoint;
   final String ellevenMassivaListEndpoint;
   final String ellevenMassivaListBearerToken;
   final String ellevenMassivaListHeaderName;
@@ -48,7 +48,7 @@ class HomePage extends StatefulWidget {
     required this.authService,
     required this.sessionUser,
     required this.middlewareMassivaBaseUrl,
-    required this.ellevenMassivaEndpoint,
+    required this.massivaApiGatewayEndpoint,
     required this.ellevenMassivaListEndpoint,
     required this.ellevenMassivaListBearerToken,
     required this.ellevenMassivaListHeaderName,
@@ -165,8 +165,8 @@ class _HomePageState extends State<HomePage> {
             baseUrl: widget.middlewareMassivaBaseUrl,
             authService: _authService,
           ),
-          ellevenService: MassivaEllevenService(
-            endpoint: widget.ellevenMassivaEndpoint,
+          gatewayService: MassivaGatewayService(
+            endpoint: widget.massivaApiGatewayEndpoint,
             listEndpoint: widget.ellevenMassivaListEndpoint,
             listBearerToken: widget.ellevenMassivaListBearerToken,
             listHeaderName: widget.ellevenMassivaListHeaderName,

@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/services/auth_service.dart';
 
-class MassivaEllevenService {
+class MassivaGatewayService {
   final String endpoint;
   final String listEndpoint;
   final String listBearerToken;
@@ -19,7 +19,7 @@ class MassivaEllevenService {
   final Map<String, String> _hostTokenCache = {};
   final Map<String, DateTime> _hostTokenExpiry = {};
 
-  MassivaEllevenService({
+  MassivaGatewayService({
     required this.endpoint,
     required this.listEndpoint,
     this.listBearerToken = '',
@@ -31,7 +31,7 @@ class MassivaEllevenService {
     this.maxRetries = 3,
   }) : _client = client ?? http.Client() {
     debugPrint(
-      'MassivaEllevenService config: '
+      'MassivaGatewayService config: '
       'listEndpoint=$listEndpoint '
       'hasListBearer=${listBearerToken.trim().isNotEmpty} '
       'listHeaderName=${listHeaderName.trim().isEmpty ? '(none)' : listHeaderName.trim()} '
@@ -41,6 +41,86 @@ class MassivaEllevenService {
 
   bool get isConfigured => endpoint.trim().isNotEmpty;
   bool get isListConfigured => listEndpoint.trim().isNotEmpty;
+
+  Future<EllevenMassivaResponse> openMassivaViaApiGateway({
+    required ApiGatewayMassivaRequest request,
+  }) async {
+    if (!isConfigured) {
+      throw Exception('Endpoint de massiva do Elleven não configurado.');
+    }
+
+    final uri = Uri.parse(endpoint);
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'User-Agent': 'insomnia/12.4.0',
+    };
+    final payload = request.toJson();
+
+    debugPrint('➡️ [ABERTURA] POST $uri');
+
+    if (kDebugMode) {
+      final prettyPayload = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(_sanitizePayload(payload));
+      debugPrint(
+        'Payload enviado [ABERTURA via API Gateway]:\n$prettyPayload',
+        wrapWidth: 4096,
+      );
+    }
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .post(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(timeout);
+
+        if (kDebugMode) {
+          debugPrint(
+            'Resposta [ABERTURA via API Gateway]: status=${response.statusCode}',
+          );
+        }
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final decoded = response.body.trim().isEmpty
+              ? <String, dynamic>{}
+              : jsonDecode(response.body);
+          final asMap = _safeMap(decoded);
+          return _parseOpenMassivaResponse(
+            asMap,
+            operationLabel: 'API Gateway',
+            rawBody: response.body,
+            accessPointCode: request.authenticationAccessPointCode,
+          );
+        }
+
+        if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
+          throw Exception(
+            'Erro ao abrir massiva via API Gateway '
+            '(status ${response.statusCode}) '
+            'para ${request.authenticationAccessPointCode}: ${response.body}',
+          );
+        }
+      } on SocketException catch (_) {
+        if (attempt == maxRetries) {
+          throw Exception(_networkFailureMessage(uri: uri, action: 'abrir a massiva'));
+        }
+      } on http.ClientException catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+            _clientFailureMessage(
+              uri: uri,
+              action: 'abrir a massiva',
+              originalMessage: e.message,
+            ),
+          );
+        }
+      }
+
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+
+    throw Exception('Falha inesperada ao abrir massiva via API Gateway.');
+  }
 
   Future<EllevenMassivaResponse> openMassiva({
     required MassivaIncidentRequest incident,
@@ -88,7 +168,11 @@ class MassivaEllevenService {
               ? <String, dynamic>{}
               : jsonDecode(response.body);
           final asMap = _safeMap(decoded);
-          return EllevenMassivaResponse.fromJson(asMap);
+          return _parseOpenMassivaResponse(
+            asMap,
+            operationLabel: 'Elleven',
+            rawBody: response.body,
+          );
         }
 
         if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
@@ -112,18 +196,44 @@ class MassivaEllevenService {
     return code == 429 || code >= 500;
   }
 
+  EllevenMassivaResponse _parseOpenMassivaResponse(
+    Map<String, dynamic> json, {
+    required String operationLabel,
+    required String rawBody,
+    String? accessPointCode,
+  }) {
+    final parsed = EllevenMassivaResponse.fromJson(json);
+    if (parsed.success) {
+      return parsed;
+    }
+
+    final backendMessage = parsed.message.trim();
+    final bodyMessage = rawBody.trim();
+    final details = backendMessage.isNotEmpty
+        ? backendMessage
+        : bodyMessage.isNotEmpty
+            ? bodyMessage
+            : 'backend retornou success=false sem mensagem.';
+    final apSegment = accessPointCode == null ? '' : ' para $accessPointCode';
+
+    throw Exception(
+      'Erro ao abrir massiva via $operationLabel$apSegment: $details',
+    );
+  }
+
   Future<List<MassivaTicket>> fetchMassivas() async {
     if (!isListConfigured) {
       throw Exception('Endpoint de listagem de massivas não configurado.');
     }
 
-    final uri = _buildMassivaListUri();
+    final uri = Uri.parse(listEndpoint);
     final headers = {
-      ...await _getListAuthHeaders(uri),
+      'User-Agent': 'insomnia/12.4.0',
       'Accept': '*/*',
+      ..._getListExtraHeaders(),
     };
 
-    debugPrint('➡️ GET $uri');
+    debugPrint('➡️ [LISTAGEM] GET $uri');
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -131,7 +241,7 @@ class MassivaEllevenService {
             await _client.get(uri, headers: headers).timeout(timeout);
 
         if (kDebugMode) {
-          debugPrint('Resposta Listar Massivas: status=${response.statusCode}');
+          debugPrint('Resposta [LISTAGEM de Massivas]: status=${response.statusCode}');
         }
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -163,9 +273,21 @@ class MassivaEllevenService {
           );
         }
       } on SocketException catch (_) {
-        if (attempt == maxRetries) rethrow;
-      } on http.ClientException catch (_) {
-        if (attempt == maxRetries) rethrow;
+        if (attempt == maxRetries) {
+          throw Exception(
+            _networkFailureMessage(uri: uri, action: 'listar as massivas'),
+          );
+        }
+      } on http.ClientException catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+            _clientFailureMessage(
+              uri: uri,
+              action: 'listar as massivas',
+              originalMessage: e.message,
+            ),
+          );
+        }
       }
 
       await Future.delayed(Duration(milliseconds: 400 * attempt));
@@ -187,30 +309,6 @@ class MassivaEllevenService {
     };
   }
 
-  Future<Map<String, String>> _getListAuthHeaders(Uri targetUri) async {
-    final extraHeaders = _getListExtraHeaders();
-    final explicitBearer = listBearerToken.trim();
-    if (explicitBearer.isNotEmpty) {
-      return {
-        'Authorization': 'Bearer $explicitBearer',
-        'Content-Type': 'application/json',
-        ...extraHeaders,
-      };
-    }
-
-    if (extraHeaders.isNotEmpty || _looksLikeWebhookEndpoint(targetUri)) {
-      return {
-        'Content-Type': 'application/json',
-        ...extraHeaders,
-      };
-    }
-
-    return {
-      ...await _getAuthHeadersForUri(targetUri),
-      ...extraHeaders,
-    };
-  }
-
   Map<String, String> _getListExtraHeaders() {
     final name = listHeaderName.trim();
     final value = listHeaderValue.trim();
@@ -219,11 +317,6 @@ class MassivaEllevenService {
     }
 
     return {name: value};
-  }
-
-  bool _looksLikeWebhookEndpoint(Uri targetUri) {
-    final path = targetUri.path.toLowerCase();
-    return path.contains('/webhook');
   }
 
   Future<String> _ensureTokenForHost(Uri targetUri) async {
@@ -279,34 +372,6 @@ class MassivaEllevenService {
     _hostTokenExpiry[cacheKey] = now.add(Duration(seconds: expiresIn));
 
     return token;
-  }
-
-  Uri _buildMassivaListUri() {
-    final baseUri = Uri.parse(listEndpoint);
-    final orderBy = jsonEncode([
-      {'PropertyName': 'id', 'Dir': 'd'},
-    ]);
-    final filter = jsonEncode({
-      'Connector': 'And',
-      'Values': [
-        {
-          'PropertyName': 'incidentTypeId',
-          'Value': '302',
-          'Operation': 'equals',
-        },
-      ],
-    });
-
-    return baseUri.replace(
-      queryParameters: {
-        ...baseUri.queryParameters,
-        'OrderBy': orderBy,
-        'Page': '1',
-        'PageSize': '20',
-        'Filter': filter,
-        'slaType': 'null',
-      },
-    );
   }
 
   List<Map<String, dynamic>> _extractRows(dynamic decoded) {
@@ -408,5 +473,26 @@ class MassivaEllevenService {
       return raw.map(_sanitizePayload).toList();
     }
     return raw;
+  }
+
+  String _networkFailureMessage({
+    required Uri uri,
+    required String action,
+  }) {
+    return 'Falha de rede ao tentar $action em $uri.';
+  }
+
+  String _clientFailureMessage({
+    required Uri uri,
+    required String action,
+    required String originalMessage,
+  }) {
+    final normalized = originalMessage.trim().toLowerCase();
+    if (normalized.contains('failed to fetch')) {
+      return 'Nao foi possivel $action em $uri. '
+          'No navegador, isso normalmente indica bloqueio de CORS, certificado ou indisponibilidade da API.';
+    }
+
+    return 'Nao foi possivel $action em $uri: $originalMessage';
   }
 }
