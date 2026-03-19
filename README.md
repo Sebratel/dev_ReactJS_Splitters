@@ -42,8 +42,10 @@ Aplicacao Flutter para consulta de splitters, clientes e operacoes de massiva da
 
 ## Pendencias conhecidas
 
-- O projeto ainda nao possui uma suite de testes em `test/`.
-- `flutter analyze` e `flutter test` precisam ser confirmados no ambiente com dependencias e tempo suficiente de execucao.
+- O projeto agora possui uma base inicial de testes em `test/`, mas ela ainda
+  cobre so models e regras de parsing.
+- `flutter analyze` e `flutter test` ainda precisam ser confirmados no ambiente
+  com dependencias e tempo suficiente de execucao.
 
 ## Arquivos locais que nao devem subir
 
