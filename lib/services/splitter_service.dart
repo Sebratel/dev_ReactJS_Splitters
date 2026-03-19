@@ -8,6 +8,13 @@ import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 
+/// Servico central de dados da HomePage e da tela de detalhe.
+///
+/// Responsabilidades principais:
+/// - buscar splitters e clientes no ERP
+/// - manter cache local com Hive
+/// - expor snapshots e notifiers para a UI
+/// - resolver ruas via reverse geocode quando necessario
 class SplitterService {
   final AuthService auth;
   final String splittersEndpoint;
@@ -128,6 +135,7 @@ class SplitterService {
   // ===================================================================
   // ✅ Inicialização (main)
   // ===================================================================
+  // Abre todas as boxes usadas pelo app. Esse metodo roda no bootstrap.
   static Future<void> initHive() async {
     boxSplitters = await Hive.openBox(_boxSplitters);
     boxClientesIndex = await Hive.openBox(_boxClientesIndex);
@@ -168,6 +176,7 @@ class SplitterService {
     return _splittersCache;
   }
 
+  // Wrapper simples para GET autenticado com retry explicito de 401.
   Future<http.Response> _authedGet(String url) async {
     debugPrint('GET $url');
     final h = await auth.getAuthHeaders();
@@ -191,6 +200,7 @@ class SplitterService {
   // ===================================================================
   // ✅ SPLITTERS
 // ===================================================================
+  // Busca splitters do cache quando valido e cai para a API quando necessario.
   Future<List<SplitterModel>> fetchSplitters() async {
     final saved = boxSplitters.get("data") as List?;
     final updatedAt = boxSplitters.get("updatedAt") as int?;
@@ -233,6 +243,10 @@ class SplitterService {
   // ===================================================================
   // ✅ CLIENTES – CHUNKS + ÍNDICE GLOBAL POR SPLITTER
   // ===================================================================
+  // Faz a carga completa de clientes e reconstrui os indices usados pela UI.
+  //
+  // Esse eh o refresh "global" do app: atualiza ocupacao, mapa por splitter
+  // e notifiers reativos que abastecem as telas abertas.
   Future<int> refreshClientesCache({
     void Function(int loaded, int total)? onProgress,
     void Function(Map<String, int> snapshot)? onSnapshot,
@@ -416,6 +430,10 @@ class SplitterService {
     );
   }
 
+  // Resolve rua por coordenada.
+  //
+  // No Web, preferimos um endpoint intermediario quando configurado para evitar
+  // limitacoes de CORS/quotas do provedor de geocoding direto no navegador.
   Future<String?> getStreetFromLatLng(double lat, double lng) async {
     if (kIsWeb &&
         (reverseGeocodeEndpoint == null || reverseGeocodeEndpoint!.isEmpty)) {
@@ -625,6 +643,8 @@ class SplitterService {
     return _streetCache[splitterCode];
   }
 
+  // Refresh pontual para um unico splitter. Usado principalmente quando a tela
+  // de detalhe detecta mudancas operacionais naquele equipamento.
   Future<void> refreshClientesPorSplitter(
     String splitterCode, {
     bool force = false,

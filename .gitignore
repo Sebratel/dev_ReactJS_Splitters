@@ -32,9 +32,13 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+.firebase/
 .env
 .env.local
+build-web.ps1
 run-local.ps1
+*.log
+*.tmp
 
 # Symbolication related
 app.*.symbols

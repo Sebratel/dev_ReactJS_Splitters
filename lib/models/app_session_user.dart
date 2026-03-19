@@ -1,6 +1,11 @@
+/// Representa o usuario da sessao ja convertido para o formato do app.
+///
+/// Este model define se a area de massivas pode ser usada e carrega
+/// identificadores reaproveitados em chamadas de API.
 class AppSessionUser {
   final String email;
   final String? name;
+  final int? personId;
   final Set<String> roles;
   final bool canOpenMassiva;
 
@@ -9,6 +14,7 @@ class AppSessionUser {
     required this.roles,
     required this.canOpenMassiva,
     this.name,
+    this.personId,
   });
 
   factory AppSessionUser.guest() {
@@ -22,12 +28,14 @@ class AppSessionUser {
   factory AppSessionUser.local({
     required String email,
     required bool canOpenMassiva,
+    int? personId,
   }) {
     return AppSessionUser(
       email: email,
       roles: canOpenMassiva ? {'local_massiva'} : const {},
       canOpenMassiva: canOpenMassiva,
       name: 'Local Dev',
+      personId: personId,
     );
   }
 
@@ -36,6 +44,8 @@ class AppSessionUser {
     required Set<String> allowedEmails,
     required Set<String> allowedRoles,
   }) {
+    // O payload do JWT pode variar conforme a origem. Por isso tentamos
+    // multiplas chaves equivalentes antes de decidir o acesso.
     final email = _extractString(
           payload,
           ['email', 'upn', 'preferred_username', 'sub'],
@@ -44,6 +54,23 @@ class AppSessionUser {
     final name = _extractString(
       payload,
       ['name', 'nome', 'given_name'],
+    );
+    final personId = _extractInt(
+      payload,
+      [
+        'personId',
+        'person_id',
+        'employeeId',
+        'employee_id',
+        'colaboradorId',
+        'colaborador_id',
+        'collaboratorId',
+        'collaborator_id',
+        'userId',
+        'user_id',
+        'id',
+        'ID',
+      ],
     );
     final roles = _extractRoles(payload);
 
@@ -54,6 +81,7 @@ class AppSessionUser {
     return AppSessionUser(
       email: email,
       name: name,
+      personId: personId,
       roles: roles,
       canOpenMassiva: emailAllowed || roleAllowed,
     );
@@ -67,6 +95,23 @@ class AppSessionUser {
       final value = payload[key];
       if (value is String && value.trim().isNotEmpty) {
         return value.trim();
+      }
+    }
+    return null;
+  }
+
+  static int? _extractInt(
+    Map<String, dynamic> payload,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = payload[key];
+      if (value is int) {
+        return value > 0 ? value : null;
+      }
+      final parsed = int.tryParse(value?.toString() ?? '');
+      if (parsed != null && parsed > 0) {
+        return parsed;
       }
     }
     return null;

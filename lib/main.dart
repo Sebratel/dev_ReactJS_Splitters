@@ -15,7 +15,11 @@ import 'package:nexaview/services/splitter_service.dart';
 
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
-// Import exclusivo para web (limpar URL)
+// Bootstrap principal da aplicacao:
+// 1. inicializa dependencias globais
+// 2. resolve sessao via token ou modo local
+// 3. instancia servicos compartilhados
+// 4. abre a HomePage com as configuracoes carregadas de env
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +54,7 @@ void main() async {
       host.startsWith("10.") ||
       host.startsWith("172.");
 
+  // As permissoes de massiva ficam em env para evitar hardcode no app.
   final allowedMassivaEmails = _parseCsvEnv(
     const String.fromEnvironment('MASSIVA_ALLOWED_EMAILS', defaultValue: ''),
   );
@@ -67,6 +72,10 @@ void main() async {
     'LOCAL_USER_EMAIL',
     defaultValue: 'dev@local',
   );
+  const localUserPersonId = int.fromEnvironment(
+    'LOCAL_USER_PERSON_ID',
+    defaultValue: 629,
+  );
   const erpClientId = String.fromEnvironment(
     'ERP_CLIENT_ID',
     defaultValue: '',
@@ -83,6 +92,7 @@ void main() async {
   var sessionUser = AppSessionUser.guest();
 
   if (!isLocal) {
+    // Em producao o acesso depende do token enviado pelo Hub.
     final tokenResult = validateToken(token);
 
     if (!tokenResult.isValid) {
@@ -105,10 +115,12 @@ void main() async {
     // Remove o token da URL (sem reload)
     _limparTokenDaUrl();
   } else {
+    // Em ambiente local criamos uma sessao tecnica para desenvolvimento.
     debugPrint("Ambiente local - valida??o de token ignorada");
     sessionUser = AppSessionUser.local(
       email: localUserEmail,
       canOpenMassiva: localMassivaEnabled,
+      personId: localUserPersonId > 0 ? localUserPersonId : 629,
     );
   }
 
@@ -136,36 +148,24 @@ void main() async {
     'REVERSE_GEOCODE_ENDPOINT',
     defaultValue: '',
   );
-  const middlewareMassivaBaseUrl = String.fromEnvironment(
-    'MIDDLEWARE_MASSIVA_BASE_URL',
-    defaultValue: '',
+  const geogridBaseUrl = String.fromEnvironment(
+    'GEOGRID_BASE_URL',
+    defaultValue: 'https://eros.geogridmaps.com.br/sebratel/api/v3',
   );
-  const legacyEllevenMassivaEndpoint = String.fromEnvironment(
-    'ELLEVEN_MASSIVA_ENDPOINT',
+  const geogridApiKey = String.fromEnvironment(
+    'GEOGRID_API_KEY',
     defaultValue: '',
   );
   const massivaApiGatewayEndpoint = String.fromEnvironment(
     'MASSIVA_API_GATEWAY_ENDPOINT',
-    defaultValue: legacyEllevenMassivaEndpoint,
+    defaultValue: '',
   );
-  const ellevenMassivaListEndpoint = String.fromEnvironment(
-    'ELLEVEN_MASSIVA_LIST_ENDPOINT',
+  const massivaAffectedUsersEndpoint = String.fromEnvironment(
+    'MASSIVA_AFFECTED_USERS_ENDPOINT',
     defaultValue: '',
   );
   const massivaApiGatewayListEndpoint = String.fromEnvironment(
     'MASSIVA_API_GATEWAY_LIST_ENDPOINT',
-    defaultValue: ellevenMassivaListEndpoint,
-  );
-  const ellevenMassivaListBearerToken = String.fromEnvironment(
-    'ELLEVEN_MASSIVA_LIST_BEARER',
-    defaultValue: '',
-  );
-  const ellevenMassivaListHeaderName = String.fromEnvironment(
-    'ELLEVEN_MASSIVA_LIST_HEADER_NAME',
-    defaultValue: '',
-  );
-  const ellevenMassivaListHeaderValue = String.fromEnvironment(
-    'ELLEVEN_MASSIVA_LIST_HEADER_VALUE',
     defaultValue: '',
   );
   const autoIspEventsEndpoint = String.fromEnvironment(
@@ -189,6 +189,7 @@ void main() async {
     defaultValue: '',
   );
 
+  // SplitterService centraliza cache local, consumo do ERP e resolucao de ruas.
   final splitterService = SplitterService(
     auth: auth,
     splittersEndpoint:
@@ -199,7 +200,7 @@ void main() async {
         reverseGeocodeEndpoint.isEmpty ? null : reverseGeocodeEndpoint,
   );
 
-// RESTAURA METADADOS PERSISTIDOS
+  // Restaura metadados de ultima atualizacao para a HomePage abrir mais rapido.
   splitterService.restoreLastUpdatesFromHive();
 
   // =============================================================
@@ -210,19 +211,18 @@ void main() async {
       splitterService: splitterService,
       authService: auth,
       sessionUser: sessionUser,
-      middlewareMassivaBaseUrl: middlewareMassivaBaseUrl,
       massivaApiGatewayEndpoint: massivaApiGatewayEndpoint,
+      massivaAffectedUsersEndpoint: massivaAffectedUsersEndpoint,
       ellevenMassivaListEndpoint: massivaApiGatewayListEndpoint,
-      ellevenMassivaListBearerToken: ellevenMassivaListBearerToken,
-      ellevenMassivaListHeaderName: ellevenMassivaListHeaderName,
-      ellevenMassivaListHeaderValue: ellevenMassivaListHeaderValue,
-        autoIspEventsEndpoint: autoIspEventsEndpoint,
-        autoIspAuthEndpoint: autoIspAuthEndpoint,
-        autoIspUsername: autoIspUsername,
-        autoIspPassword: autoIspPassword,
-        massivaCookieString: massivaCookieString,
-      ),
-    );
+      autoIspEventsEndpoint: autoIspEventsEndpoint,
+      autoIspAuthEndpoint: autoIspAuthEndpoint,
+      autoIspUsername: autoIspUsername,
+      autoIspPassword: autoIspPassword,
+      massivaCookieString: massivaCookieString,
+      geogridBaseUrl: geogridBaseUrl,
+      geogridApiKey: geogridApiKey,
+    ),
+  );
 }
 
 // =============================================================
@@ -236,6 +236,7 @@ class TokenValidationResult {
   TokenValidationResult(this.isValid, {this.reason, this.payload});
 }
 
+// Valida o JWT recebido via query string e devolve o payload normalizado.
 TokenValidationResult validateToken(String? token) {
   if (token == null || token.isEmpty) {
     return TokenValidationResult(false, reason: "Token ausente");
@@ -285,9 +286,8 @@ Set<String> _parseCsvEnv(String value) {
       .toSet();
 }
 
-// =============================================================
-// LIMPA ?token= DA URL (WEB)
-// =============================================================
+// Remove o token da URL depois da validacao para nao deixar credenciais
+// temporarias expostas na barra do navegador.
 void _limparTokenDaUrl() {
   final uri = Uri.base;
 
@@ -297,41 +297,37 @@ void _limparTokenDaUrl() {
   }
 }
 
-// =============================================================
-// APP ROOT
-// =============================================================
+/// Widget raiz que propaga servicos e configuracoes para a interface.
 class MyApp extends StatefulWidget {
   final AuthService authService;
   final SplitterService splitterService;
   final AppSessionUser sessionUser;
-  final String middlewareMassivaBaseUrl;
   final String massivaApiGatewayEndpoint;
+  final String massivaAffectedUsersEndpoint;
   final String ellevenMassivaListEndpoint;
-  final String ellevenMassivaListBearerToken;
-  final String ellevenMassivaListHeaderName;
-  final String ellevenMassivaListHeaderValue;
   final String autoIspEventsEndpoint;
   final String autoIspAuthEndpoint;
   final String autoIspUsername;
   final String autoIspPassword;
   final String massivaCookieString;
+  final String geogridBaseUrl;
+  final String geogridApiKey;
 
   const MyApp({
     super.key,
     required this.splitterService,
     required this.authService,
     required this.sessionUser,
-    required this.middlewareMassivaBaseUrl,
     required this.massivaApiGatewayEndpoint,
+    required this.massivaAffectedUsersEndpoint,
     required this.ellevenMassivaListEndpoint,
-    required this.ellevenMassivaListBearerToken,
-    required this.ellevenMassivaListHeaderName,
-    required this.ellevenMassivaListHeaderValue,
     required this.autoIspEventsEndpoint,
     required this.autoIspAuthEndpoint,
     required this.autoIspUsername,
     required this.autoIspPassword,
     required this.massivaCookieString,
+    required this.geogridBaseUrl,
+    required this.geogridApiKey,
   });
 
   @override
@@ -370,17 +366,16 @@ class _MyAppState extends State<MyApp> {
         splitterService: widget.splitterService,
         authService: widget.authService,
         sessionUser: widget.sessionUser,
-        middlewareMassivaBaseUrl: widget.middlewareMassivaBaseUrl,
         massivaApiGatewayEndpoint: widget.massivaApiGatewayEndpoint,
+        massivaAffectedUsersEndpoint: widget.massivaAffectedUsersEndpoint,
         ellevenMassivaListEndpoint: widget.ellevenMassivaListEndpoint,
-        ellevenMassivaListBearerToken: widget.ellevenMassivaListBearerToken,
-        ellevenMassivaListHeaderName: widget.ellevenMassivaListHeaderName,
-        ellevenMassivaListHeaderValue: widget.ellevenMassivaListHeaderValue,
         autoIspEventsEndpoint: widget.autoIspEventsEndpoint,
         autoIspAuthEndpoint: widget.autoIspAuthEndpoint,
         autoIspUsername: widget.autoIspUsername,
         autoIspPassword: widget.autoIspPassword,
         massivaCookieString: widget.massivaCookieString,
+        geogridBaseUrl: widget.geogridBaseUrl,
+        geogridApiKey: widget.geogridApiKey,
       ),
     );
   }

@@ -1,3 +1,4 @@
+/// Representa um alvo de rede individual dentro do contexto de massiva.
 class MassivaTarget {
   final String apCode;
   final int slot;
@@ -19,6 +20,7 @@ class MassivaTarget {
       };
 }
 
+/// Payload legado usado em alguns fluxos de abertura de massiva.
 class MassivaIncidentRequest {
   final String startDate;
   final String startTime;
@@ -65,6 +67,7 @@ class MassivaIncidentRequest {
       };
 }
 
+/// Bloco `assignment` esperado pelo API Gateway ao abrir uma massiva.
 class ApiGatewayMassivaAssignment {
   final String title;
   final String description;
@@ -86,6 +89,7 @@ class ApiGatewayMassivaAssignment {
       };
 }
 
+/// Payload principal usado hoje para abertura via API Gateway.
 class ApiGatewayMassivaRequest {
   final int incidentStatusId;
   final int personId;
@@ -137,6 +141,35 @@ class ApiGatewayMassivaRequest {
       };
 }
 
+/// PPPoE afetado que sera registrado no endpoint de afetados.
+class AffectedUserRequest {
+  final String pppoe;
+  final int protocol;
+  final String reason;
+  final String finishDate;
+  final String created;
+  final String createdBy;
+
+  const AffectedUserRequest({
+    required this.pppoe,
+    required this.protocol,
+    required this.reason,
+    required this.finishDate,
+    required this.created,
+    required this.createdBy,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'pppoe': pppoe,
+        'protocol': protocol,
+        'reason': reason,
+        'finishDate': finishDate,
+        'created': created,
+        'createdBy': createdBy,
+      };
+}
+
+/// Resultado do filtro legado de clientes impactados.
 class MiddlewareFilterResponse {
   final String correlationId;
   final List<int> cleanAuthenticationIds;
@@ -162,6 +195,7 @@ class MiddlewareFilterResponse {
   }
 }
 
+/// Resposta normalizada da abertura de massiva, independentemente do backend.
 class EllevenMassivaResponse {
   final bool success;
   final int? protocol;
@@ -224,6 +258,7 @@ class EllevenMassivaResponse {
   }
 }
 
+/// Resultado consolidado do fluxo legado com filtro + abertura.
 class MassivaExecutionResult {
   final MiddlewareFilterResponse filtered;
   final EllevenMassivaResponse elleven;
@@ -242,8 +277,10 @@ enum MassivaStatus {
   desconhecida,
 }
 
+/// Item da listagem de massivas usado na area de monitoramento.
 class MassivaTicket {
   final int protocol;
+  final int? assignmentId;
   final String title;
   final String apCode;
   final String splitterCode;
@@ -252,12 +289,14 @@ class MassivaTicket {
   final String responsible;
   final MassivaStatus status;
   final DateTime? openedAt;
+  final DateTime? expectedCloseAt;
   final DateTime? closedAt;
   final int affectedClients;
   final bool usedFallback;
 
   const MassivaTicket({
     required this.protocol,
+    this.assignmentId,
     required this.title,
     required this.apCode,
     required this.splitterCode,
@@ -266,10 +305,45 @@ class MassivaTicket {
     required this.responsible,
     required this.status,
     required this.openedAt,
+    required this.expectedCloseAt,
     required this.closedAt,
     required this.affectedClients,
     required this.usedFallback,
   });
+
+  MassivaTicket copyWith({
+    int? protocol,
+    int? assignmentId,
+    String? title,
+    String? apCode,
+    String? splitterCode,
+    String? team,
+    String? createdBy,
+    String? responsible,
+    MassivaStatus? status,
+    DateTime? openedAt,
+    DateTime? expectedCloseAt,
+    DateTime? closedAt,
+    int? affectedClients,
+    bool? usedFallback,
+  }) {
+    return MassivaTicket(
+      protocol: protocol ?? this.protocol,
+      assignmentId: assignmentId ?? this.assignmentId,
+      title: title ?? this.title,
+      apCode: apCode ?? this.apCode,
+      splitterCode: splitterCode ?? this.splitterCode,
+      team: team ?? this.team,
+      createdBy: createdBy ?? this.createdBy,
+      responsible: responsible ?? this.responsible,
+      status: status ?? this.status,
+      openedAt: openedAt ?? this.openedAt,
+      expectedCloseAt: expectedCloseAt ?? this.expectedCloseAt,
+      closedAt: closedAt ?? this.closedAt,
+      affectedClients: affectedClients ?? this.affectedClients,
+      usedFallback: usedFallback ?? this.usedFallback,
+    );
+  }
 
   bool get isOpen => status == MassivaStatus.aberta;
 
@@ -284,6 +358,10 @@ class MassivaTicket {
     final input = json['input'] is Map
         ? (json['input'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
+    final inputAssignment = input['assignment'] is Map
+        ? (input['assignment'] as Map)
+            .map((k, v) => MapEntry(k.toString(), v))
+        : const <String, dynamic>{};
     final assignment = json['assignment'] is Map
         ? (json['assignment'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
@@ -292,6 +370,14 @@ class MassivaTicket {
             .map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
     final merged = <String, dynamic>{...input, ...json};
+    final assignmentIdRaw = merged['assignmentId'] ??
+        merged['id'] ??
+        merged['ID'] ??
+        merged['idAssignment'] ??
+        assignment['id'] ??
+        assignment['ID'] ??
+        merged['assignmentIdValue'] ??
+        '';
 
     final protocolRaw =
         merged['protocol'] ?? merged['protocolo'] ?? merged['id'] ?? input['id'];
@@ -317,15 +403,18 @@ class MassivaTicket {
 
     return MassivaTicket(
       protocol: int.tryParse((protocolRaw ?? '').toString()) ?? 0,
+      assignmentId: int.tryParse(assignmentIdRaw.toString()),
       title: (merged['title'] ??
               assignment['title'] ??
               merged['tituloIncidente'] ??
+              merged['catalogo'] ??
               merged['descricao'] ??
               merged['description'] ??
               merged['subject'] ??
               'Massiva')
           .toString(),
       apCode: (merged['apCode'] ??
+              merged['pontoDeAcesso'] ??
               merged['accessPoint'] ??
               merged['accessPointCode'] ??
               '')
@@ -342,21 +431,51 @@ class MassivaTicket {
       status: status,
       openedAt: _parseDate(
         merged['openedAt'] ??
+            inputAssignment['beginningDate'] ??
+            inputAssignment['beginningData'] ??
             assignment['beginningDate'] ??
+            assignment['beginningData'] ??
             merged['beginningDate'] ??
+            merged['beginningData'] ??
             merged['criacao'] ??
             merged['creationDate'] ??
             merged['createdAt'] ??
             merged['openingDate'],
       ),
-      closedAt: _parseDate(
-        merged['closedAt'] ??
-            assignment['finalDate'] ??
+      expectedCloseAt: _parseDateCandidates(
+        [
+          inputAssignment['finalDate'],
+          inputAssignment['finalData'],
+          assignment['finalDate'],
+          assignment['finalData'],
+          merged['finalDate'],
+          merged['finalData'],
+          merged['maintenanceDate'],
+          merged['forecastClosingDate'],
+          merged['expectedCloseAt'],
+          merged['expectedClosureDate'],
+          merged['previsionClosingDate'],
+          merged['previsionCloseAt'],
+        ],
+        dateCandidate: merged['maintenanceDate'] ??
+            merged['forecastClosingDate'] ??
             merged['finalDate'] ??
-            merged['finalizado'] ??
-            merged['finalizationDate'] ??
-            merged['closedDate'] ??
-            merged['closureDate'],
+            merged['finalData'],
+        timeCandidate: merged['maintenanceTime'] ??
+            merged['forecastClosingTime'] ??
+            merged['finalTime'],
+      ),
+      closedAt: _parseDateCandidates(
+        [
+          merged['closedAt'],
+          merged['finalizado'],
+          merged['finalizationDate'],
+          merged['closedDate'],
+          merged['closureDate'],
+          merged['closedData'],
+        ],
+        dateCandidate: merged['closedDate'] ?? merged['closureDate'],
+        timeCandidate: merged['closedTime'] ?? merged['closureTime'],
       ),
       affectedClients: int.tryParse(
               (merged['affectedClients'] ??
@@ -373,10 +492,50 @@ class MassivaTicket {
 
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
-    return DateTime.tryParse(value.toString());
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+
+    final direct = DateTime.tryParse(text);
+    if (direct != null) return direct;
+
+    final match = RegExp(
+      r'^(\d{2})[\/-](\d{2})[\/-](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$',
+    ).firstMatch(text);
+
+    if (match == null) return null;
+
+    final day = int.tryParse(match.group(1) ?? '');
+    final month = int.tryParse(match.group(2) ?? '');
+    final year = int.tryParse(match.group(3) ?? '');
+    final hour = int.tryParse(match.group(4) ?? '0') ?? 0;
+    final minute = int.tryParse(match.group(5) ?? '0') ?? 0;
+    final second = int.tryParse(match.group(6) ?? '0') ?? 0;
+
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day, hour, minute, second);
+  }
+
+  static DateTime? _parseDateCandidates(
+    List<dynamic> candidates, {
+    dynamic dateCandidate,
+    dynamic timeCandidate,
+  }) {
+    for (final candidate in candidates) {
+      final parsed = _parseDate(candidate);
+      if (parsed != null) return parsed;
+    }
+
+    final dateText = dateCandidate?.toString().trim() ?? '';
+    if (dateText.isEmpty) return null;
+
+    final timeText = timeCandidate?.toString().trim() ?? '';
+    return _parseDate(
+      timeText.isEmpty ? dateText : '$dateText $timeText',
+    );
   }
 }
 
+/// Recurso individual devolvido pelo AutoISP dentro de um evento.
 class AutoIspResource {
   final String? ponlink;
   final String? pppoeUsername;
@@ -403,6 +562,7 @@ class AutoIspResource {
   }
 }
 
+/// Evento operacional devolvido pelo AutoISP.
 class AutoIspEvent {
   final int id;
   final String eventType;
