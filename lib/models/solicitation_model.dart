@@ -1,3 +1,4 @@
+/// Representa uma solicitacao/protocolo retornado por consultas de historico.
 class SolicitationModel {
   final int assignmentId;
   final int protocol;

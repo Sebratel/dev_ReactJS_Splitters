@@ -1,3 +1,8 @@
+/// Representa um splitter da rede.
+///
+/// Esse model abastece a HomePage, a tela de detalhe e parte do fluxo de
+/// massivas. Ele junta identificadores de rede, capacidade de portas,
+/// coordenadas e referencias de OLT/CTO.
 class SplitterModel {
   final int id;
   final String code;
@@ -49,6 +54,7 @@ class SplitterModel {
     return double.tryParse(normalized);
   }
 
+  // Algumas APIs devolvem coordenadas como texto, inclusive com virgula.
   double? get lat => _parseCoordinate(latitude);
   double? get lng => _parseCoordinate(longitude);
   bool get hasLocation => lat != null && lng != null;

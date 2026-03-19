@@ -1,3 +1,7 @@
+/// Representa uma OLT retornada pelas APIs operacionais.
+///
+/// Alem dos dados tecnicos de rede, este model tambem carrega coordenadas e
+/// endereco quando a API fornece essas informacoes.
 class OltModel {
   final int id;
   final String code;

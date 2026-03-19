@@ -1,0 +1,55 @@
+param(
+  [switch]$Deploy,
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$FlutterArgs
+)
+
+$ErrorActionPreference = "Stop"
+
+$envFile = Join-Path $PSScriptRoot ".env.local"
+if (-not (Test-Path $envFile)) {
+  throw "Arquivo .env.local nao encontrado. Copie .env.example para .env.local e preencha os valores."
+}
+
+$envMap = @{}
+Get-Content $envFile | ForEach-Object {
+  $line = $_.Trim()
+  if (-not $line -or $line.StartsWith("#")) {
+    return
+  }
+
+  $parts = $line -split "=", 2
+  if ($parts.Count -ne 2) {
+    return
+  }
+
+  $key = $parts[0].Trim()
+  $value = $parts[1].Trim()
+  $envMap[$key] = $value
+}
+
+$dartDefines = @()
+foreach ($entry in $envMap.GetEnumerator()) {
+  $dartDefines += "--dart-define=$($entry.Key)=$($entry.Value)"
+}
+
+$buildArgs = @("build", "web", "--release")
+if ($FlutterArgs) {
+  $buildArgs += $FlutterArgs
+}
+
+Write-Host "Executando flutter build web com configuracao do .env.local..."
+& flutter @buildArgs @dartDefines
+
+if ($LASTEXITCODE -ne 0) {
+  throw "Falha no flutter build web."
+}
+
+if ($Deploy) {
+  Write-Host "Publicando no Firebase Hosting..."
+  & firebase deploy --only hosting
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Falha no deploy do Firebase Hosting."
+  }
+}

@@ -18,6 +18,13 @@ import 'package:nexaview/widgets/geogrid_refresh_button.dart';
 import 'package:nexaview/widgets/reserva_lock_badge.dart';
 import 'package:nexaview/services/auth_service.dart';
 
+/// Tela de detalhe de um splitter especifico.
+///
+/// Ela combina dados estruturais do splitter com:
+/// - clientes conectados
+/// - endereco resolvido por geocoding
+/// - reservas vindas do GeoGrid
+/// - mapa com OLT e splitters proximos
 class SplitterDetailPage extends StatefulWidget {
   final SplitterModel splitter;
   final List<ClienteModel> clientes;
@@ -72,12 +79,15 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
     _geoService = GeocodingService();
 
+    // Endereco e reservas sao carregados separadamente porque dependem de
+    // servicos externos e podem falhar sem impedir a tela de abrir.
     _loadAddress();
     if (widget.splitter.integrationCode.isNotEmpty) {
       _loadReservasGeoGrid();
     }
 
-    // Conecta notifier (cache imediato)
+    // O notifier permite refletir refreshes pontuais do splitter sem recarregar
+    // a tela inteira.
     _clientesNotifier =
         widget.splitterService.watchClientes(widget.splitter.code);
 
@@ -124,6 +134,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     }
   }
 
+  // Resolve o endereco textual a partir da latitude/longitude do splitter.
   Future<void> _loadAddress() async {
     if (!widget.splitter.hasLocation) {
       setState(() => _loadingAddress = false);
@@ -215,6 +226,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     return buffer.toString();
   }
 
+  // Renderiza portas sem cliente conectado, mantendo o indicativo de reserva
+  // quando o GeoGrid informa bloqueio/cadeado naquela porta.
   Widget _portaVazia(
     int porta,
     bool isDark, {
@@ -328,7 +341,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     // ================= DADOS DO SPLITTER =================
     final totalPortas = widget.splitter.outPorts;
 
-    // Continua o Scaffold normalmente
+    // A tela foi organizada para misturar contexto operacional e visual:
+    // header, informacoes gerais, mapa, splitters proximos e lista de portas.
 
     return PopScope(
         canPop: false,
@@ -1111,6 +1125,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     }
   }
 
+  // Carrega o estado atual de reservas diretamente do GeoGrid.
   Future<void> _loadReservasGeoGrid() async {
     if (widget.splitter.integrationCode.isEmpty) return;
 
@@ -1131,6 +1146,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     }
   }
 
+  // Forca um refresh do GeoGrid e marca o splitter como "dirty" para a camada
+  // de cache de clientes revisar os dados logo em seguida.
   Future<void> _refreshReservasGeoGrid() async {
     if (_reservasLoading || widget.splitter.integrationCode.isEmpty) return;
 

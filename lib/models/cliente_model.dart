@@ -1,6 +1,7 @@
 // ===============================
 // 📍 ENDEREÇO DO CLIENTE
 // ===============================
+/// Endereco consolidado do cliente quando a API devolve esse bloco.
 class ClienteAddress {
   final String street;
   final String number;
@@ -41,6 +42,7 @@ class ClienteAddress {
 
 // 🔌 PONTO DE ACESSO (OLT)
 // ===============================
+/// Ponto de acesso/porta de autenticacao associado ao cliente.
 class AuthenticationAccessPoint {
   final String code;
   final String title;
@@ -66,6 +68,7 @@ class AuthenticationAccessPoint {
 
 // 📑 CONTRATO
 // ===============================
+/// Resumo de contrato retornado pela API de clientes.
 class ContractInfo {
   final int status;
   final String statusDescription;
@@ -91,6 +94,10 @@ class ContractInfo {
 
 // 👤 CLIENTE (MODEL PRINCIPAL)
 // ===============================
+/// Model principal de cliente conectado ao splitter.
+///
+/// Este objeto mistura dados de autenticacao, cliente, rota de rede e contrato
+/// em um unico payload retornado pelo ERP.
 class ClienteModel {
   /// ID do cliente (client.id)
   final int clientId;

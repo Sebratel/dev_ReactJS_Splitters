@@ -1,5 +1,4 @@
 ﻿import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +9,6 @@ import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_gateway_service.dart';
-import 'package:nexaview/services/massiva_middleware_service.dart';
 
 class _ResolvedAutoIspRoute {
   final String ap;
@@ -28,8 +26,34 @@ class _ResolvedAutoIspRoute {
   });
 }
 
+class _LocalMassivaPreview {
+  final int totalAffected;
+  final int totalPppoes;
+
+  const _LocalMassivaPreview({
+    required this.totalAffected,
+    required this.totalPppoes,
+  });
+}
+
+enum _StepperDialogAction { apply, back }
+
+class _StepperDialogResult<T> {
+  final _StepperDialogAction action;
+  final Set<T> values;
+
+  const _StepperDialogResult({
+    required this.action,
+    required this.values,
+  });
+}
+
+/// Tela operacional de massivas.
+///
+/// Esta tela concentra a maior parte da regra de negocio manual do app:
+/// selecao de rota de rede, sugestao de descricao, abertura/encerramento de
+/// protocolos e apoio com eventos do AutoISP.
 class MassivaPage extends StatefulWidget {
-  final MassivaMiddlewareService middlewareService;
   final MassivaGatewayService gatewayService;
   final AutoIspEventService autoIspService;
   final AppSessionUser sessionUser;
@@ -41,7 +65,6 @@ class MassivaPage extends StatefulWidget {
 
   const MassivaPage({
     super.key,
-    required this.middlewareService,
     required this.gatewayService,
     required this.autoIspService,
     required this.sessionUser,
@@ -65,7 +88,6 @@ class _MassivaPageState extends State<MassivaPage> {
   static const double _incidentHeaderLottieOffsetDesktop = 28;
   static const int _companyPlaceId = 1;
   static const int _apiIncidentStatusId = 1;
-  static const int _apiPersonId = 158418;
   static const int _apiIncidentTypeId = 1257;
   static const String _fixedIncidentTypeLabel = 'Registro Massivas';
   static const int _apiCatalogServiceId = 1173;
@@ -85,13 +107,14 @@ class _MassivaPageState extends State<MassivaPage> {
   final _incidentTypeController = TextEditingController(
     text: _fixedIncidentTypeLabel,
   );
+  final _massivaSearchController = TextEditingController();
   final _technicalReasonController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  bool _forceFallback = false;
   bool _loadingPreview = false;
   bool _loadingSubmit = false;
   bool _loadingMassivas = false;
+  bool _closingMassiva = false;
   bool _loadedMassivas = false;
   bool _loadingAutoIsp = false;
   bool _loadedAutoIsp = false;
@@ -101,10 +124,11 @@ class _MassivaPageState extends State<MassivaPage> {
   List<MassivaTicket> _massivas = const [];
   List<AutoIspEvent> _autoIspEvents = const [];
   MassivaStatus? _statusFilter;
-  MiddlewareFilterResponse? _lastPreview;
+  String? _massivaApFilter;
+  int? _massivaImpactFilter;
+  _LocalMassivaPreview? _lastPreview;
   String? _error;
   Timer? _autoRefreshTimer;
-  DateTime? _lastDataRefreshAt;
   DateTime? _openedAt;
   DateTime? _closedAt;
   DateTime? _identifiedAt;
@@ -179,6 +203,7 @@ class _MassivaPageState extends State<MassivaPage> {
     _closedDateController.dispose();
     _closedTimeController.dispose();
     _incidentTypeController.dispose();
+    _massivaSearchController.dispose();
     _technicalReasonController.dispose();
     _descriptionController.dispose();
     super.dispose();
@@ -202,11 +227,6 @@ class _MassivaPageState extends State<MassivaPage> {
       if (!_loadingAutoIsp) {
         await _loadAutoIspEvents();
       }
-      if (mounted) {
-        setState(() {
-          _lastDataRefreshAt = DateTime.now();
-        });
-      }
     } catch (_) {
       // erros já são tratados nos loaders
     }
@@ -219,6 +239,9 @@ class _MassivaPageState extends State<MassivaPage> {
     setState(() => _buildingRouteCatalog = true);
 
     try {
+      // Monta um catalogo em memoria no formato AP -> slot -> porta ->
+      // splitter. O mesmo catalogo tambem gera um indice por username para
+      // aproximar eventos AutoISP da topologia conhecida.
       _routeByUsername.clear();
       _apTitleByCode.clear();
       for (var i = 0; i < _splitterOptions.length; i++) {
@@ -255,7 +278,8 @@ class _MassivaPageState extends State<MassivaPage> {
                 slot: slot,
                 port: port,
                 splitterCode: splitter,
-                username: cliente.user.trim().isEmpty ? null : cliente.user.trim(),
+                username:
+                    cliente.user.trim().isEmpty ? null : cliente.user.trim(),
               ),
             );
           }
@@ -309,7 +333,8 @@ class _MassivaPageState extends State<MassivaPage> {
 
   _ResolvedAutoIspRoute? _resolveRouteByAutoIspUsername(AutoIspEvent event) {
     for (final resource in event.resources) {
-      final normalized = _normalizeAutoIspUsername(resource.pppoeUsername ?? '');
+      final normalized =
+          _normalizeAutoIspUsername(resource.pppoeUsername ?? '');
       if (normalized.isEmpty) continue;
       final match = _routeByUsername[normalized];
       if (match != null) {
@@ -383,10 +408,10 @@ class _MassivaPageState extends State<MassivaPage> {
       });
 
     _selectedSplittersByRoute.clear();
-    final routeSplitters = route.splitterCode != null &&
-            route.splitterCode!.trim().isNotEmpty
-        ? {route.splitterCode!.trim()}
-        : const <String>{};
+    final routeSplitters =
+        route.splitterCode != null && route.splitterCode!.trim().isNotEmpty
+            ? {route.splitterCode!.trim()}
+            : const <String>{};
     if (routeSplitters.isNotEmpty) {
       _selectedSplittersByRoute[route.ap] = {
         route.slot: {
@@ -512,6 +537,102 @@ class _MassivaPageState extends State<MassivaPage> {
   bool _isClosingBeforeOpening(DateTime closing) {
     if (_openedAt == null) return false;
     return closing.isBefore(_openedAt!);
+  }
+
+  Future<void> _pickOpeningDate() async {
+    final now = DateTime.now();
+    final current = _openedAt ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      locale: const Locale('pt', 'BR'),
+      initialDate: current,
+      firstDate: now.subtract(const Duration(days: 3650)),
+      lastDate: now.add(const Duration(days: 3650)),
+      builder: (context, child) {
+        return _buildPickerTheme(
+          context: context,
+          child: Localizations.override(
+            context: context,
+            locale: const Locale('pt', 'BR'),
+            child: child,
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+
+    final previous = _openedAt ?? now;
+    final candidate = DateTime(
+      picked.year,
+      picked.month,
+      picked.day,
+      previous.hour,
+      previous.minute,
+      previous.second,
+    );
+
+    if (_closedAt != null && _isClosingBeforeOpening(_closedAt!)) {
+      setState(() {
+        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+      });
+      return;
+    }
+
+    setState(() {
+      _openedAt = candidate;
+      _openedDateController.text = DateFormat('dd/MM/yyyy').format(candidate);
+      _openedTimeController.text = DateFormat('HH:mm:ss').format(candidate);
+      _identifiedAt ??= candidate;
+      _syncAutoDescription();
+    });
+  }
+
+  Future<void> _pickOpeningTime() async {
+    final now = DateTime.now();
+    final current = _openedAt ?? now;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
+      builder: (context, child) {
+        return _buildPickerTheme(
+          context: context,
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: Localizations.override(
+              context: context,
+              locale: const Locale('pt', 'BR'),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+
+    final base = _openedAt ?? now;
+    final candidate = DateTime(
+      base.year,
+      base.month,
+      base.day,
+      picked.hour,
+      picked.minute,
+      base.second,
+    );
+
+    if (_closedAt != null && _closedAt!.isBefore(candidate)) {
+      setState(() {
+        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+      });
+      return;
+    }
+
+    setState(() {
+      _openedAt = candidate;
+      _openedDateController.text = DateFormat('dd/MM/yyyy').format(candidate);
+      _openedTimeController.text = DateFormat('HH:mm:ss').format(candidate);
+      _identifiedAt ??= candidate;
+      _syncAutoDescription();
+    });
   }
 
   Future<void> _pickClosingDate() async {
@@ -678,6 +799,135 @@ class _MassivaPageState extends State<MassivaPage> {
     return seenAuthenticationIds.length;
   }
 
+  Set<String> _effectiveSplittersForRoute(String ap, int slot, int port) {
+    final explicit = _selectedSplittersByRoute[ap]?[slot]?[port];
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+
+    return _splitterOptionsForRoute(ap, slot, port).toSet();
+  }
+
+  List<ClienteModel> _collectClientesForAp({
+    required String apCode,
+  }) {
+    final seenClientKeys = <String>{};
+    final clientes = <ClienteModel>[];
+    final routes = _selectedPortsByApSlot[apCode] ?? const <int, Set<int>>{};
+
+    for (final slotEntry in routes.entries) {
+      final slot = slotEntry.key;
+      final ports = slotEntry.value.toList()..sort();
+
+      for (final port in ports) {
+        final splitters = _effectiveSplittersForRoute(apCode, slot, port);
+        for (final splitterCode in splitters) {
+          final splitterClientes = widget.getClientesForSplitter(splitterCode);
+          for (final cliente in splitterClientes) {
+            final accessPoint = cliente.accessPoint;
+            if (accessPoint == null) continue;
+            if (accessPoint.code.trim() != apCode.trim() &&
+                accessPoint.title.trim() != apCode.trim()) {
+              continue;
+            }
+            if (accessPoint.slotOlt != slot || accessPoint.portOlt != port) {
+              continue;
+            }
+
+            final clientKey = cliente.authenticationId > 0
+                ? 'auth:${cliente.authenticationId}'
+                : 'user:${cliente.user.trim().toLowerCase()}';
+            if (seenClientKeys.add(clientKey)) {
+              clientes.add(cliente);
+            }
+          }
+        }
+      }
+    }
+
+    return clientes;
+  }
+
+  String _affectedUsersReason() {
+    final technicalReason = _technicalReasonController.text.trim();
+    if (technicalReason.isNotEmpty) {
+      return technicalReason;
+    }
+
+    final description = _descriptionController.text.trim();
+    if (description.isNotEmpty) {
+      return description;
+    }
+
+    return 'Massiva aberta pelo app';
+  }
+
+  String _affectedUsersCreatedBy() {
+    final email = widget.sessionUser.email.trim().toLowerCase();
+    if (email.isNotEmpty) {
+      return email.split('@').first.replaceAll(RegExp(r'[^a-z0-9._-]'), '_');
+    }
+
+    final name = (widget.sessionUser.name ?? '').trim().toLowerCase();
+    if (name.isNotEmpty) {
+      return name.replaceAll(RegExp(r'[^a-z0-9._-]'), '_');
+    }
+
+    return 'app_splitters';
+  }
+
+  _LocalMassivaPreview _buildLocalPreview() {
+    final seenClientKeys = <String>{};
+    final seenPppoes = <String>{};
+
+    for (final apCode in _selectedAps) {
+      for (final cliente in _collectClientesForAp(apCode: apCode)) {
+        final clientKey = cliente.authenticationId > 0
+            ? 'auth:${cliente.authenticationId}'
+            : 'user:${cliente.user.trim().toLowerCase()}';
+        seenClientKeys.add(clientKey);
+
+        final pppoe = cliente.user.trim().toLowerCase();
+        if (pppoe.isNotEmpty) {
+          seenPppoes.add(pppoe);
+        }
+      }
+    }
+
+    return _LocalMassivaPreview(
+      totalAffected: seenClientKeys.length,
+      totalPppoes: seenPppoes.length,
+    );
+  }
+
+  List<AffectedUserRequest> _buildAffectedUserRequests({
+    required String apCode,
+    required int protocol,
+  }) {
+    final finishDate = (_closedAt ?? DateTime.now()).toUtc().toIso8601String();
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    final reason = _affectedUsersReason();
+    final createdBy = _affectedUsersCreatedBy();
+    final seenPppoes = <String>{};
+
+    return _collectClientesForAp(
+      apCode: apCode,
+    ).where((cliente) {
+      final pppoe = cliente.user.trim();
+      if (pppoe.isEmpty) return false;
+      return seenPppoes.add(pppoe.toLowerCase());
+    }).map((cliente) {
+      return AffectedUserRequest(
+        pppoe: cliente.user.trim(),
+        protocol: protocol,
+        reason: reason,
+        finishDate: finishDate,
+        created: createdAt,
+        createdBy: createdBy,
+      );
+    }).toList();
+  }
+
   int get _currentOpeningClients =>
       _lastPreview?.totalAffected ?? _estimatedAffectedClients();
 
@@ -743,8 +993,8 @@ class _MassivaPageState extends State<MassivaPage> {
   String _buildTopologiaText() {
     final lines = <String>[];
 
-      final aps = _selectedAps.toList()..sort();
-      for (final ap in aps) {
+    final aps = _selectedAps.toList()..sort();
+    for (final ap in aps) {
       final slots = (_selectedSlotsByAp[ap]?.toList() ?? <int>[])..sort();
       final ports = <int>{};
       final portsBySlot = _selectedPortsByApSlot[ap] ?? const <int, Set<int>>{};
@@ -813,6 +1063,9 @@ class _MassivaPageState extends State<MassivaPage> {
   }
 
   void _syncAutoDescription({bool force = false}) {
+    // A descricao eh sugerida automaticamente enquanto o usuario preenche a
+    // tela. Se ele editar manualmente, deixamos de sobrescrever, exceto quando
+    // algum fluxo explicito pede sincronizacao forcada.
     if (!force &&
         _descriptionEditedManually &&
         _descriptionController.text.trim().isNotEmpty) {
@@ -867,20 +1120,31 @@ class _MassivaPageState extends State<MassivaPage> {
     final selectedByAp = <String, Set<int>>{};
     final aps = _selectedAps.toList()..sort();
 
-    for (var i = 0; i < aps.length; i++) {
+    var i = 0;
+    while (i < aps.length) {
       final ap = aps[i];
       final options = _slotOptionsForAp(ap);
-      if (options.isEmpty) continue;
+      if (options.isEmpty) {
+        i++;
+        continue;
+      }
 
       final selected = await _selectMultiIntDialog(
-        title: 'Selecione os slots do AP $ap',
+        title: '➡️ Slots do AP ${_apDisplayLabel(ap)} ⬅️',
         values: options,
         valueLabel: (v) => 'Slot $v',
-        initial: _selectedSlotsByAp[ap] ?? const <int>{},
+        initial: selectedByAp[ap] ?? _selectedSlotsByAp[ap] ?? const <int>{},
         applyLabel: i == aps.length - 1 ? 'Aplicar' : 'Próximo',
+        showBackButton: i > 0,
       );
       if (!mounted || selected == null) return;
-      selectedByAp[ap] = selected;
+      if (selected.action == _StepperDialogAction.back) {
+        i--;
+        continue;
+      }
+
+      selectedByAp[ap] = selected.values;
+      i++;
     }
 
     setState(() {
@@ -922,21 +1186,33 @@ class _MassivaPageState extends State<MassivaPage> {
 
     final selectedByRoute = <String, Map<int, Set<int>>>{};
 
-    for (var i = 0; i < steps.length; i++) {
+    var i = 0;
+    while (i < steps.length) {
       final step = steps[i];
       final options = _portOptionsForApSlot(step.$1, step.$2);
-      if (options.isEmpty) continue;
+      if (options.isEmpty) {
+        i++;
+        continue;
+      }
 
       final selected = await _selectMultiIntDialog(
-        title: 'Portas do AP ${step.$1} ? SLOT ${step.$2}',
+        title: 'Portas do AP ${_apDisplayLabel(step.$1)} ➡️ SLOT ${step.$2} ⬅️',
         values: options,
         valueLabel: (v) => 'Porta $v',
-        initial: _selectedPortsByApSlot[step.$1]?[step.$2] ?? const <int>{},
+        initial: selectedByRoute[step.$1]?[step.$2] ??
+            _selectedPortsByApSlot[step.$1]?[step.$2] ??
+            const <int>{},
         applyLabel: i == steps.length - 1 ? 'Aplicar' : 'Próximo',
+        showBackButton: i > 0,
       );
       if (!mounted || selected == null) return;
+      if (selected.action == _StepperDialogAction.back) {
+        i--;
+        continue;
+      }
 
-      selectedByRoute.putIfAbsent(step.$1, () => {})[step.$2] = selected;
+      selectedByRoute.putIfAbsent(step.$1, () => {})[step.$2] = selected.values;
+      i++;
     }
 
     setState(() {
@@ -979,24 +1255,35 @@ class _MassivaPageState extends State<MassivaPage> {
 
     final selectedByRoute = <String, Map<int, Map<int, Set<String>>>>{};
 
-    for (var i = 0; i < steps.length; i++) {
+    var i = 0;
+    while (i < steps.length) {
       final step = steps[i];
       final options = _splitterOptionsForRoute(step.$1, step.$2, step.$3);
-      if (options.isEmpty) continue;
+      if (options.isEmpty) {
+        i++;
+        continue;
+      }
 
       final selected = await _selectMultiSplittersDialog(
         title:
-            'Splitters do AP ${step.$1} ? SLOT ${step.$2} ? PORTA ${step.$3}',
+            'Splitters do AP ${_apDisplayLabel(step.$1)} SLOT ${step.$2} ➡️ PORTA ${step.$3} ⬅️',
         sourceCodes: options,
-        initial: _selectedSplittersByRoute[step.$1]?[step.$2]?[step.$3] ??
+        initial: selectedByRoute[step.$1]?[step.$2]?[step.$3] ??
+            _selectedSplittersByRoute[step.$1]?[step.$2]?[step.$3] ??
             const <String>{},
         applyLabel: i == steps.length - 1 ? 'Aplicar' : 'Próximo',
+        showBackButton: i > 0,
       );
       if (!mounted || selected == null) return;
+      if (selected.action == _StepperDialogAction.back) {
+        i--;
+        continue;
+      }
 
       selectedByRoute
           .putIfAbsent(step.$1, () => {})
-          .putIfAbsent(step.$2, () => {})[step.$3] = selected;
+          .putIfAbsent(step.$2, () => {})[step.$3] = selected.values;
+      i++;
     }
 
     setState(() {
@@ -1009,17 +1296,19 @@ class _MassivaPageState extends State<MassivaPage> {
     });
   }
 
-  Future<Set<String>?> _selectMultiSplittersDialog({
+  Future<_StepperDialogResult<String>?> _selectMultiSplittersDialog({
     required List<String> sourceCodes,
     required Set<String> initial,
     String title = 'Selecione o splitter',
     String applyLabel = 'Aplicar',
+    bool showBackButton = false,
   }) {
     final searchController = TextEditingController();
     var filtered = List<String>.from(sourceCodes);
     final selected = Set<String>.from(initial);
+    String? validationMessage;
 
-    return showDialog<Set<String>>(
+    return showDialog<_StepperDialogResult<String>>(
       context: context,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1046,6 +1335,7 @@ class _MassivaPageState extends State<MassivaPage> {
                       onChanged: (value) {
                         final term = value.trim().toLowerCase();
                         setStateDialog(() {
+                          validationMessage = null;
                           if (term.isEmpty) {
                             filtered = List<String>.from(sourceCodes);
                           } else {
@@ -1059,6 +1349,19 @@ class _MassivaPageState extends State<MassivaPage> {
                       },
                     ),
                     const SizedBox(height: 10),
+                    if (validationMessage != null) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFC62828),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Flexible(
                       child: Container(
                         decoration: BoxDecoration(
@@ -1083,8 +1386,15 @@ class _MassivaPageState extends State<MassivaPage> {
                                 value: selected.contains(code),
                                 activeColor: _headerYellow,
                                 checkColor: const Color(0xFF1F1F1F),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.white54
+                                      : const Color(0xFF6B6B6B),
+                                  width: 1.6,
+                                ),
                                 onChanged: (_) {
                                   setStateDialog(() {
+                                    validationMessage = null;
                                     if (selected.contains(code)) {
                                       selected.remove(code);
                                     } else {
@@ -1101,6 +1411,7 @@ class _MassivaPageState extends State<MassivaPage> {
                               ),
                               onTap: () {
                                 setStateDialog(() {
+                                  validationMessage = null;
                                   if (selected.contains(code)) {
                                     selected.remove(code);
                                   } else {
@@ -1136,12 +1447,41 @@ class _MassivaPageState extends State<MassivaPage> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
+                if (showBackButton)
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: _headerYellow,
+                    ),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _StepperDialogResult<String>(
+                        action: _StepperDialogAction.back,
+                        values: Set<String>.from(selected),
+                      ),
+                    ),
+                    child: const Text('Voltar'),
+                  ),
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: _headerYellow,
                     foregroundColor: const Color(0xFF1F1F1F),
                   ),
-                  onPressed: () => Navigator.pop(context, selected),
+                  onPressed: () {
+                    if (selected.isEmpty) {
+                      setStateDialog(() {
+                        validationMessage =
+                            'Selecione ao menos uma opção para continuar.';
+                      });
+                      return;
+                    }
+                    Navigator.pop(
+                      context,
+                      _StepperDialogResult<String>(
+                        action: _StepperDialogAction.apply,
+                        values: Set<String>.from(selected),
+                      ),
+                    );
+                  },
                   child: Text(applyLabel),
                 ),
               ],
@@ -1164,6 +1504,7 @@ class _MassivaPageState extends State<MassivaPage> {
     var filtered = List<String>.from(source);
     final selected = Set<String>.from(initial);
     final labelOf = itemLabel ?? (String value) => value;
+    String? validationMessage;
 
     return showDialog<Set<String>>(
       context: context,
@@ -1189,24 +1530,37 @@ class _MassivaPageState extends State<MassivaPage> {
                         hintText: hintText,
                         isDark: isDark,
                       ),
-                        onChanged: (value) {
-                          final term = value.trim().toLowerCase();
-                          setStateDialog(() {
-                            if (term.isEmpty) {
-                              filtered = List<String>.from(source);
-                            } else {
-                              filtered = source
-                                  .where(
-                                    (s) => labelOf(s)
-                                        .toLowerCase()
-                                        .contains(term),
-                                  )
-                                  .toList();
-                            }
-                          });
-                        },
+                      onChanged: (value) {
+                        final term = value.trim().toLowerCase();
+                        setStateDialog(() {
+                          validationMessage = null;
+                          if (term.isEmpty) {
+                            filtered = List<String>.from(source);
+                          } else {
+                            filtered = source
+                                .where(
+                                  (s) =>
+                                      labelOf(s).toLowerCase().contains(term),
+                                )
+                                .toList();
+                          }
+                        });
+                      },
                     ),
                     const SizedBox(height: 10),
+                    if (validationMessage != null) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFC62828),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Flexible(
                       child: Container(
                         decoration: BoxDecoration(
@@ -1232,8 +1586,15 @@ class _MassivaPageState extends State<MassivaPage> {
                                 value: selected.contains(item),
                                 activeColor: _headerYellow,
                                 checkColor: const Color(0xFF1F1F1F),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.white54
+                                      : const Color(0xFF6B6B6B),
+                                  width: 1.6,
+                                ),
                                 onChanged: (_) {
                                   setStateDialog(() {
+                                    validationMessage = null;
                                     if (selected.contains(item)) {
                                       selected.remove(item);
                                     } else {
@@ -1250,6 +1611,7 @@ class _MassivaPageState extends State<MassivaPage> {
                               ),
                               onTap: () {
                                 setStateDialog(() {
+                                  validationMessage = null;
                                   if (selected.contains(item)) {
                                     selected.remove(item);
                                   } else {
@@ -1290,7 +1652,16 @@ class _MassivaPageState extends State<MassivaPage> {
                     backgroundColor: _headerYellow,
                     foregroundColor: const Color(0xFF1F1F1F),
                   ),
-                  onPressed: () => Navigator.pop(context, selected),
+                  onPressed: () {
+                    if (selected.isEmpty) {
+                      setStateDialog(() {
+                        validationMessage =
+                            'Selecione ao menos uma opcao para continuar.';
+                      });
+                      return;
+                    }
+                    Navigator.pop(context, selected);
+                  },
                   child: Text(applyLabel),
                 ),
               ],
@@ -1301,15 +1672,17 @@ class _MassivaPageState extends State<MassivaPage> {
     ).whenComplete(searchController.dispose);
   }
 
-  Future<Set<int>?> _selectMultiIntDialog({
+  Future<_StepperDialogResult<int>?> _selectMultiIntDialog({
     required String title,
     required List<int> values,
     required String Function(int value) valueLabel,
     required Set<int> initial,
     String applyLabel = 'Aplicar',
+    bool showBackButton = false,
   }) {
     final selected = Set<int>.from(initial);
-    return showDialog<Set<int>>(
+    String? validationMessage;
+    return showDialog<_StepperDialogResult<int>>(
       context: context,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1323,56 +1696,85 @@ class _MassivaPageState extends State<MassivaPage> {
               title: Text(title),
               content: SizedBox(
                 width: 420,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF3E3E3E) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: values.length,
-                    itemBuilder: (context, index) {
-                      final value = values[index];
-                      return ListTile(
-                        dense: true,
-                        textColor: isDark ? Colors.white : Colors.black87,
-                        leading: Checkbox(
-                          value: selected.contains(value),
-                          activeColor: _headerYellow,
-                          checkColor: const Color(0xFF1F1F1F),
-                          onChanged: (_) {
-                            setStateDialog(() {
-                              if (selected.contains(value)) {
-                                selected.remove(value);
-                              } else {
-                                selected.add(value);
-                              }
-                            });
-                          },
-                        ),
-                        title: Text(
-                          valueLabel(value),
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (validationMessage != null) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFC62828),
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        onTap: () {
-                          setStateDialog(() {
-                            if (selected.contains(value)) {
-                              selected.remove(value);
-                            } else {
-                              selected.add(value);
-                            }
-                          });
-                        },
-                      );
-                    },
-                  ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Flexible(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              isDark ? const Color(0xFF3E3E3E) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: values.length,
+                          itemBuilder: (context, index) {
+                            final value = values[index];
+                            return ListTile(
+                              dense: true,
+                              textColor: isDark ? Colors.white : Colors.black87,
+                              leading: Checkbox(
+                                value: selected.contains(value),
+                                activeColor: _headerYellow,
+                                checkColor: const Color(0xFF1F1F1F),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.white54
+                                      : const Color(0xFF6B6B6B),
+                                  width: 1.6,
+                                ),
+                                onChanged: (_) {
+                                  setStateDialog(() {
+                                    validationMessage = null;
+                                    if (selected.contains(value)) {
+                                      selected.remove(value);
+                                    } else {
+                                      selected.add(value);
+                                    }
+                                  });
+                                },
+                              ),
+                              title: Text(
+                                valueLabel(value),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              onTap: () {
+                                setStateDialog(() {
+                                  validationMessage = null;
+                                  if (selected.contains(value)) {
+                                    selected.remove(value);
+                                  } else {
+                                    selected.add(value);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               actions: [
@@ -1395,12 +1797,41 @@ class _MassivaPageState extends State<MassivaPage> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Cancelar'),
                 ),
+                if (showBackButton)
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: _headerYellow,
+                    ),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _StepperDialogResult<int>(
+                        action: _StepperDialogAction.back,
+                        values: Set<int>.from(selected),
+                      ),
+                    ),
+                    child: const Text('Voltar'),
+                  ),
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: _headerYellow,
                     foregroundColor: const Color(0xFF1F1F1F),
                   ),
-                  onPressed: () => Navigator.pop(context, selected),
+                  onPressed: () {
+                    if (selected.isEmpty) {
+                      setStateDialog(() {
+                        validationMessage =
+                            'Selecione ao menos uma opcao para continuar.';
+                      });
+                      return;
+                    }
+                    Navigator.pop(
+                      context,
+                      _StepperDialogResult<int>(
+                        action: _StepperDialogAction.apply,
+                        values: Set<int>.from(selected),
+                      ),
+                    );
+                  },
                   child: Text(applyLabel),
                 ),
               ],
@@ -1430,27 +1861,6 @@ class _MassivaPageState extends State<MassivaPage> {
     return ids.toList()..sort();
   }
 
-  MassivaIncidentRequest _buildRequest() {
-    final startedAt = _openedAt ?? DateTime.now();
-    final closedAt = _closedAt ?? startedAt;
-    final slots = _selectedSlots.toList()..sort();
-    final ports = _selectedPorts.toList()..sort();
-
-    return MassivaIncidentRequest(
-      startDate: DateFormat('dd/MM/yyyy').format(startedAt),
-      startTime: DateFormat('HH:mm').format(startedAt),
-      accessPointIds: _resolveAccessPointIds(),
-      slotOlt: slots,
-      portaOlt: ports,
-      companyPlaceId: _companyPlaceId,
-      assignmentTypeId: _apiIncidentTypeId,
-      assignmentDescription: _descriptionController.text.trim(),
-      maintenanceDate: DateFormat('dd/MM/yyyy').format(closedAt),
-      maintenanceTime: DateFormat('HH:mm').format(closedAt),
-      cookieString: widget.cookieString,
-    );
-  }
-
   String _buildApiGatewayTitle(String apCode) {
     final apTitle = (_apTitleByCode[apCode] ?? '').trim();
     return apTitle.isNotEmpty ? apTitle : apCode.trim();
@@ -1459,13 +1869,20 @@ class _MassivaPageState extends State<MassivaPage> {
   List<ApiGatewayMassivaRequest> _buildApiGatewayRequests() {
     final closedAt = _closedAt ?? DateTime.now();
     final description = _descriptionController.text.trim();
+    final personId = widget.sessionUser.personId;
     final aps = _selectedAps.toList()..sort();
+
+    if (personId == null || personId <= 0) {
+      throw Exception(
+        'O token do HUB nao trouxe o personId do usuario logado. Nao foi possivel abrir a massiva automaticamente com o usuario atual.',
+      );
+    }
 
     return aps
         .map(
           (apCode) => ApiGatewayMassivaRequest(
             incidentStatusId: _apiIncidentStatusId,
-            personId: _apiPersonId,
+            personId: personId,
             incidentTypeId: _apiIncidentTypeId,
             catalogServiceId: _apiCatalogServiceId,
             serviceLevelAgreementId: _apiServiceLevelAgreementId,
@@ -1493,22 +1910,13 @@ class _MassivaPageState extends State<MassivaPage> {
       return;
     }
 
-    if (!widget.middlewareService.isConfigured) {
-      setState(() {
-        _error =
-            'Configure MIDDLEWARE_MASSIVA_BASE_URL para habilitar validação granular.';
-      });
-      return;
-    }
-
     setState(() {
       _loadingPreview = true;
       _error = null;
     });
 
     try {
-      final filtered =
-          await widget.middlewareService.filterAffectedClients(_buildRequest());
+      final filtered = _buildLocalPreview();
 
       if (!mounted) return;
       setState(() {
@@ -1530,6 +1938,8 @@ class _MassivaPageState extends State<MassivaPage> {
       return;
     }
 
+    // O fluxo atual abre uma ou mais massivas, uma por AP selecionado.
+    // Em seguida, se configurado, envia a lista de PPPoEs afetados.
     if (!widget.gatewayService.isConfigured) {
       setState(() {
         _error = 'Configure MASSIVA_API_GATEWAY_ENDPOINT.';
@@ -1547,6 +1957,8 @@ class _MassivaPageState extends State<MassivaPage> {
       final openedProtocols = <String>[];
       final failureMessages = <String>[];
       final backendMessages = <String>[];
+      final affectedMessages = <String>[];
+      final affectedFailureMessages = <String>[];
 
       for (final request in requests) {
         final apLabel = _apDisplayLabel(request.authenticationAccessPointCode);
@@ -1565,6 +1977,30 @@ class _MassivaPageState extends State<MassivaPage> {
           if (details.isEmpty) {
             details.add('sem identificadores retornados');
           }
+
+          if (response.protocol != null &&
+              widget.gatewayService.isAffectedUsersConfigured) {
+            final affectedUsers = _buildAffectedUserRequests(
+              apCode: request.authenticationAccessPointCode,
+              protocol: response.protocol!,
+            );
+
+            if (affectedUsers.isNotEmpty) {
+              try {
+                final notifiedCount =
+                    await widget.gatewayService.notifyAffectedUsers(
+                  users: affectedUsers,
+                );
+                details.add('$notifiedCount PPPoEs enviados');
+                affectedMessages.add('$apLabel: $notifiedCount PPPoEs');
+              } catch (e) {
+                affectedFailureMessages.add('$apLabel: ${e.toString()}');
+              }
+            } else {
+              details.add('sem PPPoEs elegiveis');
+            }
+          }
+
           openedProtocols.add(
             '$apLabel: ${details.join(' | ')}',
           );
@@ -1584,15 +2020,15 @@ class _MassivaPageState extends State<MassivaPage> {
         final extraMessage = backendMessages.isNotEmpty
             ? '\n💬 ${backendMessages.join(' | ')}'
             : '';
+        final affectedExtra = affectedMessages.isNotEmpty
+            ? '\n👥 ${affectedMessages.join(' | ')}'
+            : '';
         final successText = requests.length == 1
-            ? '✅ Massiva aberta com sucesso para ${_apDisplayLabel(requests.first.authenticationAccessPointCode)}.\n📌 ${openedProtocols.first.split(': ').last}$extraMessage'
-            : '✅ ${openedProtocols.length} massivas abertas com sucesso.\n📌 ${openedProtocols.join(' | ')}$extraMessage';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(successText),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 5),
-          ),
+            ? '✅ Massiva aberta com sucesso para ${_apDisplayLabel(requests.first.authenticationAccessPointCode)}.\n📌 ${openedProtocols.first.split(': ').last}$extraMessage$affectedExtra'
+            : '✅ ${openedProtocols.length} massivas abertas com sucesso.\n📌 ${openedProtocols.join(' | ')}$extraMessage$affectedExtra';
+        _showFeedbackSnackBar(
+          successText,
+          duration: const Duration(seconds: 5),
         );
       }
 
@@ -1600,6 +2036,12 @@ class _MassivaPageState extends State<MassivaPage> {
         setState(() {
           _error =
               '⚠️ Não foi possível abrir a massiva.\n${failureMessages.join('\n')}';
+        });
+      } else if (affectedFailureMessages.isNotEmpty) {
+        setState(() {
+          _error =
+              '⚠️ Massiva aberta, mas houve falha ao enviar PPPoEs afetados.\n${affectedFailureMessages.join('\n')}';
+          _lastPreview = null;
         });
       } else {
         setState(() {
@@ -1719,6 +2161,8 @@ class _MassivaPageState extends State<MassivaPage> {
     });
 
     try {
+      // Alimenta a area de monitoramento com a visao consolidada devolvida
+      // pelo backend.
       final rows = await widget.gatewayService.fetchMassivas();
       if (!mounted) return;
       setState(() {
@@ -1738,6 +2182,107 @@ class _MassivaPageState extends State<MassivaPage> {
     }
   }
 
+  Future<String?> _promptCloseMassivaDescription({
+    required MassivaTicket item,
+  }) async {
+    final controller = TextEditingController();
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return AlertDialog(
+            backgroundColor:
+                isDark ? const Color(0xFF2F2F2F) : const Color(0xFFF7F7F7),
+            surfaceTintColor: Colors.transparent,
+            titleTextStyle: _dialogTitleStyle(isDark: isDark),
+            title: Text('Encerrar massiva #${item.protocol}'),
+            content: SizedBox(
+              width: 520,
+              child: TextField(
+                controller: controller,
+                autofocus: true,
+                maxLines: 4,
+                style: _dialogFieldTextStyle(isDark: isDark),
+                decoration: _dialogSearchDecoration(
+                  hintText: 'Informe a descricao do encerramento',
+                  isDark: isDark,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: _headerYellow),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _headerYellow,
+                  foregroundColor: const Color(0xFF1F1F1F),
+                ),
+                onPressed: () {
+                  final value = controller.text.trim();
+                  if (value.isEmpty) {
+                    return;
+                  }
+                  Navigator.pop(context, value);
+                },
+                child: const Text('Encerrar'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _closeMassiva(MassivaTicket item) async {
+    if (_closingMassiva) return;
+    if (item.assignmentId == null || item.assignmentId! <= 0) {
+      setState(() {
+        _error =
+            'Nao foi possivel encerrar a massiva #${item.protocol}: assignmentId nao encontrado.';
+      });
+      return;
+    }
+
+    final description = await _promptCloseMassivaDescription(item: item);
+    if (!mounted || description == null) return;
+
+    setState(() {
+      _closingMassiva = true;
+      _error = null;
+    });
+
+    try {
+      // O encerramento depende do assignmentId retornado pelo backend.
+      final closeMessage = await widget.gatewayService.closeMassiva(
+        assignmentId: item.assignmentId!,
+        description: description,
+      );
+      final cleanupMessage = await widget.gatewayService
+          .deleteAffectedUsersByProtocol(item.protocol);
+
+      if (!mounted) return;
+
+      _showFeedbackSnackBar(
+        'Massiva #${item.protocol} encerrada. $closeMessage | $cleanupMessage',
+      );
+
+      await _loadMassivas();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _closingMassiva = false);
+      }
+    }
+  }
+
   Future<void> _loadAutoIspEvents() async {
     if (!widget.autoIspService.isConfigured) {
       if (mounted) {
@@ -1749,6 +2294,8 @@ class _MassivaPageState extends State<MassivaPage> {
     setState(() => _loadingAutoIsp = true);
 
     try {
+      // Eventos AutoISP servem como apoio operacional. Eles nao substituem a
+      // abertura da massiva, mas ajudam a sugerir rota e impacto.
       final rows = await widget.autoIspService.fetchEvents(
         page: 1,
         perPage: 100,
@@ -1787,7 +2334,8 @@ class _MassivaPageState extends State<MassivaPage> {
     setState(() {
       if (eventStart != null) {
         _openedAt = eventStart;
-        _openedDateController.text = DateFormat('dd/MM/yyyy').format(eventStart);
+        _openedDateController.text =
+            DateFormat('dd/MM/yyyy').format(eventStart);
         _openedTimeController.text = DateFormat('HH:mm:ss').format(eventStart);
       } else if (_openedAt == null && resolvedRoute != null) {
         _captureOpenedAtFromApSelection(hasApSelection: true);
@@ -1810,23 +2358,69 @@ class _MassivaPageState extends State<MassivaPage> {
       _syncAutoDescription(force: true);
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          resolvedRoute?.username != null
-              ? 'Evento aplicado com topologia resolvida pelo PPPoE.'
-              : resolvedRoute != null
-                  ? 'Evento aplicado com topologia resolvida pelo PON.'
-                  : 'Dados base do evento aplicados no formulário.',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    _showFeedbackSnackBar(
+      resolvedRoute?.username != null
+          ? 'Evento aplicado com topologia resolvida pelo PPPoE.'
+          : resolvedRoute != null
+              ? 'Evento aplicado com topologia resolvida pelo PON.'
+              : 'Dados base do evento aplicados no formulário.',
     );
   }
 
   List<MassivaTicket> get _filteredMassivas {
-    if (_statusFilter == null) return _massivas;
-    return _massivas.where((m) => m.status == _statusFilter).toList();
+    final query = _massivaSearchController.text.trim().toLowerCase();
+
+    return _massivas.where((m) {
+      if (_statusFilter != null && m.status != _statusFilter) {
+        return false;
+      }
+
+      if (_massivaApFilter != null &&
+          _massivaApFilter!.trim().isNotEmpty &&
+          m.apCode.trim() != _massivaApFilter!.trim()) {
+        return false;
+      }
+
+      if (_massivaImpactFilter != null) {
+        final affected = m.affectedClients;
+        switch (_massivaImpactFilter) {
+          case 1:
+            if (affected < 1 || affected > 50) return false;
+            break;
+          case 2:
+            if (affected < 51 || affected > 200) return false;
+            break;
+          case 3:
+            if (affected < 201) return false;
+            break;
+        }
+      }
+
+      if (query.isEmpty) {
+        return true;
+      }
+
+      final haystack = [
+        m.protocol.toString(),
+        m.title,
+        m.apCode,
+        m.createdBy,
+        m.responsible,
+        m.team,
+      ].join(' ').toLowerCase();
+
+      return haystack.contains(query);
+    }).toList();
+  }
+
+  List<String> get _massivaApOptions {
+    final options = _massivas
+        .map((m) => m.apCode.trim())
+        .where((it) => it.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return options;
   }
 
   String _formatDate(DateTime? date) {
@@ -1834,27 +2428,16 @@ class _MassivaPageState extends State<MassivaPage> {
     return DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
   }
 
-  String _formatDuration(Duration value) {
-    final hours = value.inHours;
-    final minutes = value.inMinutes.remainder(60);
-    return '${hours}h ${minutes}m';
-  }
-
   Future<void> _exportCsv() async {
     final rows = _filteredMassivas;
     if (rows.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sem dados para exportar.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _showFeedbackSnackBar('Sem dados para exportar.');
       return;
     }
 
     final buffer = StringBuffer();
     buffer.writeln(
-      'protocol,title,status,ap,splitter,affected_clients,opened_at,closed_at,fallback',
+      'protocol,title,status,ap,affected_clients,opened_at,expected_close_at,closed_at,fallback',
     );
 
     for (final item in rows) {
@@ -1865,54 +2448,24 @@ class _MassivaPageState extends State<MassivaPage> {
               : 'desconhecida';
       buffer.writeln(
         '${item.protocol},"${item.title.replaceAll('"', "'")}",$status,'
-        '"${item.apCode}","${item.splitterCode}",${item.affectedClients},'
-        '"${item.openedAt?.toIso8601String() ?? ''}","${item.closedAt?.toIso8601String() ?? ''}",${item.usedFallback}',
+        '"${item.apCode}",${item.affectedClients},'
+        '"${item.openedAt?.toIso8601String() ?? ''}",'
+        '"${item.expectedCloseAt?.toIso8601String() ?? ''}",'
+        '"${item.closedAt?.toIso8601String() ?? ''}",${item.usedFallback}',
       );
     }
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('CSV copiado para a área de transferência.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  List<int> _trendOpenedByDay({int days = 7}) {
-    final now = DateTime.now();
-    final counts = List<int>.filled(days, 0);
-
-    for (final ticket in _massivas) {
-      final opened = ticket.openedAt;
-      if (opened == null) continue;
-      final openedDay = DateTime(opened.year, opened.month, opened.day);
-      final nowDay = DateTime(now.year, now.month, now.day);
-      final diff = nowDay.difference(openedDay).inDays;
-      if (diff >= 0 && diff < days) {
-        counts[days - 1 - diff] = counts[days - 1 - diff] + 1;
-      }
-    }
-
-    return counts;
-  }
-
-  int _slaBreaches({Duration sla = const Duration(hours: 4)}) {
-    final now = DateTime.now();
-    var count = 0;
-    for (final item in _massivas.where((m) => m.isOpen)) {
-      final opened = item.openedAt;
-      if (opened == null) continue;
-      if (now.difference(opened) > sla) count++;
-    }
-    return count;
+    _showFeedbackSnackBar('CSV copiado para a área de transferência.');
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // A interface foi organizada como um dashboard operacional em tela unica:
+    // formulario de abertura, preview do impacto e monitoramento.
     return Scaffold(
       body: Stack(
         children: [
@@ -1941,324 +2494,29 @@ class _MassivaPageState extends State<MassivaPage> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1180),
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: _panelDecoration(isDark: isDark),
-                        child: RepaintBoundary(
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildIncidentSectionHeader(isDark: isDark),
-                                const SizedBox(height: 0),
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final isMobile = constraints.maxWidth < 700;
-                                    final openCloseWidth =
-                                        isMobile ? 270.0 : 160.0;
-                                    const selectorWidth = 270.0;
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Wrap(
-                                          spacing: 12,
-                                          runSpacing: 12,
-                                          children: [
-                                            _buildReadOnlyField(
-                                              controller: _openedDateController,
-                                              label: 'Data de abertura',
-                                              isDark: isDark,
-                                              width: openCloseWidth,
-                                              locked: true,
-                                            ),
-                                            _buildReadOnlyField(
-                                              controller: _openedTimeController,
-                                              label: 'Hora de abertura',
-                                              isDark: isDark,
-                                              width: openCloseWidth,
-                                              locked: true,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Wrap(
-                                          spacing: 12,
-                                          runSpacing: 14,
-                                          children: [
-                                            _buildApPickerField(
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                            ),
-                                            _buildSlotPickerField(
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                            ),
-                                            _buildPortPickerField(
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                            ),
-                                            _buildSplitterPickerField(
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Wrap(
-                                          spacing: 12,
-                                          runSpacing: 12,
-                                          children: [
-                                            _buildReadOnlyField(
-                                              controller:
-                                                  _incidentTypeController,
-                                              label: 'Tipo de solicitação',
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                              locked: true,
-                                            ),
-                                            _buildPickerField(
-                                              controller: _closedDateController,
-                                              label: 'Data de fechamento',
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                              onTap: _pickClosingDate,
-                                            ),
-                                            _buildPickerField(
-                                              controller: _closedTimeController,
-                                              label: 'Hora de fechamento',
-                                              isDark: isDark,
-                                              width: selectorWidth,
-                                              onTap: _pickClosingTime,
-                                            ),
-                                            _buildTextField(
-                                              controller:
-                                                  _technicalReasonController,
-                                              label: 'Motivo técnico',
-                                              isDark: isDark,
-                                              requiredField: false,
-                                              width: selectorWidth,
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    );
-                                  },
+                  child: SelectionArea(
+                    child: Center(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isDesktop = constraints.maxWidth >= 1180;
+                          final maxWidth = isDesktop ? 1480.0 : 1180.0;
+
+                          return ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: maxWidth),
+                            child: Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: _panelDecoration(isDark: isDark),
+                              child: RepaintBoundary(
+                                child: Form(
+                                  key: _formKey,
+                                  child: isDesktop
+                                      ? _buildDesktopMassivaLayout(isDark)
+                                      : _buildMobileMassivaLayout(isDark),
                                 ),
-                                const SizedBox(height: 26),
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.04)
-                                        : Colors.white.withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black.withValues(alpha: 0.05),
-                                    ),
-                                  ),
-                                  child: CheckboxListTile(
-                                    value: _requestedByFieldTechnician,
-                                    contentPadding: EdgeInsets.zero,
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    activeColor:
-                                        const Color.fromARGB(255, 192, 31, 31),
-                                    checkboxShape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    title: Text(
-                                      'Técnico em campo solicitando abertura',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white
-                                            : const Color.fromARGB(
-                                                255, 24, 23, 23),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'Alterna a origem da massiva entre técnico em campo e evento de rompimento.',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black54,
-                                      ),
-                                    ),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _requestedByFieldTechnician =
-                                            value ?? false;
-                                        _syncAutoDescription();
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton.icon(
-                                    onPressed: () {
-                                      setState(() {
-                                        _syncAutoDescription(force: true);
-                                      });
-                                    },
-                                    icon: const Icon(Icons.auto_fix_high),
-                                    label: const Text(
-                                      'Gerar descricao automatica',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: _descriptionController,
-                                  maxLines: 10,
-                                  validator: _requiredValidator,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white
-                                        : const Color.fromARGB(255, 24, 23, 23),
-                                  ),
-                                  decoration: _fieldDecoration(
-                                    label: 'Descrição técnica',
-                                    isDark: isDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withValues(alpha: 0.04)
-                                        : Colors.white.withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black.withValues(alpha: 0.05),
-                                    ),
-                                  ),
-                                  child: SwitchListTile(
-                                    title: Text(
-                                      'Forçar fallback (bulk individual)',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white
-                                            : const Color.fromARGB(
-                                                255, 24, 23, 23),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'Usa abertura individual quando a massiva padrão não for desejada.',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white70
-                                            : Colors.black54,
-                                      ),
-                                    ),
-                                    activeThumbColor:
-                                        const Color.fromARGB(255, 192, 31, 31),
-                                    activeTrackColor:
-                                        _headerYellow.withValues(alpha: 0.4),
-                                    value: _forceFallback,
-                                    contentPadding: EdgeInsets.zero,
-                                    onChanged: (value) {
-                                      setState(() => _forceFallback = value);
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                _buildLiveImpactCard(isDark: isDark),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 12,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      style: _secondaryButtonStyle(),
-                                      onPressed:
-                                          _loadingPreview ? null : _preview,
-                                      icon: _loadingPreview
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.fact_check_outlined),
-                                      label: const Text('Validar Lista Limpa'),
-                                    ),
-                                    ElevatedButton.icon(
-                                      style: _primaryButtonStyle(),
-                                      onPressed:
-                                          _loadingSubmit ? null : _openMassiva,
-                                      icon: _loadingSubmit
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : const Icon(Icons.campaign),
-                                      label: const Text('Abrir Massiva'),
-                                    ),
-                                  ],
-                                ),
-                                if (_lastPreview != null) ...[
-                                  const SizedBox(height: 16),
-                                  _buildMessageCard(
-                                    isDark: isDark,
-                                    icon: Icons.verified_outlined,
-                                    accent: const Color(0xFF2E7D32),
-                                    backgroundLight: const Color(0xFFE8F5E9),
-                                    backgroundDark: const Color(0xFF1F2A1F),
-                                    text:
-                                        'Lista limpa: ${_lastPreview!.totalAffected} clientes | CorrelationId: ${_lastPreview!.correlationId}',
-                                  ),
-                                ],
-                                if (_error != null) ...[
-                                  const SizedBox(height: 16),
-                                  _buildMessageCard(
-                                    isDark: isDark,
-                                    icon: Icons.error_outline,
-                                    accent: const Color(0xFFC62828),
-                                    backgroundLight: const Color(0xFFFFEBEE),
-                                    backgroundDark: const Color(0xFF341C1C),
-                                    text: _error!,
-                                  ),
-                                ],
-                                const SizedBox(height: 22),
-                                RepaintBoundary(
-                                  child: _buildAutoIspSection(isDark),
-                                ),
-                                const SizedBox(height: 22),
-                                RepaintBoundary(
-                                  child:
-                                      _buildMassivasMonitoringSection(isDark),
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -2271,18 +2529,641 @@ class _MassivaPageState extends State<MassivaPage> {
     );
   }
 
-  Widget _buildMassivasMonitoringSection(bool isDark) {
-    final massivasView = _filteredMassivas;
+  Widget _buildMobileMassivaLayout(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildOpeningWorkspace(
+          isDark: isDark,
+          denseDesktop: false,
+          includeHeader: true,
+        ),
+        const SizedBox(height: 22),
+        RepaintBoundary(
+          child: _buildAutoIspSection(isDark),
+        ),
+        const SizedBox(height: 22),
+        RepaintBoundary(
+          child: _buildMassivasMonitoringSection(isDark),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopMassivaLayout(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDesktopHeroSummary(isDark: isDark),
+        const SizedBox(height: 18),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: _buildDesktopPane(
+                isDark: isDark,
+                title: 'Abertura da Massiva',
+                subtitle:
+                    'Comando principal para selecionar a topologia, validar o impacto e abrir o protocolo.',
+                icon: Icons.edit_note_outlined,
+                accent: _headerYellow,
+                minHeight: 1040,
+                child: _buildOpeningWorkspace(
+                  isDark: isDark,
+                  denseDesktop: true,
+                  includeHeader: false,
+                ),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              flex: 5,
+              child: _buildDesktopPane(
+                isDark: isDark,
+                title: 'Eventos AutoISP',
+                subtitle:
+                    'Eventos recentes para apoiar a decisão operacional e acelerar o preenchimento.',
+                icon: Icons.sensors_outlined,
+                accent: const Color(0xFFE0A100),
+                minHeight: 1040,
+                child: _buildAutoIspSection(isDark, embedded: true),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _buildDesktopPane(
+          isDark: isDark,
+          title: 'Monitoramento e Controle',
+          subtitle:
+              'Acompanhe as massivas abertas, filtre rapidamente e exporte quando necessário.',
+          icon: Icons.table_rows_outlined,
+          accent: const Color.fromARGB(255, 192, 31, 31),
+          child: _buildMassivasMonitoringSection(
+            isDark,
+            embedded: true,
+            desktopColumns: 3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOpeningWorkspace({
+    required bool isDark,
+    required bool denseDesktop,
+    required bool includeHeader,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final openCloseWidth = denseDesktop ? 230.0 : constraints.maxWidth;
+        final selectorWidth = denseDesktop ? 320.0 : constraints.maxWidth;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (includeHeader) _buildIncidentSectionHeader(isDark: isDark),
+            if (includeHeader) const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildPickerField(
+                  controller: _openedDateController,
+                  label: 'Data de abertura',
+                  isDark: isDark,
+                  width: openCloseWidth,
+                  onTap: _pickOpeningDate,
+                ),
+                _buildPickerField(
+                  controller: _openedTimeController,
+                  label: 'Hora de abertura',
+                  isDark: isDark,
+                  width: openCloseWidth,
+                  onTap: _pickOpeningTime,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 14,
+              children: [
+                _buildApPickerField(isDark: isDark, width: selectorWidth),
+                _buildSlotPickerField(isDark: isDark, width: selectorWidth),
+                _buildPortPickerField(isDark: isDark, width: selectorWidth),
+                _buildSplitterPickerField(isDark: isDark, width: selectorWidth),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildReadOnlyField(
+                  controller: _incidentTypeController,
+                  label: 'Tipo de solicitação',
+                  isDark: isDark,
+                  width: selectorWidth,
+                  locked: true,
+                ),
+                _buildPickerField(
+                  controller: _closedDateController,
+                  label: 'Data de fechamento',
+                  isDark: isDark,
+                  width: selectorWidth,
+                  onTap: _pickClosingDate,
+                ),
+                _buildPickerField(
+                  controller: _closedTimeController,
+                  label: 'Hora de fechamento',
+                  isDark: isDark,
+                  width: selectorWidth,
+                  onTap: _pickClosingTime,
+                ),
+                _buildTextField(
+                  controller: _technicalReasonController,
+                  label: 'Motivo técnico',
+                  isDark: isDark,
+                  requiredField: false,
+                  width: selectorWidth,
+                ),
+              ],
+            ),
+            const SizedBox(height: 26),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.05),
+                ),
+              ),
+              child: CheckboxListTile(
+                value: _requestedByFieldTechnician,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: const Color.fromARGB(255, 192, 31, 31),
+                checkboxShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                title: Text(
+                  'Técnico em campo solicitando abertura',
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.white
+                        : const Color.fromARGB(255, 24, 23, 23),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  'Alterna a origem da massiva entre técnico em campo e evento de rompimento.',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF5A5A5A),
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _requestedByFieldTechnician = value ?? false;
+                    _syncAutoDescription();
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _syncAutoDescription(force: true);
+                  });
+                },
+                icon: const Icon(Icons.auto_fix_high),
+                label: const Text('Gerar descricao automatica'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _descriptionController,
+              maxLines: denseDesktop ? 14 : 10,
+              validator: _requiredValidator,
+              style: TextStyle(
+                color: isDark
+                    ? Colors.white
+                    : const Color.fromARGB(255, 24, 23, 23),
+              ),
+              decoration: _fieldDecoration(
+                label: 'Descrição técnica',
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildLiveImpactCard(isDark: isDark),
+            const SizedBox(height: 12),
+            if (denseDesktop)
+              Wrap(
+                spacing: 10,
+                runSpacing: 12,
+                children: [
+                  ElevatedButton.icon(
+                    style: _secondaryButtonStyle(),
+                    onPressed: _loadingPreview ? null : _preview,
+                    icon: _loadingPreview
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.fact_check_outlined),
+                    label: const Text('Gerar Previa Local'),
+                  ),
+                  ElevatedButton.icon(
+                    style: _primaryButtonStyle(),
+                    onPressed: _loadingSubmit ? null : _openMassiva,
+                    icon: _loadingSubmit
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.campaign),
+                    label: const Text('Abrir Massiva'),
+                  ),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ElevatedButton.icon(
+                    style: _secondaryButtonStyle(),
+                    onPressed: _loadingPreview ? null : _preview,
+                    icon: _loadingPreview
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.fact_check_outlined),
+                    label: const Text('Gerar Previa Local'),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    style: _primaryButtonStyle(),
+                    onPressed: _loadingSubmit ? null : _openMassiva,
+                    icon: _loadingSubmit
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.campaign),
+                    label: const Text('Abrir Massiva'),
+                  ),
+                ],
+              ),
+            if (_lastPreview != null) ...[
+              const SizedBox(height: 16),
+              _buildMessageCard(
+                isDark: isDark,
+                icon: Icons.verified_outlined,
+                accent: const Color(0xFF2E7D32),
+                backgroundLight: const Color(0xFFE8F5E9),
+                backgroundDark: const Color(0xFF1F2A1F),
+                text:
+                    'Previa local: ${_lastPreview!.totalAffected} clientes | ${_lastPreview!.totalPppoes} PPPoEs',
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              _buildMessageCard(
+                isDark: isDark,
+                icon: Icons.error_outline,
+                accent: const Color(0xFFC62828),
+                backgroundLight: const Color(0xFFFFEBEE),
+                backgroundDark: const Color(0xFF341C1C),
+                text: _error!,
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDesktopHeroSummary({required bool isDark}) {
+    final openCount =
+        _massivas.where((m) => m.status == MassivaStatus.aberta).length;
+    final impactedNow = _massivas
+        .where((m) => m.status == MassivaStatus.aberta)
+        .fold<int>(0, (sum, item) => sum + item.affectedClients);
+    final autoIspOpen = _autoIspEvents.where((event) => event.isOpen).length;
+    final selectedRoutes = _selectedPortsByApSlot.values
+        .fold<int>(0, (sum, portsBySlot) => sum + portsBySlot.length);
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _sectionDecoration(isDark: isDark),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF393939), Color(0xFF2D2D2D)]
+              : const [Color(0xFFFFFCF2), Color(0xFFF2EEE1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: _headerYellow.withValues(alpha: isDark ? 0.20 : 0.35),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                const Color(0xFFFFB300).withValues(alpha: isDark ? 0.10 : 0.14),
+            blurRadius: 26,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildMiniBadge(
+                      icon: Icons.space_dashboard_outlined,
+                      label: 'Desktop Control Center',
+                      accent: _headerYellow,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Painel expandido para operar abertura, contexto e monitoramento ao mesmo tempo.',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF2A2A2A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'No desktop a tela distribui o fluxo em áreas simultâneas para reduzir rolagem e dar mais leitura operacional.',
+                      style: TextStyle(
+                        color:
+                            isDark ? Colors.white70 : const Color(0xFF666666),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.white.withValues(alpha: 0.68),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Text(
+                  'Seleções ativas: ${_selectedAps.length} APs | $selectedRoutes rotas',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF333333),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDesktopMetricCard(
+                  isDark: isDark,
+                  label: 'Massivas abertas',
+                  value: openCount.toString(),
+                  icon: Icons.campaign_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDesktopMetricCard(
+                  isDark: isDark,
+                  label: 'Impactados agora',
+                  value: impactedNow.toString(),
+                  icon: Icons.groups_2_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDesktopMetricCard(
+                  isDark: isDark,
+                  label: 'Eventos AutoISP',
+                  value: autoIspOpen.toString(),
+                  icon: Icons.sensors_outlined,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopMetricCard({
+    required bool isDark,
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _headerYellow.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: _headerYellow),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF1F1F1F),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 24,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF666666),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopPane({
+    required bool isDark,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color accent,
+    required Widget child,
+    double? minHeight,
+  }) {
+    return Container(
+      width: double.infinity,
+      constraints:
+          minHeight != null ? BoxConstraints(minHeight: minHeight) : null,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF373737), Color(0xFF313131)]
+              : const [
+                  Color.fromARGB(255, 252, 250, 246),
+                  Color.fromARGB(255, 245, 241, 234),
+                ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.28 : 0.22),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+          BoxShadow(
+            color: accent.withValues(alpha: isDark ? 0.08 : 0.06),
+            blurRadius: 26,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1F1F1F),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color:
+                            isDark ? Colors.white70 : const Color(0xFF666666),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMassivasMonitoringSection(
+    bool isDark, {
+    bool embedded = false,
+    int? desktopColumns,
+  }) {
+    final massivasView = _filteredMassivas;
+
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (!embedded)
               Expanded(
                 child: Text(
                   'Acompanhamento de Massivas',
@@ -2293,71 +3174,222 @@ class _MassivaPageState extends State<MassivaPage> {
                             : const Color.fromARGB(255, 24, 23, 23),
                       ),
                 ),
+              )
+            else
+              const Spacer(),
+            IconButton(
+              tooltip: 'Atualizar',
+              onPressed: _loadingMassivas ? null : _loadMassivas,
+              icon: _loadingMassivas
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      Icons.refresh,
+                      color: isDark
+                          ? Colors.white
+                          : const Color.fromARGB(255, 24, 23, 23),
+                    ),
+            ),
+            const SizedBox(width: 6),
+            ElevatedButton.icon(
+              onPressed: _exportCsv,
+              style: _primaryButtonStyle(),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Exportar CSV'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 280,
+              child: TextField(
+                controller: _massivaSearchController,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF161616),
+                ),
+                decoration: _dialogSearchDecoration(
+                  hintText: 'Buscar protocolo, titulo, AP...',
+                  isDark: isDark,
+                ),
               ),
-              IconButton(
-                tooltip: 'Atualizar',
-                onPressed: _loadingMassivas ? null : _loadMassivas,
-                icon: _loadingMassivas
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
+            ),
+            if (_massivaApOptions.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.white.withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.10)
+                        : Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: _massivaApFilter,
+                    hint: const Text('Filtrar AP'),
+                    dropdownColor:
+                        isDark ? const Color(0xFF2B2B2B) : Colors.white,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF161616),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Todos APs'),
+                      ),
+                      ..._massivaApOptions.map(
+                        (ap) => DropdownMenuItem<String?>(
+                          value: ap,
+                          child: Text(ap),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _massivaApFilter = value);
+                    },
+                  ),
+                ),
               ),
-              const SizedBox(width: 6),
-              ElevatedButton.icon(
-                onPressed: _exportCsv,
-                style: _primaryButtonStyle(),
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('Exportar CSV'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (!widget.gatewayService.isListConfigured)
-            _buildMessageCard(
+            _filterChip(
+              label: 'Todas',
               isDark: isDark,
-              icon: Icons.settings_ethernet_outlined,
-              accent: const Color(0xFFEF6C00),
-              backgroundLight: const Color(0xFFFFF8E1),
-              backgroundDark: const Color(0xFF2E2E2E),
-              text:
-                  'Configure MASSIVA_API_GATEWAY_LIST_ENDPOINT para habilitar monitoramento.',
-            )
-          else if (_loadingMassivas && !_loadedMassivas)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (massivasView.isEmpty)
-            _buildMessageCard(
+              selected: _statusFilter == null,
+              onTap: () => setState(() => _statusFilter = null),
+            ),
+            _filterChip(
+              label: 'Abertas',
               isDark: isDark,
-              icon: Icons.inbox_outlined,
-              accent: const Color(0xFF757575),
-              backgroundLight: const Color.fromARGB(255, 236, 236, 236),
-              backgroundDark: const Color(0xFF2E2E2E),
-              text: 'Nenhuma massiva encontrada.',
-            )
-          else
-            ...massivasView
-                .take(25)
-                .map((item) => _massivaRow(item: item, isDark: isDark)),
-        ],
-      ),
-    );
-  }
+              selected: _statusFilter == MassivaStatus.aberta,
+              onTap: () => setState(() {
+                _statusFilter = _statusFilter == MassivaStatus.aberta
+                    ? null
+                    : MassivaStatus.aberta;
+              }),
+            ),
+            _filterChip(
+              label: '1-50 impactados',
+              isDark: isDark,
+              selected: _massivaImpactFilter == 1,
+              onTap: () => setState(() {
+                _massivaImpactFilter = _massivaImpactFilter == 1 ? null : 1;
+              }),
+            ),
+            _filterChip(
+              label: '51-200 impactados',
+              isDark: isDark,
+              selected: _massivaImpactFilter == 2,
+              onTap: () => setState(() {
+                _massivaImpactFilter = _massivaImpactFilter == 2 ? null : 2;
+              }),
+            ),
+            _filterChip(
+              label: '200+ impactados',
+              isDark: isDark,
+              selected: _massivaImpactFilter == 3,
+              onTap: () => setState(() {
+                _massivaImpactFilter = _massivaImpactFilter == 3 ? null : 3;
+              }),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (!widget.gatewayService.isListConfigured)
+          _buildMessageCard(
+            isDark: isDark,
+            icon: Icons.settings_ethernet_outlined,
+            accent: const Color(0xFFEF6C00),
+            backgroundLight: const Color(0xFFFFF8E1),
+            backgroundDark: const Color(0xFF2E2E2E),
+            text:
+                'Configure MASSIVA_API_GATEWAY_LIST_ENDPOINT para habilitar monitoramento.',
+          )
+        else if (_loadingMassivas && !_loadedMassivas)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (massivasView.isEmpty)
+          _buildMessageCard(
+            isDark: isDark,
+            icon: Icons.inbox_outlined,
+            accent: const Color(0xFF757575),
+            backgroundLight: const Color.fromARGB(255, 236, 236, 236),
+            backgroundDark: const Color(0xFF2E2E2E),
+            text: 'Nenhuma massiva encontrada.',
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSingleColumn = constraints.maxWidth < 900;
+              final crossAxisCount = desktopColumns ??
+                  (isSingleColumn
+                      ? 1
+                      : constraints.maxWidth >= 1320
+                          ? 3
+                          : 2);
+              final visibleItems = massivasView.take(24).toList();
+              final childAspectRatio = crossAxisCount == 1
+                  ? 0.90
+                  : crossAxisCount == 2
+                      ? 1.22
+                      : 1.15;
 
-  Widget _buildAutoIspSection(bool isDark) {
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: visibleItems.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: childAspectRatio,
+                ),
+                itemBuilder: (context, index) {
+                  return _massivaRow(
+                    item: visibleItems[index],
+                    isDark: isDark,
+                  );
+                },
+              );
+            },
+          ),
+      ],
+    );
+
+    if (embedded) return content;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: _sectionDecoration(isDark: isDark),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
+      child: content,
+    );
+  }
+
+  Widget _buildAutoIspSection(
+    bool isDark, {
+    bool embedded = false,
+  }) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (!embedded)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2380,49 +3412,76 @@ class _MassivaPageState extends State<MassivaPage> {
                     ),
                   ],
                 ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildMiniBadge(
+                    icon: Icons.sensors_outlined,
+                    label: '${_autoIspEvents.length} eventos',
+                    accent: _headerYellow,
+                    isDark: isDark,
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: 'Atualizar eventos',
-                onPressed: _loadingAutoIsp ? null : _loadAutoIspEvents,
-                icon: _loadingAutoIsp
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (!widget.autoIspService.isConfigured)
-            _buildMessageCard(
-              isDark: isDark,
-              icon: Icons.settings_input_antenna_outlined,
-              accent: const Color(0xFFEF6C00),
-              backgroundLight: const Color(0xFFFFF8E1),
-              backgroundDark: const Color(0xFF2E2E2E),
-              text:
-                  'Configure AUTOISP_EVENTS_ENDPOINT e as credenciais AUTOISP_AUTH_ENDPOINT/AUTOISP_USERNAME/AUTOISP_PASSWORD para habilitar os eventos detectados.',
-            )
-          else if (_loadingAutoIsp && !_loadedAutoIsp)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_autoIspEvents.isEmpty)
-            _buildMessageCard(
-              isDark: isDark,
-              icon: Icons.wifi_tethering_off_outlined,
-              accent: const Color(0xFF757575),
-              backgroundLight: const Color.fromARGB(255, 236, 236, 236),
-              backgroundDark: const Color(0xFF2E2E2E),
-              text: 'Nenhum evento recente retornado pelo AutoISP.',
-            )
-          else
-            ..._autoIspEvents.take(10).map((e) => _autoIspRow(e, isDark)),
-        ],
-      ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Atualizar eventos',
+              onPressed: _loadingAutoIsp ? null : _loadAutoIspEvents,
+              icon: _loadingAutoIsp
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      Icons.refresh,
+                      color: isDark
+                          ? Colors.white
+                          : const Color.fromARGB(255, 24, 23, 23),
+                    ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (!widget.autoIspService.isConfigured)
+          _buildMessageCard(
+            isDark: isDark,
+            icon: Icons.settings_input_antenna_outlined,
+            accent: const Color(0xFFEF6C00),
+            backgroundLight: const Color(0xFFFFF8E1),
+            backgroundDark: const Color(0xFF2E2E2E),
+            text:
+                'Configure AUTOISP_EVENTS_ENDPOINT e as credenciais AUTOISP_AUTH_ENDPOINT/AUTOISP_USERNAME/AUTOISP_PASSWORD para habilitar os eventos detectados.',
+          )
+        else if (_loadingAutoIsp && !_loadedAutoIsp)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_autoIspEvents.isEmpty)
+          _buildMessageCard(
+            isDark: isDark,
+            icon: Icons.wifi_tethering_off_outlined,
+            accent: const Color(0xFF757575),
+            backgroundLight: const Color.fromARGB(255, 236, 236, 236),
+            backgroundDark: const Color(0xFF2E2E2E),
+            text: 'Nenhum evento recente retornado pelo AutoISP.',
+          )
+        else
+          ..._autoIspEvents.take(10).map((e) => _autoIspRow(e, isDark)),
+      ],
+    );
+
+    if (embedded) return content;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _sectionDecoration(isDark: isDark),
+      child: content,
     );
   }
 
@@ -2489,7 +3548,7 @@ class _MassivaPageState extends State<MassivaPage> {
             'Inicio: ${_formatDate(event.startAt)} | ONUs: ${event.countOnus} | Circuitos: ${event.countCircuits}',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? Colors.white70 : Colors.black54,
+              color: isDark ? Colors.white70 : const Color(0xFF595959),
             ),
           ),
           const SizedBox(height: 2),
@@ -2497,44 +3556,7 @@ class _MassivaPageState extends State<MassivaPage> {
             'PONs: $ponText',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? Colors.white60 : Colors.black54,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiCard({
-    required String title,
-    required String value,
-    required bool isDark,
-    required double width,
-  }) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: _subsectionCardDecoration(
-        isDark: isDark,
-        accent: const Color.fromARGB(255, 192, 31, 31),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white70 : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Color.fromARGB(255, 192, 31, 31),
+              color: isDark ? Colors.white60 : const Color(0xFF595959),
             ),
           ),
         ],
@@ -2600,7 +3622,7 @@ class _MassivaPageState extends State<MassivaPage> {
             ? Colors.white
             : isDark
                 ? Colors.white70
-                : null,
+                : const Color(0xFF333333),
         fontWeight: FontWeight.w700,
       ),
     );
@@ -2615,11 +3637,10 @@ class _MassivaPageState extends State<MassivaPage> {
         : item.isClosed
             ? const Color(0xFF43A047)
             : const Color(0xFF757575);
-    final cardBackground = isDark
-        ? const Color(0xFF1B1B1B)
-        : const Color(0xFFFFFCF4);
+    final cardBackground =
+        isDark ? const Color(0xFF1B1B1B) : const Color(0xFFFFFEFA);
     final titleColor = isDark ? Colors.white : const Color(0xFF161616);
-    final subtitleColor = isDark ? Colors.white70 : const Color(0xFF5F5F5F);
+    final subtitleColor = isDark ? Colors.white70 : const Color(0xFF4E4E4E);
     final borderColor = statusColor.withValues(alpha: isDark ? 0.28 : 0.20);
 
     Widget infoChip({
@@ -2652,6 +3673,111 @@ class _MassivaPageState extends State<MassivaPage> {
             ),
           ],
         ),
+      );
+    }
+
+    Widget impactedHighlight() {
+      const accent = Color.fromARGB(255, 233, 159, 1);
+      final shellColor =
+          isDark ? const Color(0xFF2F2610) : const Color(0xFFFFF9E8);
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 420;
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  accent.withValues(alpha: isDark ? 0.28 : 0.20),
+                  shellColor,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: accent.withValues(alpha: isDark ? 0.40 : 0.22),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: isDark ? 0.16 : 0.10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.18 : 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: accent.withValues(alpha: isDark ? 0.32 : 0.20),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.people_alt_rounded,
+                    color: accent,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Clientes afetados',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: subtitleColor,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.affectedClients.toString(),
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                          color: titleColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!compact)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color:
+                          Colors.white.withValues(alpha: isDark ? 0.06 : 0.55),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: accent.withValues(alpha: isDark ? 0.24 : 0.14),
+                      ),
+                    ),
+                    child: Text(
+                      'Impactados',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: accent.withValues(alpha: isDark ? 0.95 : 1),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       );
     }
 
@@ -2688,64 +3814,123 @@ class _MassivaPageState extends State<MassivaPage> {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardBackground,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactCard = constraints.maxWidth < 560;
+
+        Widget statusBadge() {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: statusColor.withValues(alpha: 0.26),
+              ),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+            child: Text(
+              item.isOpen
+                  ? 'ABERTA'
+                  : item.isClosed
+                      ? 'ENCERRADA'
+                      : 'N/D',
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.4,
+              ),
+            ),
+          );
+        }
+
+        Widget closeButton() {
+          return SelectionContainer.disabled(
+            child: FilledButton.icon(
+              onPressed: _closingMassiva ? null : () => _closeMassiva(item),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFE53935),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+              icon: _closingMassiva
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check_circle_outline, size: 16),
+              label: const Text('Encerrar'),
+            ),
+          );
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            padding: EdgeInsets.all(compactCard ? 12 : 14),
+            decoration: BoxDecoration(
+              color: cardBackground,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        statusColor.withValues(alpha: 0.95),
-                        statusColor.withValues(alpha: 0.65),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: statusColor.withValues(alpha: 0.28),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.campaign_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+                if (compactCard) ...[
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              statusColor.withValues(alpha: 0.95),
+                              statusColor.withValues(alpha: 0.65),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColor.withValues(alpha: 0.28),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.campaign_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
                               '#${item.protocol}',
                               style: TextStyle(
                                 fontSize: 18,
@@ -2754,138 +3939,206 @@ class _MassivaPageState extends State<MassivaPage> {
                                 color: titleColor,
                               ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: statusColor.withValues(alpha: 0.26),
-                              ),
-                            ),
-                            child: Text(
-                              item.isOpen
-                                  ? 'ABERTA'
-                                  : item.isClosed
-                                      ? 'ENCERRADA'
-                                      : 'N/D',
+                            const SizedBox(height: 4),
+                            Text(
+                              item.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                                letterSpacing: 0.4,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                height: 1.25,
+                                color: titleColor,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                          color: titleColor,
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                if (item.usedFallback)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 10, top: 2),
-                    child: Tooltip(
-                      message: 'Aberta com fallback individual',
-                      child: Icon(
-                        Icons.alt_route,
-                        color: Color.fromARGB(255, 192, 31, 31),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      statusBadge(),
+                      if (item.usedFallback)
+                        const Tooltip(
+                          message: 'Aberta com fallback individual',
+                          child: Icon(
+                            Icons.alt_route,
+                            color: Color.fromARGB(255, 192, 31, 31),
+                          ),
+                        ),
+                      if (item.isOpen) closeButton(),
+                    ],
+                  ),
+                ] else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              statusColor.withValues(alpha: 0.95),
+                              statusColor.withValues(alpha: 0.65),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: statusColor.withValues(alpha: 0.28),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.campaign_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '#${item.protocol}',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.2,
+                                      color: titleColor,
+                                    ),
+                                  ),
+                                ),
+                                statusBadge(),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                height: 1.25,
+                                color: titleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (item.usedFallback)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 10, top: 2),
+                          child: Tooltip(
+                            message: 'Aberta com fallback individual',
+                            child: Icon(
+                              Icons.alt_route,
+                              color: Color.fromARGB(255, 192, 31, 31),
+                            ),
+                          ),
+                        ),
+                      if (item.isOpen)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 10, top: 2),
+                          child: closeButton(),
+                        ),
+                    ],
                   ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    infoChip(
+                      icon: Icons.account_tree_outlined,
+                      label: item.apCode.isEmpty
+                          ? 'AP não informado'
+                          : item.apCode,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                impactedHighlight(),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.black.withValues(alpha: 0.025),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      metaLine(
+                        icon: Icons.schedule_outlined,
+                        label: 'Abertura',
+                        value: _formatDate(item.openedAt),
+                      ),
+                      if (item.expectedCloseAt != null) ...[
+                        const SizedBox(height: 6),
+                        metaLine(
+                          icon: Icons.event_note_outlined,
+                          label: 'Previsao do encerramento',
+                          value: _formatDate(item.expectedCloseAt),
+                        ),
+                      ],
+                      if (item.isClosed && item.closedAt != null) ...[
+                        const SizedBox(height: 6),
+                        metaLine(
+                          icon: Icons.event_available_outlined,
+                          label: 'Fechamento',
+                          value: _formatDate(item.closedAt),
+                        ),
+                      ],
+                      if (item.team.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        metaLine(
+                          icon: Icons.groups_2_outlined,
+                          label: 'Equipe',
+                          value: item.team.trim(),
+                        ),
+                      ],
+                      if (item.createdBy.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        metaLine(
+                          icon: Icons.person_add_alt_1_outlined,
+                          label: 'Criado por',
+                          value: item.createdBy.trim(),
+                        ),
+                      ],
+                      if (item.responsible.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        metaLine(
+                          icon: Icons.badge_outlined,
+                          label: 'Responsável',
+                          value: item.responsible.trim(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                infoChip(
-                  icon: Icons.account_tree_outlined,
-                  label: item.apCode.isEmpty ? 'AP não informado' : item.apCode,
-                ),
-                infoChip(
-                  icon: Icons.hub_outlined,
-                  label: item.splitterCode.isEmpty
-                      ? 'Splitter não informado'
-                      : item.splitterCode,
-                  accent: const Color(0xFFFB8C00),
-                ),
-                infoChip(
-                  icon: Icons.people_alt_outlined,
-                  label: '${item.affectedClients} impactados',
-                  accent: const Color(0xFF00897B),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : Colors.black.withValues(alpha: 0.025),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  metaLine(
-                    icon: Icons.schedule_outlined,
-                    label: 'Abertura',
-                    value: _formatDate(item.openedAt),
-                  ),
-                  const SizedBox(height: 8),
-                  metaLine(
-                    icon: Icons.event_available_outlined,
-                    label: 'Fechamento',
-                    value: _formatDate(item.closedAt),
-                  ),
-                  if (item.team.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    metaLine(
-                      icon: Icons.groups_2_outlined,
-                      label: 'Equipe',
-                      value: item.team.trim(),
-                    ),
-                  ],
-                  if (item.createdBy.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    metaLine(
-                      icon: Icons.person_add_alt_1_outlined,
-                      label: 'Criado por',
-                      value: item.createdBy.trim(),
-                    ),
-                  ],
-                  if (item.responsible.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    metaLine(
-                      icon: Icons.badge_outlined,
-                      label: 'Responsável',
-                      value: item.responsible.trim(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -2896,7 +4149,7 @@ class _MassivaPageState extends State<MassivaPage> {
         bottomRight: Radius.circular(32),
       ),
       child: SizedBox(
-        height: 160,
+        height: 130,
         width: double.infinity,
         child: Stack(
           fit: StackFit.expand,
@@ -2909,8 +4162,10 @@ class _MassivaPageState extends State<MassivaPage> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color.fromARGB(255, 255, 174, 0).withValues(alpha: 0.35),
-                    const Color.fromARGB(255, 255, 174, 0).withValues(alpha: 0.35),
+                    const Color.fromARGB(255, 255, 174, 0)
+                        .withValues(alpha: 0.35),
+                    const Color.fromARGB(255, 255, 174, 0)
+                        .withValues(alpha: 0.35),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -3089,7 +4344,10 @@ class _MassivaPageState extends State<MassivaPage> {
         decoration: _fieldDecoration(
           label: label,
           isDark: isDark,
-          suffixIcon: const Icon(Icons.event_outlined),
+          suffixIcon: Icon(
+            Icons.event_outlined,
+            color: isDark ? Colors.white70 : const Color(0xFF666666),
+          ),
         ),
         style: TextStyle(
           color: isDark ? Colors.white : const Color.fromARGB(255, 24, 23, 23),
@@ -3260,7 +4518,11 @@ class _MassivaPageState extends State<MassivaPage> {
           IconButton(
             tooltip: actionTooltip,
             onPressed: onTap,
-            icon: const Icon(Icons.search),
+            icon: Icon(
+              Icons.search,
+              color:
+                  isDark ? Colors.white : const Color.fromARGB(255, 24, 23, 23),
+            ),
           ),
         ],
       ),
@@ -3332,8 +4594,8 @@ class _MassivaPageState extends State<MassivaPage> {
     return BoxDecoration(
       color: isDark ? const Color(0xFF3B3B3B) : Colors.white,
       borderRadius: BorderRadius.circular(14),
-      border:
-          Border.all(color: borderAccent.withValues(alpha: accent != null ? 0.7 : 1)),
+      border: Border.all(
+          color: borderAccent.withValues(alpha: accent != null ? 0.7 : 1)),
       boxShadow: [
         BoxShadow(
           color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
@@ -3365,13 +4627,13 @@ class _MassivaPageState extends State<MassivaPage> {
       labelStyle: TextStyle(
         color: isDark
             ? Colors.white.withValues(alpha: 0.72)
-            : const Color.fromARGB(255, 88, 88, 88),
+            : const Color(0xFF535353),
         fontWeight: FontWeight.w600,
       ),
       hintStyle: TextStyle(
         color: isDark
             ? Colors.white.withValues(alpha: 0.36)
-            : const Color.fromARGB(255, 155, 155, 155),
+            : const Color(0xFF8E8E8E),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       filled: true,
@@ -3394,7 +4656,8 @@ class _MassivaPageState extends State<MassivaPage> {
       backgroundColor: const Color.fromARGB(255, 192, 31, 31),
       foregroundColor: Colors.white,
       elevation: 8,
-      shadowColor: const Color.fromARGB(255, 192, 31, 31).withValues(alpha: 0.32),
+      shadowColor:
+          const Color.fromARGB(255, 192, 31, 31).withValues(alpha: 0.32),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       textStyle: const TextStyle(fontWeight: FontWeight.w800),
@@ -3476,7 +4739,8 @@ class _MassivaPageState extends State<MassivaPage> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 192, 31, 31).withValues(alpha: 0.14),
+              color: const Color.fromARGB(255, 192, 31, 31)
+                  .withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -3512,7 +4776,7 @@ class _MassivaPageState extends State<MassivaPage> {
                       ? 'O total usa a lista limpa quando disponível e, antes disso, uma estimativa local.'
                       : 'Selecione a topologia e valide a lista limpa para acompanhar o impacto desta abertura.',
                   style: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
+                    color: isDark ? Colors.white70 : const Color(0xFF595959),
                     height: 1.3,
                   ),
                 ),
@@ -3520,6 +4784,28 @@ class _MassivaPageState extends State<MassivaPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showFeedbackSnackBar(
+    String message, {
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF1F1F1F),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        backgroundColor:
+            isDark ? const Color(0xFF2F2F2F) : const Color(0xFFFFF3CD),
+        behavior: SnackBarBehavior.floating,
+        duration: duration,
       ),
     );
   }
@@ -3545,11 +4831,11 @@ class _MassivaPageState extends State<MassivaPage> {
     return InputDecoration(
       prefixIcon: Icon(
         Icons.search,
-        color: isDark ? Colors.white70 : Colors.black54,
+        color: isDark ? Colors.white70 : const Color(0xFF666666),
       ),
       hintText: hintText,
       hintStyle: TextStyle(
-        color: isDark ? Colors.white54 : Colors.black45,
+        color: isDark ? Colors.white54 : const Color(0xFF8C8C8C),
       ),
       filled: true,
       fillColor: isDark ? const Color(0xFF3A3A3A) : Colors.white,
@@ -3749,6 +5035,7 @@ class _MassivaPageState extends State<MassivaPage> {
     required Widget? child,
   }) {
     final base = Theme.of(context);
+    final isDark = base.brightness == Brightness.dark;
     final colorScheme = base.colorScheme.copyWith(
       primary: _headerYellow,
       onPrimary: const Color(0xFF1F1F1F),
@@ -3756,17 +5043,64 @@ class _MassivaPageState extends State<MassivaPage> {
       onPrimaryContainer: const Color(0xFF1F1F1F),
       secondary: _headerYellow,
       tertiary: _headerYellow,
+      surface: isDark ? const Color(0xFF2F2F2F) : const Color(0xFFFFFCF5),
+      onSurface: isDark ? Colors.white : const Color(0xFF1F1F1F),
+      onSurfaceVariant: isDark ? Colors.white70 : const Color(0xFF4F4F4F),
     );
     return Theme(
       data: base.copyWith(
         colorScheme: colorScheme,
+        datePickerTheme: DatePickerThemeData(
+          backgroundColor:
+              isDark ? const Color(0xFF2F2F2F) : const Color(0xFFFFFCF5),
+          surfaceTintColor: Colors.transparent,
+          headerBackgroundColor:
+              isDark ? const Color(0xFF3A300F) : const Color(0xFFFFE7A6),
+          headerForegroundColor:
+              isDark ? Colors.white : const Color(0xFF1F1F1F),
+          weekdayStyle: TextStyle(
+            color: isDark ? Colors.white70 : const Color(0xFF5A5A5A),
+            fontWeight: FontWeight.w700,
+          ),
+          dayStyle: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF202020),
+            fontWeight: FontWeight.w600,
+          ),
+          yearStyle: TextStyle(
+            color: isDark ? Colors.white : const Color(0xFF202020),
+            fontWeight: FontWeight.w700,
+          ),
+          rangePickerBackgroundColor:
+              isDark ? const Color(0xFF2F2F2F) : const Color(0xFFFFFCF5),
+          cancelButtonStyle: TextButton.styleFrom(
+            foregroundColor: isDark ? Colors.white70 : const Color(0xFF5A5A5A),
+          ),
+          confirmButtonStyle: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF8A5A00),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
         timePickerTheme: TimePickerThemeData(
+          backgroundColor:
+              isDark ? const Color(0xFF2F2F2F) : const Color(0xFFFFFCF5),
+          hourMinuteTextColor: isDark ? Colors.white : const Color(0xFF1F1F1F),
+          hourMinuteColor:
+              isDark ? _headerYellow.withValues(alpha: 0.92) : _headerYellow,
           dialHandColor: _headerYellow,
-          dialTextColor: base.brightness == Brightness.dark
-              ? Colors.white
-              : const Color(0xFF1F1F1F),
-          hourMinuteTextColor: const Color(0xFF1F1F1F),
-          hourMinuteColor: _headerYellow,
+          dialTextColor: isDark ? Colors.white : const Color(0xFF1F1F1F),
+          dialBackgroundColor:
+              isDark ? const Color(0xFF424242) : const Color(0xFFFFF1C7),
+          dayPeriodTextColor: isDark ? Colors.white : const Color(0xFF1F1F1F),
+          dayPeriodColor:
+              isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+          dayPeriodBorderSide: BorderSide(
+            color: _headerYellow.withValues(alpha: isDark ? 0.28 : 0.45),
+          ),
+          entryModeIconColor: isDark ? Colors.white70 : const Color(0xFF5A5A5A),
+          helpTextStyle: TextStyle(
+            color: isDark ? Colors.white70 : const Color(0xFF5A5A5A),
+            fontWeight: FontWeight.w700,
+          ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(foregroundColor: _headerYellow),
@@ -3783,69 +5117,3 @@ class _MassivaPageState extends State<MassivaPage> {
     return null;
   }
 }
-
-class _TrendBars extends StatelessWidget {
-  final List<int> values;
-  final bool isDark;
-
-  const _TrendBars({
-    required this.values,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final maxValue =
-        values.isEmpty ? 1 : values.reduce((a, b) => a > b ? a : b);
-    final today = DateTime.now();
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: List.generate(values.length, (index) {
-        final value = values[index];
-        final ratio = maxValue == 0 ? 0.0 : value / maxValue;
-        final date = today.subtract(Duration(days: values.length - 1 - index));
-        final label = DateFormat('dd/MM').format(date);
-
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  value.toString(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Container(
-                  height: 52,
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    height: 8 + (44 * ratio),
-                    decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 192, 31, 31),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: isDark ? Colors.white60 : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
-}
-

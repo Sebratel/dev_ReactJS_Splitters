@@ -20,26 +20,28 @@ import 'package:nexaview/screens/massiva_screen.dart';
 import 'package:nexaview/services/autoisp_auth_service.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_gateway_service.dart';
-import 'package:nexaview/services/massiva_middleware_service.dart';
 import 'dart:ui';
 import 'dart:async';
 
+/// Tela principal do app.
+///
+/// Aqui ficam o bootstrap da listagem, filtros, busca e os atalhos para as
+/// demais areas operacionais, como detalhe do splitter e massivas.
 class HomePage extends StatefulWidget {
   final VoidCallback onThemeToggle;
   final SplitterService splitterService;
   final AuthService authService; // ✅
   final AppSessionUser sessionUser;
-  final String middlewareMassivaBaseUrl;
   final String massivaApiGatewayEndpoint;
+  final String massivaAffectedUsersEndpoint;
   final String ellevenMassivaListEndpoint;
-  final String ellevenMassivaListBearerToken;
-  final String ellevenMassivaListHeaderName;
-  final String ellevenMassivaListHeaderValue;
   final String autoIspEventsEndpoint;
   final String autoIspAuthEndpoint;
   final String autoIspUsername;
   final String autoIspPassword;
   final String massivaCookieString;
+  final String geogridBaseUrl;
+  final String geogridApiKey;
 
   const HomePage({
     super.key,
@@ -47,17 +49,16 @@ class HomePage extends StatefulWidget {
     required this.splitterService,
     required this.authService,
     required this.sessionUser,
-    required this.middlewareMassivaBaseUrl,
     required this.massivaApiGatewayEndpoint,
+    required this.massivaAffectedUsersEndpoint,
     required this.ellevenMassivaListEndpoint,
-    required this.ellevenMassivaListBearerToken,
-    required this.ellevenMassivaListHeaderName,
-    required this.ellevenMassivaListHeaderValue,
     required this.autoIspEventsEndpoint,
     required this.autoIspAuthEndpoint,
     required this.autoIspUsername,
     required this.autoIspPassword,
     required this.massivaCookieString,
+    required this.geogridBaseUrl,
+    required this.geogridApiKey,
   });
 
   @override
@@ -124,11 +125,13 @@ class _HomePageState extends State<HomePage> {
     _oltService = OltService(_authService);
 
     _geoGridService = GeoGridService(
-      baseUrl: 'https://eros.geogridmaps.com.br/sebratel/api/v3',
-      apiKey: '395dce58e725b7324453608e6c65e8a6a8193e86',
+      baseUrl: widget.geogridBaseUrl,
+      apiKey: widget.geogridApiKey,
     );
 
     // 🔥 Bootstrap assíncrono (obrigatório no Web)
+    // O bootstrap eh adiado para o primeiro frame para evitar travar a
+    // montagem inicial da tela, especialmente no Flutter Web.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bootstrap();
     });
@@ -139,6 +142,7 @@ class _HomePageState extends State<HomePage> {
   void _iniciarAutoRefreshClientes() {
     _clientesAutoRefreshTimer?.cancel();
 
+    // Mantem a ocupacao atualizada sem depender de refresh manual do usuario.
     _clientesAutoRefreshTimer = Timer.periodic(
       SplitterService.cacheTtl,
       (_) async {
@@ -157,20 +161,16 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openMassivaPage() async {
     if (!widget.sessionUser.canOpenMassiva) return;
 
+    // A tela de massiva recebe tudo por injecao para ficar desacoplada do
+    // bootstrap da HomePage e facilitar manutencao.
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => MassivaPage(
-          middlewareService: MassivaMiddlewareService(
-            baseUrl: widget.middlewareMassivaBaseUrl,
-            authService: _authService,
-          ),
           gatewayService: MassivaGatewayService(
             endpoint: widget.massivaApiGatewayEndpoint,
             listEndpoint: widget.ellevenMassivaListEndpoint,
-            listBearerToken: widget.ellevenMassivaListBearerToken,
-            listHeaderName: widget.ellevenMassivaListHeaderName,
-            listHeaderValue: widget.ellevenMassivaListHeaderValue,
+            affectedUsersEndpoint: widget.massivaAffectedUsersEndpoint,
             authService: _authService,
           ),
           autoIspService: AutoIspEventService(
@@ -214,6 +214,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _bootstrap() async {
+    // Garante que o fluxo de bootstrap rode uma unica vez por sessao.
     // 🔒 Garante que o bootstrap roda apenas UMA vez por sessão
     if (_bootstrapJaExecutado) {
       debugPrint("♻️ Bootstrap ignorado (sessão ativa)");
@@ -226,6 +227,9 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 1️⃣ RESTAURA CACHE LOCAL (STALE-WHILE-REVALIDATE)
       // =====================================================
+      // Primeiro tenta reidratar cache local para abrir a tela rapidamente.
+      // Se o cache estiver vencido, o refresh em background busca os dados
+      // novos sem bloquear a interface.
       final snapshot = _service.getOcupacaoSnapshot();
       final cacheValido =
           snapshot.isNotEmpty && _service.clientesCacheValidoParaBootstrap();
@@ -261,6 +265,8 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 2️⃣ SPLITTERS (CACHE → API)
       // =====================================================
+      // Depois carrega a lista base de splitters, usada por cards, filtros e
+      // navegacao para a tela de detalhes.
       final splitters = await _service.fetchSplitters();
       if (!mounted) return;
 
@@ -279,6 +285,7 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 2.5️⃣ CARREGA OLTs (FILTROS)
       // =====================================================
+      // As OLTs sao carregadas separadamente porque alimentam os filtros.
       if (!_oltService.isLoaded) {
         debugPrint("📡 Carregando OLTs...");
         await _oltService.loadOlts();
@@ -288,6 +295,7 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 3️⃣ PRIMEIRA CARGA REAL (SOMENTE SE NÃO EXISTE CACHE)
       // =====================================================
+      // So faz carga completa de clientes se ainda nao houve restauracao local.
       if (!_clientesReady && snapshot.isEmpty) {
         debugPrint("🌐 Primeira carga REAL (sem cache)");
 
@@ -313,6 +321,7 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 4️⃣ CACHE DE RUAS
       // =====================================================
+      // Ruas ficam em cache para reduzir reverse geocode repetido.
       await _service.loadStreetCache();
 
       setState(() {
@@ -330,6 +339,8 @@ class _HomePageState extends State<HomePage> {
       // =====================================================
       // 6️⃣ ENDEREÇOS EM BACKGROUND
       // =====================================================
+      // Enderecos sao resolvidos em background porque esta etapa costuma ser
+      // a mais lenta e nao precisa bloquear a listagem.
       _resolveAddressesInBackground();
 
       // =====================================================
@@ -383,6 +394,8 @@ class _HomePageState extends State<HomePage> {
 
     final query = _searchController.text.trim().toLowerCase();
 
+    // Toda a logica de filtro fica concentrada aqui para evitar divergencia
+    // entre busca textual, filtros por OLT/status e cache de clientes.
     final newFiltered = _splitters.where((s) {
       final clientes = _clientesPorSplitter[s.code] ?? const [];
 
@@ -437,6 +450,10 @@ class _HomePageState extends State<HomePage> {
     _resolvingAddresses = true;
 
     try {
+      // Tenta usar, nesta ordem:
+      // 1. rua vinda da API de splitters
+      // 2. rua persistida em cache local
+      // 3. reverse geocode pelas coordenadas
       for (final s in _splitters) {
         if (!mounted) return;
 
@@ -1797,7 +1814,8 @@ class _HomePageState extends State<HomePage> {
           _ocupacaoSnapshot.values.fold(0, (a, b) => a + b);
     });
 
-    _statusCache.clear(); // 🔥 IMPORTANTE
+    // Sempre que o snapshot muda precisamos recalcular status e filtros.
+    _statusCache.clear();
     _buildClientesIndex();
     _recalcularStatusClientes();
     _applyFilters();

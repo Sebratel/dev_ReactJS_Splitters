@@ -6,12 +6,23 @@ import 'package:http/http.dart' as http;
 import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/services/auth_service.dart';
 
+/// Cliente HTTP da area de massivas.
+///
+/// Este servico concentra toda a conversa com o backend de massivas:
+/// - abertura de protocolo
+/// - consulta da listagem
+/// - envio e limpeza de PPPoEs afetados
+/// - encerramento de massivas
 class MassivaGatewayService {
+  static const int closeIncidentStatusId = 4;
+  static const int closeProgress = 0;
+  static const int closePriority = 35;
+  static const int closeNotificationTarget = 0;
+  static const bool closePrivateReport = true;
+
   final String endpoint;
   final String listEndpoint;
-  final String listBearerToken;
-  final String listHeaderName;
-  final String listHeaderValue;
+  final String affectedUsersEndpoint;
   final AuthService authService;
   final http.Client _client;
   final Duration timeout;
@@ -22,9 +33,7 @@ class MassivaGatewayService {
   MassivaGatewayService({
     required this.endpoint,
     required this.listEndpoint,
-    this.listBearerToken = '',
-    this.listHeaderName = '',
-    this.listHeaderValue = '',
+    this.affectedUsersEndpoint = '',
     required this.authService,
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
@@ -32,16 +41,17 @@ class MassivaGatewayService {
   }) : _client = client ?? http.Client() {
     debugPrint(
       'MassivaGatewayService config: '
-      'listEndpoint=$listEndpoint '
-      'hasListBearer=${listBearerToken.trim().isNotEmpty} '
-      'listHeaderName=${listHeaderName.trim().isEmpty ? '(none)' : listHeaderName.trim()} '
-      'hasListHeaderValue=${listHeaderValue.trim().isNotEmpty}',
+      'affectedUsersEndpoint=${_resolveAffectedUsersEndpoint()} '
+      'listEndpoint=$listEndpoint',
     );
   }
 
   bool get isConfigured => endpoint.trim().isNotEmpty;
   bool get isListConfigured => listEndpoint.trim().isNotEmpty;
+  bool get isAffectedUsersConfigured =>
+      _resolveAffectedUsersEndpoint().trim().isNotEmpty;
 
+  // Fluxo principal usado pela tela atual para abertura de massivas.
   Future<EllevenMassivaResponse> openMassivaViaApiGateway({
     required ApiGatewayMassivaRequest request,
   }) async {
@@ -192,8 +202,152 @@ class MassivaGatewayService {
     throw Exception('Falha inesperada ao abrir massiva no Elleven.');
   }
 
+  // Envia a lista de PPPoEs afetados depois que o protocolo ja foi aberto.
+  Future<int> notifyAffectedUsers({
+    required List<AffectedUserRequest> users,
+  }) async {
+    if (users.isEmpty) return 0;
+
+    final endpointUrl = _resolveAffectedUsersEndpoint();
+    if (endpointUrl.trim().isEmpty) {
+      throw Exception('Endpoint de afetados nao configurado.');
+    }
+
+    final uri = Uri.parse(endpointUrl);
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'User-Agent': 'insomnia/12.4.0',
+    };
+    final payload = users.map((item) => item.toJson()).toList();
+
+    debugPrint('➡️ [AFETADOS] POST $uri');
+
+    if (kDebugMode) {
+      final prettyPayload = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(_sanitizePayload(payload));
+      debugPrint(
+        'Payload enviado [AFETADOS]:\n$prettyPayload',
+        wrapWidth: 4096,
+      );
+    }
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .post(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(timeout);
+
+        if (kDebugMode) {
+          debugPrint(
+            'Resposta [AFETADOS]: status=${response.statusCode}',
+          );
+        }
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final body = response.body.trim();
+          if (body.isNotEmpty) {
+            final decoded = jsonDecode(body);
+            final asMap = _safeMap(decoded);
+            if (asMap.isNotEmpty && asMap['success'] == false) {
+              throw Exception(
+                'Erro ao enviar afetados: ${asMap['message'] ?? body}',
+              );
+            }
+          }
+          return users.length;
+        }
+
+        if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
+          throw Exception(
+            'Erro ao enviar afetados (status ${response.statusCode}): ${response.body}',
+          );
+        }
+      } on SocketException catch (_) {
+        if (attempt == maxRetries) {
+          throw Exception(
+            _networkFailureMessage(uri: uri, action: 'enviar os PPPoEs afetados'),
+          );
+        }
+      } on http.ClientException catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+            _clientFailureMessage(
+              uri: uri,
+              action: 'enviar os PPPoEs afetados',
+              originalMessage: e.message,
+            ),
+          );
+        }
+      }
+
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+
+    throw Exception('Falha inesperada ao enviar afetados.');
+  }
+
   bool _shouldRetryStatus(int code) {
     return code == 429 || code >= 500;
+  }
+
+  // Quando o endpoint de afetados nao eh informado explicitamente, tentamos
+  // derivar uma rota padrao a partir do endpoint principal.
+  String _resolveAffectedUsersEndpoint() {
+    final configured = affectedUsersEndpoint.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+
+    final base = endpoint.trim();
+    if (base.isEmpty) {
+      return '';
+    }
+
+    final uri = Uri.tryParse(base);
+    if (uri == null) {
+      return '';
+    }
+
+    return uri.replace(
+      path: '/api/v1/afetados',
+      queryParameters: const {},
+    ).toString();
+  }
+
+  String _resolveAffectedUsersByProtocolEndpoint(int protocol) {
+    final base = _resolveAffectedUsersEndpoint().trim();
+    if (base.isEmpty) {
+      return '';
+    }
+
+    final uri = Uri.tryParse(base);
+    if (uri == null) {
+      return '';
+    }
+
+    final segments = uri.pathSegments.where((it) => it.isNotEmpty).toList();
+    return uri.replace(
+      pathSegments: [...segments, 'protocol', protocol.toString()],
+      queryParameters: const {},
+    ).toString();
+  }
+
+  String _resolveCloseMassivaEndpoint() {
+    final base = endpoint.trim();
+    if (base.isEmpty) {
+      return '';
+    }
+
+    final uri = Uri.tryParse(base);
+    if (uri == null) {
+      return '';
+    }
+
+    return uri.replace(
+      path: '/api/v1/massivas/finalizar-chamado-via-api',
+      queryParameters: const {},
+    ).toString();
   }
 
   EllevenMassivaResponse _parseOpenMassivaResponse(
@@ -221,6 +375,7 @@ class MassivaGatewayService {
     );
   }
 
+  // Consulta a listagem consolidada de massivas para abastecer o monitoramento.
   Future<List<MassivaTicket>> fetchMassivas() async {
     if (!isListConfigured) {
       throw Exception('Endpoint de listagem de massivas não configurado.');
@@ -230,7 +385,6 @@ class MassivaGatewayService {
     final headers = {
       'User-Agent': 'insomnia/12.4.0',
       'Accept': '*/*',
-      ..._getListExtraHeaders(),
     };
 
     debugPrint('➡️ [LISTAGEM] GET $uri');
@@ -248,6 +402,20 @@ class MassivaGatewayService {
           final decoded = jsonDecode(response.body);
           final rows = _extractRows(decoded);
           final parsed = rows.map(MassivaTicket.fromJson).toList();
+          final enriched = await Future.wait(
+            parsed.map((ticket) async {
+              if (!isAffectedUsersConfigured || ticket.protocol <= 0) {
+                return ticket;
+              }
+              try {
+                final count =
+                    await fetchAffectedUsersCountByProtocol(ticket.protocol);
+                return ticket.copyWith(affectedClients: count);
+              } catch (_) {
+                return ticket;
+              }
+            }),
+          );
           if (kDebugMode) {
             debugPrint('Massivas extraidas: ${rows.length}');
             if (rows.isNotEmpty) {
@@ -256,15 +424,15 @@ class MassivaGatewayService {
                 wrapWidth: 4096,
               );
             }
-            debugPrint('Massivas parseadas: ${parsed.length}');
-            if (parsed.isNotEmpty) {
-              final first = parsed.first;
+            debugPrint('Massivas parseadas: ${enriched.length}');
+            if (enriched.isNotEmpty) {
+              final first = enriched.first;
               debugPrint(
-                'Primeira massiva parseada: protocol=${first.protocol} title=${first.title} status=${first.status} openedAt=${first.openedAt} closedAt=${first.closedAt}',
+                'Primeira massiva parseada: protocol=${first.protocol} title=${first.title} status=${first.status} openedAt=${first.openedAt} expectedCloseAt=${first.expectedCloseAt} closedAt=${first.closedAt}',
               );
             }
           }
-          return parsed;
+          return enriched;
         }
 
         if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
@@ -296,6 +464,186 @@ class MassivaGatewayService {
     throw Exception('Falha inesperada ao listar massivas.');
   }
 
+  // Complementa a listagem com a quantidade de afetados por protocolo.
+  Future<int> fetchAffectedUsersCountByProtocol(int protocol) async {
+    if (protocol <= 0) return 0;
+
+    final endpointUrl = _resolveAffectedUsersByProtocolEndpoint(protocol);
+    if (endpointUrl.trim().isEmpty) {
+      throw Exception('Endpoint de afetados por protocolo nao configurado.');
+    }
+
+    final uri = Uri.parse(endpointUrl);
+    final headers = <String, String>{
+      'User-Agent': 'insomnia/12.4.0',
+      'Accept': '*/*',
+    };
+
+    debugPrint('➡️ [AFETADOS POR PROTOCOLO] GET $uri');
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response =
+            await _client.get(uri, headers: headers).timeout(timeout);
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          if (response.body.trim().isEmpty) return 0;
+          final decoded = jsonDecode(response.body);
+          final root = _safeMap(decoded);
+          final data = _safeMap(root['data']);
+          final impactedUsers = data['impactedUsers'];
+          if (impactedUsers is List) {
+            return impactedUsers.length;
+          }
+          return 0;
+        }
+
+        if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
+          throw Exception(
+            'Erro ao buscar afetados do protocolo $protocol (status ${response.statusCode}): ${response.body}',
+          );
+        }
+      } on SocketException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      } on http.ClientException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      }
+
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+
+    throw Exception('Falha inesperada ao buscar afetados por protocolo.');
+  }
+
+  // Encerra a massiva usando o assignmentId retornado pelo backend.
+  Future<String> closeMassiva({
+    required int assignmentId,
+    required String description,
+  }) async {
+    if (assignmentId <= 0) {
+      throw Exception('assignmentId invalido para encerrar a massiva.');
+    }
+
+    if (!isConfigured) {
+      throw Exception('Endpoint de massiva nao configurado.');
+    }
+
+    final endpointUrl = _resolveCloseMassivaEndpoint();
+    if (endpointUrl.trim().isEmpty) {
+      throw Exception('Endpoint de encerramento de massiva nao configurado.');
+    }
+
+    final uri = Uri.parse(endpointUrl);
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'User-Agent': 'insomnia/12.4.0',
+    };
+    final payload = <String, dynamic>{
+      'assignmentId': assignmentId.toString(),
+      'incidentStatusId': closeIncidentStatusId.toString(),
+      'description': description,
+      'progress': closeProgress.toString(),
+      'priority': closePriority.toString(),
+      'notificationTarget': closeNotificationTarget.toString(),
+      'privateReport': closePrivateReport.toString(),
+    };
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .delete(uri, headers: headers, body: jsonEncode(payload))
+            .timeout(timeout);
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          if (response.body.trim().isEmpty) {
+            return 'Massiva encerrada com sucesso.';
+          }
+          final decoded = jsonDecode(response.body);
+          final root = _safeMap(decoded);
+          if (root['success'] == false) {
+            throw Exception(
+              'Erro ao encerrar massiva: ${_extractCloseMessages(root).join(' | ')}',
+            );
+          }
+          final messages = _extractCloseMessages(root);
+          return messages.isNotEmpty
+              ? messages.join(' | ')
+              : 'Massiva encerrada com sucesso.';
+        }
+
+        if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
+          throw Exception(
+            'Erro ao encerrar massiva (status ${response.statusCode}): ${response.body}',
+          );
+        }
+      } on SocketException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      } on http.ClientException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      }
+
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+
+    throw Exception('Falha inesperada ao encerrar a massiva.');
+  }
+
+  // Limpa a lista de afetados apos o encerramento para manter o backend coerente.
+  Future<String> deleteAffectedUsersByProtocol(int protocol) async {
+    if (protocol <= 0) {
+      throw Exception('Protocolo invalido para limpar afetados.');
+    }
+
+    final endpointUrl = _resolveAffectedUsersByProtocolEndpoint(protocol);
+    if (endpointUrl.trim().isEmpty) {
+      throw Exception('Endpoint de afetados por protocolo nao configurado.');
+    }
+
+    final uri = Uri.parse(endpointUrl);
+    final headers = <String, String>{
+      'User-Agent': 'insomnia/12.4.0',
+      'Accept': '*/*',
+    };
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response =
+            await _client.delete(uri, headers: headers).timeout(timeout);
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          if (response.body.trim().isEmpty) {
+            return 'Lista de afetados removida com sucesso.';
+          }
+          final decoded = jsonDecode(response.body);
+          final root = _safeMap(decoded);
+          if (root['success'] == false) {
+            throw Exception(
+              'Erro ao limpar afetados: ${root['message'] ?? response.body}',
+            );
+          }
+          return (root['message'] ?? 'Lista de afetados removida com sucesso.')
+              .toString();
+        }
+
+        if (!_shouldRetryStatus(response.statusCode) || attempt == maxRetries) {
+          throw Exception(
+            'Erro ao limpar afetados (status ${response.statusCode}): ${response.body}',
+          );
+        }
+      } on SocketException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      } on http.ClientException catch (_) {
+        if (attempt == maxRetries) rethrow;
+      }
+
+      await Future.delayed(Duration(milliseconds: 400 * attempt));
+    }
+
+    throw Exception('Falha inesperada ao limpar afetados do protocolo.');
+  }
+
+  // Alguns endpoints compartilham o token do ERP; outros exigem token obtido
+  // dinamicamente por host. Este metodo escolhe a estrategia correta.
   Future<Map<String, String>> _getAuthHeadersForUri(Uri targetUri) async {
     final authUri = Uri.parse(authService.tokenUrl);
     if (authUri.host == targetUri.host) {
@@ -309,16 +657,7 @@ class MassivaGatewayService {
     };
   }
 
-  Map<String, String> _getListExtraHeaders() {
-    final name = listHeaderName.trim();
-    final value = listHeaderValue.trim();
-    if (name.isEmpty || value.isEmpty) {
-      return const {};
-    }
-
-    return {name: value};
-  }
-
+  // Mantem um pequeno cache de tokens por host para evitar autenticar a cada chamada.
   Future<String> _ensureTokenForHost(Uri targetUri) async {
     final cacheKey = targetUri.host;
     final cachedToken = _hostTokenCache[cacheKey];
@@ -457,6 +796,18 @@ class MassivaGatewayService {
       return {'data': raw};
     }
     return {};
+  }
+
+  List<String> _extractCloseMessages(Map<String, dynamic> json) {
+    final rawMessages = json['messages'];
+    if (rawMessages is List) {
+      return rawMessages
+          .whereType<Map>()
+          .map((item) => item['message']?.toString() ?? '')
+          .where((it) => it.trim().isNotEmpty)
+          .toList();
+    }
+    return const [];
   }
 
   dynamic _sanitizePayload(dynamic raw) {
