@@ -1500,6 +1500,11 @@ class _HomePageState extends State<HomePage> {
     final List<OltModel> olts = oltsMap.values.toList()
       ..sort((a, b) => a.title.compareTo(b.title));
 
+    if (olts.isEmpty) {
+      _showLoadingFilterMessage();
+      return null;
+    }
+
     final selected = await _showMultiSelectSearchDialog<OltModel>(
       title: 'Filtrar por OLT',
       items: olts,
@@ -1525,12 +1530,36 @@ class _HomePageState extends State<HomePage> {
 
     final ruas = _ruasCacheOrdenadas!;
 
+    if (ruas.isEmpty) {
+      _showLoadingFilterMessage();
+      return null;
+    }
+
     return _showMultiSelectSearchDialog<String>(
       title: 'Filtrar por Rua',
       items: ruas,
       label: (r) => r,
       initialSelected:
           _ruasSelecionadas.where((rua) => ruas.contains(rua)).toSet(),
+    );
+  }
+
+  void _showLoadingFilterMessage() {
+    if (!mounted) return;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 900;
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.clearSnackBars();
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('Carregando dados...'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        width: isDesktop ? 320 : null,
+      ),
     );
   }
 
