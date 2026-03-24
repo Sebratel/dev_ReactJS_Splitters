@@ -1,7 +1,10 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:nexaview/utils/web_utils.dart';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -88,18 +91,55 @@ void main() async {
     'ERP_SYNDATA',
     defaultValue: '',
   );
+  const hubSessionEndpoint = String.fromEnvironment(
+    'HUB_SESSION_ENDPOINT',
+    defaultValue: 'https://sebratel-hub.web.app/auth/session',
+  );
 
   var sessionUser = AppSessionUser.guest();
 
   if (!isLocal) {
     // Em producao o acesso depende do token enviado pelo Hub.
-    final tokenResult = validateToken(token);
+    final sessionResult = resolveHubSession(token);
 
-    sessionUser = AppSessionUser.fromJwtPayload(
-      tokenResult.payload ?? const <String, dynamic>{},
-      allowedEmails: allowedMassivaEmails,
-      allowedRoles: allowedMassivaRoles,
+    if (!sessionResult.isValid) {
+      debugPrint("ACESSO BLOQUEADO -> ${sessionResult.reason}");
+
+      Future.microtask(() {
+        WebUtils.redirect("https://sebratel-hub.web.app");
+      });
+      return;
+    }
+
+    final hubProfileResult = await fetchHubSessionProfile(
+      token: token!,
+      endpoint: hubSessionEndpoint,
     );
+
+    if (hubProfileResult.isUnauthorized) {
+      debugPrint("ACESSO BLOQUEADO -> ${hubProfileResult.reason}");
+
+      Future.microtask(() {
+        WebUtils.redirect("https://sebratel-hub.web.app");
+      });
+      return;
+    }
+
+    if (hubProfileResult.payload != null) {
+      sessionUser = AppSessionUser.fromHubSession(
+        hubProfileResult.payload!,
+        sessionToken: token,
+      );
+      debugPrint("SESSAO DO HUB CARREGADA VIA /auth/session");
+    } else {
+      sessionUser = AppSessionUser.fromJwtPayload(
+        sessionResult.payload ?? const <String, dynamic>{},
+        allowedEmails: allowedMassivaEmails,
+        allowedRoles: allowedMassivaRoles,
+        sessionToken: token,
+      );
+      debugPrint("SESSAO DO HUB CARREGADA EM MODO DE COMPATIBILIDADE");
+    }
 
     debugPrint("TOKEN ACEITO - App liberado");
 
@@ -112,6 +152,7 @@ void main() async {
       email: localUserEmail,
       canOpenMassiva: localMassivaEnabled,
       personId: localUserPersonId > 0 ? localUserPersonId : 629,
+      sessionToken: token,
     );
   }
 
@@ -179,6 +220,10 @@ void main() async {
     'MASSIVA_COOKIE_STRING',
     defaultValue: '',
   );
+  const hubGoogleIdTokenEndpoint = String.fromEnvironment(
+    'HUB_GOOGLE_ID_TOKEN_ENDPOINT',
+    defaultValue: 'https://sebratel-hub.web.app/auth/google-id-token',
+  );
 
   // SplitterService centraliza cache local, consumo do ERP e resolucao de ruas.
   final splitterService = SplitterService(
@@ -210,6 +255,7 @@ void main() async {
       autoIspUsername: autoIspUsername,
       autoIspPassword: autoIspPassword,
       massivaCookieString: massivaCookieString,
+      hubGoogleIdTokenEndpoint: hubGoogleIdTokenEndpoint,
       geogridBaseUrl: geogridBaseUrl,
       geogridApiKey: geogridApiKey,
     ),
@@ -217,32 +263,114 @@ void main() async {
 }
 
 // =============================================================
-// Valida??o do Token JWT
+// Resolucao da sessao do Hub
 // =============================================================
-class TokenValidationResult {
+class HubSessionResult {
   final bool isValid;
   final String? reason;
   final Map<String, dynamic>? payload;
 
-  TokenValidationResult(this.isValid, {this.reason, this.payload});
+  const HubSessionResult(this.isValid, {this.reason, this.payload});
 }
 
-// Valida o JWT recebido via query string e devolve o payload normalizado.
-TokenValidationResult validateToken(String? token) {
+class HubSessionProfileResult {
+  final bool isUnauthorized;
+  final String? reason;
+  final Map<String, dynamic>? payload;
+
+  const HubSessionProfileResult({
+    this.isUnauthorized = false,
+    this.reason,
+    this.payload,
+  });
+}
+
+// Resolve a sessao recebida do Hub.
+//
+// Compatibilidade:
+// - fluxo antigo: JWT assinado com HUB_JWT_SECRET
+// - fluxo novo: sessao segura do backend do Hub, sem exigir verificacao local
+HubSessionResult resolveHubSession(String? token) {
   if (token == null || token.isEmpty) {
-    return TokenValidationResult(false, reason: "Token ausente");
+    return const HubSessionResult(false, reason: "Token ausente");
   }
 
+  final verifiedPayload = _tryVerifyLegacyHubJwt(token);
+  if (verifiedPayload != null) {
+    debugPrint("JWT do Hub validado localmente");
+    return HubSessionResult(true, payload: verifiedPayload);
+  }
+
+  final decodedPayload = _tryDecodeJwtPayload(token);
+  if (decodedPayload != null) {
+    debugPrint("Sessao do Hub aceita sem validacao local de assinatura");
+    return HubSessionResult(true, payload: decodedPayload);
+  }
+
+  debugPrint("Sessao do Hub aceita sem payload legivel no frontend");
+  return const HubSessionResult(true, payload: <String, dynamic>{});
+}
+
+Future<HubSessionProfileResult> fetchHubSessionProfile({
+  required String token,
+  required String endpoint,
+}) async {
+  if (token.trim().isEmpty || endpoint.trim().isEmpty) {
+    return const HubSessionProfileResult();
+  }
+
+  try {
+    final response = await http.get(
+      Uri.parse(endpoint),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 401) {
+      return const HubSessionProfileResult(
+        isUnauthorized: true,
+        reason: 'Sessao do Hub expirada ou invalida',
+      );
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      debugPrint(
+        'Falha ao consultar /auth/session no Hub: HTTP ${response.statusCode}',
+      );
+      return const HubSessionProfileResult();
+    }
+
+    final body = response.body.trim();
+    if (body.isEmpty) {
+      debugPrint('Falha ao consultar /auth/session no Hub: resposta vazia');
+      return const HubSessionProfileResult();
+    }
+
+    final decoded = jsonDecode(body);
+    if (decoded is Map) {
+      return HubSessionProfileResult(
+        payload: decoded.map((k, v) => MapEntry(k.toString(), v)),
+      );
+    }
+
+    debugPrint('Falha ao consultar /auth/session no Hub: payload invalido');
+  } catch (e) {
+    debugPrint('Falha ao consultar /auth/session no Hub: $e');
+  }
+
+  return const HubSessionProfileResult();
+}
+
+Map<String, dynamic>? _tryVerifyLegacyHubJwt(String token) {
   try {
     const hubJwtSecret = String.fromEnvironment(
       'HUB_JWT_SECRET',
       defaultValue: '',
     );
     if (hubJwtSecret.trim().isEmpty) {
-      return TokenValidationResult(
-        false,
-        reason: "Segredo JWT do hub nao configurado",
-      );
+      return null;
     }
 
     final jwt = JWT.verify(
@@ -251,22 +379,34 @@ TokenValidationResult validateToken(String? token) {
     );
 
     final payload = jwt.payload;
-    debugPrint("JWT validado com sucesso");
-
     if (payload["iss"] != "sebratel-hub") {
-      return TokenValidationResult(
-        false,
-        reason: "Emissor n\u00e3o autorizado",
-      );
+      return null;
     }
 
-    return TokenValidationResult(
-      true,
-      payload: payload.map((k, v) => MapEntry(k.toString(), v)),
-    );
-  } catch (e) {
-    return TokenValidationResult(false, reason: "Token inv\u00e1lido: $e");
+    return payload.map((k, v) => MapEntry(k.toString(), v));
+  } catch (_) {
+    return null;
   }
+}
+
+Map<String, dynamic>? _tryDecodeJwtPayload(String token) {
+  final parts = token.split('.');
+  if (parts.length < 2) {
+    return null;
+  }
+
+  try {
+    final normalized = base64Url.normalize(parts[1]);
+    final decoded = utf8.decode(base64Url.decode(normalized));
+    final json = jsonDecode(decoded);
+    if (json is Map) {
+      return json.map((k, v) => MapEntry(k.toString(), v));
+    }
+  } catch (_) {
+    return null;
+  }
+
+  return null;
 }
 
 Set<String> _parseCsvEnv(String value) {
@@ -301,6 +441,7 @@ class MyApp extends StatefulWidget {
   final String autoIspUsername;
   final String autoIspPassword;
   final String massivaCookieString;
+  final String hubGoogleIdTokenEndpoint;
   final String geogridBaseUrl;
   final String geogridApiKey;
 
@@ -317,6 +458,7 @@ class MyApp extends StatefulWidget {
     required this.autoIspUsername,
     required this.autoIspPassword,
     required this.massivaCookieString,
+    required this.hubGoogleIdTokenEndpoint,
     required this.geogridBaseUrl,
     required this.geogridApiKey,
   });
@@ -365,6 +507,7 @@ class _MyAppState extends State<MyApp> {
         autoIspUsername: widget.autoIspUsername,
         autoIspPassword: widget.autoIspPassword,
         massivaCookieString: widget.massivaCookieString,
+        hubGoogleIdTokenEndpoint: widget.hubGoogleIdTokenEndpoint,
         geogridBaseUrl: widget.geogridBaseUrl,
         geogridApiKey: widget.geogridApiKey,
       ),

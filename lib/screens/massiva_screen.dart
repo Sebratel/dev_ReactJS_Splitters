@@ -1934,6 +1934,14 @@ class _MassivaPageState extends State<MassivaPage> {
   }
 
   Future<void> _openMassiva() async {
+    if (!widget.sessionUser.canOpenMassiva) {
+      setState(() {
+        _error =
+            'Sua sessao permite apenas acompanhamento de massivas. A abertura exige a permissao massiva_open.';
+      });
+      return;
+    }
+
     if (!_validateOpenMassivaSelection()) {
       return;
     }
@@ -2016,6 +2024,12 @@ class _MassivaPageState extends State<MassivaPage> {
 
       if (!mounted) return;
 
+      String? refreshError;
+      if (openedProtocols.isNotEmpty) {
+        refreshError = await _refreshMassivasAfterOpen();
+        if (!mounted) return;
+      }
+
       if (openedProtocols.isNotEmpty) {
         final extraMessage = backendMessages.isNotEmpty
             ? '\n💬 ${backendMessages.join(' | ')}'
@@ -2033,14 +2047,26 @@ class _MassivaPageState extends State<MassivaPage> {
       }
 
       if (failureMessages.isNotEmpty) {
+        final refreshSuffix = refreshError == null
+            ? ''
+            : '\n⚠️ A listagem nao foi atualizada automaticamente.\n$refreshError';
         setState(() {
           _error =
-              '⚠️ Não foi possível abrir a massiva.\n${failureMessages.join('\n')}';
+              '⚠️ Não foi possível abrir a massiva.\n${failureMessages.join('\n')}$refreshSuffix';
         });
       } else if (affectedFailureMessages.isNotEmpty) {
+        final refreshSuffix = refreshError == null
+            ? ''
+            : '\n⚠️ A listagem nao foi atualizada automaticamente.\n$refreshError';
         setState(() {
           _error =
-              '⚠️ Massiva aberta, mas houve falha ao enviar PPPoEs afetados.\n${affectedFailureMessages.join('\n')}';
+              '⚠️ Massiva aberta, mas houve falha ao enviar PPPoEs afetados.\n${affectedFailureMessages.join('\n')}$refreshSuffix';
+          _lastPreview = null;
+        });
+      } else if (refreshError != null) {
+        setState(() {
+          _error =
+              '⚠️ Massiva aberta, mas nao foi possivel atualizar a listagem automaticamente.\n$refreshError';
           _lastPreview = null;
         });
       } else {
@@ -2055,6 +2081,36 @@ class _MassivaPageState extends State<MassivaPage> {
     } finally {
       if (mounted) {
         setState(() => _loadingSubmit = false);
+      }
+    }
+  }
+
+  Future<String?> _refreshMassivasAfterOpen() async {
+    if (!widget.gatewayService.isListConfigured) {
+      return null;
+    }
+
+    if (mounted) {
+      setState(() => _loadingMassivas = true);
+    }
+
+    try {
+      // Recarrega a listagem assim que a abertura termina para que o usuario
+      // consiga acompanhar imediatamente o protocolo que acabou de criar.
+      final rows = await widget.gatewayService.fetchMassivas();
+      if (!mounted) return null;
+      setState(() {
+        _massivas = rows;
+        _loadedMassivas = true;
+      });
+      return null;
+    } catch (e) {
+      if (!mounted) return e.toString();
+      setState(() => _loadedMassivas = true);
+      return e.toString();
+    } finally {
+      if (mounted) {
+        setState(() => _loadingMassivas = false);
       }
     }
   }
@@ -2510,7 +2566,10 @@ class _MassivaPageState extends State<MassivaPage> {
                                 child: Form(
                                   key: _formKey,
                                   child: isDesktop
-                                      ? _buildDesktopMassivaLayout(isDark)
+                                      ? _buildDesktopMassivaLayout(
+                                          isDark,
+                                          viewportWidth: constraints.maxWidth,
+                                        )
                                       : _buildMobileMassivaLayout(isDark),
                                 ),
                               ),
@@ -2550,48 +2609,91 @@ class _MassivaPageState extends State<MassivaPage> {
     );
   }
 
-  Widget _buildDesktopMassivaLayout(bool isDark) {
+  Widget _buildDesktopMassivaLayout(
+    bool isDark, {
+    required double viewportWidth,
+  }) {
+    final isNotebook = viewportWidth < 1460;
+    final isTightNotebook = viewportWidth < 1320;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildDesktopHeroSummary(isDark: isDark),
+        _buildDesktopHeroSummary(
+          isDark: isDark,
+          compactDesktop: isNotebook,
+        ),
         const SizedBox(height: 18),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 5,
-              child: _buildDesktopPane(
+        if (isNotebook)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDesktopPane(
                 isDark: isDark,
                 title: 'Abertura da Massiva',
                 subtitle:
                     'Comando principal para selecionar a topologia, validar o impacto e abrir o protocolo.',
                 icon: Icons.edit_note_outlined,
                 accent: _headerYellow,
-                minHeight: 1040,
+                minHeight: isTightNotebook ? null : 920,
+                compactDesktop: true,
                 child: _buildOpeningWorkspace(
                   isDark: isDark,
                   denseDesktop: true,
                   includeHeader: false,
                 ),
               ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              flex: 5,
-              child: _buildDesktopPane(
+              const SizedBox(height: 18),
+              _buildDesktopPane(
                 isDark: isDark,
                 title: 'Eventos AutoISP',
                 subtitle:
                     'Eventos recentes para apoiar a decisão operacional e acelerar o preenchimento.',
                 icon: Icons.sensors_outlined,
                 accent: const Color(0xFFE0A100),
-                minHeight: 1040,
+                minHeight: null,
+                compactDesktop: true,
                 child: _buildAutoIspSection(isDark, embedded: true),
               ),
-            ),
-          ],
-        ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 5,
+                child: _buildDesktopPane(
+                  isDark: isDark,
+                  title: 'Abertura da Massiva',
+                  subtitle:
+                      'Comando principal para selecionar a topologia, validar o impacto e abrir o protocolo.',
+                  icon: Icons.edit_note_outlined,
+                  accent: _headerYellow,
+                  minHeight: 1040,
+                  child: _buildOpeningWorkspace(
+                    isDark: isDark,
+                    denseDesktop: true,
+                    includeHeader: false,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                flex: 5,
+                child: _buildDesktopPane(
+                  isDark: isDark,
+                  title: 'Eventos AutoISP',
+                  subtitle:
+                      'Eventos recentes para apoiar a decisão operacional e acelerar o preenchimento.',
+                  icon: Icons.sensors_outlined,
+                  accent: const Color(0xFFE0A100),
+                  minHeight: 1040,
+                  child: _buildAutoIspSection(isDark, embedded: true),
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: 18),
         _buildDesktopPane(
           isDark: isDark,
@@ -2600,10 +2702,15 @@ class _MassivaPageState extends State<MassivaPage> {
               'Acompanhe as massivas abertas, filtre rapidamente e exporte quando necessário.',
           icon: Icons.table_rows_outlined,
           accent: const Color.fromARGB(255, 192, 31, 31),
+          compactDesktop: isNotebook,
           child: _buildMassivasMonitoringSection(
             isDark,
             embedded: true,
-            desktopColumns: 3,
+            desktopColumns: isTightNotebook
+                ? 1
+                : isNotebook
+                    ? 2
+                    : 3,
           ),
         ),
       ],
@@ -2684,7 +2791,7 @@ class _MassivaPageState extends State<MassivaPage> {
                 ),
                 _buildTextField(
                   controller: _technicalReasonController,
-                  label: 'Motivo técnico',
+                  label: 'Relato inicial',
                   isDark: isDark,
                   requiredField: false,
                   width: selectorWidth,
@@ -2766,6 +2873,18 @@ class _MassivaPageState extends State<MassivaPage> {
             ),
             const SizedBox(height: 12),
             _buildLiveImpactCard(isDark: isDark),
+            if (!widget.sessionUser.canOpenMassiva) ...[
+              const SizedBox(height: 12),
+              _buildMessageCard(
+                isDark: isDark,
+                icon: Icons.visibility_outlined,
+                accent: const Color(0xFFE0A100),
+                backgroundLight: const Color(0xFFFFF8E1),
+                backgroundDark: const Color(0xFF332A14),
+                text:
+                    'Sua sessao permite acompanhar as massivas abertas, mas nao autoriza criar novas massivas neste app.',
+              ),
+            ],
             const SizedBox(height: 12),
             if (denseDesktop)
               Wrap(
@@ -2789,7 +2908,10 @@ class _MassivaPageState extends State<MassivaPage> {
                   ),
                   ElevatedButton.icon(
                     style: _primaryButtonStyle(),
-                    onPressed: _loadingSubmit ? null : _openMassiva,
+                    onPressed:
+                        widget.sessionUser.canOpenMassiva && !_loadingSubmit
+                            ? _openMassiva
+                            : null,
                     icon: _loadingSubmit
                         ? const SizedBox(
                             width: 16,
@@ -2826,7 +2948,10 @@ class _MassivaPageState extends State<MassivaPage> {
                   const SizedBox(height: 10),
                   ElevatedButton.icon(
                     style: _primaryButtonStyle(),
-                    onPressed: _loadingSubmit ? null : _openMassiva,
+                    onPressed:
+                        widget.sessionUser.canOpenMassiva && !_loadingSubmit
+                            ? _openMassiva
+                            : null,
                     icon: _loadingSubmit
                         ? const SizedBox(
                             width: 16,
@@ -2870,7 +2995,10 @@ class _MassivaPageState extends State<MassivaPage> {
     );
   }
 
-  Widget _buildDesktopHeroSummary({required bool isDark}) {
+  Widget _buildDesktopHeroSummary({
+    required bool isDark,
+    bool compactDesktop = false,
+  }) {
     final openCount =
         _massivas.where((m) => m.status == MassivaStatus.aberta).length;
     final impactedNow = _massivas
@@ -2882,7 +3010,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(compactDesktop ? 16 : 18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
@@ -2907,95 +3035,187 @@ class _MassivaPageState extends State<MassivaPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildMiniBadge(
-                      icon: Icons.space_dashboard_outlined,
-                      label: 'Desktop Control Center',
-                      accent: _headerYellow,
-                      isDark: isDark,
+          if (compactDesktop)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildMiniBadge(
+                  icon: Icons.space_dashboard_outlined,
+                  label: 'Desktop Control Center',
+                  accent: _headerYellow,
+                  isDark: isDark,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Painel expandido para operar abertura, contexto e monitoramento ao mesmo tempo.',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF2A2A2A),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'No notebook a tela prioriza leitura e quebra os blocos mais cedo para evitar compressão.',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF666666),
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.white.withValues(alpha: 0.68),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.06),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Painel expandido para operar abertura, contexto e monitoramento ao mesmo tempo.',
-                      style: TextStyle(
-                        color: isDark ? Colors.white : const Color(0xFF2A2A2A),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                  ),
+                  child: Text(
+                    'Seleções ativas: ${_selectedAps.length} APs | $selectedRoutes rotas',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF333333),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    SizedBox(
+                      width: 220,
+                      child: _buildDesktopMetricCard(
+                        isDark: isDark,
+                        label: 'Massivas abertas',
+                        value: openCount.toString(),
+                        icon: Icons.campaign_outlined,
+                        compactDesktop: true,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'No desktop a tela distribui o fluxo em áreas simultâneas para reduzir rolagem e dar mais leitura operacional.',
-                      style: TextStyle(
-                        color:
-                            isDark ? Colors.white70 : const Color(0xFF666666),
-                        height: 1.35,
+                    SizedBox(
+                      width: 220,
+                      child: _buildDesktopMetricCard(
+                        isDark: isDark,
+                        label: 'Impactados agora',
+                        value: impactedNow.toString(),
+                        icon: Icons.groups_2_outlined,
+                        compactDesktop: true,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: _buildDesktopMetricCard(
+                        isDark: isDark,
+                        label: 'Eventos AutoISP',
+                        value: autoIspOpen.toString(),
+                        icon: Icons.sensors_outlined,
+                        compactDesktop: true,
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 18),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : Colors.white.withValues(alpha: 0.68),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
+              ],
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildMiniBadge(
+                        icon: Icons.space_dashboard_outlined,
+                        label: 'Desktop Control Center',
+                        accent: _headerYellow,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Painel expandido para operar abertura, contexto e monitoramento ao mesmo tempo.',
+                        style: TextStyle(
+                          color:
+                              isDark ? Colors.white : const Color(0xFF2A2A2A),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'No desktop a tela distribui o fluxo em áreas simultâneas para reduzir rolagem e dar mais leitura operacional.',
+                        style: TextStyle(
+                          color:
+                              isDark ? Colors.white70 : const Color(0xFF666666),
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
                     color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.06),
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.white.withValues(alpha: 0.68),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Text(
+                    'Seleções ativas: ${_selectedAps.length} APs | $selectedRoutes rotas',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF333333),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                child: Text(
-                  'Seleções ativas: ${_selectedAps.length} APs | $selectedRoutes rotas',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF333333),
-                    fontWeight: FontWeight.w700,
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDesktopMetricCard(
+                    isDark: isDark,
+                    label: 'Massivas abertas',
+                    value: openCount.toString(),
+                    icon: Icons.campaign_outlined,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDesktopMetricCard(
-                  isDark: isDark,
-                  label: 'Massivas abertas',
-                  value: openCount.toString(),
-                  icon: Icons.campaign_outlined,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildDesktopMetricCard(
+                    isDark: isDark,
+                    label: 'Impactados agora',
+                    value: impactedNow.toString(),
+                    icon: Icons.groups_2_outlined,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDesktopMetricCard(
-                  isDark: isDark,
-                  label: 'Impactados agora',
-                  value: impactedNow.toString(),
-                  icon: Icons.groups_2_outlined,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildDesktopMetricCard(
+                    isDark: isDark,
+                    label: 'Eventos AutoISP',
+                    value: autoIspOpen.toString(),
+                    icon: Icons.sensors_outlined,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDesktopMetricCard(
-                  isDark: isDark,
-                  label: 'Eventos AutoISP',
-                  value: autoIspOpen.toString(),
-                  icon: Icons.sensors_outlined,
-                ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -3006,9 +3226,10 @@ class _MassivaPageState extends State<MassivaPage> {
     required String label,
     required String value,
     required IconData icon,
+    bool compactDesktop = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compactDesktop ? 14 : 16),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.05)
@@ -3041,7 +3262,7 @@ class _MassivaPageState extends State<MassivaPage> {
                   style: TextStyle(
                     color: isDark ? Colors.white : const Color(0xFF1F1F1F),
                     fontWeight: FontWeight.w900,
-                    fontSize: 24,
+                    fontSize: compactDesktop ? 22 : 24,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -3068,12 +3289,13 @@ class _MassivaPageState extends State<MassivaPage> {
     required Color accent,
     required Widget child,
     double? minHeight,
+    bool compactDesktop = false,
   }) {
     return Container(
       width: double.infinity,
       constraints:
           minHeight != null ? BoxConstraints(minHeight: minHeight) : null,
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(compactDesktop ? 16 : 18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
@@ -3109,8 +3331,8 @@ class _MassivaPageState extends State<MassivaPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: compactDesktop ? 42 : 46,
+                height: compactDesktop ? 42 : 46,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(14),
@@ -3126,7 +3348,7 @@ class _MassivaPageState extends State<MassivaPage> {
                       title,
                       style: TextStyle(
                         color: isDark ? Colors.white : const Color(0xFF1F1F1F),
-                        fontSize: 20,
+                        fontSize: compactDesktop ? 18 : 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -4369,7 +4591,7 @@ class _MassivaPageState extends State<MassivaPage> {
         onTap: _pickAp,
         validator: _requiredValidator,
         decoration: _fieldDecoration(
-          label: 'AP',
+          label: 'Ponto de acesso',
           isDark: isDark,
           suffixIcon: _buildFieldSuffix(
             isDark: isDark,
@@ -4437,7 +4659,7 @@ class _MassivaPageState extends State<MassivaPage> {
         onTap: _pickPort,
         validator: _requiredValidator,
         decoration: _fieldDecoration(
-          label: 'Porta',
+          label: 'Pon',
           isDark: isDark,
           suffixIcon: _buildFieldSuffix(
             isDark: isDark,

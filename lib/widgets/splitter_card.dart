@@ -30,8 +30,9 @@ class SplitterCard extends StatelessWidget {
         ? const Color.fromARGB(255, 90, 90, 90)
         : const Color.fromARGB(188, 65, 65, 65);
 
-    final shadowColor =
-        isDark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.15);
+    final shadowColor = isDark
+        ? Colors.black.withValues(alpha: 0.4)
+        : Colors.black.withValues(alpha: 0.15);
 
     final Color circleBgColor = pct > 100
         ? (isDark
@@ -41,105 +42,122 @@ class SplitterCard extends StatelessWidget {
             ? const Color.fromARGB(255, 58, 58, 58).withValues(alpha: 0.90)
             : Colors.white.withValues(alpha: 0.90));
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : Colors.grey.withValues(alpha: 0.15),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactCard =
+            constraints.maxHeight > 0 && constraints.maxHeight < 132;
+        final indicatorSize = isCompactCard ? 62.0 : 70.0;
+        final outerPadding = isCompactCard ? 9.0 : 10.0;
+        final horizontalGap = isCompactCard ? 8.0 : 10.0;
+        final titleFontSize = isCompactCard ? 14.0 : 16.0;
+        final codeFontSize = isCompactCard ? 11.0 : 12.0;
+        final footerFontSize = isCompactCard ? 12.0 : 13.0;
+        final progressSpacing = isCompactCard ? 7.0 : 10.0;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: EdgeInsets.all(outerPadding),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.grey.withValues(alpha: 0.15),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: indicatorSize,
+                  height: indicatorSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: circleBgColor,
+                    border: Border.all(
+                      color: pct > 100 ? const Color(0xFFDC2626) : statusColor,
+                      width: pct > 100 ? 3 : 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$pct%',
+                      style: TextStyle(
+                        fontSize: isCompactCard ? 14 : 16,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            pct > 100 ? const Color(0xFFDC2626) : statusColor,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: horizontalGap),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        splitter.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: titleFontSize,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.08,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        splitter.code,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: codeFontSize,
+                          color: Colors.white.withValues(alpha: 0.92),
+                        ),
+                      ),
+                      SizedBox(height: progressSpacing),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: pct > 100 ? 1.0 : pct / 100,
+                          minHeight: 7,
+                          backgroundColor: isDark
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation(statusColor),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$ocupacao / $total portas ocupadas',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: footerFontSize,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: shadowColor,
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Indicador circular
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: circleBgColor,
-                border: Border.all(
-                  color: pct > 100 ? const Color(0xFFDC2626) : statusColor,
-                  width: pct > 100 ? 3 : 2,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  '$pct%',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: pct > 100 ? const Color(0xFFDC2626) : statusColor,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 10),
-
-            // Informacoes
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    splitter.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    splitter.code,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: pct > 100 ? 1.0 : pct / 100,
-                      minHeight: 7,
-                      backgroundColor:
-                          isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation(statusColor),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$ocupacao / $total portas ocupadas',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
-

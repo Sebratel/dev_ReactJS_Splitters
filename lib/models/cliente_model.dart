@@ -70,12 +70,14 @@ class AuthenticationAccessPoint {
 // ===============================
 /// Resumo de contrato retornado pela API de clientes.
 class ContractInfo {
+  final int id;
   final int status;
   final String statusDescription;
   final int stage;
   final String stageDescription;
 
   ContractInfo({
+    required this.id,
     required this.status,
     required this.statusDescription,
     required this.stage,
@@ -84,6 +86,7 @@ class ContractInfo {
 
   factory ContractInfo.fromJson(Map<String, dynamic> json) {
     return ContractInfo(
+      id: json['id'] ?? 0,
       status: json['status'] ?? 0,
       statusDescription: json['statusDescription'] ?? '',
       stage: json['stage'] ?? 0,

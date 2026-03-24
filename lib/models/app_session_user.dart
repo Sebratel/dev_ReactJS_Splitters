@@ -3,24 +3,38 @@
 /// Este model define se a area de massivas pode ser usada e carrega
 /// identificadores reaproveitados em chamadas de API.
 class AppSessionUser {
+  static const String massivaViewPermission = 'massiva_view';
+  static const String massivaOpenPermission = 'massiva_open';
+
   final String email;
   final String? name;
   final int? personId;
+  final String? sessionToken;
   final Set<String> roles;
+  final Set<String> permissions;
+  final bool isAdmin;
+  final bool canAccessMassiva;
   final bool canOpenMassiva;
 
   const AppSessionUser({
     required this.email,
     required this.roles,
+    required this.permissions,
+    required this.isAdmin,
+    required this.canAccessMassiva,
     required this.canOpenMassiva,
     this.name,
     this.personId,
+    this.sessionToken,
   });
 
   factory AppSessionUser.guest() {
     return const AppSessionUser(
       email: '',
       roles: {},
+      permissions: {},
+      isAdmin: false,
+      canAccessMassiva: false,
       canOpenMassiva: false,
     );
   }
@@ -29,13 +43,20 @@ class AppSessionUser {
     required String email,
     required bool canOpenMassiva,
     int? personId,
+    String? sessionToken,
   }) {
     return AppSessionUser(
       email: email,
       roles: canOpenMassiva ? {'local_massiva'} : const {},
+      permissions: canOpenMassiva
+          ? {massivaViewPermission, massivaOpenPermission}
+          : const {},
+      isAdmin: canOpenMassiva,
+      canAccessMassiva: canOpenMassiva,
       canOpenMassiva: canOpenMassiva,
       name: 'Local Dev',
       personId: personId,
+      sessionToken: sessionToken,
     );
   }
 
@@ -43,6 +64,7 @@ class AppSessionUser {
     Map<String, dynamic> payload, {
     required Set<String> allowedEmails,
     required Set<String> allowedRoles,
+    String? sessionToken,
   }) {
     // O payload do JWT pode variar conforme a origem. Por isso tentamos
     // multiplas chaves equivalentes antes de decidir o acesso.
@@ -82,8 +104,39 @@ class AppSessionUser {
       email: email,
       name: name,
       personId: personId,
+      sessionToken: sessionToken,
       roles: roles,
+      permissions: const {},
+      isAdmin: false,
+      canAccessMassiva: emailAllowed || roleAllowed,
       canOpenMassiva: emailAllowed || roleAllowed,
+    );
+  }
+
+  factory AppSessionUser.fromHubSession(
+    Map<String, dynamic> payload, {
+    String? sessionToken,
+  }) {
+    final email = _extractString(payload, ['email']) ?? '';
+    final name = _extractString(payload, ['name']);
+    final permissions = _extractValues(payload, ['permissions']);
+    final isAdmin = payload['isAdmin'] == true;
+    final canAccessMassiva = isAdmin ||
+        permissions.contains(massivaViewPermission) ||
+        permissions.contains(massivaOpenPermission);
+    final canOpenMassiva =
+        isAdmin || permissions.contains(massivaOpenPermission);
+
+    return AppSessionUser(
+      email: email,
+      name: name,
+      personId: null,
+      sessionToken: sessionToken,
+      roles: _extractValues(payload, ['profile', 'team']),
+      permissions: permissions,
+      isAdmin: isAdmin,
+      canAccessMassiva: canAccessMassiva,
+      canOpenMassiva: canOpenMassiva,
     );
   }
 
@@ -132,5 +185,27 @@ class AppSessionUser {
     }
 
     return roles;
+  }
+
+  static Set<String> _extractValues(
+    Map<String, dynamic> payload,
+    List<String> keys,
+  ) {
+    final values = <String>{};
+
+    for (final key in keys) {
+      final raw = payload[key];
+      if (raw is String && raw.trim().isNotEmpty) {
+        values.add(raw.trim().toLowerCase());
+      } else if (raw is List) {
+        for (final item in raw) {
+          if (item is String && item.trim().isNotEmpty) {
+            values.add(item.trim().toLowerCase());
+          }
+        }
+      }
+    }
+
+    return values;
   }
 }
