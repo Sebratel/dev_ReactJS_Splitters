@@ -43,7 +43,7 @@ class DarkModeColors {
   static const darkOnErrorContainer = Color(0xFF7F1D1D);
   static const darkInversePrimary = Color.fromARGB(255, 148, 133, 175);
   static const darkShadow = Color(0xFF000000);
-  static const darkBackground = Color(0xFF121212); // fundo geral
+  static const darkBackground = Color.fromARGB(255, 39, 39, 39); // fundo geral
   static const darkSurface = Color(0xFF1C1C1C); // cards / containers
   static const darkCardBackground = Color(0xFF1C1C1C);
   static const darkAppBarBackground = Color(0xFF181818);

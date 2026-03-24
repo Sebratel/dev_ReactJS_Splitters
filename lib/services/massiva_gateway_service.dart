@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/services/auth_service.dart';
+import 'package:nexaview/utils/web_utils.dart';
 
 /// Cliente HTTP da area de massivas.
 ///
@@ -23,17 +24,23 @@ class MassivaGatewayService {
   final String endpoint;
   final String listEndpoint;
   final String affectedUsersEndpoint;
+  final String hubGoogleIdTokenEndpoint;
+  final String? sessionToken;
   final AuthService authService;
   final http.Client _client;
   final Duration timeout;
   final int maxRetries;
   final Map<String, String> _hostTokenCache = {};
   final Map<String, DateTime> _hostTokenExpiry = {};
+  String? _googleIdTokenCache;
+  DateTime? _googleIdTokenExpiry;
 
   MassivaGatewayService({
     required this.endpoint,
     required this.listEndpoint,
     this.affectedUsersEndpoint = '',
+    required this.hubGoogleIdTokenEndpoint,
+    this.sessionToken,
     required this.authService,
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
@@ -42,6 +49,7 @@ class MassivaGatewayService {
     debugPrint(
       'MassivaGatewayService config: '
       'affectedUsersEndpoint=${_resolveAffectedUsersEndpoint()} '
+      'hubGoogleIdTokenEndpoint=$hubGoogleIdTokenEndpoint '
       'listEndpoint=$listEndpoint',
     );
   }
@@ -60,10 +68,6 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpoint);
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'User-Agent': 'insomnia/12.4.0',
-    };
     final payload = request.toJson();
 
     debugPrint('➡️ [ABERTURA] POST $uri');
@@ -80,9 +84,11 @@ class MassivaGatewayService {
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response = await _client
-            .post(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(timeout);
+        final response = await _sendMassivaAuthorizedJson(
+          (headers) => _client
+              .post(uri, headers: headers, body: jsonEncode(payload))
+              .timeout(timeout),
+        );
 
         if (kDebugMode) {
           debugPrint(
@@ -112,7 +118,8 @@ class MassivaGatewayService {
         }
       } on SocketException catch (_) {
         if (attempt == maxRetries) {
-          throw Exception(_networkFailureMessage(uri: uri, action: 'abrir a massiva'));
+          throw Exception(
+              _networkFailureMessage(uri: uri, action: 'abrir a massiva'));
         }
       } on http.ClientException catch (e) {
         if (attempt == maxRetries) {
@@ -148,7 +155,8 @@ class MassivaGatewayService {
         : {
             'incident': incident.toJson(),
             'authenticationIds': authenticationIds,
-            'strategy': individualTickets ? 'bulk_individual' : 'single_massive',
+            'strategy':
+                individualTickets ? 'bulk_individual' : 'single_massive',
           };
 
     debugPrint('➡️ POST $uri');
@@ -214,10 +222,6 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpointUrl);
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'User-Agent': 'insomnia/12.4.0',
-    };
     final payload = users.map((item) => item.toJson()).toList();
 
     debugPrint('➡️ [AFETADOS] POST $uri');
@@ -234,9 +238,11 @@ class MassivaGatewayService {
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response = await _client
-            .post(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(timeout);
+        final response = await _sendMassivaAuthorizedJson(
+          (headers) => _client
+              .post(uri, headers: headers, body: jsonEncode(payload))
+              .timeout(timeout),
+        );
 
         if (kDebugMode) {
           debugPrint(
@@ -266,7 +272,8 @@ class MassivaGatewayService {
       } on SocketException catch (_) {
         if (attempt == maxRetries) {
           throw Exception(
-            _networkFailureMessage(uri: uri, action: 'enviar os PPPoEs afetados'),
+            _networkFailureMessage(
+                uri: uri, action: 'enviar os PPPoEs afetados'),
           );
         }
       } on http.ClientException catch (e) {
@@ -313,6 +320,126 @@ class MassivaGatewayService {
       path: '/api/v1/afetados',
       queryParameters: const {},
     ).toString();
+  }
+
+  Future<Map<String, String>> _buildMassivaApiHeaders() async {
+    final googleIdToken = await _ensureGoogleIdToken();
+    return {
+      'User-Agent': 'insomnia/12.4.0',
+      'Accept': '*/*',
+      'Authorization': 'Bearer $googleIdToken',
+    };
+  }
+
+  Future<String> _ensureGoogleIdToken() async {
+    final token = _googleIdTokenCache?.trim() ?? '';
+    final expiresAt = _googleIdTokenExpiry;
+    final now = DateTime.now().toUtc();
+
+    if (token.isNotEmpty &&
+        expiresAt != null &&
+        now.isBefore(expiresAt.subtract(const Duration(minutes: 2)))) {
+      return token;
+    }
+
+    return _fetchGoogleIdTokenFromHub();
+  }
+
+  Future<String> _fetchGoogleIdTokenFromHub() async {
+    final hubToken = sessionToken?.trim() ?? '';
+    if (hubToken.isEmpty) {
+      throw Exception(
+        'Sessao do Hub indisponivel. Abra o Splitters novamente a partir do Hub.',
+      );
+    }
+
+    final endpointUrl = hubGoogleIdTokenEndpoint.trim();
+    if (endpointUrl.isEmpty) {
+      throw Exception('Endpoint do googleIdToken do Hub nao configurado.');
+    }
+
+    final uri = Uri.parse(endpointUrl);
+    final response = await _client.get(
+      uri,
+      headers: {
+        'User-Agent': 'insomnia/12.4.0',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $hubToken',
+      },
+    ).timeout(timeout);
+
+    if (response.statusCode == 401) {
+      _redirectToHub();
+      throw Exception('Sessao do Hub expirada. Redirecionando para o Hub.');
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Erro ao obter googleIdToken no Hub (status ${response.statusCode}): ${response.body}',
+      );
+    }
+
+    final decoded = response.body.trim().isEmpty
+        ? const <String, dynamic>{}
+        : jsonDecode(response.body);
+    final root = _safeMap(decoded);
+    final googleIdToken = root['googleIdToken']?.toString().trim() ?? '';
+    final expiresAtRaw = root['expiresAt']?.toString().trim() ?? '';
+    final expiresAt = DateTime.tryParse(expiresAtRaw)?.toUtc();
+
+    if (googleIdToken.isEmpty) {
+      throw Exception('Hub nao retornou googleIdToken valido.');
+    }
+
+    _googleIdTokenCache = googleIdToken;
+    _googleIdTokenExpiry = expiresAt;
+    return googleIdToken;
+  }
+
+  void _clearGoogleIdTokenCache() {
+    _googleIdTokenCache = null;
+    _googleIdTokenExpiry = null;
+  }
+
+  Future<http.Response> _sendMassivaAuthorized(
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) async {
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      final headers = await _buildMassivaApiHeaders();
+      final response = await send(headers);
+      if (response.statusCode != 401) {
+        return response;
+      }
+
+      _clearGoogleIdTokenCache();
+      if (attempt == 2) {
+        _redirectToHub();
+        return response;
+      }
+    }
+
+    throw Exception('Falha inesperada ao autenticar na API de massivas.');
+  }
+
+  Future<http.Response> _sendMassivaAuthorizedJson(
+    Future<http.Response> Function(Map<String, String> headers) send,
+  ) {
+    return _sendMassivaAuthorized((headers) {
+      final merged = <String, String>{
+        ...headers,
+        'Content-Type': 'application/json',
+      };
+      return send(merged);
+    });
+  }
+
+  void _redirectToHub() {
+    final endpointUrl = hubGoogleIdTokenEndpoint.trim();
+    final uri = Uri.tryParse(endpointUrl);
+    final destination = uri == null || !uri.hasScheme
+        ? 'https://sebratel-hub.web.app'
+        : uri.origin;
+    WebUtils.redirect(destination);
   }
 
   String _resolveAffectedUsersByProtocolEndpoint(int protocol) {
@@ -382,20 +509,18 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(listEndpoint);
-    final headers = {
-      'User-Agent': 'insomnia/12.4.0',
-      'Accept': '*/*',
-    };
 
     debugPrint('➡️ [LISTAGEM] GET $uri');
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response =
-            await _client.get(uri, headers: headers).timeout(timeout);
+        final response = await _sendMassivaAuthorized(
+          (headers) => _client.get(uri, headers: headers).timeout(timeout),
+        );
 
         if (kDebugMode) {
-          debugPrint('Resposta [LISTAGEM de Massivas]: status=${response.statusCode}');
+          debugPrint(
+              'Resposta [LISTAGEM de Massivas]: status=${response.statusCode}');
         }
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -474,17 +599,14 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpointUrl);
-    final headers = <String, String>{
-      'User-Agent': 'insomnia/12.4.0',
-      'Accept': '*/*',
-    };
 
     debugPrint('➡️ [AFETADOS POR PROTOCOLO] GET $uri');
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response =
-            await _client.get(uri, headers: headers).timeout(timeout);
+        final response = await _sendMassivaAuthorized(
+          (headers) => _client.get(uri, headers: headers).timeout(timeout),
+        );
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           if (response.body.trim().isEmpty) return 0;
@@ -534,10 +656,6 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpointUrl);
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-      'User-Agent': 'insomnia/12.4.0',
-    };
     final payload = <String, dynamic>{
       'assignmentId': assignmentId.toString(),
       'incidentStatusId': closeIncidentStatusId.toString(),
@@ -550,9 +668,11 @@ class MassivaGatewayService {
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response = await _client
-            .delete(uri, headers: headers, body: jsonEncode(payload))
-            .timeout(timeout);
+        final response = await _sendMassivaAuthorizedJson(
+          (headers) => _client
+              .delete(uri, headers: headers, body: jsonEncode(payload))
+              .timeout(timeout),
+        );
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           if (response.body.trim().isEmpty) {
@@ -600,15 +720,12 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpointUrl);
-    final headers = <String, String>{
-      'User-Agent': 'insomnia/12.4.0',
-      'Accept': '*/*',
-    };
 
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        final response =
-            await _client.delete(uri, headers: headers).timeout(timeout);
+        final response = await _sendMassivaAuthorized(
+          (headers) => _client.delete(uri, headers: headers).timeout(timeout),
+        );
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
           if (response.body.trim().isEmpty) {
@@ -676,21 +793,19 @@ class MassivaGatewayService {
       queryParameters: const {},
     );
 
-    final response = await _client
-        .post(
-          tokenUri,
-          headers: const {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: {
-            'client_id': authService.clientId,
-            'client_secret': authService.clientSecret,
-            'syndata': authService.syndata,
-            'grant_type': authService.grantType,
-            'scope': authService.scope,
-          },
-        )
-        .timeout(timeout);
+    final response = await _client.post(
+      tokenUri,
+      headers: const {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: {
+        'client_id': authService.clientId,
+        'client_secret': authService.clientSecret,
+        'syndata': authService.syndata,
+        'grant_type': authService.grantType,
+        'scope': authService.scope,
+      },
+    ).timeout(timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
@@ -701,10 +816,12 @@ class MassivaGatewayService {
     final decoded = jsonDecode(response.body);
     final root = _safeMap(decoded);
     final token = root['access_token']?.toString();
-    final expiresIn = int.tryParse((root['expires_in'] ?? '3600').toString()) ?? 3600;
+    final expiresIn =
+        int.tryParse((root['expires_in'] ?? '3600').toString()) ?? 3600;
 
     if (token == null || token.trim().isEmpty) {
-      throw Exception('Host ${targetUri.host} não retornou access_token válido.');
+      throw Exception(
+          'Host ${targetUri.host} não retornou access_token válido.');
     }
 
     _hostTokenCache[cacheKey] = token;
@@ -724,7 +841,7 @@ class MassivaGatewayService {
       final data = _safeMap(root['data']);
       final result = _safeMap(root['result']);
 
-       if (response['data'] is List) {
+      if (response['data'] is List) {
         return (response['data'] as List)
             .whereType<Map>()
             .map(_safeMap)

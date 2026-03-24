@@ -158,9 +158,6 @@ O projeto e uma aplicacao Flutter para operacao de rede da Sebratel, com foco em
 - `lib/screens/splitter_detail_page.dart`: detalhe de splitter, mapa, clientes e reservas
 - `lib/screens/cliente_detail_screen.dart`: detalhe de cliente e historico de solicitacoes
 - `lib/screens/massiva_screen.dart`: operacao completa de massivas
-- `lib/screens/qr_scanner_page.dart`: export condicional do scanner por plataforma
-- `lib/screens/qr_scanner_page_mobile.dart`: implementacao mobile do scanner
-- `lib/screens/qr_scanner_page_web.dart`: implementacao web do scanner
 
 ### `lib/widgets/`
 

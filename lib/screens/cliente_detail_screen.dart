@@ -341,6 +341,11 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
       children: [
         _item(
           context,
+          'ID do contrato',
+          cliente.contract!.id.toString(),
+        ),
+        _item(
+          context,
           'Status',
           cliente.contract!.statusDescription,
         ),
@@ -645,4 +650,3 @@ class _SelectableItemRowState extends State<_SelectableItemRow> {
     );
   }
 }
-
