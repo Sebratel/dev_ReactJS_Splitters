@@ -95,15 +95,6 @@ void main() async {
     // Em producao o acesso depende do token enviado pelo Hub.
     final tokenResult = validateToken(token);
 
-    if (!tokenResult.isValid) {
-      debugPrint("ACESSO BLOQUEADO -> ${tokenResult.reason}");
-
-      Future.microtask(() {
-        WebUtils.redirect("https://sebratel-hub.web.app");
-      });
-      return;
-    }
-
     sessionUser = AppSessionUser.fromJwtPayload(
       tokenResult.payload ?? const <String, dynamic>{},
       allowedEmails: allowedMassivaEmails,
