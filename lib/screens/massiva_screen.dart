@@ -1937,7 +1937,7 @@ class _MassivaPageState extends State<MassivaPage> {
     if (!widget.sessionUser.canOpenMassiva) {
       setState(() {
         _error =
-            'Sua sessao permite apenas acompanhamento de massivas. A abertura exige a permissao massiva_open.';
+            'Sua sessão permite apenas acompanhamento de massivas. A abertura exige permissões adicionais.';
       });
       return;
     }
@@ -2882,7 +2882,7 @@ class _MassivaPageState extends State<MassivaPage> {
                 backgroundLight: const Color(0xFFFFF8E1),
                 backgroundDark: const Color(0xFF332A14),
                 text:
-                    'Sua sessao permite acompanhar as massivas abertas, mas nao autoriza criar novas massivas neste app.',
+                    'Sua sessão permite acompanhar as massivas abertas, mas não autoriza criar novas massivas.',
               ),
             ],
             const SizedBox(height: 12),
@@ -4317,7 +4317,7 @@ class _MassivaPageState extends State<MassivaPage> {
                         const SizedBox(height: 6),
                         metaLine(
                           icon: Icons.event_note_outlined,
-                          label: 'Previsao do encerramento',
+                          label: 'Previsão de encerramento',
                           value: _formatDate(item.expectedCloseAt),
                         ),
                       ],
