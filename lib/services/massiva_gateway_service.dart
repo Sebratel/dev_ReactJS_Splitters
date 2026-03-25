@@ -349,7 +349,7 @@ class MassivaGatewayService {
     final hubToken = sessionToken?.trim() ?? '';
     if (hubToken.isEmpty) {
       throw Exception(
-        'Sessao do Hub indisponivel. Abra o Splitters novamente a partir do Hub.',
+        'Sessão do Hub indisponível. Abra o Splitters novamente a partir do Hub.',
       );
     }
 
@@ -370,7 +370,7 @@ class MassivaGatewayService {
 
     if (response.statusCode == 401) {
       _redirectToHub();
-      throw Exception('Sessao do Hub expirada. Redirecionando para o Hub.');
+      throw Exception('Sessão do Hub expirada. Redirecionando para o Hub.');
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

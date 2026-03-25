@@ -1875,7 +1875,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Operacao de rede com foco em velocidade, contexto e resposta rapida.',
+          'Operacão de rede com foco em agilidade, contexto e respostas rápidas.',
           style: TextStyle(
             color: isDark ? Colors.white : const Color(0xFF1F1F1F),
             fontSize: 28,
@@ -1885,7 +1885,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Use o menu lateral para abrir massivas, filtrar por OLT, status e rua, e mantenha o painel central dedicado a busca e acompanhamento dos equipamentos.',
+          'Use o menu lateral para abrir massivas, filtrar por OLTs, status e ruas.',
           style: TextStyle(
             color: isDark ? Colors.white70 : const Color(0xFF4E4E4E),
             fontSize: 14,
@@ -1920,7 +1920,7 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Visao atual',
+            'Visão atual',
             style: TextStyle(
               color: isDark ? Colors.white70 : Colors.black54,
               fontWeight: FontWeight.w700,
@@ -1939,8 +1939,8 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 6),
           Text(
             isFiltered
-                ? 'splitters visiveis com filtros aplicados'
-                : 'splitters monitorados nesta sessao',
+                ? 'Splitters visíveis filtrados'
+                : 'Splitters monitorados nesta sessão',
             style: TextStyle(
               color: isDark ? Colors.white70 : const Color(0xFF4E4E4E),
               fontWeight: FontWeight.w600,
@@ -1985,7 +1985,7 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Pesquise por codigo do splitter, nome ou cliente vinculado sem perder o contexto dos cards e filtros laterais.',
+          'Pesquise por código, nome ou cliente vinculado de um splitter.',
           style: TextStyle(
             color: isDark ? Colors.white60 : Colors.black54,
             height: 1.4,
@@ -2046,7 +2046,7 @@ class _HomePageState extends State<HomePage> {
           Text(
             hasRefinement
                 ? 'A listagem foi refinada para acelerar a leitura operacional.'
-                : 'Painel exibindo a visao completa da operacao.',
+                : 'Painel para a visão completa da operação.',
             style: TextStyle(
               color: isDark ? Colors.white60 : Colors.black54,
               height: 1.35,
