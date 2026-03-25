@@ -34,8 +34,8 @@ class AppSessionUser {
       roles: {},
       permissions: {},
       isAdmin: false,
-      canAccessMassiva: false,
-      canOpenMassiva: false,
+      canAccessMassiva: true,
+      canOpenMassiva: true,
     );
   }
 
@@ -52,8 +52,8 @@ class AppSessionUser {
           ? {massivaViewPermission, massivaOpenPermission}
           : const {},
       isAdmin: canOpenMassiva,
-      canAccessMassiva: canOpenMassiva,
-      canOpenMassiva: canOpenMassiva,
+      canAccessMassiva: true,
+      canOpenMassiva: true,
       name: 'Local Dev',
       personId: personId,
       sessionToken: sessionToken,
@@ -108,8 +108,8 @@ class AppSessionUser {
       roles: roles,
       permissions: const {},
       isAdmin: false,
-      canAccessMassiva: emailAllowed || roleAllowed,
-      canOpenMassiva: emailAllowed || roleAllowed,
+      canAccessMassiva: true,
+      canOpenMassiva: true,
     );
   }
 

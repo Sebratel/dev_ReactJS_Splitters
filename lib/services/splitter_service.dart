@@ -182,13 +182,15 @@ class SplitterService {
     final h = await auth.getAuthHeaders();
     var r = await http.get(Uri.parse(url), headers: h);
     debugPrint(
-      'GET status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}',
+      'GET status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}, headers=${r.headers}',
     );
 
     if (r.statusCode == 401) {
       debugPrint('GET recebeu 401, renovando token e repetindo chamada');
+      print("$auth.getAuthHeaders() = $h");
       await auth.forceRefresh();
       final h2 = await auth.getAuthHeaders();
+      print("$auth.getAuthHeaders() após refresh = $h2");
       r = await http.get(Uri.parse(url), headers: h2);
       debugPrint(
         'GET retry status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}',
@@ -438,7 +440,7 @@ class SplitterService {
     if (kIsWeb &&
         (reverseGeocodeEndpoint == null || reverseGeocodeEndpoint!.isEmpty)) {
       //debugPrint(
-        //'Reverse geocoding desabilitado no Web: configure REVERSE_GEOCODE_ENDPOINT',
+      //'Reverse geocoding desabilitado no Web: configure REVERSE_GEOCODE_ENDPOINT',
       //);
       return null;
     }
@@ -449,7 +451,8 @@ class SplitterService {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         final Uri url;
-        if (reverseGeocodeEndpoint != null && reverseGeocodeEndpoint!.isNotEmpty) {
+        if (reverseGeocodeEndpoint != null &&
+            reverseGeocodeEndpoint!.isNotEmpty) {
           final base = Uri.parse(reverseGeocodeEndpoint!);
           final qp = Map<String, String>.from(base.queryParameters)
             ..addAll({
@@ -465,15 +468,16 @@ class SplitterService {
           );
         }
 
-        final response = await http
-            .get(
-              url,
-              headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'NexaView/1.0 (contato@sebratel.com.br)',
-              },
-            )
-            .timeout(const Duration(seconds: 8));
+        print(
+            "Consultando geocodificação para $lat, $lng (attempt $attempt/$maxAttempts)...");
+
+        final response = await http.get(
+          url,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'NexaView/1.0 (contato@sebratel.com.br)',
+          },
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 429) {
           if (attempt < maxAttempts) {
@@ -543,6 +547,7 @@ class SplitterService {
 
     return null;
   }
+
   /// Retorna o índice completo de clientes por splitter
   /// Map&lt;splitterCode, List&lt;ClienteModel&gt;&gt;
   Map<String, List<ClienteModel>> getClientesIndex() {

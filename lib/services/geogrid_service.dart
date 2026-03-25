@@ -42,7 +42,7 @@ class GeoGridService {
     final url = Uri.parse(
       '$baseUrl/equipamentos/$splitterIntegrationCode/portas',
     );
-
+    print("Consultando portas para o splitter $splitterIntegrationCode...");
     final response = await http.get(
       url,
       headers: {
@@ -85,7 +85,7 @@ class GeoGridService {
     if (_cacheNomeCliente.containsKey(id)) {
       return _cacheNomeCliente[id];
     }
-
+    print("Consultando nome do cliente para o ID: $id");
     final url = Uri.parse('$baseUrl/clientes/$id');
     final response = await http.get(
       url,
