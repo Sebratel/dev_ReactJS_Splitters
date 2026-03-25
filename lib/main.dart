@@ -229,7 +229,7 @@ void main() async {
   final splitterService = SplitterService(
     auth: auth,
     splittersEndpoint:
-        "https://erp.sebratel.net.br:45715/external/map/splitter/all",
+        "https://api-gateway-bff.sebratel.net.br/api/v1/listarSplitters",
     clientesEndpoint:
         "https://erp.sebratel.net.br:45715/external/map/connection/all",
     reverseGeocodeEndpoint:
@@ -320,6 +320,7 @@ Future<HubSessionProfileResult> fetchHubSessionProfile({
   }
 
   try {
+    print("Consultando perfil do Hub...");
     final response = await http.get(
       Uri.parse(endpoint),
       headers: {

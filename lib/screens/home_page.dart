@@ -210,6 +210,7 @@ class _HomePageState extends State<HomePage> {
           gatewayService: MassivaGatewayService(
             endpoint: widget.massivaApiGatewayEndpoint,
             listEndpoint: widget.ellevenMassivaListEndpoint,
+            token: widget.sessionUser.sessionToken!,
             affectedUsersEndpoint: widget.massivaAffectedUsersEndpoint,
             authService: _authService,
             sessionToken: widget.sessionUser.sessionToken,

@@ -60,7 +60,7 @@ class AuthService {
       throw Exception("Credenciais do ERP nao configuradas.");
     }
 
-    debugPrint("Solicitando novo token...");
+    debugPrint("Solicitando novo token... ELEVEN");
 
     final response = await http.post(
       Uri.parse(tokenUrl),

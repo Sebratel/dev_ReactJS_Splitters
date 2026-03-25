@@ -17,6 +17,7 @@ class OltService {
 
   Future<void> loadOlts() async {
     final headers = await auth.getAuthHeaders();
+    print("Consultando OLTs... com headers $headers");
     final response = await http.get(Uri.parse(_endpoint), headers: headers);
 
     if (response.statusCode != 200) {

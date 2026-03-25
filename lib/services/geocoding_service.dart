@@ -20,6 +20,7 @@ class GeocodingService {
       final uri = Uri.parse(
         '$_baseUrl?format=json&lat=$lat&lon=$lng&addressdetails=1',
       );
+      print("Consultando geocodificação para $lat, $lng...");
 
       final response = await http
           .get(

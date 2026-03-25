@@ -26,6 +26,7 @@ class MassivaGatewayService {
   final String affectedUsersEndpoint;
   final String hubGoogleIdTokenEndpoint;
   final String? sessionToken;
+  final String token; // Variável que guarda o valor do token recebido
   final AuthService authService;
   final http.Client _client;
   final Duration timeout;
@@ -41,6 +42,7 @@ class MassivaGatewayService {
     this.affectedUsersEndpoint = '',
     required this.hubGoogleIdTokenEndpoint,
     this.sessionToken,
+    required this.token, // Token obrigatório na instanciação
     required this.authService,
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
@@ -323,26 +325,17 @@ class MassivaGatewayService {
   }
 
   Future<Map<String, String>> _buildMassivaApiHeaders() async {
-    final googleIdToken = await _ensureGoogleIdToken();
+    // Agora utilizamos o token injetado na instanciação para todas as chamadas.
     return {
       'User-Agent': 'insomnia/12.4.0',
       'Accept': '*/*',
-      'Authorization': 'Bearer $googleIdToken',
+      'Authorization': 'Bearer $token',
     };
   }
 
   Future<String> _ensureGoogleIdToken() async {
-    final token = _googleIdTokenCache?.trim() ?? '';
-    final expiresAt = _googleIdTokenExpiry;
-    final now = DateTime.now().toUtc();
-
-    if (token.isNotEmpty &&
-        expiresAt != null &&
-        now.isBefore(expiresAt.subtract(const Duration(minutes: 2)))) {
-      return token;
-    }
-
-    return _fetchGoogleIdTokenFromHub();
+    // Mantido por compatibilidade de estrutura, mas redirecionado para o token injetado.
+    return token;
   }
 
   Future<String> _fetchGoogleIdTokenFromHub() async {
@@ -767,9 +760,9 @@ class MassivaGatewayService {
       return authService.getAuthHeaders();
     }
 
-    final token = await _ensureTokenForHost(targetUri);
+    final tokenForHost = await _ensureTokenForHost(targetUri);
     return {
-      'Authorization': 'Bearer $token',
+      'Authorization': 'Bearer $tokenForHost',
       'Content-Type': 'application/json',
     };
   }
@@ -815,19 +808,19 @@ class MassivaGatewayService {
 
     final decoded = jsonDecode(response.body);
     final root = _safeMap(decoded);
-    final token = root['access_token']?.toString();
+    final tokenResult = root['access_token']?.toString();
     final expiresIn =
         int.tryParse((root['expires_in'] ?? '3600').toString()) ?? 3600;
 
-    if (token == null || token.trim().isEmpty) {
+    if (tokenResult == null || tokenResult.trim().isEmpty) {
       throw Exception(
           'Host ${targetUri.host} não retornou access_token válido.');
     }
 
-    _hostTokenCache[cacheKey] = token;
+    _hostTokenCache[cacheKey] = tokenResult;
     _hostTokenExpiry[cacheKey] = now.add(Duration(seconds: expiresIn));
 
-    return token;
+    return tokenResult;
   }
 
   List<Map<String, dynamic>> _extractRows(dynamic decoded) {
