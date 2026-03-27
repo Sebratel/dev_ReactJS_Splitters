@@ -165,7 +165,7 @@ Hoje o app ja conversa com o Elleven para abertura massiva, inclusive com fallba
 ### Regras sugeridas
 
 - Garantir deduplicacao por cliente + massiva.
-- Registrar motivo da abertura automatica no historico do protocolo.
+- Registrar relato inicial da abertura automatica no historico do protocolo.
 - Definir fila de reprocessamento para falhas transientes.
 - Separar claramente protocolo gerado por automacao de protocolo aberto manualmente.
 
