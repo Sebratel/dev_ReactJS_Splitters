@@ -640,7 +640,8 @@ class _MassivaPageState extends State<MassivaPage> {
   Future<void> _pickClosingDate() async {
     if (_openedAt == null) {
       setState(() {
-        _error = 'Preencha primeiro a data e hora de abertura (selecione AP).';
+        _error =
+            'Preencha primeiro a data e hora de abertura (selecione Ponto de acesso).';
       });
       return;
     }
@@ -697,7 +698,8 @@ class _MassivaPageState extends State<MassivaPage> {
   Future<void> _pickClosingTime() async {
     if (_openedAt == null) {
       setState(() {
-        _error = 'Preencha primeiro a data e hora de abertura (selecione AP).';
+        _error =
+            'Preencha primeiro a data e hora de abertura (selecione Ponto de acesso).';
       });
       return;
     }
@@ -919,8 +921,6 @@ class _MassivaPageState extends State<MassivaPage> {
       if (pppoe.isEmpty) return false;
       return seenPppoes.add(pppoe.toLowerCase());
     }).map((cliente) {
-
-
       return AffectedUserRequest(
         pppoe: cliente.user.trim(),
         protocol: protocol,
@@ -1044,7 +1044,7 @@ class _MassivaPageState extends State<MassivaPage> {
       '',
       '\ud83d\udc64 Nome do solicitante: ${_requesterName()}',
       '',
-      '\ud83d\udee0\ufe0f Motivo t\u00e9cnico: $technicalReason',
+      '\ud83d\udee0\ufe0f Relato inicial: $technicalReason',
       '',
       '\ud83d\udce1 Origem massiva: ${_buildOpeningContextText()}',
       '',
@@ -1092,8 +1092,8 @@ class _MassivaPageState extends State<MassivaPage> {
     if (!mounted || _apOptions.isEmpty) return;
 
     final selected = await _selectMultiStringDialog(
-      title: 'Selecione o AP',
-      hintText: 'Buscar AP',
+      title: 'Selecione o Ponto de Acesso',
+      hintText: 'Buscar Ponto de Acesso',
       source: _apOptions,
       initial: _selectedAps,
       itemLabel: _apDisplayLabel,
@@ -1110,14 +1110,14 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_selectedAps.isEmpty) {
       setState(() {
-        _error = 'Selecione AP antes do Slot.';
+        _error = 'Selecione o Ponto de Acesso antes do Slot.';
       });
       return;
     }
 
     if (_slotOptions.isEmpty) {
       setState(() {
-        _error = 'Nenhum Slot encontrado para o AP selecionado.';
+        _error = 'Nenhum Slot encontrado para o Ponto de Acesso selecionado.';
       });
       return;
     }
@@ -1169,7 +1169,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_selectedAps.isEmpty || _selectedSlotsByAp.isEmpty) {
       setState(() {
-        _error = 'Selecione AP e Slot antes da Porta.';
+        _error = 'Selecione o Ponto de Acesso e Slot antes da Porta.';
       });
       return;
     }
@@ -1201,7 +1201,8 @@ class _MassivaPageState extends State<MassivaPage> {
       }
 
       final selected = await _selectMultiIntDialog(
-        title: 'Portas do AP ${_apDisplayLabel(step.$1)} ➡️ SLOT ${step.$2} ⬅️',
+        title:
+            'Portas do Ponto de Acesso ${_apDisplayLabel(step.$1)} ➡️ SLOT ${step.$2} ⬅️',
         values: options,
         valueLabel: (v) => 'Porta $v',
         initial: selectedByRoute[step.$1]?[step.$2] ??
@@ -1234,7 +1235,8 @@ class _MassivaPageState extends State<MassivaPage> {
   Future<void> _pickSplitter() async {
     if (_selectedAps.isEmpty || _selectedPortsByApSlot.isEmpty) {
       setState(() {
-        _error = 'Selecione AP, Slot e Porta antes de escolher splitter.';
+        _error =
+            'Selecione o Ponto de Acesso, Slot e Porta antes de escolher splitter.';
       });
       return;
     }
@@ -1271,7 +1273,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
       final selected = await _selectMultiSplittersDialog(
         title:
-            'Splitters do AP ${_apDisplayLabel(step.$1)} SLOT ${step.$2} ➡️ PORTA ${step.$3} ⬅️',
+            'Splitters do Ponto de Acesso ${_apDisplayLabel(step.$1)} SLOT ${step.$2} ➡️ PORTA ${step.$3} ⬅️',
         sourceCodes: options,
         initial: selectedByRoute[step.$1]?[step.$2]?[step.$3] ??
             _selectedSplittersByRoute[step.$1]?[step.$2]?[step.$3] ??
@@ -2160,7 +2162,8 @@ class _MassivaPageState extends State<MassivaPage> {
         _selectedSlots.isEmpty ||
         _selectedPorts.isEmpty) {
       setState(() {
-        _error = 'Selecione AP, Slot e Porta antes de continuar.';
+        _error =
+            'Selecione o Ponto de Acesso, Slot e Porta antes de continuar.';
       });
       return false;
     }
@@ -2210,7 +2213,8 @@ class _MassivaPageState extends State<MassivaPage> {
         _selectedSlots.isEmpty ||
         _selectedPorts.isEmpty) {
       setState(() {
-        _error = 'Selecione AP, Slot e Porta antes de continuar.';
+        _error =
+            'Selecione o Ponto de Acesso, Slot e Porta antes de continuar.';
       });
       return false;
     }
@@ -2817,7 +2821,7 @@ class _MassivaPageState extends State<MassivaPage> {
                 ),
                 _buildPickerField(
                   controller: _closedDateController,
-                  label: 'Data de fechamento',
+                  label: 'Previsão de finalização',
                   isDark: isDark,
                   width: selectorWidth,
                   onTap: _pickClosingDate,
@@ -3479,7 +3483,7 @@ class _MassivaPageState extends State<MassivaPage> {
                   color: isDark ? Colors.white : const Color(0xFF161616),
                 ),
                 decoration: _dialogSearchDecoration(
-                  hintText: 'Buscar protocolo, titulo, AP...',
+                  hintText: 'Buscar protocolo, título, Ponto de Acesso...',
                   isDark: isDark,
                 ),
               ),
@@ -3501,7 +3505,7 @@ class _MassivaPageState extends State<MassivaPage> {
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String?>(
                     value: _massivaApFilter,
-                    hint: const Text('Filtrar AP'),
+                    hint: const Text('Filtrar Ponto de Acesso'),
                     dropdownColor:
                         isDark ? const Color(0xFF2B2B2B) : Colors.white,
                     style: TextStyle(
@@ -4329,7 +4333,7 @@ class _MassivaPageState extends State<MassivaPage> {
                     infoChip(
                       icon: Icons.account_tree_outlined,
                       label: item.apCode.isEmpty
-                          ? 'AP não informado'
+                          ? 'Ponto de acesso não informado'
                           : item.apCode,
                     ),
                   ],
@@ -4637,7 +4641,7 @@ class _MassivaPageState extends State<MassivaPage> {
             isDark: isDark,
             selected: isSelected,
             onTap: _pickAp,
-            actionTooltip: 'Buscar AP',
+            actionTooltip: 'Buscar Ponto de acesso',
             selectedTooltip: isSelected
                 ? _selectedAps.length == _apOptions.length
                     ? 'Todos selecionados'
