@@ -16,7 +16,7 @@ import 'package:flutter/foundation.dart';
 /// - expor snapshots e notifiers para a UI
 /// - resolver ruas via reverse geocode quando necessario
 class SplitterService {
-  final AuthService auth;
+  final String token;
   final String splittersEndpoint;
   final String clientesEndpoint;
   final String? reverseGeocodeEndpoint;
@@ -124,7 +124,7 @@ class SplitterService {
   }
 
   SplitterService({
-    required this.auth,
+    required this.token,
     required this.splittersEndpoint,
     required this.clientesEndpoint,
     this.reverseGeocodeEndpoint,
@@ -179,18 +179,15 @@ class SplitterService {
   // Wrapper simples para GET autenticado com retry explicito de 401.
   Future<http.Response> _authedGet(String url) async {
     debugPrint('GET $url');
-    final h = await auth.getAuthHeaders();
+    final h = {'Authorization': 'Bearer $token'};
+    print("headers esta aqui = $h");
     var r = await http.get(Uri.parse(url), headers: h);
     debugPrint(
       'GET status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}, headers=${r.headers}',
     );
 
     if (r.statusCode == 401) {
-      debugPrint('GET recebeu 401, renovando token e repetindo chamada');
-      print("$auth.getAuthHeaders() = $h");
-      await auth.forceRefresh();
-      final h2 = await auth.getAuthHeaders();
-      print("$auth.getAuthHeaders() após refresh = $h2");
+      final h2 = {'Authorization': 'Bearer $token'};
       r = await http.get(Uri.parse(url), headers: h2);
       debugPrint(
         'GET retry status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}',
@@ -255,14 +252,11 @@ class SplitterService {
   }) async {
     final r = await _authedGet(clientesEndpoint);
     if (r.statusCode != 200) throw Exception("Erro clientes");
-
     final body = jsonDecode(r.body);
     final response = body["response"] as List;
-    debugPrint('Clientes response count=${response.length}');
 
     final all = response.map((e) => _safeMap(e)).toList();
     final total = all.length;
-
     final chunks = (total + chunkSize - 1) ~/ chunkSize;
     final oldChunks = boxClientesIndex.get("chunks") as int? ?? 0;
 

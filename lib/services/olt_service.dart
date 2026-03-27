@@ -2,21 +2,20 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/olt_model.dart';
-import '../services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 
 class OltService {
-  final AuthService auth;
+  final String token;
   static const _endpoint =
-      'https://erp.sebratel.net.br:45715/external/map/olt/all';
+      'https://api-gateway-bff.sebratel.net.br/api/v1/splitters/listarOlts';
 
-  OltService(this.auth);
+  OltService(this.token);
 
   final Map<String, OltModel> _oltByCode = {};
   bool get isLoaded => _oltByCode.isNotEmpty;
 
   Future<void> loadOlts() async {
-    final headers = await auth.getAuthHeaders();
+    final headers = {'Authorization': 'Bearer $token'};
     print("Consultando OLTs... com headers $headers");
     final response = await http.get(Uri.parse(_endpoint), headers: headers);
 

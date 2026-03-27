@@ -9,6 +9,8 @@ import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_gateway_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class _ResolvedAutoIspRoute {
   final String ap;
@@ -917,6 +919,8 @@ class _MassivaPageState extends State<MassivaPage> {
       if (pppoe.isEmpty) return false;
       return seenPppoes.add(pppoe.toLowerCase());
     }).map((cliente) {
+
+
       return AffectedUserRequest(
         pppoe: cliente.user.trim(),
         protocol: protocol,
@@ -924,6 +928,7 @@ class _MassivaPageState extends State<MassivaPage> {
         finishDate: finishDate,
         created: createdAt,
         createdBy: createdBy,
+        contractId: (cliente.contract?.id ?? 0),
       );
     }).toList();
   }
@@ -1866,10 +1871,45 @@ class _MassivaPageState extends State<MassivaPage> {
     return apTitle.isNotEmpty ? apTitle : apCode.trim();
   }
 
-  List<ApiGatewayMassivaRequest> _buildApiGatewayRequests() {
+  Future<int?> getPersonEllevenId(String emailenviado, String token) async {
+    final url = Uri.parse(
+            'https://api-gateway-bff.sebratel.net.br/api/v1/employee/get-person-id-by-email')
+        .replace(queryParameters: {
+      'email': emailenviado,
+    });
+
+    final Map<String, String> headers = {
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    };
+
+    try {
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        // 1. Decodifica a String JSON para um Map ou List
+        final dynamic decodedResponse = jsonDecode(response.body);
+
+        // 2. Extrai o ID (ajuste o caminho 'data' conforme a estrutura real do seu JSON)
+        // Se o JSON for direto { "data": 123 }, use:
+        final personId = decodedResponse['data'];
+
+        return personId is int ? personId : int.tryParse(personId.toString());
+      }
+
+      print('Erro na requisição: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      print('Erro de conexão: $e');
+      return null; // Ou throw Exception se quiser travar o login
+    }
+  }
+
+  Future<List<ApiGatewayMassivaRequest>> _buildApiGatewayRequests() async {
     final closedAt = _closedAt ?? DateTime.now();
     final description = _descriptionController.text.trim();
-    final personId = widget.sessionUser.personId;
+    final personId = await getPersonEllevenId(
+        widget.sessionUser.email, widget.sessionUser.sessionToken ?? '');
     final aps = _selectedAps.toList()..sort();
 
     if (personId == null || personId <= 0) {
@@ -1961,7 +2001,7 @@ class _MassivaPageState extends State<MassivaPage> {
     });
 
     try {
-      final requests = _buildApiGatewayRequests();
+      final requests = await _buildApiGatewayRequests();
       final openedProtocols = <String>[];
       final failureMessages = <String>[];
       final backendMessages = <String>[];

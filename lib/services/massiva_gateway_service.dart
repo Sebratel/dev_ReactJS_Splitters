@@ -27,7 +27,6 @@ class MassivaGatewayService {
   final String hubGoogleIdTokenEndpoint;
   final String? sessionToken;
   final String token; // Variável que guarda o valor do token recebido
-  final AuthService authService;
   final http.Client _client;
   final Duration timeout;
   final int maxRetries;
@@ -43,7 +42,6 @@ class MassivaGatewayService {
     required this.hubGoogleIdTokenEndpoint,
     this.sessionToken,
     required this.token, // Token obrigatório na instanciação
-    required this.authService,
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
     this.maxRetries = 3,
@@ -151,7 +149,7 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpoint);
-    final headers = await _getAuthHeadersForUri(uri);
+    final headers = Map<String, String>.from("Authorization: Bearer $token".split(': ').asMap().map((_, e) => MapEntry(e[0], e[1])));
     final payload = authenticationIds.isEmpty
         ? incident.toJson()
         : {
@@ -750,77 +748,6 @@ class MassivaGatewayService {
     }
 
     throw Exception('Falha inesperada ao limpar afetados do protocolo.');
-  }
-
-  // Alguns endpoints compartilham o token do ERP; outros exigem token obtido
-  // dinamicamente por host. Este metodo escolhe a estrategia correta.
-  Future<Map<String, String>> _getAuthHeadersForUri(Uri targetUri) async {
-    final authUri = Uri.parse(authService.tokenUrl);
-    if (authUri.host == targetUri.host) {
-      return authService.getAuthHeaders();
-    }
-
-    final tokenForHost = await _ensureTokenForHost(targetUri);
-    return {
-      'Authorization': 'Bearer $tokenForHost',
-      'Content-Type': 'application/json',
-    };
-  }
-
-  // Mantem um pequeno cache de tokens por host para evitar autenticar a cada chamada.
-  Future<String> _ensureTokenForHost(Uri targetUri) async {
-    final cacheKey = targetUri.host;
-    final cachedToken = _hostTokenCache[cacheKey];
-    final expiresAt = _hostTokenExpiry[cacheKey];
-    final now = DateTime.now();
-
-    if (cachedToken != null &&
-        expiresAt != null &&
-        now.isBefore(expiresAt.subtract(const Duration(seconds: 30)))) {
-      return cachedToken;
-    }
-
-    final tokenUri = targetUri.replace(
-      port: 45700,
-      path: '/connect/token',
-      queryParameters: const {},
-    );
-
-    final response = await _client.post(
-      tokenUri,
-      headers: const {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: {
-        'client_id': authService.clientId,
-        'client_secret': authService.clientSecret,
-        'syndata': authService.syndata,
-        'grant_type': authService.grantType,
-        'scope': authService.scope,
-      },
-    ).timeout(timeout);
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Erro ao autenticar no host ${targetUri.host} (status ${response.statusCode}).',
-      );
-    }
-
-    final decoded = jsonDecode(response.body);
-    final root = _safeMap(decoded);
-    final tokenResult = root['access_token']?.toString();
-    final expiresIn =
-        int.tryParse((root['expires_in'] ?? '3600').toString()) ?? 3600;
-
-    if (tokenResult == null || tokenResult.trim().isEmpty) {
-      throw Exception(
-          'Host ${targetUri.host} não retornou access_token válido.');
-    }
-
-    _hostTokenCache[cacheKey] = tokenResult;
-    _hostTokenExpiry[cacheKey] = now.add(Duration(seconds: expiresIn));
-
-    return tokenResult;
   }
 
   List<Map<String, dynamic>> _extractRows(dynamic decoded) {

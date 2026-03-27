@@ -16,12 +16,12 @@ String _formatDate(DateTime date) {
 
 class ClienteDetailPage extends StatefulWidget {
   final ClienteModel cliente;
-  final AuthService authService;
+  final String token;
 
   const ClienteDetailPage({
     super.key,
     required this.cliente,
-    required this.authService,
+    required this.token,
   });
 
   @override
@@ -50,8 +50,8 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
     debugPrint('Solicitacoes | clientId = ${cliente.clientId}');
 
     final service = SolicitationService(
-      baseUrl: 'https://erp.sebratel.net.br:45715',
-      authService: widget.authService,
+      baseUrl: 'https://api-gateway-bff.sebratel.net.br',
+      token: widget.token,
     );
 
     return service.fetchByAuthenticationId(cliente.clientId);
@@ -471,8 +471,9 @@ class _ClienteDetailPageState extends State<ClienteDetailPage> {
 
     final bgColor = isDark ? const Color(0xFF1D1D1D) : Colors.white;
 
-    final shadowColor =
-        isDark ? Colors.black.withValues(alpha: 0.4) : Colors.black.withValues(alpha: 0.06);
+    final shadowColor = isDark
+        ? Colors.black.withValues(alpha: 0.4)
+        : Colors.black.withValues(alpha: 0.06);
 
     final titleColor = isDark ? Colors.white : Colors.black87;
 

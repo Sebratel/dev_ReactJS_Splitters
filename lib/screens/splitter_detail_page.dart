@@ -34,7 +34,7 @@ class SplitterDetailPage extends StatefulWidget {
   final OltService oltService;
   final Map<String, int> ocupacaoSnapshot;
   final GeoGridService geoGridService;
-  final AuthService authService;
+  final String token;
 
   const SplitterDetailPage({
     super.key,
@@ -46,7 +46,7 @@ class SplitterDetailPage extends StatefulWidget {
     required this.oltService, // Novo
     required this.ocupacaoSnapshot, // Aqui
     required this.geoGridService,
-    required this.authService,
+    required this.token,
   });
 
   @override
@@ -745,7 +745,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
                               return ClienteCard(
                                 cliente: cliente,
-                                authService: widget.authService,
+                                token: widget.token,
                                 temReserva: temReserva,
                                 reservaInfo: reservaInfo,
                               );
@@ -803,7 +803,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                               in clientesSemPorta)
                                             ClienteCard(
                                               cliente: cliente,
-                                              authService: widget.authService,
+                                              token: widget.token,
                                               isNoPort: true,
                                             ),
                                         ],
@@ -827,7 +827,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                               in clientesExcedentes)
                                             ClienteCard(
                                               cliente: cliente,
-                                              authService: widget.authService,
+                                              token: widget.token,
                                               isOverflow: true,
                                             ),
                                         ],
@@ -1040,7 +1040,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                       splitterService: widget.splitterService,
                                       oltService: widget.oltService,
                                       geoGridService: widget.geoGridService,
-                                      authService: widget.authService,
+                                      token: widget.token,
                                     ),
                                   ),
                                 );
