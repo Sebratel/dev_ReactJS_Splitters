@@ -7,6 +7,7 @@ import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:nexaview/utils/web_utils.dart';
 
 /// Servico central de dados da HomePage e da tela de detalhe.
 ///
@@ -192,6 +193,11 @@ class SplitterService {
       debugPrint(
         'GET retry status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}',
       );
+
+      if (r.statusCode == 401) {
+        debugPrint('GET falhou com 401 mesmo após retry');
+        WebUtils.redirect("https://sebratel-hub.web.app");
+      }
     }
     return r;
   }
