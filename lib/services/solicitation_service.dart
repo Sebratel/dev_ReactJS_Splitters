@@ -7,21 +7,23 @@ import '../services/auth_service.dart';
 
 class SolicitationService {
   final String baseUrl;
-  final AuthService authService;
+  final String token;
 
   SolicitationService({
     required this.baseUrl,
-    required this.authService,
+    required this.token,
   });
 
   Future<List<SolicitationModel>> fetchByAuthenticationId(
     int authenticationId,
   ) async {
-    final headers = await authService.getAuthHeaders();
+    final headers = {
+      'Authorization': 'Bearer $token',
+    };
 
     final uri = Uri.parse(
-      '$baseUrl/external/integrations/thirdparty/solicitationlist/'
-      '$authenticationId?allAssignments=false',
+      '$baseUrl/api/v1/splitters/listarSolicitacoes/'
+      '$authenticationId',
     );
 
     debugPrint('GET $uri');

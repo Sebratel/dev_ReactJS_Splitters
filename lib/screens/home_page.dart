@@ -29,7 +29,7 @@ import 'dart:async';
 class HomePage extends StatefulWidget {
   final VoidCallback onThemeToggle;
   final SplitterService splitterService;
-  final AuthService authService; // ✅
+  final String token;
   final AppSessionUser sessionUser;
   final String massivaApiGatewayEndpoint;
   final String massivaAffectedUsersEndpoint;
@@ -47,7 +47,7 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.onThemeToggle,
     required this.splitterService,
-    required this.authService,
+    required this.token,
     required this.sessionUser,
     required this.massivaApiGatewayEndpoint,
     required this.massivaAffectedUsersEndpoint,
@@ -68,7 +68,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late final SplitterService _service;
-  late final AuthService _authService;
+  late final String _token;
   late final OltService _oltService;
   late final GeoGridService _geoGridService;
   Timer? _clientesAutoRefreshTimer;
@@ -134,8 +134,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
 
     _service = widget.splitterService;
-    _authService = widget.authService;
-    _oltService = OltService(_authService);
+    _token = widget.token;
+    _oltService = OltService(_token);
 
     _geoGridService = GeoGridService(
       baseUrl: widget.geogridBaseUrl,
@@ -212,7 +212,6 @@ class _HomePageState extends State<HomePage> {
             listEndpoint: widget.ellevenMassivaListEndpoint,
             token: widget.sessionUser.sessionToken!,
             affectedUsersEndpoint: widget.massivaAffectedUsersEndpoint,
-            authService: _authService,
             sessionToken: widget.sessionUser.sessionToken,
             hubGoogleIdTokenEndpoint: widget.hubGoogleIdTokenEndpoint,
           ),
@@ -828,7 +827,7 @@ class _HomePageState extends State<HomePage> {
           oltService: _oltService,
           ocupacaoSnapshot: _ocupacaoSnapshot,
           geoGridService: _geoGridService,
-          authService: widget.authService,
+          token: widget.token,
         ),
       ),
     );

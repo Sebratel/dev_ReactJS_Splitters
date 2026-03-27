@@ -149,6 +149,7 @@ class AffectedUserRequest {
   final String finishDate;
   final String created;
   final String createdBy;
+  final int contractId;
 
   const AffectedUserRequest({
     required this.pppoe,
@@ -157,6 +158,7 @@ class AffectedUserRequest {
     required this.finishDate,
     required this.created,
     required this.createdBy,
+    required this.contractId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -166,6 +168,7 @@ class AffectedUserRequest {
         'finishDate': finishDate,
         'created': created,
         'createdBy': createdBy,
+        'contractId': contractId,
       };
 }
 
@@ -359,8 +362,7 @@ class MassivaTicket {
         ? (json['input'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
     final inputAssignment = input['assignment'] is Map
-        ? (input['assignment'] as Map)
-            .map((k, v) => MapEntry(k.toString(), v))
+        ? (input['assignment'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
     final assignment = json['assignment'] is Map
         ? (json['assignment'] as Map).map((k, v) => MapEntry(k.toString(), v))
@@ -379,8 +381,10 @@ class MassivaTicket {
         merged['assignmentIdValue'] ??
         '';
 
-    final protocolRaw =
-        merged['protocol'] ?? merged['protocolo'] ?? merged['id'] ?? input['id'];
+    final protocolRaw = merged['protocol'] ??
+        merged['protocolo'] ??
+        merged['id'] ??
+        input['id'];
     final statusRaw = (merged['status'] ??
             merged['situation'] ??
             incidentStatus['title'] ??
@@ -477,13 +481,12 @@ class MassivaTicket {
         dateCandidate: merged['closedDate'] ?? merged['closureDate'],
         timeCandidate: merged['closedTime'] ?? merged['closureTime'],
       ),
-      affectedClients: int.tryParse(
-              (merged['affectedClients'] ??
-                      merged['impacted'] ??
-                      merged['contractsCounter'] ??
-                      merged['clientsCount'] ??
-                      '0')
-                  .toString()) ??
+      affectedClients: int.tryParse((merged['affectedClients'] ??
+                  merged['impacted'] ??
+                  merged['contractsCounter'] ??
+                  merged['clientsCount'] ??
+                  '0')
+              .toString()) ??
           0,
       usedFallback: merged['strategy']?.toString() == 'bulk_individual' ||
           merged['usedFallback'] == true,

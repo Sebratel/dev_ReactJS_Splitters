@@ -41,7 +41,7 @@ void main() async {
   // 2. Token via URL (Web)
   // =============================================================
   final params = WebUtils.queryParams;
-  final token = params['token'];
+  final token = params['googleIdToken'];
 
   debugPrint("Token recebido via URL");
 
@@ -78,18 +78,6 @@ void main() async {
   const localUserPersonId = int.fromEnvironment(
     'LOCAL_USER_PERSON_ID',
     defaultValue: 629,
-  );
-  const erpClientId = String.fromEnvironment(
-    'ERP_CLIENT_ID',
-    defaultValue: '',
-  );
-  const erpClientSecret = String.fromEnvironment(
-    'ERP_CLIENT_SECRET',
-    defaultValue: '',
-  );
-  const erpSyndata = String.fromEnvironment(
-    'ERP_SYNDATA',
-    defaultValue: '',
   );
   const hubSessionEndpoint = String.fromEnvironment(
     'HUB_SESSION_ENDPOINT',
@@ -165,13 +153,6 @@ void main() async {
   // =============================================================
   // 5. Auth ERP
   // =============================================================
-  final auth = AuthService(
-    clientId: erpClientId,
-    clientSecret: erpClientSecret,
-    syndata: erpSyndata,
-    grantType: "client_credentials",
-    scope: "syngw",
-  );
 
   // =============================================================
   // 6. Servi?os principais
@@ -227,11 +208,11 @@ void main() async {
 
   // SplitterService centraliza cache local, consumo do ERP e resolucao de ruas.
   final splitterService = SplitterService(
-    auth: auth,
+    token: sessionUser.sessionToken!,
     splittersEndpoint:
-        "https://api-gateway-bff.sebratel.net.br/api/v1/listarSplitters",
+        "https://api-gateway-bff.sebratel.net.br/api/v1/splitters/listarSplitters",
     clientesEndpoint:
-        "https://erp.sebratel.net.br:45715/external/map/connection/all",
+        "https://api-gateway-bff.sebratel.net.br/api/v1/splitters/listarConnections",
     reverseGeocodeEndpoint:
         reverseGeocodeEndpoint.isEmpty ? null : reverseGeocodeEndpoint,
   );
@@ -245,7 +226,7 @@ void main() async {
   runApp(
     MyApp(
       splitterService: splitterService,
-      authService: auth,
+      token: sessionUser.sessionToken!,
       sessionUser: sessionUser,
       massivaApiGatewayEndpoint: massivaApiGatewayEndpoint,
       massivaAffectedUsersEndpoint: massivaAffectedUsersEndpoint,
@@ -431,7 +412,7 @@ void _limparTokenDaUrl() {
 
 /// Widget raiz que propaga servicos e configuracoes para a interface.
 class MyApp extends StatefulWidget {
-  final AuthService authService;
+  final String token;
   final SplitterService splitterService;
   final AppSessionUser sessionUser;
   final String massivaApiGatewayEndpoint;
@@ -449,7 +430,7 @@ class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     required this.splitterService,
-    required this.authService,
+    required this.token,
     required this.sessionUser,
     required this.massivaApiGatewayEndpoint,
     required this.massivaAffectedUsersEndpoint,
@@ -498,7 +479,7 @@ class _MyAppState extends State<MyApp> {
       home: HomePage(
         onThemeToggle: _toggleTheme,
         splitterService: widget.splitterService,
-        authService: widget.authService,
+        token: widget.token,
         sessionUser: widget.sessionUser,
         massivaApiGatewayEndpoint: widget.massivaApiGatewayEndpoint,
         massivaAffectedUsersEndpoint: widget.massivaAffectedUsersEndpoint,

@@ -8,7 +8,7 @@ import 'package:nexaview/widgets/reserva_lock_badge.dart';
 
 class ClienteCard extends StatefulWidget {
   final ClienteModel cliente;
-  final AuthService authService; // ADICIONAR
+  final String token; // ADICIONAR
   final bool isOverflow;
   final bool isNoPort;
   final bool temReserva;
@@ -17,7 +17,7 @@ class ClienteCard extends StatefulWidget {
   const ClienteCard({
     super.key,
     required this.cliente,
-    required this.authService, // OBRIGATORIO
+    required this.token, // OBRIGATORIO
     this.isOverflow = false,
     this.isNoPort = false,
     this.temReserva = false,
@@ -83,7 +83,7 @@ class _ClienteCardState extends State<ClienteCard> {
             MaterialPageRoute(
               builder: (_) => ClienteDetailPage(
                 cliente: widget.cliente,
-                authService: widget.authService, // AQUI
+                token: widget.token, // AQUI
               ),
             ),
           );
