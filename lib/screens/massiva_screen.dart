@@ -11,6 +11,7 @@ import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_gateway_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:nexaview/utils/web_utils.dart';
 
 class _ResolvedAutoIspRoute {
   final String ap;
@@ -1897,6 +1898,12 @@ class _MassivaPageState extends State<MassivaPage> {
         final personId = decodedResponse['data'];
 
         return personId is int ? personId : int.tryParse(personId.toString());
+      }
+
+      if(response.statusCode == 401) {
+        debugPrint('401 ao buscar personId, token pode estar expirado');
+        WebUtils.redirect("https://sebratel-hub.web.app");
+        return null;
       }
 
       print('Erro na requisição: ${response.statusCode}');

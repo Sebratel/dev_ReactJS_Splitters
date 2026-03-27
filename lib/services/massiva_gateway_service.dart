@@ -508,7 +508,7 @@ class MassivaGatewayService {
         final response = await _sendMassivaAuthorized(
           (headers) => _client.get(uri, headers: headers).timeout(timeout),
         );
-
+        
         if (kDebugMode) {
           debugPrint(
               'Resposta [LISTAGEM de Massivas]: status=${response.statusCode}');

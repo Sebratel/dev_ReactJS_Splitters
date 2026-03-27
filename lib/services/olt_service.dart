@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:nexaview/utils/web_utils.dart';
 
 import '../models/olt_model.dart';
 import 'package:flutter/foundation.dart';
@@ -21,6 +22,12 @@ class OltService {
 
     if (response.statusCode != 200) {
       throw Exception('Erro ao buscar OLTs');
+    }
+
+    if(response.statusCode == 401) {
+      debugPrint('401 ao buscar OLTs, token pode estar expirado');
+        WebUtils.redirect("https://sebratel-hub.web.app");
+        return;
     }
 
     final List list = jsonDecode(response.body)['response'];
