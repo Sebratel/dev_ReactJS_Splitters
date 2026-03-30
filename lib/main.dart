@@ -13,7 +13,6 @@ import 'firebase_options.dart';
 import 'package:nexaview/theme.dart';
 import 'package:nexaview/models/app_session_user.dart';
 import 'package:nexaview/screens/home_page.dart';
-import 'package:nexaview/services/auth_service.dart';
 import 'package:nexaview/services/splitter_service.dart';
 
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
@@ -37,12 +36,44 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  await Hive.initFlutter();
+  final authBox = await Hive.openBox('auth_cache');
+
   // =============================================================
   // 2. Token via URL (Web)
   // =============================================================
   final params = WebUtils.queryParams;
-  final token = params['googleIdToken'];
+  String? token = params['googleIdToken'];
+  String? tokenHub = params['token'];
 
+  final agora = DateTime.now();
+
+  if (token != null && token.isNotEmpty) {
+    debugPrint("Token recebido via URL - Persistindo por 1 hora");
+    await authBox.put('googleIdToken', token);
+    await authBox.put('token_timestamp', agora.millisecondsSinceEpoch);
+  } else {
+    // --- CENÁRIO B: BUSCAR NO CACHE ---
+    final cachedToken = authBox.get('googleIdToken');
+    final savedTimestamp = authBox.get('token_timestamp') as int?;
+
+    if (cachedToken != null && savedTimestamp != null) {
+      final dataSalva = DateTime.fromMillisecondsSinceEpoch(savedTimestamp);
+      final diferenca = agora.difference(dataSalva);
+
+      // VERIFICAÇÃO DE 1 HORA (3600 segundos)
+      if (diferenca.inHours < 1) {
+        token = cachedToken;
+        debugPrint(
+            "Token recuperado do cache (Idade: ${diferenca.inMinutes} min)");
+      } else {
+        debugPrint("Token de cache expirou (Mais de 1h). Limpando...");
+        await authBox.delete('googleIdToken');
+        await authBox.delete('token_timestamp');
+        token = null;
+      }
+    }
+  }
   debugPrint("Token recebido via URL");
 
   // =============================================================
@@ -88,7 +119,7 @@ void main() async {
 
   if (!isLocal) {
     // Em producao o acesso depende do token enviado pelo Hub.
-    final sessionResult = resolveHubSession(token);
+    final sessionResult = resolveHubSession(tokenHub);
 
     if (!sessionResult.isValid) {
       debugPrint("ACESSO BLOQUEADO -> ${sessionResult.reason}");
@@ -100,7 +131,7 @@ void main() async {
     }
 
     final hubProfileResult = await fetchHubSessionProfile(
-      token: token!,
+      token: tokenHub!,
       endpoint: hubSessionEndpoint,
     );
 
@@ -121,7 +152,7 @@ void main() async {
       debugPrint("SESSAO DO HUB CARREGADA VIA /auth/session");
     } else {
       sessionUser = AppSessionUser.fromJwtPayload(
-        sessionResult.payload ?? const <String, dynamic>{},
+        params,
         allowedEmails: allowedMassivaEmails,
         allowedRoles: allowedMassivaRoles,
         sessionToken: token,
@@ -147,7 +178,6 @@ void main() async {
   // =============================================================
   // 4. Hive (cache local)
   // =============================================================
-  await Hive.initFlutter();
   await SplitterService.initHive();
 
   // =============================================================

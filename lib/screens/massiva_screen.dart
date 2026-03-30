@@ -9,6 +9,7 @@ import 'package:nexaview/models/massiva_models.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/services/autoisp_event_service.dart';
 import 'package:nexaview/services/massiva_gateway_service.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/utils/web_utils.dart';
@@ -576,7 +577,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_closedAt != null && _isClosingBeforeOpening(_closedAt!)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão nao pode ser menor que a abertura.';
       });
       return;
     }
@@ -624,7 +625,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_closedAt != null && _closedAt!.isBefore(candidate)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão nao pode ser menor que a abertura.';
       });
       return;
     }
@@ -683,7 +684,7 @@ class _MassivaPageState extends State<MassivaPage> {
     );
     if (_isClosingBeforeOpening(candidate)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão nao pode ser menor que a abertura.';
       });
       return;
     }
@@ -736,7 +737,7 @@ class _MassivaPageState extends State<MassivaPage> {
     );
     if (_isClosingBeforeOpening(candidate)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão nao pode ser menor que a abertura.';
       });
       return;
     }
@@ -1902,6 +1903,8 @@ class _MassivaPageState extends State<MassivaPage> {
 
       if(response.statusCode == 401) {
         debugPrint('401 ao buscar personId, token pode estar expirado');
+        final authBox = await Hive.openBox('auth_cache');
+        await authBox.delete('googleIdToken');
         WebUtils.redirect("https://sebratel-hub.web.app");
         return null;
       }
@@ -2186,7 +2189,7 @@ class _MassivaPageState extends State<MassivaPage> {
     if (_closedDateController.text.trim().isEmpty ||
         _closedTimeController.text.trim().isEmpty) {
       setState(() {
-        _error = 'Informe data e hora de fechamento (prazo).';
+        _error = 'Informe data e hora de previsão (prazo).';
       });
       return false;
     }
@@ -2200,14 +2203,14 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_closedAt == null) {
       setState(() {
-        _error = 'Informe data e hora de fechamento (prazo).';
+        _error = 'Informe data e hora de previsão (prazo).';
       });
       return false;
     }
 
     if (_isClosingBeforeOpening(_closedAt!)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão nao pode ser menor que a abertura.';
       });
       return false;
     }
@@ -2230,7 +2233,7 @@ class _MassivaPageState extends State<MassivaPage> {
         _closedTimeController.text.trim().isEmpty ||
         _closedAt == null) {
       setState(() {
-        _error = 'Informe data e hora de fechamento (prazo).';
+        _error = 'Informe data e hora de previsão (prazo).';
       });
       return false;
     }
@@ -2244,7 +2247,7 @@ class _MassivaPageState extends State<MassivaPage> {
 
     if (_isClosingBeforeOpening(_closedAt!)) {
       setState(() {
-        _error = 'Data/hora de fechamento nao pode ser menor que a abertura.';
+        _error = 'Data/hora de previsão não pode ser menor que a abertura.';
       });
       return false;
     }
@@ -2835,7 +2838,7 @@ class _MassivaPageState extends State<MassivaPage> {
                 ),
                 _buildPickerField(
                   controller: _closedTimeController,
-                  label: 'Hora de fechamento',
+                  label: 'Hora de previsão de finalização',
                   isDark: isDark,
                   width: selectorWidth,
                   onTap: _pickClosingTime,
