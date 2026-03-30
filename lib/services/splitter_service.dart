@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:nexaview/models/splitter_model.dart';
 import 'package:nexaview/models/cliente_model.dart';
-import 'package:nexaview/services/auth_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nexaview/utils/web_utils.dart';
 
@@ -196,6 +195,8 @@ class SplitterService {
 
       if (r.statusCode == 401) {
         debugPrint('GET falhou com 401 mesmo após retry');
+        final authBox = await Hive.openBox('auth_cache');
+        await authBox.delete('googleIdToken');
         WebUtils.redirect("https://sebratel-hub.web.app");
       }
     }

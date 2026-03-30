@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
 /// Representa o usuario da sessao ja convertido para o formato do app.
 ///
 /// Este model define se a area de massivas pode ser usada e carrega
@@ -60,58 +64,100 @@ class AppSessionUser {
     );
   }
 
-  factory AppSessionUser.fromJwtPayload(
-    Map<String, dynamic> payload, {
-    required Set<String> allowedEmails,
-    required Set<String> allowedRoles,
-    String? sessionToken,
-  }) {
-    // O payload do JWT pode variar conforme a origem. Por isso tentamos
-    // multiplas chaves equivalentes antes de decidir o acesso.
-    final email = _extractString(
-          payload,
-          ['email', 'upn', 'preferred_username', 'sub'],
-        ) ??
-        '';
-    final name = _extractString(
-      payload,
-      ['name', 'nome', 'given_name'],
-    );
-    final personId = _extractInt(
-      payload,
-      [
-        'personId',
-        'person_id',
-        'employeeId',
-        'employee_id',
-        'colaboradorId',
-        'colaborador_id',
-        'collaboratorId',
-        'collaborator_id',
-        'userId',
-        'user_id',
-        'id',
-        'ID',
-      ],
-    );
-    final roles = _extractRoles(payload);
-
-    final emailAllowed = email.isNotEmpty &&
-        allowedEmails.any((it) => it == email.toLowerCase());
-    final roleAllowed = roles.any(allowedRoles.contains);
-
-    return AppSessionUser(
-      email: email,
-      name: name,
-      personId: personId,
-      sessionToken: sessionToken,
-      roles: roles,
-      permissions: const {},
-      isAdmin: false,
-      canAccessMassiva: true,
-      canOpenMassiva: true,
-    );
+ factory AppSessionUser.fromJwtPayload(
+  Map<String, dynamic> payload, {
+  required Set<String> allowedEmails,
+  required Set<String> allowedRoles,
+  String? sessionToken,
+}) {
+  // --- 0. Pré-processamento do hubLaunch ---
+  // Na URL, o hubLaunch geralmente vem como uma String JSON. 
+  // Precisamos converter para Map para conseguir acessar as chaves internas.
+  Map<String, dynamic> hubLaunchData = {};
+  final rawHubLaunch = payload['hubLaunch'];
+  
+  if (rawHubLaunch is Map) {
+    hubLaunchData = rawHubLaunch.cast<String, dynamic>();
+  } else if (rawHubLaunch is String && rawHubLaunch.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(rawHubLaunch);
+      if (decoded is Map) {
+        hubLaunchData = decoded.cast<String, dynamic>();
+      }
+    } catch (e) {
+      debugPrint("Erro ao decodar hubLaunch da URL: $e");
+    }
   }
+
+  // --- 1. Extração de Identidade Base ---
+  // Tenta na raiz, se não achar, tenta dentro do hubLaunch decodificado
+  final email = _extractString(payload, ['email', 'upn', 'preferred_username', 'sub']) ??
+                _extractString(hubLaunchData, ['email', 'upn']) ??
+                '';
+
+  final name = _extractString(payload, ['name', 'nome', 'given_name', 'display_name']) ??
+               _extractString(hubLaunchData, ['name', 'nome']);
+
+  final personId = _extractInt(payload, [
+    'personId', 'person_id', 'employeeId', 'employee_id',
+    'colaboradorId', 'colaborador_id', 'id', 'ID',
+  ]) ?? _extractInt(hubLaunchData, ['personId', 'person_id', 'id']) ?? 0;
+
+  // --- 2. Extração de Permissões ---
+  final Set<String> permissions = {};
+
+  // Busca permissões na raiz ou dentro do hubLaunchData
+  // Aceita o formato "perm1,perm2" (String) ou ["perm1", "perm2"] (List)
+  var rawPerms = payload['permissions'] ?? hubLaunchData['permissions'];
+
+  if (rawPerms is String && rawPerms.isNotEmpty) {
+    permissions.addAll(rawPerms.split(',').map((e) => e.trim().toLowerCase()));
+  } else if (rawPerms is List) {
+    permissions.addAll(rawPerms.map((e) => e.toString().trim().toLowerCase()));
+  }
+
+  // --- 3. Extração de Roles e Admin ---
+  final roles = _extractRoles(payload);
+  if (roles.isEmpty && hubLaunchData.containsKey('roles')) {
+    final rawRoles = hubLaunchData['roles'];
+    if (rawRoles is List) roles.addAll(rawRoles.map((e) => e.toString()));
+  }
+
+  final bool isAdmin = payload['isAdmin'] == true || 
+                       payload['isAdmin'] == 'true' ||
+                       hubLaunchData['isAdmin'] == true ||
+                       hubLaunchData['isAdmin'] == 'true';
+
+  // --- 4. Lógica de Flags de Interface (Regras de Negócio) ---
+  // Agora validamos se as permissões necessárias existem no Set
+  final canAccessMassiva = permissions.contains('massiva_view') || 
+                           permissions.contains('massiva_admin') ||
+                           isAdmin;
+
+  final canOpenMassiva = permissions.contains('massiva_open') || 
+                         permissions.contains('massiva_admin') ||
+                         isAdmin;
+
+  // DEBUG (IMPORTANTE: Verifique o console do navegador)
+  debugPrint("--- AUTH DEBUG ---");
+  debugPrint("Email extraído: $email");
+  debugPrint("HubLaunch detectado: ${hubLaunchData.isNotEmpty}");
+  debugPrint("Permissions encontradas: $permissions");
+  debugPrint("Can Access Massiva: $canAccessMassiva");
+  debugPrint("Can Open Massiva: $canOpenMassiva");
+
+  return AppSessionUser(
+    email: email,
+    name: name ?? 'Usuário',
+    personId: personId,
+    sessionToken: sessionToken,
+    roles: roles,
+    permissions: permissions,
+    isAdmin: isAdmin,
+    canAccessMassiva: canAccessMassiva,
+    canOpenMassiva: canOpenMassiva,
+  );
+}
 
   factory AppSessionUser.fromHubSession(
     Map<String, dynamic> payload, {

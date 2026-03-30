@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/utils/web_utils.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/olt_model.dart';
 import 'package:flutter/foundation.dart';
@@ -26,6 +27,8 @@ class OltService {
 
     if(response.statusCode == 401) {
       debugPrint('401 ao buscar OLTs, token pode estar expirado');
+        final authBox = await Hive.openBox('auth_cache');
+        await authBox.delete('googleIdToken');
         WebUtils.redirect("https://sebratel-hub.web.app");
         return;
     }

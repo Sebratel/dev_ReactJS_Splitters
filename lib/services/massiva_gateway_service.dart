@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/models/massiva_models.dart';
-import 'package:nexaview/services/auth_service.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:nexaview/utils/web_utils.dart';
 
 /// Cliente HTTP da area de massivas.
@@ -424,7 +424,9 @@ class MassivaGatewayService {
     });
   }
 
-  void _redirectToHub() {
+  void _redirectToHub() async {
+    final authBox = await Hive.openBox('auth_cache');
+    await authBox.delete('googleIdToken');
     final endpointUrl = hubGoogleIdTokenEndpoint.trim();
     final uri = Uri.tryParse(endpointUrl);
     final destination = uri == null || !uri.hasScheme
