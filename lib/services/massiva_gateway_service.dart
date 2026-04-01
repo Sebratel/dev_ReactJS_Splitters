@@ -62,13 +62,15 @@ class MassivaGatewayService {
   // Fluxo principal usado pela tela atual para abertura de massivas.
   Future<EllevenMassivaResponse> openMassivaViaApiGateway({
     required ApiGatewayMassivaRequest request,
+    required int affectedUsersQuantity,
+    List<AffectedUserRequest> affectedUsers = const [],
   }) async {
     if (!isConfigured) {
       throw Exception('Endpoint de massiva do Elleven não configurado.');
     }
 
     final uri = Uri.parse(endpoint);
-    final payload = request.toJson();
+    final payload = request.toJson(affectedUsersQuantity);
 
     debugPrint('➡️ [ABERTURA] POST $uri');
 
@@ -408,6 +410,7 @@ class MassivaGatewayService {
         return response;
       }
     }
+
 
     throw Exception('Falha inesperada ao autenticar na API de massivas.');
   }

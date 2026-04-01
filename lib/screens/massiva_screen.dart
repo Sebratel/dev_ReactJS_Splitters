@@ -97,7 +97,7 @@ class _MassivaPageState extends State<MassivaPage> {
   static const int _apiCatalogServiceId = 1173;
   static const int _apiServiceLevelAgreementId = 99;
   static const int _apiMatrixType = 2;
-  static const String _apiTeamCode = 'DEV - 01';
+  static const String _apiTeamCode = '8.0';
   static const String _apiSolicitationServiceCategory1 = 'MASSIVAS - 001';
   final _formKey = GlobalKey<FormState>();
   final _apController = TextEditingController();
@@ -1901,7 +1901,7 @@ class _MassivaPageState extends State<MassivaPage> {
         return personId is int ? personId : int.tryParse(personId.toString());
       }
 
-      if(response.statusCode == 401) {
+      if (response.statusCode == 401) {
         debugPrint('401 ao buscar personId, token pode estar expirado');
         final authBox = await Hive.openBox('auth_cache');
         await authBox.delete('googleIdToken');
@@ -1946,6 +1946,10 @@ class _MassivaPageState extends State<MassivaPage> {
             solicitationServiceCategory4: '',
             solicitationServiceCategory5: '',
             authenticationAccessPointCode: apCode,
+            affectedUsers: _buildAffectedUserRequests(
+              apCode: apCode,
+              protocol: 1, // O protocolo real ainda não existe, mas é necessário passar algum valor para construir a lista de afetados. O ideal seria retornar os protocolos abertos e construir a lista de afetados dentro do loop de abertura.
+            ),
             assignment: ApiGatewayMassivaAssignment(
               title: _buildApiGatewayTitle(apCode),
               description: description,
@@ -2024,8 +2028,12 @@ class _MassivaPageState extends State<MassivaPage> {
         final apLabel = _apDisplayLabel(request.authenticationAccessPointCode);
         try {
           final response = await widget.gatewayService.openMassivaViaApiGateway(
-            request: request,
-          );
+              request: request,
+              affectedUsersQuantity: _estimatedAffectedClients(),
+              affectedUsers: _buildAffectedUserRequests(
+              apCode: request.authenticationAccessPointCode,
+              protocol: 1, // O protocolo real ainda não existe, mas é necessário passar algum valor para construir a lista de afetados. O ideal seria retornar os protocolos abertos e construir a lista de afetados dentro do loop de abertura.
+            ));
 
           final details = <String>[];
           if (response.protocol != null) {
@@ -4395,7 +4403,7 @@ class _MassivaPageState extends State<MassivaPage> {
                         const SizedBox(height: 6),
                         metaLine(
                           icon: Icons.person_add_alt_1_outlined,
-                          label: 'Criado por',
+                          label: 'Solicitado por',
                           value: item.createdBy.trim(),
                         ),
                       ],
