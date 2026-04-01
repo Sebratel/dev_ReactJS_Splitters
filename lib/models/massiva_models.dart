@@ -105,6 +105,7 @@ class ApiGatewayMassivaRequest {
   final String solicitationServiceCategory5;
   final String authenticationAccessPointCode;
   final ApiGatewayMassivaAssignment assignment;
+  final List<AffectedUserRequest> affectedUsers;
 
   const ApiGatewayMassivaRequest({
     required this.incidentStatusId,
@@ -121,9 +122,10 @@ class ApiGatewayMassivaRequest {
     required this.solicitationServiceCategory5,
     required this.authenticationAccessPointCode,
     required this.assignment,
+    required this.affectedUsers,
   });
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson(int affectedUsersQuantity) => {
         'incidentStatusId': incidentStatusId,
         'personId': personId,
         'incidentTypeId': incidentTypeId,
@@ -138,6 +140,8 @@ class ApiGatewayMassivaRequest {
         'solicitationServiceCategory5': solicitationServiceCategory5,
         'authenticationAccessPointCode': authenticationAccessPointCode,
         'assignment': assignment.toJson(),
+        'affectedUsersQuantity': affectedUsersQuantity,
+        'affectedUsers': affectedUsers,
       };
 }
 
@@ -358,6 +362,8 @@ class MassivaTicket {
   }
 
   factory MassivaTicket.fromJson(Map<String, dynamic> json) {
+    print(json.toString());
+
     final input = json['input'] is Map
         ? (json['input'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
@@ -429,9 +435,14 @@ class MassivaTicket {
               '')
           .toString(),
       team: (merged['team'] ?? merged['equipe'] ?? '').toString(),
-      createdBy: (merged['createdBy'] ?? merged['criadoPor'] ?? '').toString(),
+      createdBy: (inputAssignment['responsavel'] ??
+              merged['responsavel'] ??
+              merged['createdBy'] ??
+              merged['criadoPor'] ??
+              '')
+          .toString(),
       responsible:
-          (merged['responsible'] ?? merged['responsavel'] ?? '').toString(),
+          (merged['responsavel'] ?? merged['responsible'] ?? '').toString(),
       status: status,
       openedAt: _parseDate(
         merged['openedAt'] ??
@@ -448,6 +459,8 @@ class MassivaTicket {
       ),
       expectedCloseAt: _parseDateCandidates(
         [
+          merged['sla'],
+          inputAssignment['sla'],
           inputAssignment['finalDate'],
           inputAssignment['finalData'],
           assignment['finalDate'],
