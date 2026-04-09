@@ -1,6 +1,6 @@
-﻿// lib/services/geogrid_service.dart
-
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/models/porta_geogrid_model.dart';
 
@@ -8,7 +8,6 @@ class GeoGridService {
   final String baseUrl;
   final String apiKey;
 
-  /// Cache por splitter
   final Map<String, Map<int, PortaGeoGrid>> _cachePorSplitter = {};
   final Map<String, String> _cacheNomeCliente = {};
 
@@ -16,8 +15,6 @@ class GeoGridService {
     required this.baseUrl,
     required this.apiKey,
   });
-
-// lib/services/geogrid_service.dart
 
   void clearCache({String? splitterIntegrationCode}) {
     if (splitterIntegrationCode != null) {
@@ -28,13 +25,9 @@ class GeoGridService {
     }
   }
 
-  // =====================================================
-  // BUSCA RESERVAS POR SPLITTER (DETALHE)
-  // =====================================================
   Future<Map<int, PortaGeoGrid>> fetchReservasPorSplitter(
     String splitterIntegrationCode,
   ) async {
-    // cache por splitter
     if (_cachePorSplitter.containsKey(splitterIntegrationCode)) {
       return _cachePorSplitter[splitterIntegrationCode]!;
     }
@@ -42,7 +35,9 @@ class GeoGridService {
     final url = Uri.parse(
       '$baseUrl/equipamentos/$splitterIntegrationCode/portas',
     );
-    print("Consultando portas para o splitter $splitterIntegrationCode...");
+    debugPrint(
+      'Consultando portas para o splitter $splitterIntegrationCode...',
+    );
     final response = await http.get(
       url,
       headers: {
@@ -58,18 +53,14 @@ class GeoGridService {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final portas = body['portas'] as List? ?? [];
 
-    final Map<int, PortaGeoGrid> result = {};
+    final result = <int, PortaGeoGrid>{};
 
     for (final raw in portas) {
       final porta = PortaGeoGrid.fromGeoGrid(raw);
 
       if (porta.porta <= 0) continue;
 
-      // consolidacao por porta:
-      // prioriza reserva com cadeado (reserva sem atendimento)
-      if (!result.containsKey(porta.porta)) {
-        result[porta.porta] = porta;
-      } else if (porta.hasReservaComCadeado) {
+      if (!result.containsKey(porta.porta) || porta.hasReservaComCadeado) {
         result[porta.porta] = porta;
       }
     }
@@ -85,7 +76,8 @@ class GeoGridService {
     if (_cacheNomeCliente.containsKey(id)) {
       return _cacheNomeCliente[id];
     }
-    print("Consultando nome do cliente para o ID: $id");
+
+    debugPrint('Consultando nome do cliente para o ID: $id');
     final url = Uri.parse('$baseUrl/clientes/$id');
     final response = await http.get(
       url,
@@ -109,4 +101,3 @@ class GeoGridService {
     return nome;
   }
 }
-

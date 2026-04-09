@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nexaview/models/address_model.dart';
 import 'package:nexaview/models/olt_model.dart';
@@ -16,7 +16,6 @@ import 'package:nexaview/models/porta_geogrid_model.dart';
 import 'package:nexaview/services/geogrid_service.dart';
 import 'package:nexaview/widgets/geogrid_refresh_button.dart';
 import 'package:nexaview/widgets/reserva_lock_badge.dart';
-import 'package:nexaview/services/auth_service.dart';
 
 /// Tela de detalhe de um splitter especifico.
 ///
@@ -432,7 +431,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
 
                   const SizedBox(height: 4),
 
-                      // OLT
+                  // OLT
                   Wrap(
                     spacing: 10,
                     runSpacing: 6,
@@ -447,7 +446,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                           color: Colors.white.withValues(alpha: 0.95),
                           shadows: [
                             Shadow(
-                          offset: const Offset(0, 2), // posicao da sombra
+                              offset: const Offset(0, 2), // posicao da sombra
                               blurRadius: 4, // suavidade
                               color: Colors.black.withValues(alpha: 0.65),
                             ),
@@ -784,7 +783,7 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
                                           _buildPortasGrid(portaCards),
                                         if (!kIsWeb) ...portaCards,
 
-                            // Clientes sem porta (problema de cadastro)
+                                        // Clientes sem porta (problema de cadastro)
                                         if (clientesSemPorta.isNotEmpty) ...[
                                           const SizedBox(height: 20),
                                           const Padding(
@@ -1115,7 +1114,8 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     setState(() => _refreshing = true);
 
     try {
-      await widget.splitterService.refreshClientesPorSplitter(widget.splitter.code);
+      await widget.splitterService
+          .refreshClientesPorSplitter(widget.splitter.code);
 
       _atualizouSplitter = true;
     } finally {
@@ -1238,4 +1238,3 @@ class _SplitterDetailPageState extends State<SplitterDetailPage> {
     setState(() => _nomesClientesReservaGeoGrid = nomes);
   }
 }
-

@@ -9,7 +9,6 @@ import 'package:nexaview/screens/splitter_detail_page.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:nexaview/models/olt_model.dart'; // ✅ IMPORTANTE
-import 'package:nexaview/services/auth_service.dart';
 import 'package:nexaview/services/splitter_status_service.dart';
 import 'package:nexaview/enums/splitter_status.dart';
 import 'package:nexaview/services/geogrid_service.dart';
@@ -1957,7 +1956,7 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.tune_rounded,
                 label: _desktopActiveFilterCount == 0
                     ? 'Sem filtros'
-                    : '${_desktopActiveFilterCount} filtros',
+                    : '$_desktopActiveFilterCount filtros',
               ),
               _buildDesktopMiniPill(
                 isDark,
@@ -2033,7 +2032,7 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.tune_rounded,
                 label: _desktopActiveFilterCount == 0
                     ? 'Sem filtros'
-                    : '${_desktopActiveFilterCount} filtros',
+                    : '$_desktopActiveFilterCount filtros',
               ),
               _buildDesktopMiniPill(
                 isDark,

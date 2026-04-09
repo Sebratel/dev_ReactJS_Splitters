@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:nexaview/models/cliente_model.dart';
 import 'package:nexaview/screens/cliente_detail_screen.dart';
-import 'package:nexaview/services/auth_service.dart';
 import 'package:nexaview/widgets/reserva_lock_badge.dart';
 
 class ClienteCard extends StatefulWidget {
@@ -99,7 +98,8 @@ class _ClienteCardState extends State<ClienteCard> {
             border: Border.all(
               color: widget.isOverflow || widget.isNoPort
                   ? statusColor
-                  : const Color.fromARGB(255, 82, 82, 82).withValues(alpha: 0.2),
+                  : const Color.fromARGB(255, 82, 82, 82)
+                      .withValues(alpha: 0.2),
               width: widget.isOverflow || widget.isNoPort ? 2 : 1,
             ),
           ),
@@ -232,4 +232,3 @@ class _ClienteCardState extends State<ClienteCard> {
     );
   }
 }
-

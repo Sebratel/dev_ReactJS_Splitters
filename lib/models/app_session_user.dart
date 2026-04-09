@@ -56,108 +56,126 @@ class AppSessionUser {
           ? {massivaViewPermission, massivaOpenPermission}
           : const {},
       isAdmin: canOpenMassiva,
-      canAccessMassiva: true,
-      canOpenMassiva: true,
+      canAccessMassiva: canOpenMassiva,
+      canOpenMassiva: canOpenMassiva,
       name: 'Local Dev',
       personId: personId,
       sessionToken: sessionToken,
     );
   }
 
- factory AppSessionUser.fromJwtPayload(
-  Map<String, dynamic> payload, {
-  required Set<String> allowedEmails,
-  required Set<String> allowedRoles,
-  String? sessionToken,
-}) {
-  // --- 0. Pré-processamento do hubLaunch ---
-  // Na URL, o hubLaunch geralmente vem como uma String JSON. 
-  // Precisamos converter para Map para conseguir acessar as chaves internas.
-  Map<String, dynamic> hubLaunchData = {};
-  final rawHubLaunch = payload['hubLaunch'];
-  
-  if (rawHubLaunch is Map) {
-    hubLaunchData = rawHubLaunch.cast<String, dynamic>();
-  } else if (rawHubLaunch is String && rawHubLaunch.isNotEmpty) {
-    try {
-      final decoded = jsonDecode(rawHubLaunch);
-      if (decoded is Map) {
-        hubLaunchData = decoded.cast<String, dynamic>();
+  factory AppSessionUser.fromJwtPayload(
+    Map<String, dynamic> payload, {
+    required Set<String> allowedEmails,
+    required Set<String> allowedRoles,
+    String? sessionToken,
+  }) {
+    Map<String, dynamic> hubLaunchData = {};
+    final rawHubLaunch = payload['hubLaunch'];
+
+    if (rawHubLaunch is Map) {
+      hubLaunchData = rawHubLaunch.cast<String, dynamic>();
+    } else if (rawHubLaunch is String && rawHubLaunch.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawHubLaunch);
+        if (decoded is Map) {
+          hubLaunchData = decoded.cast<String, dynamic>();
+        }
+      } catch (e) {
+        debugPrint('Erro ao decodificar hubLaunch da URL: $e');
       }
-    } catch (e) {
-      debugPrint("Erro ao decodar hubLaunch da URL: $e");
     }
+
+    final email = _extractString(
+          payload,
+          ['email', 'upn', 'preferred_username', 'sub'],
+        ) ??
+        _extractString(hubLaunchData, ['email', 'upn']) ??
+        '';
+    final normalizedEmail = email.trim().toLowerCase();
+
+    final name = _extractString(
+          payload,
+          ['name', 'nome', 'given_name', 'display_name'],
+        ) ??
+        _extractString(hubLaunchData, ['name', 'nome']);
+
+    final personId = _extractInt(
+          payload,
+          [
+            'personId',
+            'person_id',
+            'employeeId',
+            'employee_id',
+            'colaboradorId',
+            'colaborador_id',
+            'id',
+            'ID',
+          ],
+        ) ??
+        _extractInt(hubLaunchData, ['personId', 'person_id', 'id']);
+
+    final permissions = <String>{};
+    final rawPerms = payload['permissions'] ?? hubLaunchData['permissions'];
+    if (rawPerms is String && rawPerms.isNotEmpty) {
+      permissions
+          .addAll(rawPerms.split(',').map((e) => e.trim().toLowerCase()));
+    } else if (rawPerms is List) {
+      permissions.addAll(
+        rawPerms.map((e) => e.toString().trim().toLowerCase()),
+      );
+    }
+
+    final roles = _extractRoles(payload);
+    final rawHubRoles = hubLaunchData['roles'];
+    if (rawHubRoles is String && rawHubRoles.trim().isNotEmpty) {
+      roles.add(rawHubRoles.trim().toLowerCase());
+    } else if (rawHubRoles is List) {
+      roles.addAll(
+        rawHubRoles
+            .map((e) => e.toString().trim().toLowerCase())
+            .where((e) => e.isNotEmpty),
+      );
+    }
+
+    final isAdmin = payload['isAdmin'] == true ||
+        payload['isAdmin'] == 'true' ||
+        hubLaunchData['isAdmin'] == true ||
+        hubLaunchData['isAdmin'] == 'true';
+    final emailAllowed = allowedEmails.contains(normalizedEmail);
+    final roleAllowed = roles.any(allowedRoles.contains);
+    final canAccessMassiva = isAdmin ||
+        emailAllowed ||
+        roleAllowed ||
+        permissions.contains(massivaViewPermission) ||
+        permissions.contains(massivaOpenPermission) ||
+        permissions.contains('massiva_admin');
+    final canOpenMassiva = isAdmin ||
+        emailAllowed ||
+        roleAllowed ||
+        permissions.contains(massivaOpenPermission) ||
+        permissions.contains('massiva_admin');
+
+    debugPrint('--- AUTH DEBUG ---');
+    debugPrint('Email extraido: $email');
+    debugPrint('HubLaunch detectado: ${hubLaunchData.isNotEmpty}');
+    debugPrint('Roles encontradas: $roles');
+    debugPrint('Permissions encontradas: $permissions');
+    debugPrint('Can Access Massiva: $canAccessMassiva');
+    debugPrint('Can Open Massiva: $canOpenMassiva');
+
+    return AppSessionUser(
+      email: email,
+      name: name ?? 'Usuario',
+      personId: personId,
+      sessionToken: sessionToken,
+      roles: roles,
+      permissions: permissions,
+      isAdmin: isAdmin,
+      canAccessMassiva: canAccessMassiva,
+      canOpenMassiva: canOpenMassiva,
+    );
   }
-
-  // --- 1. Extração de Identidade Base ---
-  // Tenta na raiz, se não achar, tenta dentro do hubLaunch decodificado
-  final email = _extractString(payload, ['email', 'upn', 'preferred_username', 'sub']) ??
-                _extractString(hubLaunchData, ['email', 'upn']) ??
-                '';
-
-  final name = _extractString(payload, ['name', 'nome', 'given_name', 'display_name']) ??
-               _extractString(hubLaunchData, ['name', 'nome']);
-
-  final personId = _extractInt(payload, [
-    'personId', 'person_id', 'employeeId', 'employee_id',
-    'colaboradorId', 'colaborador_id', 'id', 'ID',
-  ]) ?? _extractInt(hubLaunchData, ['personId', 'person_id', 'id']) ?? 0;
-
-  // --- 2. Extração de Permissões ---
-  final Set<String> permissions = {};
-
-  // Busca permissões na raiz ou dentro do hubLaunchData
-  // Aceita o formato "perm1,perm2" (String) ou ["perm1", "perm2"] (List)
-  var rawPerms = payload['permissions'] ?? hubLaunchData['permissions'];
-
-  if (rawPerms is String && rawPerms.isNotEmpty) {
-    permissions.addAll(rawPerms.split(',').map((e) => e.trim().toLowerCase()));
-  } else if (rawPerms is List) {
-    permissions.addAll(rawPerms.map((e) => e.toString().trim().toLowerCase()));
-  }
-
-  // --- 3. Extração de Roles e Admin ---
-  final roles = _extractRoles(payload);
-  if (roles.isEmpty && hubLaunchData.containsKey('roles')) {
-    final rawRoles = hubLaunchData['roles'];
-    if (rawRoles is List) roles.addAll(rawRoles.map((e) => e.toString()));
-  }
-
-  final bool isAdmin = payload['isAdmin'] == true || 
-                       payload['isAdmin'] == 'true' ||
-                       hubLaunchData['isAdmin'] == true ||
-                       hubLaunchData['isAdmin'] == 'true';
-
-  // --- 4. Lógica de Flags de Interface (Regras de Negócio) ---
-  // Agora validamos se as permissões necessárias existem no Set
-  final canAccessMassiva = permissions.contains('massiva_view') || 
-                           permissions.contains('massiva_admin') ||
-                           isAdmin;
-
-  final canOpenMassiva = permissions.contains('massiva_open') || 
-                         permissions.contains('massiva_admin') ||
-                         isAdmin;
-
-  // DEBUG (IMPORTANTE: Verifique o console do navegador)
-  debugPrint("--- AUTH DEBUG ---");
-  debugPrint("Email extraído: $email");
-  debugPrint("HubLaunch detectado: ${hubLaunchData.isNotEmpty}");
-  debugPrint("Permissions encontradas: $permissions");
-  debugPrint("Can Access Massiva: $canAccessMassiva");
-  debugPrint("Can Open Massiva: $canOpenMassiva");
-
-  return AppSessionUser(
-    email: email,
-    name: name ?? 'Usuário',
-    personId: personId,
-    sessionToken: sessionToken,
-    roles: roles,
-    permissions: permissions,
-    isAdmin: isAdmin,
-    canAccessMassiva: canAccessMassiva,
-    canOpenMassiva: canOpenMassiva,
-  );
-}
 
   factory AppSessionUser.fromHubSession(
     Map<String, dynamic> payload, {
@@ -221,7 +239,10 @@ class AppSessionUser {
     final roles = <String>{};
 
     if (rawRoles is String) {
-      roles.add(rawRoles.trim().toLowerCase());
+      final normalized = rawRoles.trim().toLowerCase();
+      if (normalized.isNotEmpty) {
+        roles.add(normalized);
+      }
     } else if (rawRoles is List) {
       for (final item in rawRoles) {
         if (item is String && item.trim().isNotEmpty) {

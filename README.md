@@ -30,6 +30,7 @@ Aplicacao Flutter para consulta de splitters, clientes e operacoes de massiva da
 - `REVERSE_GEOCODE_ENDPOINT`: reverse geocode opcional.
 - `GEOGRID_BASE_URL`, `GEOGRID_API_KEY`: integracao GeoGrid.
 - `LOCAL_USER_EMAIL`, `LOCAL_USER_PERSON_ID`, `LOCAL_MASSIVA_ENABLED`: defaults para ambiente local.
+- `LOCAL_SESSION_TOKEN`: token tecnico usado como fallback no ambiente local quando nao houver token vindo da URL.
 
 ## Fluxo de entrega para GitHub
 

@@ -1,10 +1,11 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexaview/utils/web_utils.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/olt_model.dart';
-import 'package:flutter/foundation.dart';
 
 class OltService {
   final String token;
@@ -18,22 +19,22 @@ class OltService {
 
   Future<void> loadOlts() async {
     final headers = {'Authorization': 'Bearer $token'};
-    print("Consultando OLTs... com headers $headers");
+    debugPrint('Consultando OLTs...');
     final response = await http.get(Uri.parse(_endpoint), headers: headers);
+
+    if (response.statusCode == 401) {
+      debugPrint('401 ao buscar OLTs, token pode estar expirado');
+      final authBox = await Hive.openBox('auth_cache');
+      await authBox.delete('googleIdToken');
+      WebUtils.redirect("https://sebratel-hub.web.app");
+      return;
+    }
 
     if (response.statusCode != 200) {
       throw Exception('Erro ao buscar OLTs');
     }
 
-    if(response.statusCode == 401) {
-      debugPrint('401 ao buscar OLTs, token pode estar expirado');
-        final authBox = await Hive.openBox('auth_cache');
-        await authBox.delete('googleIdToken');
-        WebUtils.redirect("https://sebratel-hub.web.app");
-        return;
-    }
-
-    final List list = jsonDecode(response.body)['response'];
+    final list = jsonDecode(response.body)['response'] as List;
 
     _oltByCode.clear();
 
@@ -45,10 +46,9 @@ class OltService {
       }
     }
 
-    debugPrint('✅ OLTs carregadas por code: ${_oltByCode.length}');
+    debugPrint('OLTs carregadas por code: ${_oltByCode.length}');
   }
 
-  /// 🔗 Splitter.oltCode -> OLT.code
   OltModel? getBySplitterCode(String? splitterOltCode) {
     if (splitterOltCode == null || splitterOltCode.isEmpty) return null;
     return _oltByCode[splitterOltCode];

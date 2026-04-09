@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -909,6 +909,7 @@ class _MassivaPageState extends State<MassivaPage> {
   List<AffectedUserRequest> _buildAffectedUserRequests({
     required String apCode,
     required int protocol,
+    int? assignmentId,
   }) {
     final finishDate = (_closedAt ?? DateTime.now()).toUtc().toIso8601String();
     final createdAt = DateTime.now().toUtc().toIso8601String();
@@ -926,6 +927,7 @@ class _MassivaPageState extends State<MassivaPage> {
       return AffectedUserRequest(
         pppoe: cliente.user.trim(),
         protocol: protocol,
+        assignmentId: assignmentId,
         reason: reason,
         finishDate: finishDate,
         created: createdAt,
@@ -1909,10 +1911,10 @@ class _MassivaPageState extends State<MassivaPage> {
         return null;
       }
 
-      print('Erro na requisição: ${response.statusCode}');
+      debugPrint('Erro na requisicao: ${response.statusCode}');
       return null;
     } catch (e) {
-      print('Erro de conexão: $e');
+      debugPrint('Erro de conexao: $e');
       return null; // Ou throw Exception se quiser travar o login
     }
   }
@@ -1946,10 +1948,7 @@ class _MassivaPageState extends State<MassivaPage> {
             solicitationServiceCategory4: '',
             solicitationServiceCategory5: '',
             authenticationAccessPointCode: apCode,
-            affectedUsers: _buildAffectedUserRequests(
-              apCode: apCode,
-              protocol: 1, // O protocolo real ainda não existe, mas é necessário passar algum valor para construir a lista de afetados. O ideal seria retornar os protocolos abertos e construir a lista de afetados dentro do loop de abertura.
-            ),
+            affectedUsers: const [],
             assignment: ApiGatewayMassivaAssignment(
               title: _buildApiGatewayTitle(apCode),
               description: description,
@@ -2028,12 +2027,9 @@ class _MassivaPageState extends State<MassivaPage> {
         final apLabel = _apDisplayLabel(request.authenticationAccessPointCode);
         try {
           final response = await widget.gatewayService.openMassivaViaApiGateway(
-              request: request,
-              affectedUsersQuantity: _estimatedAffectedClients(),
-              affectedUsers: _buildAffectedUserRequests(
-              apCode: request.authenticationAccessPointCode,
-              protocol: 1, // O protocolo real ainda não existe, mas é necessário passar algum valor para construir a lista de afetados. O ideal seria retornar os protocolos abertos e construir a lista de afetados dentro do loop de abertura.
-            ));
+            request: request,
+            affectedUsersQuantity: _estimatedAffectedClients(),
+          );
 
           final details = <String>[];
           if (response.protocol != null) {
@@ -2048,9 +2044,23 @@ class _MassivaPageState extends State<MassivaPage> {
 
           if (response.protocol != null &&
               widget.gatewayService.isAffectedUsersConfigured) {
+            if (response.assignmentId == null || response.assignmentId! <= 0) {
+              affectedFailureMessages.add(
+                '$apLabel: assignmentId nao retornado pela API de abertura',
+              );
+              openedProtocols.add(
+                '$apLabel: ${details.join(' | ')}',
+              );
+              if (response.message.trim().isNotEmpty) {
+                backendMessages.add('$apLabel: ${response.message.trim()}');
+              }
+              continue;
+            }
+
             final affectedUsers = _buildAffectedUserRequests(
               apCode: request.authenticationAccessPointCode,
               protocol: response.protocol!,
+              assignmentId: response.assignmentId,
             );
 
             if (affectedUsers.isNotEmpty) {

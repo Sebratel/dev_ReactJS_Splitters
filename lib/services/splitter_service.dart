@@ -180,7 +180,7 @@ class SplitterService {
   Future<http.Response> _authedGet(String url) async {
     debugPrint('GET $url');
     final h = {'Authorization': 'Bearer $token'};
-    print("headers esta aqui = $h");
+    debugPrint('Headers sanitizados enviados para GET autenticado');
     var r = await http.get(Uri.parse(url), headers: h);
     debugPrint(
       'GET status=${r.statusCode} content-type=${r.headers['content-type'] ?? '(sem content-type)'} bytes=${r.bodyBytes.length}, headers=${r.headers}',
@@ -469,8 +469,10 @@ class SplitterService {
           );
         }
 
-        print(
-            "Consultando geocodificação para $lat, $lng (attempt $attempt/$maxAttempts)...");
+        debugPrint(
+          'Consultando geocodificacao para $lat, $lng '
+          '(attempt $attempt/$maxAttempts)...',
+        );
 
         final response = await http.get(
           url,

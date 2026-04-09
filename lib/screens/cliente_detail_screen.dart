@@ -4,7 +4,6 @@ import 'package:nexaview/models/cliente_model.dart';
 import 'package:flutter/services.dart';
 import 'package:nexaview/models/solicitation_model.dart';
 import 'package:nexaview/services/solicitation_service.dart';
-import 'package:nexaview/services/auth_service.dart';
 
 String _formatDate(DateTime date) {
   return '${date.day.toString().padLeft(2, '0')}/'
