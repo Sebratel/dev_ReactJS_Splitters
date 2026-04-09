@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/solicitation_model.dart';
-import '../services/auth_service.dart';
 
 class SolicitationService {
   final String baseUrl;

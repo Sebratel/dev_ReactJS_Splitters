@@ -30,9 +30,9 @@ class MassivaGatewayService {
   final http.Client _client;
   final Duration timeout;
   final int maxRetries;
-  final Map<String, String> _hostTokenCache = {};
-  final Map<String, DateTime> _hostTokenExpiry = {};
+  // ignore: unused_field
   String? _googleIdTokenCache;
+  // ignore: unused_field
   DateTime? _googleIdTokenExpiry;
 
   MassivaGatewayService({
@@ -63,7 +63,6 @@ class MassivaGatewayService {
   Future<EllevenMassivaResponse> openMassivaViaApiGateway({
     required ApiGatewayMassivaRequest request,
     required int affectedUsersQuantity,
-    List<AffectedUserRequest> affectedUsers = const [],
   }) async {
     if (!isConfigured) {
       throw Exception('Endpoint de massiva do Elleven não configurado.');
@@ -151,7 +150,10 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpoint);
-    final headers = Map<String, String>.from("Authorization: Bearer $token".split(': ').asMap().map((_, e) => MapEntry(e[0], e[1])));
+    final headers = Map<String, String>.from("Authorization: Bearer $token"
+        .split(': ')
+        .asMap()
+        .map((_, e) => MapEntry(e[0], e[1])));
     final payload = authenticationIds.isEmpty
         ? incident.toJson()
         : {
@@ -224,11 +226,49 @@ class MassivaGatewayService {
     }
 
     final uri = Uri.parse(endpointUrl);
-    final payload = users.map((item) => item.toJson()).toList();
+    final assignmentId = users
+        .map((item) => item.assignmentId)
+        .whereType<int>()
+        .firstWhere((id) => id > 0, orElse: () => 0);
+    if (assignmentId <= 0) {
+      throw Exception('assignmentId invalido para enviar afetados.');
+    }
+    final payload = <String, dynamic>{
+      'usuarioAfetadoEntities': users
+          .map(
+            (item) => <String, dynamic>{
+              'protocol': item.protocol,
+              'reason': item.reason,
+              'contractId': item.contractId,
+              'finishDate': item.finishDate,
+              'created': item.created,
+            },
+          )
+          .toList(),
+      'assignmentId': assignmentId,
+    };
 
     debugPrint('➡️ [AFETADOS] POST $uri');
 
     if (kDebugMode) {
+      final protocols = users.map((item) => item.protocol).toSet().toList()
+        ..sort();
+      debugPrint(
+        '[AFETADOS][TEMP] total=${users.length} '
+        'protocols=$protocols '
+        'assignmentId=$assignmentId',
+      );
+      for (var i = 0; i < users.length && i < 3; i++) {
+        final item = users[i];
+        debugPrint(
+          '[AFETADOS][TEMP][ITEM ${i + 1}] '
+          'protocol=${item.protocol} '
+          'reason=${item.reason} '
+          'finishDate=${item.finishDate} '
+          'created=${item.created} '
+          'contractId=${item.contractId}',
+        );
+      }
       final prettyPayload = const JsonEncoder.withIndent(
         '  ',
       ).convert(_sanitizePayload(payload));
@@ -333,11 +373,7 @@ class MassivaGatewayService {
     };
   }
 
-  Future<String> _ensureGoogleIdToken() async {
-    // Mantido por compatibilidade de estrutura, mas redirecionado para o token injetado.
-    return token;
-  }
-
+  // ignore: unused_element
   Future<String> _fetchGoogleIdTokenFromHub() async {
     final hubToken = sessionToken?.trim() ?? '';
     if (hubToken.isEmpty) {
@@ -389,6 +425,7 @@ class MassivaGatewayService {
     return googleIdToken;
   }
 
+  // ignore: unused_element
   void _clearGoogleIdTokenCache() {
     _googleIdTokenCache = null;
     _googleIdTokenExpiry = null;
@@ -410,7 +447,6 @@ class MassivaGatewayService {
         return response;
       }
     }
-
 
     throw Exception('Falha inesperada ao autenticar na API de massivas.');
   }
@@ -513,7 +549,7 @@ class MassivaGatewayService {
         final response = await _sendMassivaAuthorized(
           (headers) => _client.get(uri, headers: headers).timeout(timeout),
         );
-        
+
         if (kDebugMode) {
           debugPrint(
               'Resposta [LISTAGEM de Massivas]: status=${response.statusCode}');

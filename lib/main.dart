@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,6 +106,10 @@ void main() async {
     'LOCAL_USER_EMAIL',
     defaultValue: 'dev@local',
   );
+  const localSessionToken = String.fromEnvironment(
+    'LOCAL_SESSION_TOKEN',
+    defaultValue: 'local-dev-token',
+  );
   const localUserPersonId = int.fromEnvironment(
     'LOCAL_USER_PERSON_ID',
     defaultValue: 629,
@@ -147,7 +151,7 @@ void main() async {
     if (hubProfileResult.payload != null) {
       sessionUser = AppSessionUser.fromHubSession(
         hubProfileResult.payload!,
-        sessionToken: token,
+        sessionToken: token ?? tokenHub,
       );
       debugPrint("SESSAO DO HUB CARREGADA VIA /auth/session");
     } else {
@@ -155,7 +159,7 @@ void main() async {
         params,
         allowedEmails: allowedMassivaEmails,
         allowedRoles: allowedMassivaRoles,
-        sessionToken: token,
+        sessionToken: token ?? tokenHub,
       );
       debugPrint("SESSAO DO HUB CARREGADA EM MODO DE COMPATIBILIDADE");
     }
@@ -171,9 +175,11 @@ void main() async {
       email: localUserEmail,
       canOpenMassiva: localMassivaEnabled,
       personId: localUserPersonId > 0 ? localUserPersonId : 629,
-      sessionToken: token,
+      sessionToken: token ?? localSessionToken,
     );
   }
+
+  final effectiveSessionToken = sessionUser.sessionToken ?? localSessionToken;
 
   // =============================================================
   // 4. Hive (cache local)
@@ -238,7 +244,7 @@ void main() async {
 
   // SplitterService centraliza cache local, consumo do ERP e resolucao de ruas.
   final splitterService = SplitterService(
-    token: sessionUser.sessionToken!,
+    token: effectiveSessionToken,
     splittersEndpoint:
         "https://api-gateway-bff.sebratel.net.br/api/v1/splitters/listarSplitters",
     clientesEndpoint:
@@ -256,7 +262,7 @@ void main() async {
   runApp(
     MyApp(
       splitterService: splitterService,
-      token: sessionUser.sessionToken!,
+      token: effectiveSessionToken,
       sessionUser: sessionUser,
       massivaApiGatewayEndpoint: massivaApiGatewayEndpoint,
       massivaAffectedUsersEndpoint: massivaAffectedUsersEndpoint,
@@ -331,7 +337,7 @@ Future<HubSessionProfileResult> fetchHubSessionProfile({
   }
 
   try {
-    print("Consultando perfil do Hub...");
+    debugPrint("Consultando perfil do Hub...");
     final response = await http.get(
       Uri.parse(endpoint),
       headers: {

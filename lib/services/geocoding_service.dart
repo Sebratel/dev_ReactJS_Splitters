@@ -1,5 +1,8 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/address_model.dart';
 import 'address_cache_service.dart';
 
@@ -13,23 +16,20 @@ class GeocodingService {
     required double lng,
   }) async {
     try {
-      // 1) tenta cache primeiro
       final cached = await _cache.get(splitterCode);
       if (cached != null) return cached;
 
       final uri = Uri.parse(
         '$_baseUrl?format=json&lat=$lat&lon=$lng&addressdetails=1',
       );
-      print("Consultando geocodificação para $lat, $lng...");
+      debugPrint('Consultando geocodificacao para $lat, $lng...');
 
-      final response = await http
-          .get(
-            uri,
-            headers: {
-              'User-Agent': 'SplitterApp/1.0 (contato@sebratel.com.br)',
-            },
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await http.get(
+        uri,
+        headers: {
+          'User-Agent': 'SplitterApp/1.0 (contato@sebratel.com.br)',
+        },
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return null;
 
@@ -44,7 +44,6 @@ class GeocodingService {
         postalCode: address['postcode'],
       );
 
-      // salva cache
       await _cache.save(splitterCode, model);
 
       return model;

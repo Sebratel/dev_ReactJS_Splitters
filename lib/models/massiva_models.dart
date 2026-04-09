@@ -149,6 +149,7 @@ class ApiGatewayMassivaRequest {
 class AffectedUserRequest {
   final String pppoe;
   final int protocol;
+  final int? assignmentId;
   final String reason;
   final String finishDate;
   final String created;
@@ -158,6 +159,7 @@ class AffectedUserRequest {
   const AffectedUserRequest({
     required this.pppoe,
     required this.protocol,
+    this.assignmentId,
     required this.reason,
     required this.finishDate,
     required this.created,
@@ -168,6 +170,7 @@ class AffectedUserRequest {
   Map<String, dynamic> toJson() => {
         'pppoe': pppoe,
         'protocol': protocol,
+        if (assignmentId != null) 'assignmentId': assignmentId,
         'reason': reason,
         'finishDate': finishDate,
         'created': created,
@@ -362,8 +365,6 @@ class MassivaTicket {
   }
 
   factory MassivaTicket.fromJson(Map<String, dynamic> json) {
-    print(json.toString());
-
     final input = json['input'] is Map
         ? (json['input'] as Map).map((k, v) => MapEntry(k.toString(), v))
         : const <String, dynamic>{};
@@ -536,18 +537,24 @@ class MassivaTicket {
     dynamic dateCandidate,
     dynamic timeCandidate,
   }) {
+    final dateText = dateCandidate?.toString().trim() ?? '';
+    final timeText = timeCandidate?.toString().trim() ?? '';
+
+    if (dateText.isNotEmpty && timeText.isNotEmpty) {
+      final combined = _parseDate('$dateText $timeText');
+      if (combined != null) {
+        return combined;
+      }
+    }
+
     for (final candidate in candidates) {
       final parsed = _parseDate(candidate);
       if (parsed != null) return parsed;
     }
 
-    final dateText = dateCandidate?.toString().trim() ?? '';
     if (dateText.isEmpty) return null;
 
-    final timeText = timeCandidate?.toString().trim() ?? '';
-    return _parseDate(
-      timeText.isEmpty ? dateText : '$dateText $timeText',
-    );
+    return _parseDate(dateText);
   }
 }
 
