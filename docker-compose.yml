@@ -6,6 +6,8 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: nexaview-backend
+    env_file:
+      - .env.local
     environment:
       PORT: 3001
       # As demais variáveis vêm do .env.local
@@ -25,6 +27,8 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     container_name: nexaview-frontend
+    env_file:
+      - .env.local
     environment:
       # Dentro do container, 'backend' é o hostname do serviço
       VITE_LOCAL_BFF_URL: http://backend:3001
@@ -36,4 +40,8 @@ services:
     networks:
       - nexaview-network
     restart: unless-stopped
+
+networks:
+  nexaview-network:
+    driver: bridge
     
