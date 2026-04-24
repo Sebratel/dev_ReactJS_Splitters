@@ -28,7 +28,7 @@ export function explainMassivaPostBlocked(
     case 'person-id-invalid':
       return 'personId inválido. Verifique sessão ou o endpoint de funcionário no BFF.'
     case 'missing-gateway-config':
-      return 'Em produção é obrigatório definir VITE_MASSIVA_OPEN_PATH no build. Em npm run dev o app já assume /api/v1/massivas/open se a variável estiver vazia; confira também VITE_BFF_BASE_URL e reinicie o Vite após mudar .env.'
+      return 'Em produção é obrigatório definir VITE_MASSIVA_OPEN_PATH no build. Em npm run dev o app já assume /api/v1/massivas/salvar-massiva-via-api se a variável estiver vazia; confira também VITE_BFF_BASE_URL e reinicie o Vite após mudar .env.'
     case 'missing-assignment':
       return readiness.issues.join(' ')
     default:

@@ -46,10 +46,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($Deploy) {
-  Write-Host "Publicando no Firebase Hosting..."
-  & firebase deploy --only hosting
-
-  if ($LASTEXITCODE -ne 0) {
-    throw "Falha no deploy do Firebase Hosting."
+  if (Test-Path (Join-Path $PSScriptRoot "package.json")) {
+    Write-Host "Publicando a app React com Docker (ver README e .env.example, secao Docker)..."
+    Push-Location $PSScriptRoot
+    & npm run deploy:docker
+    $code = $LASTEXITCODE
+    Pop-Location
+    if ($code -ne 0) {
+      throw "Falha no deploy: npm run deploy:docker"
+    }
+  } else {
+    Write-Host "Ajuste este script: defina o comando de publicacao do artefacto (Firebase Hosting nao e mais usado neste repositorio)."
   }
 }

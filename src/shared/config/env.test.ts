@@ -16,10 +16,10 @@ describe('env', () => {
     vi.stubEnv('VITE_MASSIVA_AFETADOS_PATH', '')
     vi.stubEnv('VITE_MASSIVA_LIST_PATH', '')
     const { env } = await import('@/shared/config/env')
-    expect(env.massivaOpenPath).toBe('/api/v1/massivas/open')
+    expect(env.massivaOpenPath).toBe('/api/v1/massivas/salvar-massiva-via-api')
     expect(env.massivaClosePath).toBe('/api/v1/massivas/finalizar-chamado-via-api')
     expect(env.massivaAfetadosPath).toBe('/api/v1/afetados')
-    expect(env.massivaListPath).toBe('/api/v1/massivas/list')
+    expect(env.massivaListPath).toBe('/api/v1/massivas/recuperar-pelo-banco')
   })
 
   it('massiva paths usam valor explícito da env quando preenchido', async () => {

@@ -1,81 +1,34 @@
-# Docker Compose para Portainer
+# NexaView Web (Splitters)
 
-## Problema Resolvido
-
-O arquivo `docker-compose.yml` original usa `env_file: - .env.local`, mas o Portainer não consegue acessar arquivos locais fora do contexto do stack. Este arquivo `docker-compose.portainer.yml` incorpora as variáveis essenciais diretamente no arquivo.
-
-## Como usar no Portainer
-
-### 1. **Faça upload do arquivo correto**
-
-No Portainer, faça upload do **`docker-compose.portainer.yml`** (não o `docker-compose.yml` original).
-
-### 2. **Configure variáveis de ambiente sensíveis (opcional)**
-
-Se precisar das credenciais mais sensíveis, configure-as como **Environment Variables** no Portainer:
-
-```
-ERP_CLIENT_ID=ad0c5d9a-fad1-4ca9-8d1e-cff2cedb3146
-ERP_CLIENT_SECRET=cb53bd13-5305-4306-b03b-b00cf05f2e34
-ERP_SYNDATA=TWpNMU9EYzVaakk1T0dSaU1USmxaalprWldFd00ySTFZV1JsTTJRMFptUT06...
-MASSIVA_COOKIE_STRING=_hjSessionUser_5073910=...
-VITE_DEV_SESSION_TOKEN=eyJhbGciOiJSUzI1NiIsImtpZCI6ImIzZDk1Yjk1ZmE0OGQxODBiODVmZmU4MDgyZmNmYTIxNzRiMDQ2Njci...
-```
-
-### 3. **Deploy no Portainer**
-
-O stack deve iniciar sem erros agora! ✅
-
-## O que foi incorporado
-
-### Backend
-- ✅ Conexão MySQL remoto (`10.0.11.171`)
-- ✅ APIs externas (GeoGrid, Hub, AutoISP)
-- ✅ Configurações de massiva
-
-### Frontend
-- ✅ URL do backend (`http://backend:3001`)
-- ✅ APIs para browser (VITE_*)
-- ✅ Configurações Google OAuth
-- ✅ Configurações de desenvolvimento
-
-## Arquivos necessários
-
-Para o Portainer, você só precisa fazer upload do:
-- `docker-compose.portainer.yml`
-
-Os Dockerfiles (`Dockerfile.frontend` e `server/Dockerfile`) serão baixados automaticamente durante o build.
-
-## Troubleshooting
-
-### Se ainda der erro de build
-
-Certifique-se de que os arquivos estão no repositório Git ou disponíveis para o Portainer:
-
-1. **Build context**: O Portainer precisa acessar `./server` e `./` (raiz)
-2. **Dockerfiles**: `Dockerfile.frontend` e `server/Dockerfile` devem existir
-
-### Verificar logs
+## Desenvolvimento
 
 ```bash
-# No Portainer, veja os logs dos containers
-docker logs nexaview-backend
-docker logs nexaview-frontend
+npm run dev
 ```
 
-### Health check
+Variáveis: um único [`.env.example`](.env.example) documenta tudo; em dev use `.env.local` (gitignored) para sobrepor.
 
-Acesse: http://seu-servidor:3001/api/health
+## Docker (um ambiente, um ficheiro)
 
----
-
-## Desenvolvimento Local
-
-Para desenvolvimento local (fora do Portainer), continue usando:
+1. Crie **`.env.docker`** com a secção *Docker* de `.env.example` (e preencha credenciais).
+2. Suba a stack (Nginx com o bundle + API Node no mesmo compose):
 
 ```bash
-# Usa .env.local
-docker-compose up -d
+npm run deploy:docker
 ```
 
-Para Portainer, use sempre `docker-compose.portainer.yml`.
+Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm run deploy:docker` usa `docker compose --env-file .env.docker` para preencher `build args` e o `environment` do backend. O Vite **não** lê ficheiro dentro da imagem: as `VITE_*` vão pelo compose.
+
+## Portainer
+
+- O repositório no Git **não** deve (e não precisa) conter `.env.docker`. O `Dockerfile.frontend` **não** faz `COPY` desse ficheiro. Se ainda vires o erro `"/.env.docker": not found`, o stack está a construir **código antigo**: faz *Pull and redeploy* apontado ao **último commit** da branch (ou cola o `Dockerfile.frontend` / `docker-compose.yml` atuais do GitHub).
+- Se aparecer *Bind for 0.0.0.0:80 failed: port is already allocated*, a porta **80** do host está ocupada. No stack, define **`FRONTEND_PORT=8080`** (ou outra livre); o mapeamento predefinido no compose passa a ser **8080→80** no container. Para expor em **80**, para o serviço que a usa ou usa um *reverse proxy*.
+- No stack, abra **Environment variables** e defina as chaves da secção *Docker* de [`.env.example`](.env.example) (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.). O compose passa-as como *build args* para o frontend.
+- Pode usar **Load variables from .env file** e colar o conteúdo de um `.env` completo (equivalente ao que usaria em `docker compose --env-file`).
+- `npm run deploy:portainer` é alias de `npm run deploy:docker`.
+
+### Build da imagem (`Dockerfile.frontend`)
+
+- A imagem corre **`vite build`** (bundle) e **não** `tsc -b`, para evitar falhas difíceis de reproduzir fora do Docker. O typecheck continua em **`npm run build`** e **`npm run typecheck`** antes de merge/deploy.
+- Se o **`vite build`** falhar, veja o log do `RUN npx vite build`. Se for **memória**, aumente `NODE_OPTIONS` (`--max-old-space-size`) no Dockerfile.
+- Se o **backend** ficar *unhealthy*: confira `DB_*` e `MASSIVA_MYSQL_*` no stack. O serviço sobe a HTTP antes de completar a ligação às bases; veja *Logs* do container se as rotas com DB devolverem erro.

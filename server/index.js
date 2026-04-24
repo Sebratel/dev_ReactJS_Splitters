@@ -1703,20 +1703,38 @@ app.post('/api/dashboard/kpi-daily-snapshot', async (req, res) => {
 });
 
 async function startServer() {
-  await ensureDashboardKpiTable(pool);
-  if (dashboardKpiSnapshotWritesEnabled) {
-    console.log('Tabela dashboard_kpi_daily (PostgreSQL) verificada.');
+  // Escutar primeiro: /api/health fica pronto de imediato (Docker/Portainer). Antes, await a
+  // Postgresql/MySQL podia atrasar ou bloquear e o healthcheck falhava (container unhealthy).
+  await new Promise((resolve, reject) => {
+    const httpServer = app.listen(port, () => {
+      console.log(`BFF Local rodando em http://localhost:${port}`);
+      resolve();
+    });
+    httpServer.on('error', reject);
+  });
+
+  try {
+    await ensureDashboardKpiTable(pool);
+    if (dashboardKpiSnapshotWritesEnabled) {
+      console.log('Tabela dashboard_kpi_daily (PostgreSQL) verificada.');
+    }
+  } catch (error) {
+    console.error(
+      'Arranque: falha ao verificar PostgreSQL (conexao ou DDL). Rotas com DB podem falhar.',
+      error,
+    );
   }
+
   if (massivaHistoryStore.configured) {
-    await massivaHistoryStore.ensureReady();
-    console.log('Histórico local de massivas (MySQL) pronto.');
+    try {
+      await massivaHistoryStore.ensureReady();
+      console.log('Histórico local de massivas (MySQL) pronto.');
+    } catch (error) {
+      console.error('Arranque: falha ao preparar MySQL (massiva).', error);
+    }
   } else {
     console.warn('Histórico local de massivas (MySQL) desativado: configure MASSIVA_MYSQL_* no .env.local.');
   }
-
-  app.listen(port, () => {
-    console.log(`BFF Local rodando em http://localhost:${port}`);
-  });
 
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';
   const kpiCronExpr = (process.env.DASHBOARD_KPI_CRON ?? '0 6 * * *').trim();
