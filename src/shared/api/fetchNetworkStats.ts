@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env';
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 /** Faixas de ocupação no catálogo (paridade `resolveSplitterStatus` / filtros da lista). */
 export type EquipmentOccupancyBands = {
@@ -30,7 +31,7 @@ export type NetworkStats = {
 
 export async function fetchNetworkStats(): Promise<NetworkStats> {
   const url = `${env.localBffUrl}/api/stats`;
-  const response = await fetch(url);
+  const response = await fetchWithSessionAuth(url);
   if (!response.ok) throw new Error('Falha ao buscar estatísticas de rede');
   
   const result = await response.json();

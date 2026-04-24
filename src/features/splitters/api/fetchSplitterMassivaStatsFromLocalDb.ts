@@ -1,5 +1,6 @@
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 type SplitterMassivaStatsApiRow = {
   splitterCode?: unknown
@@ -33,7 +34,9 @@ export async function fetchSplitterMassivaStatsFromLocalDb(
     splitterCodes: clean.join(','),
   })
 
-  const response = await fetch(`${env.localBffUrl}/api/massiva/history/splitter-stats?${params}`)
+  const response = await fetchWithSessionAuth(
+    `${env.localBffUrl}/api/massiva/history/splitter-stats?${params}`,
+  )
   if (!response.ok) {
     throw new Error(`Erro ao consultar histórico local de massivas por splitter: ${response.status}`)
   }

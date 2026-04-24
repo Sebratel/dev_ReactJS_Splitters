@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { ClienteDetail } from '@/features/clientes/model/clienteDetail'
 import { pickIsCorporateFromRow } from '@/features/splitters/model/splitterCliente'
 import {
@@ -100,7 +101,7 @@ export async function fetchClienteDetailFromLocalDb(
   authenticationId: number,
 ): Promise<ClienteDetail | null> {
   const url = `${env.localBffUrl}/api/clientes/${authenticationId}`
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
 
   if (response.status === 404) {
     return null

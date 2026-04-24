@@ -1,7 +1,10 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 export async function fetchOpenMassivaSplitterCodesFromLocalDb(): Promise<string[]> {
-  const response = await fetch(`${env.localBffUrl}/api/massiva/history/open-splitter-codes`)
+  const response = await fetchWithSessionAuth(
+    `${env.localBffUrl}/api/massiva/history/open-splitter-codes`,
+  )
   if (!response.ok) {
     throw new Error(`Erro ao consultar splitters com massiva aberta no BFF Local: ${response.status}`)
   }
