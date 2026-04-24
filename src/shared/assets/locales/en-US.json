@@ -1,0 +1,43 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "apply": "Apply",
+    "clear": "Clear",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "success": "Success!"
+  },
+  "session": {
+    "authenticating": "Authenticating with Hub...",
+    "invalid_session": "Invalid or expired session",
+    "redirecting": "Redirecting to login...",
+    "login_button": "Sign in with Hub",
+    "login_google_button": "Sign in with Google"
+  },
+  "autoisp": {
+    "suggestions_title": "AutoISP Suggestions",
+    "apply_suggestion": "Apply to Preview",
+    "active_events": "Active events",
+    "no_events": "No events detected",
+    "searching_events": "Searching for network events...",
+    "connection_error": "AutoISP connection error"
+  },
+  "massiva": {
+    "local_preview_title": "Local Preview (connections)",
+    "affected_total": "Total affected",
+    "pppoes_total": "Total PPPoEs",
+    "point_of_access": "Point of access",
+    "slot": "Slot",
+    "port": "Port",
+    "splitter": "Splitter",
+    "description_placeholder": "Ex.: scheduled fiber maintenance...",
+    "deadline_label": "Closing deadline",
+    "opening_preparation": "Opening preparation",
+    "ready_to_open": "Everything ready to open!",
+    "opening_massiva": "Opening massiva...",
+    "opening_success": "Massiva opened successfully!",
+    "opening_error": "Failed to open massiva"
+  }
+}

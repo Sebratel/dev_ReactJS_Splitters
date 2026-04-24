@@ -1,123 +1,324 @@
-# NexaView - Visao Tecnica
+# NexaView Web - Arquitetura Atual
 
 ## Objetivo
 
-Aplicacao Flutter usada para consultar splitters, clientes conectados e apoiar
-operacoes de massiva da Sebratel.
+Descrever como a aplicacao esta organizada hoje para manutencao, onboarding e evolucao segura.
 
-## Fluxo de entrada
+Este documento substitui referencias antigas da base Flutter. O repositorio atual e React no frontend com um BFF local em Node.js.
 
-1. `lib/main.dart` inicializa Firebase, Hive e os servicos principais.
-2. Em producao, o app recebe um token via URL e valida esse JWT com
-   `HUB_JWT_SECRET`.
-3. Em ambiente local, o app cria uma sessao tecnica a partir das variaveis
-   `LOCAL_USER_*`.
-4. Depois disso, a aplicacao abre a `HomePage`.
+## Visao geral
 
-## Estrutura principal
+O sistema foi dividido em duas camadas principais:
 
-### `lib/main.dart`
+- `frontend`: experiencia operacional, regras de tela, filtros, visualizacoes e chamadas de integracao
+- `server`: BFF local para consultas SQL, historico local e proxies auxiliares
 
-- ponto de entrada da aplicacao
-- injeta configuracoes e servicos na UI
-- decide entre modo local e modo autenticado
+## Camadas do frontend
 
-### `lib/screens/home_page.dart`
+### `src/app`
 
-- tela principal da operacao
-- carrega splitters, clientes, OLTs e cache de ruas
-- controla busca, filtros e navegacao
-- abre a tela de massivas quando o usuario tem permissao
+Infraestrutura da aplicacao.
 
-### `lib/screens/splitter_detail_page.dart`
+- `App.tsx`: composicao principal
+- `router.tsx`: declaracao das rotas
+- `providers/AppProviders.tsx`: TanStack Query e bridges globais
+- `layouts/`: layout raiz e sidebar
+- `auth/`: protecao de rota, OIDC e token bridge
 
-- mostra detalhes de um splitter especifico
-- exibe clientes conectados
-- usa GeoGrid e geocodificacao para enriquecer a visualizacao
+Regra: nada de negocio pesado aqui. `app` orquestra, nao implementa regra operacional.
 
-### `lib/screens/massiva_screen.dart`
+### `src/pages`
 
-- concentra a maior parte da regra operacional de massivas
-- monta a rota AP/slot/porta/splitter
-- gera descricao do protocolo
-- abre, lista e encerra massivas
-- consulta eventos AutoISP para apoio operacional
+Entrypoints de rota.
 
-## Servicos principais
+Cada arquivo de `pages/` deve apenas conectar a rota a um modulo de feature.
 
-### `lib/services/splitter_service.dart`
+Rotas atuais:
 
-- integra com o ERP para buscar splitters e clientes
-- mantem cache local com Hive
-- expoe snapshots usados pela HomePage
+- `/` -> `HomePage`
+- `/splitters` -> `SplittersPage`
+- `/splitters/:code` -> `SplitterDetailPage`
+- `/clientes/:id` -> `ClienteDetailPage`
+- `/massiva` -> `MassivaPage`
+- `/intelligence` -> `NetworkIntelligencePage`
+- `/callback` -> `OidcCallbackPage`
 
-### `lib/services/auth_service.dart`
+### `src/features`
 
-- resolve autenticacao com o ERP
-- devolve headers autenticados para outros servicos
+Nucleo do negocio. Cada feature tenta manter esta estrutura:
 
-### `lib/services/massiva_gateway_service.dart`
+- `api/`: chamadas HTTP e adaptadores de endpoint
+- `hooks/`: orquestracao de queries e estado de tela
+- `lib/`: funcoes puras e regras reutilizaveis
+- `model/`: tipos e chaves da feature
+- `store/`: Zustand local quando necessario
+- `ui/`: componentes especificos da feature
 
-- conversa com a API Gateway de massivas
-- abre protocolos
-- consulta lista de massivas
-- envia PPPoEs afetados
-- encerra massivas
+### `src/shared`
 
-### `lib/services/autoisp_event_service.dart`
+Infraestrutura compartilhada por todo o app.
 
-- consulta eventos do AutoISP
-- alimenta a tela de massivas com eventos detectados
+- `api/`: clientes HTTP, erros e chamadas transversais
+- `config/`: leitura de ambiente, i18n e configuracoes globais
+- `lib/`: utils, formatadores, storage, guards
+- `store/`: UI global
+- `ui/`: componentes reutilizaveis e estados padrao
 
-### `lib/services/geogrid_service.dart`
+### `src/domain`
 
-- consulta dados do GeoGrid
-- usado principalmente em detalhes de splitter
+Tipos/schemas transversais que nao pertencem a uma feature unica.
 
-## Models importantes
+No estado atual, o modulo principal aqui e `user`.
 
-### `lib/models/app_session_user.dart`
+## Modulos funcionais
 
-- representa o usuario da sessao atual
-- guarda email, papeis e `personId`
-- define se a funcionalidade de massiva pode ser usada
+### 1. Dashboard
 
-### `lib/models/splitter_model.dart`
+Arquivos centrais:
 
-- representa os dados estruturais do splitter
+- `src/pages/HomePage.tsx`
+- `src/features/dashboard/hooks/useNetworkStats.ts`
+- `src/features/dashboard/ui/DashboardConnectionMonitor.tsx`
 
-### `lib/models/cliente_model.dart`
+Responsabilidade:
 
-- representa o cliente conectado, inclusive dados de rota
+- mostrar KPIs operacionais da rede
+- exibir resumo de ocorrencias
+- monitorar conectividade e tempo de atualizacao dos dados
 
-### `lib/models/massiva_models.dart`
+### 2. Splitters
 
-- concentra requests e responses usados pela tela e pelo servico de massivas
+Arquivos centrais:
 
-## Variaveis de ambiente
+- `src/pages/SplittersPage.tsx`
+- `src/features/splitters/hooks/useSplittersList.ts`
+- `src/features/splitters/ui/SplittersList.tsx`
+- `src/features/splitters/ui/SplitterDetailScreen.tsx`
+- `src/features/splitters/ui/SplitterDetailSummary.tsx`
+- `src/features/splitters/lib/buildSplitterOperationalScore.ts`
 
-As configuracoes ficam em `.env.local` e sao documentadas em `.env.example`.
-As mais sensiveis para o fluxo atual sao:
+Responsabilidade:
 
-- `ERP_CLIENT_ID`, `ERP_CLIENT_SECRET`, `ERP_SYNDATA`
-- `HUB_JWT_SECRET`
-- `MASSIVA_API_GATEWAY_ENDPOINT`
-- `MASSIVA_AFFECTED_USERS_ENDPOINT`
-- `MASSIVA_API_GATEWAY_LIST_ENDPOINT`
-- `AUTOISP_EVENTS_ENDPOINT`
-- `AUTOISP_AUTH_ENDPOINT`
-- `AUTOISP_USERNAME`
-- `AUTOISP_PASSWORD`
-- `GEOGRID_BASE_URL`
-- `GEOGRID_API_KEY`
+- listar splitters com filtros e busca
+- ordenar por risco, ocupacao ou codigo
+- calcular score operacional
+- exibir detalhe do splitter com contexto tecnico e operacional
+- integrar clientes, OLT, GeoGrid, conexoes, vizinhos, massivas e tendencias
+
+### 3. Massiva
+
+Arquivos centrais:
+
+- `src/pages/MassivaPage.tsx`
+- `src/features/massiva/ui/MassivaScreen.tsx`
+- `src/features/massiva/ui/MassivaPage.tsx`
+- `src/features/massiva/hooks/useMassivaTickets.ts`
+- `src/features/massiva/hooks/useMassivaOpenMutation.ts`
+- `src/features/massiva/lib/buildMassivaOpenRequestBody.ts`
+
+Responsabilidade:
+
+- listar tickets de massiva
+- preparar abertura com validacoes
+- montar payload para o BFF
+- registrar historico local
+- apoiar o operador com preview e correlacao
+
+### 4. Clientes
+
+Arquivos centrais:
+
+- `src/pages/ClienteDetailPage.tsx`
+- `src/features/clientes/ui/ClienteDetailScreen.tsx`
+- `src/features/clientes/hooks/useClienteDetail.ts`
+- `src/features/clientes/hooks/useClienteSolicitations.ts`
+
+Responsabilidade:
+
+- mostrar detalhes de um assinante
+- ligar cliente ao splitter e ao ponto de acesso
+- listar solicitacoes
+
+### 5. Intelligence
+
+Arquivos centrais:
+
+- `src/pages/NetworkIntelligencePage.tsx`
+- `src/features/intelligence/hooks/useNetworkIntelligenceData.ts`
+- `src/features/intelligence/ui/IntelligenceSaturationMap.tsx`
+
+Responsabilidade:
+
+- cruzar tendencias com massivas
+- agregar saturacao por periodo
+- mostrar recorrencia operacional
+- exibir mapa de saturacao por splitter
+
+### 6. Session/Auth
+
+Arquivos centrais:
+
+- `src/app/auth/ProtectedRoute.tsx`
+- `src/app/auth/ProtectedAppLayout.tsx`
+- `src/app/auth/OidcAccessTokenBridge.tsx`
+- `src/features/session/ui/GoogleSessionBridge.tsx`
+- `src/features/session/store/sessionStore.ts`
+
+Responsabilidade:
+
+- proteger area logada
+- decidir entre OIDC e Google Identity
+- obter e renovar token
+- montar sessao do usuario
+
+## Estrategia de autenticacao
+
+Existem dois caminhos principais:
+
+### OIDC
+
+Ativado quando `VITE_OIDC_AUTHORITY` e `VITE_OIDC_CLIENT_ID` estao preenchidos.
+
+Nesse modo:
+
+- a aplicacao exige login OIDC
+- o callback e `/callback`
+- o access token pode ser usado como Bearer nas chamadas protegidas
+
+### Google Identity
+
+Usado como fallback quando OIDC nao esta configurado e `VITE_GOOGLE_CLIENT_ID` existe.
+
+Nesse modo:
+
+- `GoogleSessionBridge` inicia o fluxo no browser
+- a store de sessao recebe o token e metadados
+- o app tenta refresh silencioso quando necessario
+
+## Estrategia de dados
+
+### No frontend
+
+Padrao esperado:
+
+1. componente de pagina chama um `hook`
+2. `hook` usa TanStack Query ou store
+3. `api` resolve endpoint e contrato
+4. `lib` aplica regra pura ou transformacao
+5. `ui` renderiza o resultado
+
+### No backend local
+
+`server/index.js` acumula responsabilidades que hoje estao centralizadas no BFF local:
+
+- consultas em PostgreSQL para splitters, clientes, OLTs e indicadores
+- historico local de massivas em MySQL
+- proxy para GeoGrid
+- proxy para Hub
+- endpoints auxiliares de snapshot e tendencia
+
+## Integracoes externas
+
+### BFF principal / gateway
+
+Usado para:
+
+- listagens e mutacoes de massiva
+- sessao do Hub
+- parte das consultas de rede, dependendo do ambiente
+
+### PostgreSQL
+
+Fonte principal para:
+
+- splitters
+- portas
+- clientes
+- OLTs
+- estatisticas operacionais
+- snapshots e tendencias locais
+
+### MySQL (`DB_Massives`)
+
+Fonte local para:
+
+- historico de abertura/encerramento de massivas
+- estatisticas por splitter
+- codigos com massiva aberta
+
+### GeoGrid
+
+Usado para:
+
+- portas de equipamento
+- clientes e atendimentos
+- comparacao de dados operacionais por porta
+
+### AutoISP
+
+Usado quando configurado para:
+
+- autenticacao
+- leitura de eventos
+- apoio ao fluxo de massiva
+
+## Rotas e familias de endpoint do BFF local
+
+Principais grupos em `server/index.js`:
+
+- `/api/health`, `/api/stats`
+- `/api/hub/session`
+- `/api/olts`
+- `/api/splitters`
+- `/api/splitters/filter-options`
+- `/api/splitters/access-points`
+- `/api/splitters/trends`
+- `/api/splitters/:code/neighbors`
+- `/api/splitters-by-code`
+- `/api/splitters/:code/connections`
+- `/api/clientes/:id`
+- `/api/geogrid/...`
+- `/api/massiva/routes`
+- `/api/massiva/connections`
+- `/api/massiva/history/...`
+- `/api/splitters/snapshots/capture`
+- `/api/dashboard/kpi-daily-snapshot`
+
+## Responsabilidade dos arquivos mais importantes
+
+### Frontend
+
+- `src/app/router.tsx`: roteamento principal
+- `src/shared/config/env.ts`: resolucao central de variaveis de ambiente
+- `src/shared/api/bffClient.ts`: cliente para chamadas do BFF
+- `src/pages/SplittersPage.tsx`: tela mais importante do fluxo operacional
+- `src/features/splitters/ui/SplitterDetailSummary.tsx`: resumo executivo do detalhe do splitter
+- `src/features/massiva/ui/MassivaPage.tsx`: fluxo visual central de massivas
+
+### Backend
+
+- `server/index.js`: concentrador do BFF local
+- `server/massivaHistoryStore.js`: persistencia local de historico de massivas
+- `server/scripts/ensureMassivaHistory.js`: bootstrap/garantia da estrutura de historico
+
+## Decisoes arquiteturais importantes
+
+1. `pages` sao finas; a regra mora nas `features`.
+2. Integracoes nao devem ficar espalhadas em componentes visuais.
+3. Score operacional e agregacoes devem ficar em `lib`.
+4. BFF local pode complementar ou substituir fontes remotas dependendo do ambiente.
+5. O detalhe do splitter e o ponto de convergencia da maior parte das integracoes.
+
+## Riscos e pontos de atencao
+
+- `server/index.js` esta grande e centraliza muitas responsabilidades; qualquer evolucao maior deve considerar modularizacao por dominio.
+- a cobertura automatizada existe no frontend, mas precisa de ambiente local funcional para rodar Vitest.
+- a documentacao precisa ser atualizada sempre que houver mudanca de contrato, auth ou estrutura de feature.
 
 ## Por onde comecar para manutencao
 
-- problema na listagem, filtros ou cache: `lib/screens/home_page.dart` e
-  `lib/services/splitter_service.dart`
-- problema em detalhes de splitter: `lib/screens/splitter_detail_page.dart`,
-  `lib/services/geogrid_service.dart` e `lib/services/geocoding_service.dart`
-- problema em massivas: `lib/screens/massiva_screen.dart` e
-  `lib/services/massiva_gateway_service.dart`
-- problema de permissao/acesso: `lib/main.dart` e
-  `lib/models/app_session_user.dart`
+1. Leia `README.md`.
+2. Leia `docs/application_module_reference.md`.
+3. Se a tarefa for operacional, comece por `splitters`.
+4. Se a tarefa for abertura/encerramento, siga por `massiva`.
+5. Se a tarefa for integracao/dados, confira `src/shared/config/env.ts` e `server/index.js`.

@@ -1,0 +1,82 @@
+import { CheckCircle2, AlertTriangle, Circle } from 'lucide-react'
+import { cn } from '@/shared/lib/utils'
+
+export type MassivaStepId = 'rota' | 'splitters' | 'validacao' | 'abertura'
+
+export type MassivaStepIndicatorStatus = 'current' | 'success' | 'warning' | 'error' | 'idle'
+
+export type MassivaStepItem = {
+  id: MassivaStepId
+  title: string
+  description: string
+  status: MassivaStepIndicatorStatus
+}
+
+type MassivaStepperProps = {
+  currentStep: MassivaStepId
+  steps: MassivaStepItem[]
+  onStepChange: (step: MassivaStepId) => void
+}
+
+function StepIcon({ status }: { status: MassivaStepIndicatorStatus }) {
+  if (status === 'success') {
+    return <CheckCircle2 size={16} aria-hidden />
+  }
+  if (status === 'warning' || status === 'error') {
+    return <AlertTriangle size={16} aria-hidden />
+  }
+  return <Circle size={16} aria-hidden />
+}
+
+export function MassivaStepper({
+  currentStep,
+  steps,
+  onStepChange,
+}: MassivaStepperProps) {
+  return (
+    <nav aria-label="Etapas da abertura de massiva">
+      <ol className="grid gap-2 md:grid-cols-4">
+        {steps.map((step, index) => {
+          const isCurrent = currentStep === step.id
+          const toneClass =
+            step.status === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : step.status === 'warning'
+                ? 'border-amber-200 bg-amber-50 text-amber-950'
+                : step.status === 'error'
+                  ? 'border-red-200 bg-red-50 text-red-900'
+                  : isCurrent
+                    ? 'border-sky-300 bg-sky-50 text-sky-950 shadow-sm'
+                    : 'border-neutral-200 bg-white text-neutral-700'
+
+          return (
+            <li key={step.id} className="min-w-0">
+              <button
+                type="button"
+                onClick={() => onStepChange(step.id)}
+                className={cn(
+                  'flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition hover:border-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50',
+                  toneClass,
+                )}
+                aria-current={isCurrent ? 'step' : undefined}
+              >
+                <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current/20 bg-white/70">
+                  <StepIcon status={isCurrent ? 'current' : step.status} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">
+                    Etapa {index + 1}
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold">{step.title}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed opacity-80">
+                    {step.description}
+                  </span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}

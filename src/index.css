@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@keyframes operacao-mark-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.06);
+  }
+  32% {
+    transform: scale(1);
+  }
+  52% {
+    transform: scale(1.1);
+  }
+  72% {
+    transform: scale(1);
+  }
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #ffb000;
+  --color-primary-container: #ffc107;
+  --color-surface: #f4f1e8;
+  --color-surface-container-low: #ebe7db;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface: #1a1a1a;
+  --color-on-surface-variant: #5d5d5d;
+  --color-secondary: #ff8f00;
+  --color-tertiary: #b44a32;
+  --color-outline-variant: rgba(0, 0, 0, 0.05);
+  --color-inverse-surface: #262626;
+  
+  --radius-3xl: 24px;
+  --radius-4xl: 32px;
+
+  --animate-operacao-mark: operacao-mark-beat 1.45s ease-in-out infinite;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-sans;
+  }
+}
