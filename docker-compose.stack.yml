@@ -1,0 +1,138 @@
+# NexaView - Stack para Portainer (Produção)
+#
+# Esta stack contém a aplicação NexaView pronta para rodar no Docker Hub e Portainer
+# 
+# Uso:
+# 1. No Portainer, acesse "Stacks" -> "Add Stack"
+# 2. Cole o conteúdo deste arquivo
+# 3. Adicione as variáveis de ambiente conforme necessário
+# 4. Deploy!
+#
+# Variáveis de ambiente recomendadas (configure no Portainer):
+# - BACKEND_IMAGE=seu-usuario/nexaview-backend:latest
+# - FRONTEND_IMAGE=seu-usuario/nexaview-frontend:latest
+# - REGISTRY_URL=docker.io (ou seu registry privado)
+
+version: '3.8'
+
+name: nexaview
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-node:22-alpine}
+    container_name: nexaview-backend
+    pull_policy: always
+    environment:
+      PORT: 3001
+      # PostgreSQL - DESABILITADO (funciona sem estatísticas de rede)
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-}
+      DB_USER: ${DB_USER:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_SSL: ${DB_SSL:-false}
+      # MySQL remoto
+      MASSIVA_MYSQL_HOST: ${MASSIVA_MYSQL_HOST:-10.0.11.171}
+      MASSIVA_MYSQL_PORT: ${MASSIVA_MYSQL_PORT:-3306}
+      MASSIVA_MYSQL_DATABASE: ${MASSIVA_MYSQL_DATABASE:-DB_Massives}
+      MASSIVA_MYSQL_USER: ${MASSIVA_MYSQL_USER:-DevSebratel}
+      MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD:-DevBI*24}
+      # APIs externas
+      HUB_BASE_URL: ${HUB_BASE_URL:-https://sebratel-hub.web.app}
+      VITE_GEOGRID_BASE_URL: ${VITE_GEOGRID_BASE_URL:-https://eros.geogridmaps.com.br/sebratel/api/v3}
+      VITE_GEOGRID_API_KEY: ${VITE_GEOGRID_API_KEY:-}
+      VITE_BFF_BASE_URL: ${VITE_BFF_BASE_URL:-}
+      VITE_BFF_PROXY_TARGET: ${VITE_BFF_PROXY_TARGET:-https://api-gateway-bff-staging.sebratel.net.br}
+      VITE_MASSIVA_LIST_PATH: ${VITE_MASSIVA_LIST_PATH:-/api/v1/massivas/recuperar-pelo-banco}
+      VITE_MASSIVA_OPEN_PATH: ${VITE_MASSIVA_OPEN_PATH:-/api/v1/massivas/salvar-massiva-via-api}
+      VITE_MASSIVA_AFETADOS_PATH: ${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
+      # AutoISP
+      AUTOISP_EVENTS_ENDPOINT: ${AUTOISP_EVENTS_ENDPOINT:-https://autoisp.sebratel.net.br/api/massives/v1/events}
+      AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT:-https://autoisp.sebratel.net.br/api/auth/v2/request_token}
+      AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
+      AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-}
+      # Credenciais sensíveis
+      ERP_CLIENT_ID: ${ERP_CLIENT_ID:-}
+      ERP_CLIENT_SECRET: ${ERP_CLIENT_SECRET:-}
+      ERP_SYNDATA: ${ERP_SYNDATA:-}
+    ports:
+      - "3001:3001"
+    networks:
+      - nexaview-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    # Limites de recursos (opcional)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M
+    # Labels para Portainer
+    labels:
+      app: nexaview
+      component: backend
+      environment: production
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-node:22-alpine}
+    container_name: nexaview-frontend
+    pull_policy: always
+    environment:
+      VITE_LOCAL_BFF_URL: ${VITE_LOCAL_BFF_URL:-http://backend:3001}
+      # APIs externas
+      VITE_GEOGRID_BASE_URL: ${VITE_GEOGRID_BASE_URL:-https://eros.geogridmaps.com.br/sebratel/api/v3}
+      VITE_GEOGRID_API_KEY: ${VITE_GEOGRID_API_KEY:-}
+      VITE_BFF_BASE_URL: ${VITE_BFF_BASE_URL:-}
+      VITE_BFF_PROXY_TARGET: ${VITE_BFF_PROXY_TARGET:-https://api-gateway-bff-staging.sebratel.net.br}
+      VITE_MASSIVA_LIST_PATH: ${VITE_MASSIVA_LIST_PATH:-/api/v1/massivas/recuperar-pelo-banco}
+      VITE_MASSIVA_OPEN_PATH: ${VITE_MASSIVA_OPEN_PATH:-/api/v1/massivas/salvar-massiva-via-api}
+      VITE_MASSIVA_AFETADOS_PATH: ${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
+      # AutoISP
+      VITE_AUTOISP_AUTH_ENDPOINT: ${VITE_AUTOISP_AUTH_ENDPOINT:-/__autoisp/api/auth/v2/request_token}
+      VITE_AUTOISP_EVENTS_ENDPOINT: ${VITE_AUTOISP_EVENTS_ENDPOINT:-/__autoisp/api/massives/v1/events}
+      VITE_AUTOISP_USERNAME: ${VITE_AUTOISP_USERNAME:-api@sebratel.com.br}
+      VITE_AUTOISP_PASSWORD: ${VITE_AUTOISP_PASSWORD:-}
+      # Google OAuth
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+      VITE_GOOGLE_REDIRECT_URI: ${VITE_GOOGLE_REDIRECT_URI:-}
+      # Desenvolvimento
+      LOCAL_USER_EMAIL: ${LOCAL_USER_EMAIL:-dev@local}
+      LOCAL_USER_PERSON_ID: ${LOCAL_USER_PERSON_ID:-629}
+      LOCAL_MASSIVA_ENABLED: ${LOCAL_MASSIVA_ENABLED:-true}
+      VITE_DEV_SESSION_TOKEN: ${VITE_DEV_SESSION_TOKEN:-}
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - nexaview-network
+    restart: unless-stopped
+    # Limites de recursos (opcional)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1'
+    #       memory: 512M
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 256M
+    # Labels para Portainer
+    labels:
+      app: nexaview
+      component: frontend
+      environment: production
+
+networks:
+  nexaview-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: br-nexaview
