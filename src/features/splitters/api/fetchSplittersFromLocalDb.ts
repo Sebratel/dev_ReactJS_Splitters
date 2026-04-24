@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import {
   mapSplitterTypeText,
   type Splitter,
@@ -104,7 +105,7 @@ export async function fetchSplittersFromLocalDb({
 
   const url = `${env.localBffUrl}/api/splitters?${queryParams.toString()}`
 
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
   if (!response.ok) {
     throw new Error(`Erro ao consultar BFF Local: ${response.status}`)
   }
@@ -157,5 +158,4 @@ export async function fetchSplittersFromLocalDb({
     totalCount: result.totalCount || items.length,
   }
 }
-
 

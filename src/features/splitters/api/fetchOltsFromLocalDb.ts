@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { Olt } from '@/features/splitters/model/olt'
 
 type OltApiRow = {
@@ -57,7 +58,7 @@ function pickOptionalDouble(value: unknown): number | null {
 export async function fetchOltsFromLocalDb(): Promise<Olt[]> {
   const url = `${env.localBffUrl}/api/olts`
 
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
   if (!response.ok) {
     throw new Error(`Erro ao consultar BFF Local para OLTs: ${response.status}`)
   }

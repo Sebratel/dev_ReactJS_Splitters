@@ -1,4 +1,5 @@
-﻿import { env } from '@/shared/config/env'
+import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { SplitterMapNeighbor } from '@/features/splitters/model/splitterMap'
 
 type SplitterNeighborApiRow = {
@@ -32,7 +33,7 @@ export async function fetchSplitterNeighborsFromLocalDb(args: {
   url.searchParams.set('code', args.code)
   url.searchParams.set('radius', String(args.radiusMeters))
 
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
   if (!response.ok) {
     throw new Error(`Erro ao consultar vizinhos do splitter: ${response.status}`)
   }
@@ -66,3 +67,4 @@ export async function fetchSplitterNeighborsFromLocalDb(args: {
     (item): item is Omit<SplitterMapNeighbor, 'occupancyBand'> => item !== null,
   )
 }
+

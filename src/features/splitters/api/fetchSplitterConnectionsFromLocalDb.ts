@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import {
   CLIENT_LATITUDE_ROW_KEYS,
   CLIENT_LONGITUDE_ROW_KEYS,
@@ -116,7 +117,7 @@ function buildRequestUrl(input?: FetchConnectionsInput): string {
 }
 
 async function fetchConnectionsRows(input?: FetchConnectionsInput): Promise<Record<string, unknown>[]> {
-  const response = await fetch(buildRequestUrl(input))
+  const response = await fetchWithSessionAuth(buildRequestUrl(input))
   if (!response.ok) {
     throw new Error(`Erro ao consultar BFF Local para Conexoes: ${response.status}`)
   }
@@ -268,7 +269,7 @@ export async function fetchMassivaConnectionsFromLocalDbByRoutes(
   routes: MassivaConnectionBatchRoute[],
 ): Promise<SplitterCliente[]> {
   if (routes.length === 0) return []
-  const response = await fetch(`${env.localBffUrl}/api/massiva/connections/batch`, {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/massiva/connections/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ routes }),
@@ -290,4 +291,5 @@ export async function fetchSplitterConnectionsFromLocalDb(
   const bundle = await fetchSplitterConnectionsBundleFromLocalDb(input)
   return bundle.clientes
 }
+
 

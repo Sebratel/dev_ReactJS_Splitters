@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 type RegisterClosedMassivaHistoryInput = {
   protocol: number
@@ -9,7 +10,7 @@ type RegisterClosedMassivaHistoryInput = {
 export async function registerClosedMassivaHistoryInLocalDb(
   input: RegisterClosedMassivaHistoryInput,
 ): Promise<void> {
-  const response = await fetch(`${env.localBffUrl}/api/massiva/history/close`, {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/massiva/history/close`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
