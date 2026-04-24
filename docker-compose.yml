@@ -1,9 +1,6 @@
-# Producao: Nginx (frontend) + API Node. Variaveis: copie a secao Docker de `.env.example` para `.env.docker`.
-#   docker compose --env-file .env.docker up -d --build
-#
-# Portainer: faca o build num host com .env.docker no mesmo diretorio, ou
-# anexa o ficheiro ao stack; o backend liga via env_file e o frontend e construido com
-# o COPY .env.docker do Dockerfile.
+# Variáveis: ficheiro .env.local na máquina (docker compose --env-file .env.docker)
+# ou o painel "Environment" do Portainer (mesmos nomes; alimenta build args do frontend).
+# Não é preciso ficheiro .env.docker no repositório.
 
 name: nexaview
 
@@ -44,6 +41,37 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        VITE_LOCAL_BFF_URL: ${VITE_LOCAL_BFF_URL:-}
+        VITE_BFF_BASE_URL: ${VITE_BFF_BASE_URL:-}
+        VITE_BFF_PROXY_TARGET: ${VITE_BFF_PROXY_TARGET:-}
+        VITE_HUB_ORIGIN: ${VITE_HUB_ORIGIN:-}
+        VITE_HUB_SESSION_ENDPOINT: ${VITE_HUB_SESSION_ENDPOINT:-}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_GOOGLE_REDIRECT_URI: ${VITE_GOOGLE_REDIRECT_URI:-}
+        VITE_REVERSE_GEOCODE_ENDPOINT: ${VITE_REVERSE_GEOCODE_ENDPOINT:-}
+        VITE_DEV_SESSION_TOKEN: ${VITE_DEV_SESSION_TOKEN:-}
+        VITE_GEOGRID_BASE_URL: ${VITE_GEOGRID_BASE_URL:-}
+        VITE_GEOGRID_API_KEY: ${VITE_GEOGRID_API_KEY:-}
+        VITE_MASSIVA_LIST_PATH: ${VITE_MASSIVA_LIST_PATH:-}
+        VITE_MASSIVA_OPEN_PATH: ${VITE_MASSIVA_OPEN_PATH:-}
+        VITE_MASSIVA_CLOSE_PATH: ${VITE_MASSIVA_CLOSE_PATH:-}
+        VITE_MASSIVA_AFETADOS_PATH: ${VITE_MASSIVA_AFETADOS_PATH:-}
+        VITE_MASSIVA_AFFECTED_USERS_PATH: ${VITE_MASSIVA_AFFECTED_USERS_PATH:-}
+        VITE_MASSIVA_CLOSE_INCIDENT_STATUS_ID: ${VITE_MASSIVA_CLOSE_INCIDENT_STATUS_ID:-}
+        VITE_MASSIVA_CLOSE_PROGRESS: ${VITE_MASSIVA_CLOSE_PROGRESS:-}
+        VITE_MASSIVA_CLOSE_PRIORITY: ${VITE_MASSIVA_CLOSE_PRIORITY:-}
+        VITE_MASSIVA_CLOSE_NOTIFICATION_TARGET: ${VITE_MASSIVA_CLOSE_NOTIFICATION_TARGET:-}
+        VITE_MASSIVA_CLOSE_PRIVATE_REPORT: ${VITE_MASSIVA_CLOSE_PRIVATE_REPORT:-}
+        VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY:-}
+        VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-}
+        VITE_OIDC_REDIRECT_PATH: ${VITE_OIDC_REDIRECT_PATH:-}
+        VITE_OIDC_SCOPE: ${VITE_OIDC_SCOPE:-}
+        VITE_OIDC_POST_LOGOUT_REDIRECT_URI: ${VITE_OIDC_POST_LOGOUT_REDIRECT_URI:-}
+        VITE_AUTOISP_AUTH_ENDPOINT: ${VITE_AUTOISP_AUTH_ENDPOINT:-}
+        VITE_AUTOISP_EVENTS_ENDPOINT: ${VITE_AUTOISP_EVENTS_ENDPOINT:-}
+        VITE_AUTOISP_USERNAME: ${VITE_AUTOISP_USERNAME:-}
+        VITE_AUTOISP_PASSWORD: ${VITE_AUTOISP_PASSWORD:-}
     container_name: nexaview-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
