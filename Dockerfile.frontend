@@ -1,5 +1,6 @@
-FROM node:22-alpine
+# Build: `.env.docker` na raiz (modelo na secao Docker de `.env.example`) vira `.env.production` no Vite.
 
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -7,6 +8,12 @@ RUN npm ci
 
 COPY . .
 
-EXPOSE 5173
+# Obrigatorio antes do build: existir `.env.docker` na raiz do contexto
+COPY .env.docker .env.production
 
-CMD ["npm", "run", "dev:frontend", "--", "--host", "0.0.0.0", "--port", "5173"]
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY docker/nginx-frontend.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
