@@ -29,4 +29,5 @@ Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm ru
 ### Erro `npm run build` / exit code 2 no build da imagem
 
 - No log do build, veja qual **RUN** falhou: **`npx tsc -b`** (TypeScript) ou **`npx vite build`** (bundle).
-- Se for **memória** no servidor, aumente limite de RAM para o builder ou suba `NODE_OPTIONS` no `Dockerfile.frontend` (`--max-old-space-size`).
+- Se o **`npx tsc -b`** falhar sem mensagens claras, confirme que o `Dockerfile` instala **devDependencies** (`npm ci` com `NODE_ENV=development`); com `NODE_ENV=production` o npm omite *typescript* e o build rebenta.
+- Se for **memória** no servidor, aumente o limite de RAM do builder ou suba `NODE_OPTIONS` no `Dockerfile.frontend` (`--max-old-space-size`).
