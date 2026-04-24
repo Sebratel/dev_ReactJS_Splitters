@@ -1,6 +1,7 @@
 import type { MassivaOpenMutationSuccessPayload } from '@/features/massiva/model/massivaOpenMutation'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 function flattenSplitterEntries(context: MassivaOpenFinalContext): Array<{ code: string; label: string }> {
   const merged = new Map<string, { code: string; label: string }>()
@@ -20,7 +21,7 @@ export async function registerOpenedMassivaHistoryInLocalDb(
   context: MassivaOpenFinalContext,
   result: MassivaOpenMutationSuccessPayload,
 ): Promise<void> {
-  const response = await fetch(`${env.localBffUrl}/api/massiva/history/open`, {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/massiva/history/open`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',

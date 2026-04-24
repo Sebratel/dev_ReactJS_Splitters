@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 export type SplittersFilterOptions = {
   streets: string[]
@@ -8,7 +9,7 @@ export type SplittersFilterOptions = {
 
 export async function fetchSplittersFilterOptionsFromLocalDb(): Promise<SplittersFilterOptions> {
   const url = `${env.localBffUrl}/api/splitters/filter-options`
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
   if (!response.ok) {
     throw new Error(
       `Erro ao consultar opções de filtro de splitters no BFF Local: ${response.status}`,
