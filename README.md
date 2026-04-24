@@ -25,3 +25,8 @@ Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm ru
 - No stack, abra **Environment variables** e defina as chaves da secção *Docker* de [`.env.example`](.env.example) (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.). O compose passa-as como *build args* para o frontend.
 - Pode usar **Load variables from .env file** e colar o conteúdo de um `.env` completo (equivalente ao que usaria em `docker compose --env-file`).
 - `npm run deploy:portainer` é alias de `npm run deploy:docker`.
+
+### Erro `npm run build` / exit code 2 no build da imagem
+
+- No log do build, veja qual **RUN** falhou: **`npx tsc -b`** (TypeScript) ou **`npx vite build`** (bundle).
+- Se for **memória** no servidor, aumente limite de RAM para o builder ou suba `NODE_OPTIONS` no `Dockerfile.frontend` (`--max-old-space-size`).

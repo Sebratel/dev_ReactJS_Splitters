@@ -1,8 +1,11 @@
 # Build do bundle Vite. Variáveis VITE_* vêm de build args (Portainer/CI ou
 # `docker compose --env-file .env.docker` com os mesmos nomes no ficheiro).
 # Não é necessário o ficheiro .env.docker no contexto do Git.
+#
+# Imagem de build: Debian slim (glibc) em vez de Alpine — evita falhas comuns do
+# Tailwind 4 / lightningcss / Vite em musl e reduz surpresas entre hosts (Portainer).
 
-FROM node:22-alpine AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -72,7 +75,11 @@ ENV VITE_AUTOISP_EVENTS_ENDPOINT=$VITE_AUTOISP_EVENTS_ENDPOINT
 ENV VITE_AUTOISP_USERNAME=$VITE_AUTOISP_USERNAME
 ENV VITE_AUTOISP_PASSWORD=$VITE_AUTOISP_PASSWORD
 
-RUN npm run build
+# Memoria em hosts pequenos; ajuste se o build ainda falhar (heap OOM).
+ENV NODE_OPTIONS=--max-old-space-size=6144
+# Dois passos: no log do Portainer fica claro se falhou o TypeScript ou o Vite.
+RUN npx tsc -b
+RUN npx vite build
 
 FROM nginx:1.27-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
