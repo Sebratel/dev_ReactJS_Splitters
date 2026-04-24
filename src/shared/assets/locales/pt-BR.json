@@ -1,0 +1,43 @@
+{
+  "common": {
+    "loading": "Carregando...",
+    "error": "Ocorreu um erro",
+    "retry": "Tentar novamente",
+    "apply": "Aplicar",
+    "clear": "Limpar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "success": "Sucesso!"
+  },
+  "session": {
+    "authenticating": "Autenticando no Hub...",
+    "invalid_session": "Sessao invalida ou expirada",
+    "redirecting": "Redirecionando para login...",
+    "login_button": "Entrar via Hub",
+    "login_google_button": "Entrar com Google"
+  },
+  "autoisp": {
+    "suggestions_title": "Sugestoes do AutoISP",
+    "apply_suggestion": "Aplicar ao Preview",
+    "active_events": "Eventos ativos",
+    "no_events": "Nenhum evento detectado",
+    "searching_events": "Buscando eventos de rede...",
+    "connection_error": "Erro de conexao com AutoISP"
+  },
+  "massiva": {
+    "local_preview_title": "Preview local (conexoes)",
+    "affected_total": "Total de afetados",
+    "pppoes_total": "Total de PPPoEs",
+    "point_of_access": "Ponto de acesso",
+    "slot": "Slot",
+    "port": "Porta",
+    "splitter": "Splitter",
+    "description_placeholder": "Ex.: manutencao programada na fibra...",
+    "deadline_label": "Prazo de encerramento",
+    "opening_preparation": "Preparacao para abertura",
+    "ready_to_open": "Tudo pronto para abrir!",
+    "opening_massiva": "Abrindo massiva...",
+    "opening_success": "Massiva aberta com sucesso!",
+    "opening_error": "Falha ao abrir massiva"
+  }
+}

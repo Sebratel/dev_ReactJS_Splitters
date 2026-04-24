@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: nexaview-backend
+    env_file:
+      - ./.env.local
+    environment:
+      PORT: 3001
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: nexaview-frontend
+    env_file:
+      - ./.env.local
+    environment:
+      VITE_LOCAL_BFF_URL: http://localhost:${BACKEND_PORT:-3001}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped

@@ -1,0 +1,626 @@
+import { useMemo } from 'react'
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
+import { fetchNetworkStats } from '@/shared/api/fetchNetworkStats'
+import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
+import { fetchSplitterMassivaStatsFromLocalDb } from '@/features/splitters/api/fetchSplitterMassivaStatsFromLocalDb'
+import { fetchSplitterTrendsFromLocalDb } from '@/features/splitters/api/fetchSplitterTrendsFromLocalDb'
+import type { Splitter } from '@/features/splitters/model/splitter'
+import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
+import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
+
+export type IntelligenceDateRangePreset = '7d' | '30d' | '90d' | 'custom'
+
+export type TrendLabel = 'Estavel' | 'Em crescimento' | 'Em queda' | 'Quase saturando'
+
+export type IntelligenceTrendRow = {
+  splitterCode: string
+  splitterTitle: string
+  /** Coordenadas do cadastro do splitter (BFF); null se ausentes ou inválidas. */
+  latitude: number | null
+  longitude: number | null
+  label: TrendLabel
+  currentUsagePercent: number
+  delta7d: number
+  delta30d: number
+  capturedAt: Date | null
+}
+
+export type IntelligenceMassivaRow = {
+  splitterCode: string
+  totalTickets: number
+  openTickets: number
+  closedTickets: number
+  affectedClientsTotal: number
+  latestOpenedAt: Date | null
+}
+
+export type IntelligenceKpis = {
+  totalEquipments: number
+  occupiedPorts: number
+  overallOccupancyPercent: number
+  oltCount: number
+}
+
+export type IntelligenceAreaPoint = {
+  at: Date
+  usagePercent: number
+}
+
+export type IntelligenceBarPoint = {
+  splitterCode: string
+  totalTickets: number
+  affectedClientsTotal: number
+}
+
+export type IntelligenceRecurrenceCell = {
+  weekday: string
+  shift: string
+  count: number
+}
+
+export type IntelligenceSaturationCell = {
+  splitterCode: string
+  splitterTitle: string
+  latitude: number | null
+  longitude: number | null
+  usagePercent: number
+  label: TrendLabel
+  delta7d: number
+  delta30d: number
+  capturedAt: Date | null
+}
+
+export type IntelligenceDataset = {
+  trends: IntelligenceTrendRow[]
+  massivaStats: IntelligenceMassivaRow[]
+  kpis: IntelligenceKpis
+  source: 'live' | 'mock'
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function asTrendLabel(label: string): TrendLabel {
+  if (label === 'Quase saturando') return label
+  if (label === 'Em crescimento') return label
+  if (label === 'Em queda') return label
+  return 'Estavel'
+}
+
+function parseSplitterCoord(raw: string): number | null {
+  const s = String(raw ?? '').trim().replace(',', '.')
+  if (s === '') return null
+  const n = Number.parseFloat(s)
+  if (!Number.isFinite(n)) return null
+  return n
+}
+
+/** Páginas grandes na listagem; tendências/massivas vão em lotes (query string). */
+const INTELLIGENCE_SPLITTER_PAGE_SIZE = 500
+/** Evita URL gigante em `/trends` e `/splitter-stats` (~2–3k caracteres por lote). */
+const INTELLIGENCE_CODE_QUERY_CHUNK = 200
+const INTELLIGENCE_MAX_SPLITTER_PAGES = 500
+/** Requisições simultâneas ao BFF (splitters / trends / massivas em fila por worker). */
+const INTELLIGENCE_HTTP_CONCURRENCY = 6
+const INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY = 6
+
+function chunkBy<T>(items: readonly T[], size: number): T[][] {
+  if (size <= 0) return [items.slice() as T[]]
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size) as T[])
+  }
+  return out
+}
+
+async function mergeMapsFromConcurrentChunks<K, V>(
+  chunks: string[][],
+  concurrency: number,
+  fetchChunk: (codes: string[]) => Promise<Map<K, V>>,
+): Promise<Map<K, V>> {
+  const merged = new Map<K, V>()
+  const queue = chunks.filter((c) => c.length > 0)
+
+  async function worker() {
+    for (;;) {
+      const chunk = queue.shift()
+      if (!chunk) break
+      const part = await fetchChunk(chunk)
+      for (const [k, v] of part) merged.set(k, v)
+    }
+  }
+
+  const workers = Math.max(1, Math.min(concurrency, queue.length))
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return merged
+}
+
+async function fetchAllSplittersCatalogForIntelligence(): Promise<{
+  items: Splitter[]
+  totalCount: number
+}> {
+  const pageSize = INTELLIGENCE_SPLITTER_PAGE_SIZE
+  const first = await fetchSplittersFromLocalDb({ page: 1, limit: pageSize })
+  const reportedTotal = Number(first.totalCount ?? 0)
+
+  if (first.items.length === 0) {
+    return { items: [], totalCount: reportedTotal }
+  }
+
+  if (first.items.length < pageSize) {
+    return { items: [...first.items], totalCount: Math.max(reportedTotal, first.items.length) }
+  }
+
+  if (reportedTotal > first.items.length) {
+    const totalPages = Math.min(
+      INTELLIGENCE_MAX_SPLITTER_PAGES,
+      Math.max(1, Math.ceil(reportedTotal / pageSize)),
+    )
+    const rest: Splitter[] = []
+    const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 2)
+
+    for (let i = 0; i < pageNums.length; i += INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY) {
+      const batch = pageNums.slice(i, i + INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY)
+      const pages = await Promise.all(
+        batch.map((page) => fetchSplittersFromLocalDb({ page, limit: pageSize })),
+      )
+      for (const p of pages) rest.push(...p.items)
+    }
+
+    const items = [...first.items, ...rest]
+    return { items, totalCount: Math.max(reportedTotal, items.length) }
+  }
+
+  const items: Splitter[] = [...first.items]
+  let page = 2
+  while (page <= INTELLIGENCE_MAX_SPLITTER_PAGES) {
+    const next = await fetchSplittersFromLocalDb({ page, limit: pageSize })
+    if (next.items.length === 0) break
+    items.push(...next.items)
+    page += 1
+    if (next.items.length < pageSize) break
+  }
+
+  return {
+    items,
+    totalCount: Math.max(reportedTotal, items.length),
+  }
+}
+
+async function fetchSplitterTrendsBatched(
+  splitterCodes: readonly string[],
+): Promise<Map<string, SplitterTrend>> {
+  const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
+  return mergeMapsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY, (codes) =>
+    fetchSplitterTrendsFromLocalDb(codes),
+  )
+}
+
+async function fetchSplitterMassivaStatsBatched(
+  splitterCodes: readonly string[],
+): Promise<Map<string, SplitterMassivaStats>> {
+  const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
+  return mergeMapsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY, (codes) =>
+    fetchSplitterMassivaStatsFromLocalDb(codes),
+  )
+}
+
+function normalizeSplitterLatLng(
+  latRaw: string,
+  lngRaw: string,
+): { latitude: number | null; longitude: number | null } {
+  const latitude = parseSplitterCoord(latRaw)
+  const longitude = parseSplitterCoord(lngRaw)
+  if (
+    latitude === null ||
+    longitude === null ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
+    return { latitude: null, longitude: null }
+  }
+  return { latitude, longitude }
+}
+
+/** Limite de marcadores no mapa de saturação (evita sobrecarga do Leaflet). */
+const MAP_SATURATION_POINT_LIMIT = 80
+
+/**
+ * Monta a lista do mapa: em rodízio entre crítico (≥95%), atenção (70–94%) e folga (&lt;70%),
+ * para não mostrar só os de maior uso (que tendem a ser todos críticos). Completa até o limite
+ * pelos maiores usos entre os que faltaram.
+ */
+export function stratifiedSaturationTrendsForMap(
+  trends: IntelligenceTrendRow[],
+  limit: number,
+): IntelligenceTrendRow[] {
+  if (trends.length === 0) return []
+  const crit = trends
+    .filter((t) => t.currentUsagePercent >= 95)
+    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+  const alert = trends
+    .filter((t) => t.currentUsagePercent >= 70 && t.currentUsagePercent < 95)
+    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+  const ok = trends
+    .filter((t) => t.currentUsagePercent < 70)
+    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+
+  const bands: IntelligenceTrendRow[][] = [crit, alert, ok]
+  const idx = [0, 0, 0]
+  const out: IntelligenceTrendRow[] = []
+  const seen = new Set<string>()
+
+  while (out.length < limit) {
+    let progress = false
+    for (let b = 0; b < 3; b++) {
+      if (out.length >= limit) break
+      while (idx[b] < bands[b].length) {
+        const row = bands[b][idx[b]++]
+        if (!row || seen.has(row.splitterCode)) continue
+        seen.add(row.splitterCode)
+        out.push(row)
+        progress = true
+        break
+      }
+    }
+    if (!progress) break
+  }
+
+  if (out.length < limit) {
+    const rest = [...trends]
+      .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+      .filter((t) => !seen.has(t.splitterCode))
+    for (const row of rest) {
+      if (out.length >= limit) break
+      seen.add(row.splitterCode)
+      out.push(row)
+    }
+  }
+
+  return out
+}
+
+function makeMockDataset(): IntelligenceDataset {
+  const trends: IntelligenceTrendRow[] = []
+  const massivaStats: IntelligenceMassivaRow[] = []
+  const now = new Date()
+
+  for (let i = 1; i <= 40; i++) {
+    const splitterCode = `SPL-${String(i).padStart(4, '0')}`
+    const swing = Math.sin(i / 4) * 12
+    const baseline = 52 + swing + (i % 7)
+    const currentUsagePercent = clamp(Number(baseline.toFixed(2)), 20, 99)
+    const delta7d = Number((Math.cos(i / 3) * 4).toFixed(2))
+    const delta30d = Number((Math.sin(i / 5) * 7).toFixed(2))
+    const label: TrendLabel =
+      currentUsagePercent >= 85 && delta30d >= 5
+        ? 'Quase saturando'
+        : delta30d >= 5 || delta7d >= 3
+          ? 'Em crescimento'
+          : delta30d <= -5 || delta7d <= -3
+            ? 'Em queda'
+            : 'Estavel'
+
+    const capturedAt = new Date(now)
+    capturedAt.setDate(now.getDate() - (i % 15))
+    capturedAt.setHours(8 + (i % 12), 10, 0, 0)
+
+    const angle = i * 0.55
+    const radius = 0.012 * Math.sqrt(i)
+    const { latitude, longitude } = normalizeSplitterLatLng(
+      String(-19.9167 + radius * Math.cos(angle)),
+      String(-43.9345 + radius * Math.sin(angle)),
+    )
+
+    trends.push({
+      splitterCode,
+      splitterTitle: `Splitter mock · ${splitterCode}`,
+      latitude,
+      longitude,
+      label,
+      currentUsagePercent,
+      delta7d,
+      delta30d,
+      capturedAt,
+    })
+
+    const latestOpenedAt = new Date(now)
+    latestOpenedAt.setDate(now.getDate() - (i % 20))
+    latestOpenedAt.setHours((i * 3) % 24, 5, 0, 0)
+
+    const totalTickets = 3 + (i % 12)
+    const affectedClientsTotal = 15 + ((i * 17) % 460)
+    massivaStats.push({
+      splitterCode,
+      totalTickets,
+      openTickets: i % 4 === 0 ? 1 : 0,
+      closedTickets: totalTickets - (i % 4 === 0 ? 1 : 0),
+      affectedClientsTotal,
+      latestOpenedAt,
+    })
+  }
+
+  const kpis: IntelligenceKpis = {
+    totalEquipments: 17342,
+    occupiedPorts: 9864,
+    overallOccupancyPercent: 56.9,
+    oltCount: 214,
+  }
+
+  return { trends, massivaStats, kpis, source: 'mock' }
+}
+
+const NETWORK_STATS_QUERY_KEY = ['network-intelligence', 'network-stats'] as const
+const NETWORK_STATS_STALE_MS = 3 * 60_000
+
+async function fetchLiveDataset(queryClient: QueryClient): Promise<IntelligenceDataset> {
+  const splitters = await fetchAllSplittersCatalogForIntelligence()
+  const codes = splitters.items.map((item) => item.code).filter((value) => value.trim() !== '')
+
+  const networkStats = await queryClient.fetchQuery({
+    queryKey: NETWORK_STATS_QUERY_KEY,
+    queryFn: fetchNetworkStats,
+    staleTime: NETWORK_STATS_STALE_MS,
+  })
+
+  const [trendsByCode, statsByCode] = await Promise.all([
+    fetchSplitterTrendsBatched(codes),
+    fetchSplitterMassivaStatsBatched(codes),
+  ])
+
+  const titleByCode = new Map(
+    splitters.items.map((item) => [item.code, String(item.title ?? '').trim()]),
+  )
+  const geoByCode = new Map(
+    splitters.items.map((item) => {
+      const { latitude, longitude } = normalizeSplitterLatLng(item.latitude, item.longitude)
+      return [item.code, { latitude, longitude }] as const
+    }),
+  )
+
+  const trends: IntelligenceTrendRow[] = codes.map((code) => {
+    const row = trendsByCode.get(code)
+    const geo = geoByCode.get(code)
+    return {
+      splitterCode: code,
+      splitterTitle: titleByCode.get(code) ?? '',
+      latitude: geo?.latitude ?? null,
+      longitude: geo?.longitude ?? null,
+      label: asTrendLabel(row?.label ?? 'Estavel'),
+      currentUsagePercent: Number(row?.currentUsagePercent ?? 0),
+      delta7d: Number(row?.delta7d ?? 0),
+      delta30d: Number(row?.delta30d ?? 0),
+      capturedAt: row?.capturedAt ?? null,
+    }
+  })
+
+  const massivaStats: IntelligenceMassivaRow[] = codes.map((code) => {
+    const row = statsByCode.get(code)
+    return {
+      splitterCode: code,
+      totalTickets: Number(row?.totalTickets ?? 0),
+      openTickets: Number(row?.openTickets ?? 0),
+      closedTickets: Number(row?.closedTickets ?? 0),
+      affectedClientsTotal: Number(row?.affectedClientsTotal ?? 0),
+      latestOpenedAt: row?.latestOpenedAt ?? null,
+    }
+  })
+
+  const totalEquipments = networkStats.activeSplitters
+  const occupiedPorts = networkStats.onlineClients
+  const overallOccupancyPercent =
+    totalEquipments > 0 ? Number(((occupiedPorts / totalEquipments) * 100).toFixed(2)) : 0
+
+  return {
+    trends,
+    massivaStats,
+    kpis: {
+      totalEquipments,
+      occupiedPorts,
+      overallOccupancyPercent,
+      oltCount: networkStats.oltCount,
+    },
+    source: 'live',
+  }
+}
+
+async function fetchIntelligenceDataset(queryClient: QueryClient): Promise<IntelligenceDataset> {
+  try {
+    return await fetchLiveDataset(queryClient)
+  } catch {
+    return makeMockDataset()
+  }
+}
+
+function startOfDay(date: Date): Date {
+  const next = new Date(date)
+  next.setHours(0, 0, 0, 0)
+  return next
+}
+
+function endOfDay(date: Date): Date {
+  const next = new Date(date)
+  next.setHours(23, 59, 59, 999)
+  return next
+}
+
+function buildDateWindow(
+  preset: IntelligenceDateRangePreset,
+  customStart: Date | null,
+  customEnd: Date | null,
+): { start: Date; end: Date } {
+  const now = new Date()
+  const end = endOfDay(now)
+
+  if (preset === 'custom' && customStart && customEnd) {
+    return {
+      start: startOfDay(customStart),
+      end: endOfDay(customEnd),
+    }
+  }
+
+  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90
+  const start = startOfDay(new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000))
+  return { start, end }
+}
+
+export function useNetworkIntelligenceData(
+  preset: IntelligenceDateRangePreset,
+  customStart: Date | null,
+  customEnd: Date | null,
+) {
+  const queryClient = useQueryClient()
+
+  const statsQuery = useQuery({
+    queryKey: NETWORK_STATS_QUERY_KEY,
+    queryFn: fetchNetworkStats,
+    staleTime: NETWORK_STATS_STALE_MS,
+    refetchInterval: false,
+  })
+
+  const query = useQuery({
+    queryKey: ['network-intelligence', 'dataset'],
+    queryFn: () => fetchIntelligenceDataset(queryClient),
+    placeholderData: keepPreviousData,
+    /** Dataset é pesado; cache longo. Sem polling automático (evita reexecutar centenas de requests). */
+    staleTime: 3 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchInterval: false,
+  })
+
+  const window = useMemo(
+    () => buildDateWindow(preset, customStart, customEnd),
+    [preset, customStart, customEnd],
+  )
+
+  const filtered = useMemo(() => {
+    const data = query.data
+    if (!data) return null
+
+    const trends = data.trends.filter((row) => {
+      if (!row.capturedAt) return false
+      return row.capturedAt >= window.start && row.capturedAt <= window.end
+    })
+
+    const massivaStats = data.massivaStats.filter((row) => {
+      if (!row.latestOpenedAt) return false
+      return row.latestOpenedAt >= window.start && row.latestOpenedAt <= window.end
+    })
+
+    return { ...data, trends, massivaStats }
+  }, [query.data, window.end, window.start])
+
+  const areaPoints = useMemo<IntelligenceAreaPoint[]>(() => {
+    if (!filtered || filtered.trends.length === 0) return []
+    const points: { at: Date; usagePercent: number }[] = []
+
+    for (const row of filtered.trends) {
+      if (!row.capturedAt) continue
+      const atNow = row.capturedAt
+      const at7d = new Date(atNow)
+      at7d.setDate(at7d.getDate() - 7)
+      const at30d = new Date(atNow)
+      at30d.setDate(at30d.getDate() - 30)
+
+      points.push(
+        { at: at30d, usagePercent: row.currentUsagePercent - row.delta30d },
+        { at: at7d, usagePercent: row.currentUsagePercent - row.delta7d },
+        { at: atNow, usagePercent: row.currentUsagePercent },
+      )
+    }
+
+    const bucket = new Map<string, { at: Date; sum: number; count: number }>()
+    for (const point of points) {
+      const key = point.at.toISOString().slice(0, 10)
+      const current = bucket.get(key) ?? { at: startOfDay(point.at), sum: 0, count: 0 }
+      current.sum += point.usagePercent
+      current.count += 1
+      bucket.set(key, current)
+    }
+
+    return [...bucket.values()]
+      .map((entry) => ({
+        at: entry.at,
+        usagePercent: Number((entry.sum / Math.max(1, entry.count)).toFixed(2)),
+      }))
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+  }, [filtered])
+
+  const barPoints = useMemo<IntelligenceBarPoint[]>(() => {
+    if (!filtered) return []
+    return [...filtered.massivaStats]
+      .sort((a, b) => b.totalTickets - a.totalTickets)
+      .slice(0, 10)
+      .map((row) => ({
+        splitterCode: row.splitterCode,
+        totalTickets: row.totalTickets,
+        affectedClientsTotal: row.affectedClientsTotal,
+      }))
+  }, [filtered])
+
+  const recurrenceCells = useMemo<IntelligenceRecurrenceCell[]>(() => {
+    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
+    const shifts = ['Madrugada', 'Manha', 'Tarde', 'Noite']
+
+    const base: IntelligenceRecurrenceCell[] = []
+    for (const weekday of weekdays) {
+      for (const shift of shifts) {
+        base.push({ weekday, shift, count: 0 })
+      }
+    }
+    if (!filtered) return base
+
+    const index = new Map<string, IntelligenceRecurrenceCell>()
+    for (const item of base) {
+      index.set(`${item.weekday}-${item.shift}`, item)
+    }
+
+    for (const row of filtered.massivaStats) {
+      if (!row.latestOpenedAt) continue
+      const weekday = weekdays[row.latestOpenedAt.getDay()] ?? 'Dom'
+      const hour = row.latestOpenedAt.getHours()
+      const shift = hour < 6 ? 'Madrugada' : hour < 12 ? 'Manha' : hour < 18 ? 'Tarde' : 'Noite'
+      const key = `${weekday}-${shift}`
+      const cell = index.get(key)
+      if (cell) cell.count += 1
+    }
+
+    return base
+  }, [filtered])
+
+  const saturationCells = useMemo<IntelligenceSaturationCell[]>(() => {
+    if (!filtered) return []
+    return stratifiedSaturationTrendsForMap(filtered.trends, MAP_SATURATION_POINT_LIMIT).map((row) => ({
+      splitterCode: row.splitterCode,
+      splitterTitle: row.splitterTitle,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      usagePercent: row.currentUsagePercent,
+      label: row.label,
+      delta7d: row.delta7d,
+      delta30d: row.delta30d,
+      capturedAt: row.capturedAt,
+    }))
+  }, [filtered])
+
+  return {
+    query,
+    /** `/api/stats` — costuma concluir antes do dataset; útil para prévia na UI. */
+    networkStatsPreview: statsQuery.data ?? null,
+    source: filtered?.source ?? null,
+    kpis: filtered?.kpis ?? null,
+    trends: filtered?.trends ?? [],
+    massivaStats: filtered?.massivaStats ?? [],
+    areaPoints,
+    barPoints,
+    recurrenceCells,
+    saturationCells,
+    dateWindow: window,
+  }
+}
