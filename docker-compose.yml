@@ -75,7 +75,7 @@ services:
         VITE_AUTOISP_PASSWORD: ${VITE_AUTOISP_PASSWORD:-}
     container_name: nexaview-frontend
     ports:
-      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
