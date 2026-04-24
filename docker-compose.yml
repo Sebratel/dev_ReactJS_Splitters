@@ -10,7 +10,6 @@ services:
       - .env.local
     environment:
       PORT: 3001
-      # As demais variáveis vêm do .env.local
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     networks:
@@ -30,7 +29,6 @@ services:
     env_file:
       - .env.local
     environment:
-      # Dentro do container, 'backend' é o hostname do serviço
       VITE_LOCAL_BFF_URL: http://backend:3001
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
