@@ -1,0 +1,88 @@
+name: nexaview
+
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: nexaview-backend
+    environment:
+      PORT: 3001
+      # MySQL remoto (do .env.local)
+      MASSIVA_MYSQL_HOST: 10.0.11.171
+      MASSIVA_MYSQL_PORT: 3306
+      MASSIVA_MYSQL_DATABASE: DB_Massives
+      MASSIVA_MYSQL_USER: ***REMOVED***
+      MASSIVA_MYSQL_PASSWORD: ***REMOVED***
+      # APIs externas
+      HUB_BASE_URL: https://sebratel-hub.web.app
+      VITE_GEOGRID_BASE_URL: https://eros.geogridmaps.com.br/sebratel/api/v3
+      VITE_GEOGRID_API_KEY: ***REMOVED***
+      VITE_BFF_BASE_URL: ""
+      VITE_BFF_PROXY_TARGET: https://api-gateway-bff-staging.sebratel.net.br
+      VITE_MASSIVA_LIST_PATH: /api/v1/massivas/recuperar-pelo-banco
+      VITE_MASSIVA_OPEN_PATH: /api/v1/massivas/salvar-massiva-via-api
+      VITE_MASSIVA_AFETADOS_PATH: /api/v1/afetados
+      # AutoISP
+      AUTOISP_EVENTS_ENDPOINT: https://autoisp.sebratel.net.br/api/massives/v1/events
+      AUTOISP_AUTH_ENDPOINT: https://autoisp.sebratel.net.br/api/auth/v2/request_token
+      AUTOISP_USERNAME: api@sebratel.com.br
+      AUTOISP_PASSWORD: ***REMOVED***
+      # Credenciais sensíveis - configure no Portainer como variáveis de ambiente
+      # ERP_CLIENT_ID: ${ERP_CLIENT_ID}
+      # ERP_CLIENT_SECRET: ${ERP_CLIENT_SECRET}
+      # ERP_SYNDATA: ${ERP_SYNDATA}
+      # MASSIVA_COOKIE_STRING: ${MASSIVA_COOKIE_STRING}
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    networks:
+      - nexaview-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: nexaview-frontend
+    environment:
+      # Dentro do container, 'backend' é o hostname do serviço
+      VITE_LOCAL_BFF_URL: http://backend:3001
+      # APIs externas (para o browser)
+      VITE_GEOGRID_BASE_URL: https://eros.geogridmaps.com.br/sebratel/api/v3
+      VITE_GEOGRID_API_KEY: ***REMOVED***
+      VITE_BFF_BASE_URL: ""
+      VITE_BFF_PROXY_TARGET: https://api-gateway-bff-staging.sebratel.net.br
+      VITE_MASSIVA_LIST_PATH: /api/v1/massivas/recuperar-pelo-banco
+      VITE_MASSIVA_OPEN_PATH: /api/v1/massivas/salvar-massiva-via-api
+      VITE_MASSIVA_AFETADOS_PATH: /api/v1/afetados
+      # AutoISP (para o browser)
+      VITE_AUTOISP_AUTH_ENDPOINT: /__autoisp/api/auth/v2/request_token
+      VITE_AUTOISP_EVENTS_ENDPOINT: /__autoisp/api/massives/v1/events
+      VITE_AUTOISP_USERNAME: api@sebratel.com.br
+      VITE_AUTOISP_PASSWORD: ***REMOVED***
+      # Google OAuth
+      VITE_GOOGLE_CLIENT_ID: 374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com
+      VITE_GOOGLE_REDIRECT_URI: https://app-splitters-staging.web.app/
+      # Desenvolvimento local
+      LOCAL_USER_EMAIL: dev@local
+      LOCAL_USER_PERSON_ID: 629
+      LOCAL_MASSIVA_ENABLED: "true"
+      # Token de desenvolvimento (opcional - configure no Portainer)
+      # VITE_DEV_SESSION_TOKEN: ${VITE_DEV_SESSION_TOKEN}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - nexaview-network
+    restart: unless-stopped
+
+networks:
+  nexaview-network:
+    driver: bridge
