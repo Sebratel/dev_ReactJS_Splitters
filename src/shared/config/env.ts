@@ -59,6 +59,19 @@ function massivaListPathResolved(): string {
   return ''
 }
 
+/**
+ * URL do BFF operacional usado por consultas SQL/auxiliares.
+ * Em dev: localhost:3001 por padrao.
+ * Em staging/prod: cai para o mesmo host base do BFF remoto para evitar
+ * build apontando para localhost no navegador dos usuarios.
+ */
+function localBffUrlResolved(): string {
+  const fromEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
+  if (fromEnv !== '') return fromEnv
+  if (import.meta.env.DEV) return 'http://localhost:3001'
+  return bffBaseUrlResolved()
+}
+
 export const env = {
   hubOrigin: str(
     import.meta.env.VITE_HUB_ORIGIN,
@@ -127,8 +140,8 @@ export const env = {
   /** Credenciais de serviço do AutoISP (paridade `AUTOISP_USERNAME` / `AUTOISP_PASSWORD`). */
   autoIspUsername: str(import.meta.env.VITE_AUTOISP_USERNAME, ''),
   autoIspPassword: str(import.meta.env.VITE_AUTOISP_PASSWORD, ''),
-  /** BFF Local para queries diretas SQL (porta 3001). */
-  localBffUrl: str(import.meta.env.VITE_LOCAL_BFF_URL, 'http://localhost:3001'),
+  /** BFF operacional para queries SQL/auxiliares (local no dev, remoto em staging/prod). */
+  localBffUrl: localBffUrlResolved(),
   /**
    * OpenID Connect (react-oidc-context / oidc-client-ts). Quando authority e client_id
    * estão preenchidos, o app exige login OIDC e envia `access_token` no Bearer do BFF.

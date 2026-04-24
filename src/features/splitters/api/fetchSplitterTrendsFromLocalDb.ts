@@ -1,5 +1,6 @@
 import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 type SplitterTrendApiRow = {
   splitterCode?: unknown
@@ -33,7 +34,9 @@ export async function fetchSplitterTrendsFromLocalDb(
     codes: clean.join(','),
   })
 
-  const response = await fetch(`${env.localBffUrl}/api/splitters/trends?${params}`)
+  const response = await fetchWithSessionAuth(
+    `${env.localBffUrl}/api/splitters/trends?${params}`,
+  )
   if (!response.ok) {
     throw new Error(`Erro ao consultar tendências de splitters no BFF Local: ${response.status}`)
   }

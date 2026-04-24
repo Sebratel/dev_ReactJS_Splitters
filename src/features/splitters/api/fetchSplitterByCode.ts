@@ -1,4 +1,5 @@
-ï»¿import { env } from '@/shared/config/env'
+import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import {
   mapSplitterTypeText,
   type Splitter,
@@ -48,7 +49,7 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
   const url = new URL(`${env.localBffUrl}/api/splitters-by-code`)
   url.searchParams.set('code', code)
 
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
 
   if (response.status === 404) {
     return null
@@ -67,8 +68,8 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
   const splitterCode = toStringValue(
     pickRowValue(
       row,
-      'CÃ“DIGO[SPLT.SECUNDARIO]',
-      'Cï¿½DIGO[SPLT.SECUNDARIO]',
+      'CÓDIGO[SPLT.SECUNDARIO]',
+      'C?DIGO[SPLT.SECUNDARIO]',
     ),
   )
 
@@ -95,7 +96,8 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     busyCount: toNumber(row['BUSY_COUNT']),
     tipoLocal: toTipoLocal(row['TIPO LOCAL']),
     nomeCondominio: toNullableString(
-      pickRowValue(row, 'NOME CONDOMÃNIO', 'NOME CONDOMï¿½NIO'),
+      pickRowValue(row, 'NOME CONDOMÍNIO', 'NOME CONDOM?NIO'),
     ),
   }
 }
+

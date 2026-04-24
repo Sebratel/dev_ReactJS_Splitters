@@ -1,8 +1,9 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 export async function fetchPrimarySplittersFromLocalDb(): Promise<string[]> {
   const url = `${env.localBffUrl}/api/splitters/primarios`
-  const response = await fetch(url)
+  const response = await fetchWithSessionAuth(url)
 
   if (!response.ok) {
     throw new Error(

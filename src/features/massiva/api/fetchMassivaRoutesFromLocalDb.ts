@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 export type MassivaRouteRow = {
   apCode: string
@@ -26,7 +27,7 @@ function toNullableText(value: unknown): string | null {
 }
 
 export async function fetchMassivaRoutesFromLocalDb(): Promise<MassivaRouteRow[]> {
-  const response = await fetch(`${env.localBffUrl}/api/massiva/routes`)
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/massiva/routes`)
   if (!response.ok) {
     throw new Error(`Erro ao consultar rotas da Massiva no BFF Local: ${response.status}`)
   }
