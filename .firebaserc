@@ -1,22 +1,14 @@
 {
   "projects": {
-    "default": "sebratel-hub"
+    "default": "app-splitters-staging",
+    "staging": "app-splitters-staging",
+    "prod": "sebratel-hub"
   },
   "targets": {
-    "sebratel-hub": {
+    "app-splitters-staging": {
       "hosting": {
-        "hub": [
-          "sebratel-hub"
-        ],
-        "splitters": [
-          "app-splitters-sebratel-ceb1f"
-        ]
-      }
-    },
-    "splitters": {
-      "hosting": {
-        "splitters": [
-          "app-splitters-sebratel-ceb1f"
+        "splitters-staging": [
+          "app-splitters-staging"
         ]
       }
     }

@@ -1,7 +1,7 @@
 {
   "hosting": {
-    "site": "app-splitters-sebratel-ceb1f",
-    "public": "build/web",
+    "target": "splitters-staging",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
