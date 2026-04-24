@@ -30,3 +30,4 @@ Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm ru
 
 - A imagem corre **`vite build`** (bundle) e **não** `tsc -b`, para evitar falhas difíceis de reproduzir fora do Docker. O typecheck continua em **`npm run build`** e **`npm run typecheck`** antes de merge/deploy.
 - Se o **`vite build`** falhar, veja o log do `RUN npx vite build`. Se for **memória**, aumente `NODE_OPTIONS` (`--max-old-space-size`) no Dockerfile.
+- Se o **backend** ficar *unhealthy*: confira `DB_*` e `MASSIVA_MYSQL_*` no stack. O serviço sobe a HTTP antes de completar a ligação às bases; veja *Logs* do container se as rotas com DB devolverem erro.
