@@ -26,8 +26,7 @@ Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm ru
 - Pode usar **Load variables from .env file** e colar o conteúdo de um `.env` completo (equivalente ao que usaria em `docker compose --env-file`).
 - `npm run deploy:portainer` é alias de `npm run deploy:docker`.
 
-### Erro `npm run build` / exit code 2 no build da imagem
+### Build da imagem (`Dockerfile.frontend`)
 
-- No log do build, veja qual **RUN** falhou: **`npx tsc -b`** (TypeScript) ou **`npx vite build`** (bundle).
-- Se o **`npx tsc -b`** falhar sem mensagens claras, confirme que o `Dockerfile` instala **devDependencies** (`npm ci` com `NODE_ENV=development`); com `NODE_ENV=production` o npm omite *typescript* e o build rebenta.
-- Se for **memória** no servidor, aumente o limite de RAM do builder ou suba `NODE_OPTIONS` no `Dockerfile.frontend` (`--max-old-space-size`).
+- A imagem corre **`vite build`** (bundle) e **não** `tsc -b`, para evitar falhas difíceis de reproduzir fora do Docker. O typecheck continua em **`npm run build`** e **`npm run typecheck`** antes de merge/deploy.
+- Se o **`vite build`** falhar, veja o log do `RUN npx vite build`. Se for **memória**, aumente `NODE_OPTIONS` (`--max-old-space-size`) no Dockerfile.

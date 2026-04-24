@@ -8,6 +8,8 @@
     "dev:frontend": "vite",
     "dev:backend": "npm --prefix server run dev",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "build:bundle": "vite build",
     "build:staging": "npm run build",
     "build:docker": "docker compose --env-file .env.docker build",
     "deploy:docker": "docker compose --env-file .env.docker up -d --build",
