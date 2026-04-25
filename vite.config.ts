@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const bffProxyTarget =
-    env.VITE_BFF_PROXY_TARGET || 'https://api-gateway-bff.sebratel.net.br'
+    env.VITE_BFF_PROXY_TARGET || 'https://n8n-staging.sebratel.net.br'
 
   return {
     plugins: [react(), tailwindcss()],
@@ -17,6 +17,24 @@ export default defineConfig(({ mode }) => {
        * Evita CORS no dev: com `VITE_BFF_BASE_URL` vazio, o app chama `/api/...` no mesmo host
        * e o Vite encaminha ao BFF. Veja comentário em `env.ts` (`bffBaseUrlResolved`).
        */
+      proxy: {
+        '/__autoisp': {
+          target: 'https://autoisp.sebratel.net.br',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/__autoisp/, ''),
+        },
+        '/api': {
+          target: bffProxyTarget,
+          changeOrigin: true,
+          secure: true,
+        },
+      },
+    },
+    preview: {
+      port: 5173,
+      host: '0.0.0.0',
+      allowedHosts: true,
       proxy: {
         '/__autoisp': {
           target: 'https://autoisp.sebratel.net.br',

@@ -18,10 +18,7 @@ type SidebarProps = {
 
 export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
   const currentPath = useLocation().pathname
-  const canAccessMassivaByProfile = useSessionStore(
-    (s) => s.user?.canAccessMassiva ?? false,
-  )
-  const canAccessMassiva = canAccessMassivaByProfile || isLocalDevHostname()
+  const canAccessMassiva = true
 
   const isActive = (to: string) => {
     if (to === '/') return currentPath === '/'

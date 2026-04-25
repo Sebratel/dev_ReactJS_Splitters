@@ -19,19 +19,28 @@ function str(value: unknown, fallback: string): string {
 function bffBaseUrlResolved(): string {
   const fromEnv = str(import.meta.env.VITE_BFF_BASE_URL, '')
   if (fromEnv !== '') return fromEnv
+
+  // Fallback para desenvolvimento (proxy local /api)
   if (import.meta.env.DEV) return ''
-  return 'https://api-gateway-bff.sebratel.net.br'
+
+  // Em produção, se VITE_BFF_BASE_URL não foi definida, tenta VITE_LOCAL_BFF_URL
+  const localEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
+  if (localEnv !== '') return localEnv
+
+  // Caso as variáveis não estejam definidas em PROD, retornamos vazio para forçar path relativo
+  // O Vite Preview ou Nginx fará o proxy para o backend apropriado.
+  return ''
 }
 
 /**
  * Path do POST de abertura no BFF. Em `vite` dev, se `VITE_MASSIVA_OPEN_PATH` estiver vazio,
- * usa o path documentado no `.env.example` para o botão não ficar bloqueado sem .env.local.
+ * em dev usa salvar-massiva-via-api se a variável estiver vazia.
  * Build de produção exige variável (ou o deploy define).
  */
 function massivaOpenPathResolved(): string {
   const fromEnv = str(import.meta.env.VITE_MASSIVA_OPEN_PATH, '')
   if (fromEnv !== '') return fromEnv
-  if (import.meta.env.DEV) return '/api/v1/massivas/open'
+  if (import.meta.env.DEV) return '/api/v1/massivas/salvar-massiva-via-api'
   return ''
 }
 
@@ -55,7 +64,7 @@ function massivaAfetadosPathResolved(): string {
 function massivaListPathResolved(): string {
   const fromEnv = str(import.meta.env.VITE_MASSIVA_LIST_PATH, '')
   if (fromEnv !== '') return fromEnv
-  if (import.meta.env.DEV) return '/api/v1/massivas/list'
+  if (import.meta.env.DEV) return '/api/v1/massivas/recuperar-pelo-banco'
   return ''
 }
 
@@ -68,8 +77,10 @@ function massivaListPathResolved(): string {
 function localBffUrlResolved(): string {
   const fromEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
   if (fromEnv !== '') return fromEnv
+
   if (import.meta.env.DEV) return 'http://localhost:3001'
-  return bffBaseUrlResolved()
+  
+  return ''
 }
 
 export const env = {
@@ -104,7 +115,7 @@ export const env = {
   geogridApiKey: str(import.meta.env.VITE_GEOGRID_API_KEY, ''),
   /**
    * GET no BFF — listagem de massivas (paridade `MASSIVA_API_GATEWAY_LIST_ENDPOINT` no Flutter,
-   * mas sempre como path relativo ao `bffBaseUrl`). Ex.: `/api/v1/massivas/list`
+   * mas sempre como path relativo ao `bffBaseUrl`). Ex.: `/api/v1/massivas/recuperar-pelo-banco`
    */
   massivaListPath: massivaListPathResolved(),
   /** POST de abertura de massiva no BFF (paridade `MASSIVA_API_GATEWAY_ENDPOINT` no Flutter, como path). */

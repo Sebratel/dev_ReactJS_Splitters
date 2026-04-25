@@ -1,0 +1,297 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-04-25T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app",
+  "resources": [
+    {
+      "_id": "wrk_splitters_api",
+      "_type": "workspace",
+      "name": "ReactJS Splitters API",
+      "description": "API backend do projeto ReactJS Splitters",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_splitters_api",
+      "_type": "environment",
+      "parentId": "wrk_splitters_api",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://186.14.32.56:3031"
+      },
+      "metaSortKey": -1
+    },
+    {
+      "_id": "req_olts",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/olts",
+      "method": "GET",
+      "url": "{{ base_url }}/api/olts",
+      "body": {
+        "mimeType": "application/json",
+        "text": ""
+      },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_primarios",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/primarios",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/primarios",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_geogrid_equipamentos",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/geogrid/equipamentos/:integrationCode/portas",
+      "method": "GET",
+      "url": "{{ base_url }}/api/geogrid/equipamentos/{integrationCode}/portas",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_geogrid_clientes",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/geogrid/clientes/:idCliente",
+      "method": "GET",
+      "url": "{{ base_url }}/api/geogrid/clientes/{idCliente}",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_geogrid_clientesAtendimentos",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/geogrid/clientesAtendimentos",
+      "method": "GET",
+      "url": "{{ base_url }}/api/geogrid/clientesAtendimentos?nomes=Nome1,Nome2",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_hub_session",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/hub/session",
+      "method": "GET",
+      "url": "{{ base_url }}/api/hub/session",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters?page=1&limit=20",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_filter_options",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/filter-options",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/filter-options",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_access_points",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/access-points",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/access-points",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_massiva_routes",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/massiva/routes",
+      "method": "GET",
+      "url": "{{ base_url }}/api/massiva/routes",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_massiva_connections",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/massiva/connections",
+      "method": "GET",
+      "url": "{{ base_url }}/api/massiva/connections?apCode=AP1&slot=1&port=1",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_massiva_connections_batch",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "POST /api/massiva/connections/batch",
+      "method": "POST",
+      "url": "{{ base_url }}/api/massiva/connections/batch",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"routes\": [\n    { \"apCode\": \"AP1\", \"slot\": 1, \"port\": 1 }\n  ]\n}"
+      },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "_id": "req_massiva_history_open",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "POST /api/massiva/history/open",
+      "method": "POST",
+      "url": "{{ base_url }}/api/massiva/history/open",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"operatorEmail\": \"user@example.com\",\n  \"title\": \"Massiva aberta\",\n  \"splitterEntries\": [],\n  \"results\": [],\n  \"affectedClients\": 0\n}"
+      },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "_id": "req_massiva_history_close",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "POST /api/massiva/history/close",
+      "method": "POST",
+      "url": "{{ base_url }}/api/massiva/history/close",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"protocol\": \"1234\",\n  \"assignmentId\": \"5678\",\n  \"closeDescription\": \"Encerramento\"\n}"
+      },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "_id": "req_massiva_history_splitter_stats",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/massiva/history/splitter-stats",
+      "method": "GET",
+      "url": "{{ base_url }}/api/massiva/history/splitter-stats?splitterCodes=C123",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_massiva_history_open_splitter_codes",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/massiva/history/open-splitter-codes",
+      "method": "GET",
+      "url": "{{ base_url }}/api/massiva/history/open-splitter-codes",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_snapshots_capture",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "POST /api/splitters/snapshots/capture",
+      "method": "POST",
+      "url": "{{ base_url }}/api/splitters/snapshots/capture",
+      "body": { "mimeType": "application/json", "text": "{}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "_id": "req_splitters_trends",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/trends",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/trends?codes=C123",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_neighbors",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/:code/neighbors",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/C123/neighbors?radius=200",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_by_code",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters-by-code/:code",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters-by-code/C123",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_splitters_connections",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/splitters/:code/connections",
+      "method": "GET",
+      "url": "{{ base_url }}/api/splitters/C123/connections",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_clientes",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/clientes/:id",
+      "method": "GET",
+      "url": "{{ base_url }}/api/clientes/123",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_health",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/health",
+      "method": "GET",
+      "url": "{{ base_url }}/api/health",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_stats",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "GET /api/stats",
+      "method": "GET",
+      "url": "{{ base_url }}/api/stats",
+      "body": { "mimeType": "application/json", "text": "" },
+      "headers": []
+    },
+    {
+      "_id": "req_dashboard_kpi_snapshot",
+      "_type": "request",
+      "parentId": "wrk_splitters_api",
+      "name": "POST /api/dashboard/kpi-daily-snapshot",
+      "method": "POST",
+      "url": "{{ base_url }}/api/dashboard/kpi-daily-snapshot",
+      "body": { "mimeType": "application/json", "text": "{}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ]
+    }
+  ]
+}
