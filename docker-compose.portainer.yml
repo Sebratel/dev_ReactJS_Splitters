@@ -53,13 +53,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        - VITE_BFF_BASE_URL=https://api-gateway-bff-staging.sebratel.net.br
     container_name: react-frontend-portainer
     environment:
       VITE_LOCAL_BFF_URL: http://react-backend-portainer:3001
       # APIs externas (para o browser)
       VITE_GEOGRID_BASE_URL: https://eros.geogridmaps.com.br/sebratel/api/v3
       VITE_GEOGRID_API_KEY: 395dce58e725b7324453608e6c65e8a6a8193e86
-      VITE_BFF_BASE_URL: https://api-gateway-bff-staging.sebratel.net.br
       VITE_BFF_PROXY_TARGET: https://api-gateway-bff-staging.sebratel.net.br
       VITE_MASSIVA_LIST_PATH: /api/v1/massivas/recuperar-pelo-banco
       VITE_MASSIVA_OPEN_PATH: /api/v1/massivas/salvar-massiva-via-api
