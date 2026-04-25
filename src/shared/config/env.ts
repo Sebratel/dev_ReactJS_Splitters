@@ -27,7 +27,9 @@ function bffBaseUrlResolved(): string {
   const localEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
   if (localEnv !== '') return localEnv
 
-  return 'https://api-gateway-bff.sebratel.net.br'
+  // Caso as variáveis não estejam definidas em PROD, retornamos vazio para forçar path relativo
+  // O Vite Preview ou Nginx fará o proxy para o backend apropriado.
+  return ''
 }
 
 /**
