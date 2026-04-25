@@ -17,8 +17,8 @@ function str(value: unknown, fallback: string): string {
  * backend precisa liberar CORS para o origin do app).
  */
 function bffBaseUrlResolved(): string {
-  const fromEnv = import.meta.env.VITE_BFF_BASE_URL
-  if (typeof fromEnv === 'string') return fromEnv.trim()
+  const fromEnv = str(import.meta.env.VITE_BFF_BASE_URL, '')
+  if (fromEnv !== '') return fromEnv
 
   // Fallback para desenvolvimento (proxy local /api)
   if (import.meta.env.DEV) return ''
@@ -73,8 +73,8 @@ function massivaListPathResolved(): string {
  * build apontando para localhost no navegador dos usuarios.
  */
 function localBffUrlResolved(): string {
-  const fromEnv = import.meta.env.VITE_LOCAL_BFF_URL
-  if (typeof fromEnv === 'string') return fromEnv.trim()
+  const fromEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
+  if (fromEnv !== '') return fromEnv
 
   if (import.meta.env.DEV) return 'http://localhost:3001'
   return bffBaseUrlResolved()
