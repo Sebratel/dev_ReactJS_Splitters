@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         - VITE_BFF_BASE_URL=
-        - VITE_LOCAL_BFF_URL=http://backend:3031
+        - VITE_LOCAL_BFF_URL=
         - VITE_GEOGRID_BASE_URL=https://eros.geogridmaps.com.br/sebratel/api/v3
         - VITE_GEOGRID_API_KEY=395dce58e725b7324453608e6c65e8a6a8193e86
         - VITE_BFF_PROXY_TARGET=http://backend:3031
