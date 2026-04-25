@@ -36,7 +36,7 @@ services:
       AUTOISP_USERNAME: api@sebratel.com.br
       AUTOISP_PASSWORD: nqy!jzk7gwx_BUQ!qug
     ports:
-      - "3001:3001"
+      - "3031:3001"
     networks:
       - nexaview-network
     healthcheck:
