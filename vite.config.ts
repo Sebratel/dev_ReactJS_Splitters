@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
     preview: {
       port: 5173,
       host: '0.0.0.0',
-      allowedHosts: ['portainer-staging.sebratel.net.br'],
+      allowedHosts: true,
       proxy: {
         '/__autoisp': {
           target: 'https://autoisp.sebratel.net.br',
