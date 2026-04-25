@@ -62,7 +62,7 @@ services:
         - VITE_AUTOISP_USERNAME=api@sebratel.com.br
         - VITE_AUTOISP_PASSWORD=nqy!jzk7gwx_BUQ!qug
         - VITE_GOOGLE_CLIENT_ID=374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com
-        - VITE_GOOGLE_REDIRECT_URI=http://186.219.134.246:5173/
+        - VITE_GOOGLE_REDIRECT_URI=https://portainer-staging.sebratel.net.br/
     container_name: react-frontend-portainer
     environment:
       # Desenvolvimento local
