@@ -8,8 +8,8 @@ export default defineConfig({
   },
 
   preview: {
-    allowedHosts: ['portainer-staging.sebratel.net.br'],
-  },
+    allowedHosts: true,
+  }
 
   test: {
     environment: 'jsdom',
