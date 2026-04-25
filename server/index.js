@@ -6,12 +6,15 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
+
+captureConsole();
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -32,6 +35,26 @@ const hubBaseUrl = (
 
 app.use(cors()); // Permite qualquer origem em desenvolvimento local
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const startAt = Date.now();
+  logger.info('http_request_start', {
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+  });
+
+  res.on('finish', () => {
+    logger.info('http_request_end', {
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startAt,
+    });
+  });
+
+  next();
+});
 
 function normalizeNumericSql(expression) {
   return `NULLIF(REPLACE(REGEXP_REPLACE(TRIM(${expression}::text), '[^0-9,.-]', '', 'g'), ',', '.'), '')::double precision`;
@@ -1707,7 +1730,7 @@ async function startServer() {
   // Postgresql/MySQL podia atrasar ou bloquear e o healthcheck falhava (container unhealthy).
   await new Promise((resolve, reject) => {
     const httpServer = app.listen(port, () => {
-      console.log(`BFF Local rodando em http://localhost:${port}`);
+      logger.info(`BFF Local rodando em http://localhost:${port}`);
       resolve();
     });
     httpServer.on('error', reject);
@@ -1716,52 +1739,74 @@ async function startServer() {
   try {
     await ensureDashboardKpiTable(pool);
     if (dashboardKpiSnapshotWritesEnabled) {
-      console.log('Tabela dashboard_kpi_daily (PostgreSQL) verificada.');
+      logger.info('Tabela dashboard_kpi_daily (PostgreSQL) verificada.');
     }
   } catch (error) {
-    console.error(
-      'Arranque: falha ao verificar PostgreSQL (conexao ou DDL). Rotas com DB podem falhar.',
+    logger.error('Arranque: falha ao verificar PostgreSQL (conexao ou DDL). Rotas com DB podem falhar.', {
       error,
-    );
+    });
   }
 
   if (massivaHistoryStore.configured) {
     try {
       await massivaHistoryStore.ensureReady();
-      console.log('Histórico local de massivas (MySQL) pronto.');
+      logger.info('Histórico local de massivas (MySQL) pronto.');
     } catch (error) {
-      console.error('Arranque: falha ao preparar MySQL (massiva).', error);
+      logger.error('Arranque: falha ao preparar MySQL (massiva).', { error });
     }
   } else {
-    console.warn('Histórico local de massivas (MySQL) desativado: configure MASSIVA_MYSQL_* no .env.local.');
+    logger.warn('Histórico local de massivas (MySQL) desativado: configure MASSIVA_MYSQL_* no .env.local.');
   }
 
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';
   const kpiCronExpr = (process.env.DASHBOARD_KPI_CRON ?? '0 6 * * *').trim();
   if (!dashboardKpiSnapshotWritesEnabled) {
-    console.log('[dashboard-kpi] Cron não registrado (PostgreSQL só leitura).');
+    logger.info('[dashboard-kpi] Cron não registrado (PostgreSQL só leitura).');
   } else if (!kpiCronDisabled) {
     cron.schedule(
       kpiCronExpr,
       async () => {
         try {
           const { snapshot_date: d } = await captureDashboardKpiDaily();
-          console.log(`[dashboard-kpi] Snapshot agendado OK (data operacional: ${d}).`);
+          logger.info(`[dashboard-kpi] Snapshot agendado OK (data operacional: ${d}).`);
         } catch (error) {
-          console.error('[dashboard-kpi] Falha no snapshot agendado:', error);
+          logger.error('[dashboard-kpi] Falha no snapshot agendado:', { error });
         }
       },
       { timezone: 'America/Sao_Paulo' },
     );
-    console.log(
+    logger.info(
       `[dashboard-kpi] Cron ativo: "${kpiCronExpr}" America/Sao_Paulo (padrão 06:00). Desative com DASHBOARD_KPI_CRON_DISABLED=true.`,
     );
   } else {
-    console.log('[dashboard-kpi] Cron desativado (DASHBOARD_KPI_CRON_DISABLED=true).');
+    logger.info('[dashboard-kpi] Cron desativado (DASHBOARD_KPI_CRON_DISABLED=true).');
   }
 }
 
+process.on('uncaughtException', (error) => {
+  logger.fatal('uncaught_exception', { error });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.fatal('unhandled_rejection', { reason });
+});
+
+app.use((error, req, res, next) => {
+  logger.error('express_error', {
+    message: error?.message,
+    stack: error?.stack,
+    method: req.method,
+    url: req.originalUrl,
+  });
+
+  res.status(error?.status || 500).json({
+    success: false,
+    error: 'Internal server error',
+  });
+});
+
 startServer().catch((error) => {
-  console.error('Falha ao iniciar o BFF Local:', error);
+  logger.fatal('Falha ao iniciar o BFF Local:', { error });
   process.exit(1);
 });
