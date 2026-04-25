@@ -10,6 +10,12 @@ services:
       NODE_ENV: production
       LOG_LEVEL: debug
       PORT: 3001
+      ERP_CLIENT_ID: ad0c5d9a-fad1-4ca9-8d1e-cff2cedb3146
+      ERP_CLIENT_SECRET: cb53bd13-5305-4306-b03b-b00cf05f2e34
+      ERP_SYNDATA: TWpNMU9EYzVaakk1T0dSaU1USmxaalprWldFd00ySTFZV1JsTTJRMFptUT06WlhsS1ZHVlhOVWxpTTA0d1NXcHZhVTFVWnpKTWFrbDRUMU0wZUUxcVozVk5hbFY0U1dsM2FWVXpiSFZTUjBscFQybEthMWx0Vm5SalJFRjNUVlJCZDBscGQybFNSMHBWWlZoQ2JFbHFiMmxqUnpsNlpFZGtlVnBZVFdsbVVUMDk6WlRoa01qTTFZamswWXpsaU5ETm1aRGczTURsa01qWTJZekF4TUdNM01HVT0=
+      MASSIVA_COOKIE_STRING: "_hjSessionUser_5073910=eyJpZCI6IjIzNTcyMGQ2LTVjOTMtNTUzMi05NGU1LWU1NWQ0YzJkZTE1OCIsImNyZWF0ZWQiOjE3NzI2MjkxMjMzNTQsImV4aXN0aW5nIjp0cnVlfQ==; SYNSUITE=sseq0g9d3tstr5e3becln7fo44; _hjSession_5073910=eyJpZCI6ImQ4YzcxYTIzLWIwMmYtNDI2Ny1iMjdiLTM3OTk5MDRkY2ZjMiIsImMiOjE3NzI3MTc5ODg1NDEsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MH0="
+      MASSIVA_API_GATEWAY_ENDPOINT: https://api-gateway-bff.sebratel.net.br/api/v1/massivas/salvar-massiva-via-api
+      MASSIVA_API_GATEWAY_LIST_ENDPOINT: https://api-gateway-bff.sebratel.net.br/api/v1/massivas/recuperar-pelo-banco
       # PostgreSQL - DESABILITADO (funciona sem estatísticas de rede)
       DB_HOST: 186.219.128.248
       DB_PORT: 5432
