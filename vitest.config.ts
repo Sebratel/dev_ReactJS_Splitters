@@ -1,8 +1,3 @@
-import path from 'node:path'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { defineConfig } from 'vitest/config'
-
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -11,11 +6,16 @@ export default defineConfig({
       '@domain': path.resolve(__dirname, 'src/domain'),
     },
   },
+
+  preview: {
+    allowedHosts: ['portainer-staging.sebratel.net.br'],
+  },
+
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    globals: true, // Alterado para true
+    globals: true,
     css: true,
     pool: 'forks',
     coverage: {
