@@ -9,11 +9,11 @@ services:
     environment:
       PORT: 3001
       # PostgreSQL - DESABILITADO (funciona sem estatísticas de rede)
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: 186.219.128.248
+      DB_PORT: 5432
+      DB_NAME: dbemp00100
+      DB_USER: cliente_s
+      DB_PASSWORD: mHWIg8o1V:4v
       DB_SSL: "false"
       # MySQL remoto (do .env.local)
       MASSIVA_MYSQL_HOST: 10.0.11.171
