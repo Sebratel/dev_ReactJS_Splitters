@@ -79,7 +79,8 @@ function localBffUrlResolved(): string {
   if (fromEnv !== '') return fromEnv
 
   if (import.meta.env.DEV) return 'http://localhost:3001'
-  return bffBaseUrlResolved()
+  
+  return ''
 }
 
 export const env = {
