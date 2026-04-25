@@ -32,7 +32,22 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
+      port: 5173,
+      host: '0.0.0.0',
       allowedHosts: ['portainer-staging.sebratel.net.br'],
+      proxy: {
+        '/__autoisp': {
+          target: 'https://autoisp.sebratel.net.br',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/__autoisp/, ''),
+        },
+        '/api': {
+          target: bffProxyTarget,
+          changeOrigin: true,
+          secure: true,
+        },
+      },
     },
     resolve: {
       alias: {
