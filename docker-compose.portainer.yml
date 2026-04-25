@@ -50,10 +50,10 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         - VITE_BFF_BASE_URL=
-        - VITE_LOCAL_BFF_URL=
+        - VITE_LOCAL_BFF_URL=http://backend:3031
         - VITE_GEOGRID_BASE_URL=https://eros.geogridmaps.com.br/sebratel/api/v3
         - VITE_GEOGRID_API_KEY=395dce58e725b7324453608e6c65e8a6a8193e86
-        - VITE_BFF_PROXY_TARGET=http://backend:3001
+        - VITE_BFF_PROXY_TARGET=http://backend:3031
         - VITE_MASSIVA_LIST_PATH=/api/v1/massivas/recuperar-pelo-banco
         - VITE_MASSIVA_OPEN_PATH=/api/v1/massivas/salvar-massiva-via-api
         - VITE_MASSIVA_AFETADOS_PATH=/api/v1/afetados
@@ -62,7 +62,7 @@ services:
         - VITE_AUTOISP_USERNAME=api@sebratel.com.br
         - VITE_AUTOISP_PASSWORD=nqy!jzk7gwx_BUQ!qug
         - VITE_GOOGLE_CLIENT_ID=374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com
-        - VITE_GOOGLE_REDIRECT_URI=http://186.219.134.246:5173/
+        - VITE_GOOGLE_REDIRECT_URI=https://portainer-staging.sebratel.net.br/
     container_name: react-frontend-portainer
     environment:
       # Desenvolvimento local
