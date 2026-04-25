@@ -6,11 +6,6 @@ export default defineConfig({
       '@domain': path.resolve(__dirname, 'src/domain'),
     },
   },
-
-  preview: {
-    allowedHosts: true,
-  }
-
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
