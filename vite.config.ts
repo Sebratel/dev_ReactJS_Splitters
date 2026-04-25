@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const bffProxyTarget =
-    env.VITE_BFF_PROXY_TARGET || 'https://api-gateway-bff.sebratel.net.br'
+    env.VITE_BFF_PROXY_TARGET || 'https://n8n-staging.sebratel.net.br'
 
   return {
     plugins: [react(), tailwindcss()],
