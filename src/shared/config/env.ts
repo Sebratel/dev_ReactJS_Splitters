@@ -20,9 +20,12 @@ function bffBaseUrlResolved(): string {
   const fromEnv = str(import.meta.env.VITE_BFF_BASE_URL, '')
   if (fromEnv !== '') return fromEnv
 
-  // Fallback para produção apenas quando a variável estiver vazia/ausente no build.
-  // Em desenvolvimento, retornamos vazio para habilitar o proxy local (/api).
+  // Fallback para desenvolvimento (proxy local /api)
   if (import.meta.env.DEV) return ''
+
+  // Em produção, se VITE_BFF_BASE_URL estiver vazia, tenta VITE_LOCAL_BFF_URL
+  const localEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
+  if (localEnv !== '') return localEnv
 
   return 'https://api-gateway-bff.sebratel.net.br'
 }

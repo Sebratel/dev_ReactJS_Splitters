@@ -55,24 +55,21 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         - VITE_BFF_BASE_URL=https://api-gateway-bff-staging.sebratel.net.br
+        - VITE_LOCAL_BFF_URL=http://react-backend-portainer:3001
+        - VITE_GEOGRID_BASE_URL=https://eros.geogridmaps.com.br/sebratel/api/v3
+        - VITE_GEOGRID_API_KEY=395dce58e725b7324453608e6c65e8a6a8193e86
+        - VITE_BFF_PROXY_TARGET=https://api-gateway-bff-staging.sebratel.net.br
+        - VITE_MASSIVA_LIST_PATH=/api/v1/massivas/recuperar-pelo-banco
+        - VITE_MASSIVA_OPEN_PATH=/api/v1/massivas/salvar-massiva-via-api
+        - VITE_MASSIVA_AFETADOS_PATH=/api/v1/afetados
+        - VITE_AUTOISP_AUTH_ENDPOINT=/__autoisp/api/auth/v2/request_token
+        - VITE_AUTOISP_EVENTS_ENDPOINT=/__autoisp/api/massives/v1/events
+        - VITE_AUTOISP_USERNAME=api@sebratel.com.br
+        - VITE_AUTOISP_PASSWORD=nqy!jzk7gwx_BUQ!qug
+        - VITE_GOOGLE_CLIENT_ID=374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com
+        - VITE_GOOGLE_REDIRECT_URI=https://app-splitters-staging.web.app/
     container_name: react-frontend-portainer
     environment:
-      VITE_LOCAL_BFF_URL: http://react-backend-portainer:3001
-      # APIs externas (para o browser)
-      VITE_GEOGRID_BASE_URL: https://eros.geogridmaps.com.br/sebratel/api/v3
-      VITE_GEOGRID_API_KEY: 395dce58e725b7324453608e6c65e8a6a8193e86
-      VITE_BFF_PROXY_TARGET: https://api-gateway-bff-staging.sebratel.net.br
-      VITE_MASSIVA_LIST_PATH: /api/v1/massivas/recuperar-pelo-banco
-      VITE_MASSIVA_OPEN_PATH: /api/v1/massivas/salvar-massiva-via-api
-      VITE_MASSIVA_AFETADOS_PATH: /api/v1/afetados
-      # AutoISP (para o browser)
-      VITE_AUTOISP_AUTH_ENDPOINT: /__autoisp/api/auth/v2/request_token
-      VITE_AUTOISP_EVENTS_ENDPOINT: /__autoisp/api/massives/v1/events
-      VITE_AUTOISP_USERNAME: api@sebratel.com.br
-      VITE_AUTOISP_PASSWORD: nqy!jzk7gwx_BUQ!qug
-      # Google OAuth
-      VITE_GOOGLE_CLIENT_ID: 374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com
-      VITE_GOOGLE_REDIRECT_URI: https://app-splitters-staging.web.app/
       # Desenvolvimento local
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
