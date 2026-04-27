@@ -1,6 +1,6 @@
-﻿import { FormEvent, useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { isFirebaseAuthConfigured } from '@/shared/config/env'
+import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 export function LoginPage() {
@@ -9,10 +9,7 @@ export function LoginPage() {
   const initialize = useAccessAuthStore((s) => s.initialize)
   const status = useAccessAuthStore((s) => s.status)
   const error = useAccessAuthStore((s) => s.error)
-  const signIn = useAccessAuthStore((s) => s.signIn)
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const signInWithGoogle = useAccessAuthStore((s) => s.signInWithGoogle)
   const [submitting, setSubmitting] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -27,13 +24,12 @@ export function LoginPage() {
     }
   }, [status, navigate, location.state])
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleGoogleSignIn = async () => {
     setLocalError(null)
     setSubmitting(true)
 
     try {
-      await signIn(email, password)
+      await signInWithGoogle()
     } catch (submitError) {
       setLocalError(submitError instanceof Error ? submitError.message : 'Falha ao autenticar.')
     } finally {
@@ -59,34 +55,26 @@ export function LoginPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500">Splitters</p>
           <h1 className="mt-1 text-xl font-semibold text-neutral-900">Acessar plataforma</h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Login de usuário para controle de permissões por módulo.
+            Acesso com conta Google para controle de permissões por módulo.
           </p>
         </div>
 
-        <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">E-mail</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-neutral-500">Senha</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20"
-            />
-          </label>
+        <div className="mt-5 space-y-3">
+          {env.accessAllowedEmailDomain !== '' ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+              Domínio liberado nesta fase:{' '}
+              <strong>
+                {env.accessAllowedEmailDomain.startsWith('@')
+                  ? env.accessAllowedEmailDomain
+                  : `@${env.accessAllowedEmailDomain}`}
+              </strong>
+            </p>
+          ) : null}
+          {env.accessAllowedEmailDomain === '' && env.accessAllowedEmails.length > 0 ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+              E-mail liberado nesta fase: <strong>{env.accessAllowedEmails.join(', ')}</strong>
+            </p>
+          ) : null}
 
           {(localError || error) ? (
             <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -95,13 +83,14 @@ export function LoginPage() {
           ) : null}
 
           <button
-            type="submit"
+            type="button"
+            onClick={handleGoogleSignIn}
             disabled={submitting || status === 'loading'}
             className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
           >
-            {submitting || status === 'loading' ? 'Entrando...' : 'Entrar'}
+            {submitting || status === 'loading' ? 'Entrando...' : 'Entrar com Google'}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   )
