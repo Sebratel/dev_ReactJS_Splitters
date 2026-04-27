@@ -57,7 +57,7 @@ export const router = createBrowserRouter([
               </PermissionGuard>
             ),
           },
-          /*{
+          {
             path: 'usuarios',
             element: (
               <PermissionGuard
@@ -67,7 +67,7 @@ export const router = createBrowserRouter([
                 <UsersManagementPage />
               </PermissionGuard>
             ),
-          },*/
+          },
         ],
       },
     ],
