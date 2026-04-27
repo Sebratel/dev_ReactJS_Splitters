@@ -37,9 +37,9 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
     ...(canAccessMassiva
       ? [{ label: 'Massivas', icon: AlertTriangle, to: '/massiva', accent: 'danger' as const }]
       : []),
-    /*...(isAdmin
+    ...(isAdmin
       ? [{ label: 'Usuários', icon: Users, to: '/usuarios' }]
-      : []),*/
+      : []),
   ]
 
   return (
