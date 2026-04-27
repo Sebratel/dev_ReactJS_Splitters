@@ -17,25 +17,25 @@ services:
       MASSIVA_API_GATEWAY_ENDPOINT: ${MASSIVA_API_GATEWAY_ENDPOINT:-https://api-gateway-bff.sebratel.net.br/api/v1/massivas/salvar-massiva-via-api}
       MASSIVA_API_GATEWAY_LIST_ENDPOINT: ${MASSIVA_API_GATEWAY_LIST_ENDPOINT:-https://api-gateway-bff.sebratel.net.br/api/v1/massivas/recuperar-pelo-banco}
       # PostgreSQL - DESABILITADO (funciona sem estatísticas de rede)
-      DB_HOST: ${DB_HOST:-186.219.128.248}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-dbemp00100}
-      DB_USER: ${DB_USER:-cliente_s}
-      DB_PASSWORD: ${DB_PASSWORD:-mHWIg8o1V:4v}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_SSL: ${DB_SSL:-false}
       # MySQL remoto (do .env.local)
-      MASSIVA_MYSQL_HOST: ${MASSIVA_MYSQL_HOST:-10.0.11.171}
-      MASSIVA_MYSQL_PORT: ${MASSIVA_MYSQL_PORT:-3306}
-      MASSIVA_MYSQL_DATABASE: ${MASSIVA_MYSQL_DATABASE:-DB_Massives}
-      MASSIVA_MYSQL_USER: ${MASSIVA_MYSQL_USER:-DevSebratel}
-      MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD:-DevBI*24}
+      MASSIVA_MYSQL_HOST: ${MASSIVA_MYSQL_HOST}
+      MASSIVA_MYSQL_PORT: ${MASSIVA_MYSQL_PORT}
+      MASSIVA_MYSQL_DATABASE: ${MASSIVA_MYSQL_DATABASE}
+      MASSIVA_MYSQL_USER: ${MASSIVA_MYSQL_USER}
+      MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD}
       # APIs externas
-      HUB_BASE_URL: ${HUB_BASE_URL:-https://sebratel-hub.web.app}
-      GEOGRID_BASE_URL: ${GEOGRID_BASE_URL:-https://eros.geogridmaps.com.br/sebratel/api/v3}
-      GEOGRID_API_KEY: ${GEOGRID_API_KEY:-395dce58e725b7324453608e6c65e8a6a8193e86}
+      HUB_BASE_URL: ${HUB_BASE_URL}
+      GEOGRID_BASE_URL: ${GEOGRID_BASE_URL}
+      GEOGRID_API_KEY: ${GEOGRID_API_KEY}
       # AutoISP
-      AUTOISP_EVENTS_ENDPOINT: ${AUTOISP_EVENTS_ENDPOINT:-https://autoisp.sebratel.net.br/api/massives/v1/events}
-      AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT:-https://autoisp.sebratel.net.br/api/auth/v2/request_token}
+      AUTOISP_EVENTS_ENDPOINT: ${AUTOISP_EVENTS_ENDPOINT}
+      AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT}
       AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
       AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
     ports:
@@ -55,19 +55,19 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_BFF_BASE_URL=${VITE_BFF_BASE_URL:-}
-        - VITE_LOCAL_BFF_URL=${VITE_LOCAL_BFF_URL:-}
-        - VITE_GEOGRID_BASE_URL=${VITE_GEOGRID_BASE_URL:-https://eros.geogridmaps.com.br/sebratel/api/v3}
-        - VITE_GEOGRID_API_KEY=${VITE_GEOGRID_API_KEY:-395dce58e725b7324453608e6c65e8a6a8193e86}
-        - VITE_BFF_PROXY_TARGET=${VITE_BFF_PROXY_TARGET:-https://n8n-staging.sebratel.net.br}
-        - VITE_MASSIVA_LIST_PATH=${VITE_MASSIVA_LIST_PATH:-/api/v1/massivas/recuperar-pelo-banco}
-        - VITE_MASSIVA_OPEN_PATH=${VITE_MASSIVA_OPEN_PATH:-/api/v1/massivas/salvar-massiva-via-api}
-        - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
-        - VITE_AUTOISP_AUTH_ENDPOINT=${VITE_AUTOISP_AUTH_ENDPOINT:-/__autoisp/api/auth/v2/request_token}
-        - VITE_AUTOISP_EVENTS_ENDPOINT=${VITE_AUTOISP_EVENTS_ENDPOINT:-/__autoisp/api/massives/v1/events}
-        - VITE_AUTOISP_USERNAME=${VITE_AUTOISP_USERNAME:-api@sebratel.com.br}
-        - VITE_AUTOISP_PASSWORD=${VITE_AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
-        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-374233629278-383pi1ga2ta3sge34nkd5sggpulq8qbc.apps.googleusercontent.com}
+        - VITE_BFF_BASE_URL=${VITE_BFF_BASE_URL}
+        - VITE_LOCAL_BFF_URL=${VITE_LOCAL_BFF_URL}
+        - VITE_GEOGRID_BASE_URL=${VITE_GEOGRID_BASE_URL}
+        - VITE_GEOGRID_API_KEY=${VITE_GEOGRID_API_KEY}
+        - VITE_BFF_PROXY_TARGET=${VITE_BFF_PROXY_TARGET}
+        - VITE_MASSIVA_LIST_PATH=${VITE_MASSIVA_LIST_PATH}
+        - VITE_MASSIVA_OPEN_PATH=${VITE_MASSIVA_OPEN_PATH}
+        - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH}
+        - VITE_AUTOISP_AUTH_ENDPOINT=${VITE_AUTOISP_AUTH_ENDPOINT}
+        - VITE_AUTOISP_EVENTS_ENDPOINT=${VITE_AUTOISP_EVENTS_ENDPOINT}
+        - VITE_AUTOISP_USERNAME=${VITE_AUTOISP_USERNAME}
+        - VITE_AUTOISP_PASSWORD=${VITE_AUTOISP_PASSWORD}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
         - VITE_GOOGLE_REDIRECT_URI=${VITE_GOOGLE_REDIRECT_URI}
     container_name: react-frontend-portainer
     environment:
