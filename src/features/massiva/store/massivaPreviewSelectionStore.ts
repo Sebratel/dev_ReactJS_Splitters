@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   MassivaLocalPreviewRouteSelection,
   MassivaRouteConnectionSelection,
+  MassivaRouteSlotPortPair,
   MassivaSelectedSplitter,
 } from '@/features/massiva/model/massivaLocalPreview'
 
@@ -27,6 +28,21 @@ function normalizeSplitters(
   }
 
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id, 'pt-BR'))
+}
+
+function normalizeSelectedPairs(
+  pairs: readonly MassivaRouteSlotPortPair[] | undefined,
+): MassivaRouteSlotPortPair[] | undefined {
+  if (!pairs || pairs.length === 0) return undefined
+  const byKey = new Map<string, MassivaRouteSlotPortPair>()
+  for (const pair of pairs) {
+    if (!Number.isFinite(pair.slot) || !Number.isFinite(pair.port)) continue
+    const slot = Math.trunc(pair.slot)
+    const port = Math.trunc(pair.port)
+    byKey.set(`${slot}|${port}`, { slot, port })
+  }
+  if (byKey.size === 0) return undefined
+  return [...byKey.values()].sort((a, b) => (a.slot !== b.slot ? a.slot - b.slot : a.port - b.port))
 }
 
 function withConnectionAt(
@@ -87,6 +103,7 @@ export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionSta
           ...current,
           apId: (apId ?? '').trim(),
           apLabel: apLabel.trim(),
+          selectedPairs: undefined,
         })),
       ),
 
@@ -95,6 +112,7 @@ export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionSta
         withConnectionAt(state, index, (current) => ({
           ...current,
           slot,
+          selectedPairs: undefined,
         })),
       ),
 
@@ -103,6 +121,7 @@ export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionSta
         withConnectionAt(state, index, (current) => ({
           ...current,
           porta,
+          selectedPairs: undefined,
         })),
       ),
 
@@ -147,6 +166,7 @@ export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionSta
         slot: connection.slot,
         porta: connection.porta,
         splitters: normalizeSplitters(connection.splitters),
+        selectedPairs: normalizeSelectedPairs(connection.selectedPairs),
       }))
 
       set({

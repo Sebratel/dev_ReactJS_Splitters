@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+﻿import { useEffect, type ReactNode } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import { hasAuthParams, useAuth } from 'react-oidc-context'
 import { signinRedirectWithReturnPath } from '@/app/auth/oidcReturnPath'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { isOidcConfigured } from '@/shared/config/env'
+import { isFirebaseAuthConfigured, isOidcConfigured } from '@/shared/config/env'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 type ProtectedRouteProps = {
   children: ReactNode
@@ -83,13 +84,45 @@ function ProtectedRouteOidc({ children }: ProtectedRouteProps) {
   return null
 }
 
-/**
- * Com OIDC configurado, redireciona para o login do provedor. Sem OIDC, libera o conteúdo
- * (útil para desenvolvimento local sem IdP).
- */
+function ProtectedRouteFirebase({ children }: ProtectedRouteProps) {
+  const location = useLocation()
+  const initialize = useAccessAuthStore((s) => s.initialize)
+  const initialized = useAccessAuthStore((s) => s.initialized)
+  const status = useAccessAuthStore((s) => s.status)
+
+  useEffect(() => {
+    initialize()
+  }, [initialize])
+
+  if (!initialized || status === 'loading') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <LoadingState label="Validando acesso..." />
+      </div>
+    )
+  }
+
+  if (status !== 'authenticated') {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    )
+  }
+
+  return <>{children}</>
+}
+
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  if (isFirebaseAuthConfigured()) {
+    return <ProtectedRouteFirebase>{children}</ProtectedRouteFirebase>
+  }
+
   if (!isOidcConfigured()) {
     return <>{children}</>
   }
+
   return <ProtectedRouteOidc>{children}</ProtectedRouteOidc>
 }

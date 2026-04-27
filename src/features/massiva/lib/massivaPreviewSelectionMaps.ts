@@ -32,12 +32,8 @@ export function massivaPreviewNormalizedRoutes(
   }> = []
 
   for (const connection of s.connections) {
-    if (!isCompleteConnection(connection)) continue
-
     const apCode = connection.apId.trim()
-    const routeKey = `${apCode}|${connection.slot}|${connection.porta}`
-    if (seen.has(routeKey)) continue
-    seen.add(routeKey)
+    if (apCode === '') continue
 
     const splitterCodes = [...new Set(
       connection.splitters
@@ -45,12 +41,25 @@ export function massivaPreviewNormalizedRoutes(
         .filter((code) => code !== ''),
     )].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
-    routes.push({
-      apCode,
-      slot: connection.slot,
-      port: connection.porta,
-      splitterCodes,
-    })
+    const selectedPairs = connection.selectedPairs ?? []
+    if (selectedPairs.length > 0) {
+      for (const pair of selectedPairs) {
+        if (!Number.isFinite(pair.slot) || !Number.isFinite(pair.port)) continue
+        const slot = Math.trunc(pair.slot)
+        const port = Math.trunc(pair.port)
+        const routeKey = `${apCode}|${slot}|${port}`
+        if (seen.has(routeKey)) continue
+        seen.add(routeKey)
+        routes.push({ apCode, slot, port, splitterCodes })
+      }
+      continue
+    }
+
+    if (!isCompleteConnection(connection)) continue
+    const routeKey = `${apCode}|${connection.slot}|${connection.porta}`
+    if (seen.has(routeKey)) continue
+    seen.add(routeKey)
+    routes.push({ apCode, slot: connection.slot, port: connection.porta, splitterCodes })
   }
 
   return routes

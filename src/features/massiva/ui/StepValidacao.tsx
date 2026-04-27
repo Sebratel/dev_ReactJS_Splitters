@@ -402,9 +402,9 @@ export function StepValidacao({
 
             {sampleClientes.length > 0 ? (
               <div>
-                <div className="overflow-x-auto">
+                <div className="max-h-[26rem] overflow-auto">
                   <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead className="bg-white">
+                    <thead className="sticky top-0 z-[1] bg-white">
                       <tr className="border-b border-neutral-200/90">
                         <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                           Cliente
@@ -507,7 +507,7 @@ export function StepValidacao({
                 </p>
               </div>
               {openingPreparation.status === 'prepared' ? (
-                <ol className="relative ml-1.5 space-y-0 border-l-2 border-neutral-200 pl-5">
+                <ol className="relative ml-1.5 max-h-[22rem] space-y-0 overflow-y-auto border-l-2 border-neutral-200 pl-5 pr-1">
                   {openingPreparation.basis.topology.routes.map((route) => (
                     <li
                       key={`${route.apCode}-${route.slot}-${route.port}`}

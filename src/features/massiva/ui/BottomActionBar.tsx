@@ -29,7 +29,7 @@ export function BottomActionBar({
   onDismiss,
 }: BottomActionBarProps) {
   return (
-    <div className="sticky bottom-0 z-20 border-t border-neutral-200/80 bg-white/95 px-5 py-4 shadow-[0_-10px_30px_-20px_rgba(15,23,42,0.2)] backdrop-blur">
+    <div className="sticky bottom-0 z-20 border-t border-neutral-200/80 bg-white/95 px-3 py-3 shadow-[0_-10px_30px_-20px_rgba(15,23,42,0.2)] backdrop-blur sm:px-4 sm:py-4 lg:px-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
@@ -44,7 +44,7 @@ export function BottomActionBar({
               <p className="text-xs text-emerald-700">
                 Massiva aberta com sucesso. Protocolos retornados: {successPayload.results.length}.
               </p>
-              <div className="overflow-hidden rounded-lg ring-1 ring-neutral-200/80">
+              <div className="overflow-x-auto rounded-lg ring-1 ring-neutral-200/80">
                 <table className="w-full min-w-[520px] text-left text-xs">
                   <thead className="bg-neutral-50">
                     <tr>

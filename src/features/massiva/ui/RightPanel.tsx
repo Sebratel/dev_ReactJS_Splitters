@@ -18,9 +18,9 @@ export function RightPanel() {
   const [tab, setTab] = useState<RightPanelTab>('autoisp')
 
   return (
-    <aside className="flex min-h-0 flex-col rounded-xl bg-neutral-50/80 px-4 py-4 ring-1 ring-neutral-200/70">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
+    <aside className="flex min-h-0 min-w-0 flex-col rounded-xl bg-neutral-50/80 px-3 py-3 ring-1 ring-neutral-200/70 sm:px-4 sm:py-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
             Apoio operacional
           </p>
@@ -34,7 +34,7 @@ export function RightPanel() {
           </p>
         </div>
         <div
-          className="flex rounded-full bg-white p-1 shadow-sm ring-1 ring-neutral-200/80"
+          className="flex w-full flex-wrap gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:flex-nowrap sm:rounded-full"
           role="tablist"
           aria-label="Abas do painel lateral"
         >
@@ -44,7 +44,7 @@ export function RightPanel() {
             aria-selected={tab === 'autoisp'}
             onClick={() => setTab('autoisp')}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
+              'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:flex-none',
               tab === 'autoisp'
                 ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200'
                 : 'text-neutral-600 hover:bg-neutral-50',
@@ -59,7 +59,7 @@ export function RightPanel() {
             aria-selected={tab === 'protocolos'}
             onClick={() => setTab('protocolos')}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
+              'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:flex-none',
               tab === 'protocolos'
                 ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
                 : 'text-neutral-600 hover:bg-neutral-50',

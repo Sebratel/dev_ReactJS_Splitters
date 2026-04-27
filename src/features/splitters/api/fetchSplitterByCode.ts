@@ -69,15 +69,17 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     pickRowValue(
       row,
       'CÓDIGO[SPLT.SECUNDARIO]',
+      'CDIGO[SPLT.SECUNDARIO]',
       'C?DIGO[SPLT.SECUNDARIO]',
     ),
   )
+  const resolvedSplitterCode = splitterCode.trim() !== '' ? splitterCode : code.trim()
 
   return {
     id: toNumber(row['ID[SPLT.SECUNDARIO]']),
-    code: splitterCode,
+    code: resolvedSplitterCode,
     title: toStringValue(row['SPLT.SECUNDARIO']),
-    integrationCode: splitterCode,
+    integrationCode: resolvedSplitterCode,
     outPorts: toNumber(row['CAPACIDADE[SPLT.SECUNDARIO]']),
     active: row['ATIVO[SPLT.SECUNDARIO]'] === true,
     typeText: mapSplitterTypeText(
@@ -96,7 +98,7 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     busyCount: toNumber(row['BUSY_COUNT']),
     tipoLocal: toTipoLocal(row['TIPO LOCAL']),
     nomeCondominio: toNullableString(
-      pickRowValue(row, 'NOME CONDOMÍNIO', 'NOME CONDOM?NIO'),
+      pickRowValue(row, 'NOME CONDOMNIO', 'NOME CONDOMNIO', 'NOME CONDOM?NIO'),
     ),
   }
 }
