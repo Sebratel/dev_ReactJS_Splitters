@@ -164,6 +164,12 @@ export const env = {
   oidcScope: str(import.meta.env.VITE_OIDC_SCOPE, 'openid profile email'),
   /** Opcional; se vazio, usa `window.location.origin` em runtime. */
   oidcPostLogoutRedirectUri: str(import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI, ''),
+  firebaseApiKey: str(import.meta.env.VITE_FIREBASE_API_KEY, ''),
+  firebaseAuthDomain: str(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, ''),
+  firebaseProjectId: str(import.meta.env.VITE_FIREBASE_PROJECT_ID, ''),
+  firebaseStorageBucket: str(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, ''),
+  firebaseMessagingSenderId: str(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, ''),
+  firebaseAppId: str(import.meta.env.VITE_FIREBASE_APP_ID, ''),
 } as const
 
 
@@ -171,6 +177,15 @@ export type Env = typeof env
 
 export function isOidcConfigured(): boolean {
   return env.oidcAuthority.trim() !== '' && env.oidcClientId.trim() !== ''
+}
+
+export function isFirebaseAuthConfigured(): boolean {
+  return (
+    env.firebaseApiKey.trim() !== '' &&
+    env.firebaseAuthDomain.trim() !== '' &&
+    env.firebaseProjectId.trim() !== '' &&
+    env.firebaseAppId.trim() !== ''
+  )
 }
 
 /** AutoISP só é consultado no browser quando as quatro variáveis estão definidas. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+﻿import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEmployeePersonIdByEmail } from '@/features/massiva/api/fetchEmployeePersonIdByEmail'
 import { buildMassivaOpenFinalContext } from '@/features/massiva/lib/buildMassivaOpenFinalContext'
@@ -12,7 +12,12 @@ import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaO
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { useSessionStore } from '@/features/session/store/sessionStore'
-import { env, isLocalDevHostname } from '@/shared/config/env'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import {
+  env,
+  isFirebaseAuthConfigured,
+  isLocalDevHostname,
+} from '@/shared/config/env'
 
 const PERSON_ID_STALE_MS = 5 * 60 * 1000
 
@@ -23,8 +28,7 @@ function normalizeOpenPath(path: string): string {
 }
 
 /**
- * Autenticação, personId, permissões, rascunho de assignment e path de abertura —
- * sem chamar o POST de massiva.
+ * Autenticacao, personId, permissoes, rascunho de assignment e path de abertura.
  */
 export function useMassivaOpenReadiness(
   openingPreparation: MassivaOpeningPreparationView,
@@ -34,52 +38,47 @@ export function useMassivaOpenReadiness(
   refetchPersonId: () => void
 } {
   const sessionToken = useSessionStore((s) => s.sessionToken)
-  const user = useSessionStore((s) => s.user)
+  const sessionUser = useSessionStore((s) => s.user)
+  const firebaseProfile = useAccessAuthStore((s) => s.profile)
+  const firebaseCanOpenMassiva = useAccessAuthStore((s) => s.hasPermission('canOpenMassiva'))
 
-  const assignmentDescription = useMassivaOpenDraftStore(
-    (s) => s.assignmentDescription,
-  )
-  const descriptionAutoSync = useMassivaOpenDraftStore(
-    (s) => s.descriptionAutoSync,
-  )
-  const assignmentForecastDate = useMassivaOpenDraftStore(
-    (s) => s.assignmentForecastDate,
-  )
-  const assignmentForecastTime = useMassivaOpenDraftStore(
-    (s) => s.assignmentForecastTime,
-  )
+  const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
+  const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
+  const assignmentForecastDate = useMassivaOpenDraftStore((s) => s.assignmentForecastDate)
+  const assignmentForecastTime = useMassivaOpenDraftStore((s) => s.assignmentForecastTime)
   const eventStartDate = useMassivaOpenDraftStore((s) => s.eventStartDate)
   const eventStartTime = useMassivaOpenDraftStore((s) => s.eventStartTime)
-  const eventIdentifiedDate = useMassivaOpenDraftStore(
-    (s) => s.eventIdentifiedDate,
-  )
-  const eventIdentifiedTime = useMassivaOpenDraftStore(
-    (s) => s.eventIdentifiedTime,
-  )
+  const eventIdentifiedDate = useMassivaOpenDraftStore((s) => s.eventIdentifiedDate)
+  const eventIdentifiedTime = useMassivaOpenDraftStore((s) => s.eventIdentifiedTime)
   const initialReport = useMassivaOpenDraftStore((s) => s.initialReport)
-  const fieldTechnicianRequesting = useMassivaOpenDraftStore(
-    (s) => s.fieldTechnicianRequesting,
-  )
+  const fieldTechnicianRequesting = useMassivaOpenDraftStore((s) => s.fieldTechnicianRequesting)
   const affectedUsersQuantityAutoIspOverride = useMassivaOpenDraftStore(
     (s) => s.affectedUsersQuantityAutoIspOverride,
   )
-  const setAssignmentDescription = useMassivaOpenDraftStore(
-    (s) => s.setAssignmentDescription,
-  )
+  const setAssignmentDescription = useMassivaOpenDraftStore((s) => s.setAssignmentDescription)
+
+  const firebaseUserFallback =
+    isFirebaseAuthConfigured() && firebaseProfile
+      ? {
+          email: firebaseProfile.email,
+          name: firebaseProfile.displayName,
+          personId: null,
+          canOpenMassiva: firebaseCanOpenMassiva,
+        }
+      : null
+
+  const user = sessionUser ?? firebaseUserFallback
 
   const email = user?.email?.trim() ?? ''
   const sessionPersonId = user?.personId ?? null
   const canOpenMassiva = user?.canOpenMassiva ?? false
 
-  /** Em dev local o Hub não preenche token, mas o perfil técnico já existe — exibir rascunho e fluxo. */
-  const hasBearer =
-    typeof sessionToken === 'string' && sessionToken.trim() !== ''
-  const sessionCredentialOk = hasBearer || isLocalDevHostname()
+  const hasBearer = typeof sessionToken === 'string' && sessionToken.trim() !== ''
+  const sessionCredentialOk =
+    hasBearer || isLocalDevHostname() || isFirebaseAuthConfigured()
 
   const needsPersonIdFetch =
     openingPreparation.status === 'prepared' &&
-    sessionToken !== null &&
-    sessionToken !== '' &&
     user !== null &&
     email !== '' &&
     canOpenMassiva &&
@@ -98,7 +97,7 @@ export function useMassivaOpenReadiness(
     if (openingPreparation.status !== 'prepared') return
 
     const requester =
-      user?.name?.trim() || user?.email?.trim() || 'Não informado'
+      user?.name?.trim() || user?.email?.trim() || 'Nao informado'
     const { basis, plan } = openingPreparation
 
     const affectedClientsCount =
@@ -215,7 +214,7 @@ export function useMassivaOpenReadiness(
     if (finalIso === null) {
       return {
         status: 'missing-assignment',
-        issues: ['Data/hora de encerramento inválida.'],
+        issues: ['Data/hora de encerramento invalida.'],
       }
     }
 

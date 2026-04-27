@@ -2,7 +2,11 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Sparkles } from 'lucide-react'
 import { MassivaPage } from '@/features/massiva/ui/MassivaPage'
 
-export function MassivaScreen() {
+type MassivaScreenProps = {
+  canOpenMassiva?: boolean
+}
+
+export function MassivaScreen({ canOpenMassiva = true }: MassivaScreenProps) {
   return (
     <div className="mx-auto max-w-[1720px] animate-in fade-in px-4 pb-8 pt-0 duration-500 xl:px-8">
       <header className="relative mb-4 overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-amber-50/30 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80">
@@ -42,7 +46,7 @@ export function MassivaScreen() {
         </div>
       </header>
 
-      <MassivaPage />
+      <MassivaPage canOpenMassiva={canOpenMassiva} />
     </div>
   )
 }

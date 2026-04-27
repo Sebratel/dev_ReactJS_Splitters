@@ -35,7 +35,7 @@ export function MassivaStepper({
 }: MassivaStepperProps) {
   return (
     <nav aria-label="Etapas da abertura de massiva">
-      <ol className="grid gap-2 md:grid-cols-4">
+      <ol className="grid auto-rows-fr gap-2 sm:grid-cols-2 2xl:grid-cols-4">
         {steps.map((step, index) => {
           const isCurrent = currentStep === step.id
           const toneClass =
@@ -50,12 +50,12 @@ export function MassivaStepper({
                     : 'border-neutral-200 bg-white text-neutral-700'
 
           return (
-            <li key={step.id} className="min-w-0">
+            <li key={step.id} className="min-w-0 h-full">
               <button
                 type="button"
                 onClick={() => onStepChange(step.id)}
                 className={cn(
-                  'flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition hover:border-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50',
+                  'flex h-full w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition hover:border-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50',
                   toneClass,
                 )}
                 aria-current={isCurrent ? 'step' : undefined}
@@ -67,8 +67,8 @@ export function MassivaStepper({
                   <span className="block text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">
                     Etapa {index + 1}
                   </span>
-                  <span className="mt-1 block text-sm font-semibold">{step.title}</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed opacity-80">
+                  <span className="mt-1 block min-h-[20px] text-sm font-semibold">{step.title}</span>
+                  <span className="mt-0.5 block min-h-[34px] text-xs leading-relaxed opacity-80">
                     {step.description}
                   </span>
                 </span>

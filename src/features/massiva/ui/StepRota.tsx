@@ -1,4 +1,4 @@
-import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
+﻿import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
 import { useMemo, useState } from 'react'
 
 type StepRotaProps = {
@@ -57,12 +57,14 @@ export function StepRota({
   )
 
   const slotOptions = useMemo(
-    () => (openedConnection ? slotOptionsForConnection(openedConnection) : []),
-    [openedConnection, slotOptionsForConnection],
+    () =>
+      [...new Set(openedRouteOptions.map((pair) => pair.slot))].sort((a, b) => a - b),
+    [openedRouteOptions],
   )
   const portOptions = useMemo(
-    () => (openedConnection ? portOptionsForConnection(openedConnection) : []),
-    [openedConnection, portOptionsForConnection],
+    () =>
+      [...new Set(openedRouteOptions.map((pair) => pair.port))].sort((a, b) => a - b),
+    [openedRouteOptions],
   )
   const selectedSlotValues = useMemo(
     () =>
@@ -111,7 +113,13 @@ export function StepRota({
   const openDropdown = (routeIndex: number, connection: MassivaRouteConnectionSelection) => {
     const preselectedSlots: Record<number, boolean> = {}
     const preselectedPorts: Record<number, boolean> = {}
-    if (connection.slot !== null && connection.porta !== null) {
+    const selectedPairs = connection.selectedPairs ?? []
+    if (selectedPairs.length > 0) {
+      for (const pair of selectedPairs) {
+        preselectedSlots[pair.slot] = true
+        preselectedPorts[pair.port] = true
+      }
+    } else if (connection.slot !== null && connection.porta !== null) {
       preselectedSlots[connection.slot] = true
       preselectedPorts[connection.porta] = true
     }
@@ -130,13 +138,34 @@ export function StepRota({
     closeDropdown()
   }
 
+  const selectAllOpenedRoutePairs = () => {
+    if (openDropdownRouteIndex === null) return
+
+    const allSlots: Record<number, boolean> = {}
+    const allPorts: Record<number, boolean> = {}
+
+    for (const option of openedRouteOptions) {
+      allSlots[option.slot] = true
+      allPorts[option.port] = true
+    }
+
+    setSelectedSlots(allSlots)
+    setSelectedPorts(allPorts)
+  }
+
+  const clearOpenedRouteSelection = () => {
+    if (openDropdownRouteIndex === null) return
+    setSelectedSlots({})
+    setSelectedPorts({})
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-neutral-900">Rota</h3>
           <p className="mt-1 text-sm text-neutral-600">
-            Defina AP, slot e porta. Adicione mais de uma rota quando precisar abrir em lote.
+            Defina AP, slot e porta. A seleção múltipla aplica todas as combinações válidas do AP.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -160,6 +189,16 @@ export function StepRota({
       <div className="space-y-3">
         {connections.map((connection, index) => {
           const apOptions = apOptionsForConnection(connection)
+          const routeOptions = slotPortOptionsForConnection(connection)
+          const selectedPairs = connection.selectedPairs ?? []
+          const hasAllPairsSelected =
+            routeOptions.length > 0 &&
+            selectedPairs.length > 0 &&
+            routeOptions.every((option) =>
+              selectedPairs.some(
+                (pair) => pair.slot === option.slot && pair.port === option.port,
+              ),
+            )
 
           const apSelectDisabled =
             isRoutesCatalogPending || isRoutesCatalogError
@@ -242,20 +281,47 @@ export function StepRota({
                   <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                     Seleção múltipla (slot e porta)
                   </span>
-                  <button
-                    type="button"
-                    className={`${fieldClass} flex items-center justify-between text-left`}
-                    onClick={() => openDropdown(index, connection)}
-                    disabled={connection.apId.trim() === ''}
-                    aria-label={`Selecionar múltiplos slots e portas da rota ${index + 1}`}
-                  >
-                    <span className="truncate">
-                      {connection.slot !== null && connection.porta !== null
-                        ? `Atual: slot ${connection.slot} / porta ${connection.porta}`
-                        : 'Selecionar pares...'}
-                    </span>
-                    <span className="text-xs text-neutral-500">Abrir</span>
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      className={`${fieldClass} flex items-center justify-between text-left`}
+                      onClick={() => openDropdown(index, connection)}
+                      disabled={connection.apId.trim() === ''}
+                      aria-label={`Selecionar múltiplos slots e portas da rota ${index + 1}`}
+                    >
+                      <span className="truncate">
+                        {hasAllPairsSelected
+                          ? 'Todos selecionados'
+                          : connection.slot !== null && connection.porta !== null
+                          ? `Atual: slot ${connection.slot} / porta ${connection.porta}`
+                          : 'Selecionar pares...'}
+                      </span>
+                      <span className="text-xs text-neutral-500">Abrir</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        hasAllPairsSelected
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100'
+                          : 'border-neutral-200 bg-white text-neutral-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800'
+                      }`}
+                      disabled={connection.apId.trim() === '' || routeOptions.length === 0}
+                      onClick={() => onApplyMultiplePairsAtRoute(index, routeOptions)}
+                      aria-label={`Selecionar todos os slots e portas da rota ${index + 1}`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border text-[10px] leading-none ${
+                          hasAllPairsSelected
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : 'border-current'
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      {hasAllPairsSelected ? 'Todos selecionados' : 'Selecionar todos'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -279,8 +345,24 @@ export function StepRota({
                 Dropdown multi-seleção
               </h4>
               <p className="mt-1 text-sm text-neutral-600">
-                Selecione múltiplos slots e múltiplas portas (separados) para criar as rotas no mesmo AP.
+                Selecione múltiplos slots e portas para encontrar combinações válidas do AP.
               </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllOpenedRoutePairs}
+                  className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900 transition hover:border-sky-300 hover:bg-sky-100"
+                >
+                  Selecionar tudo
+                </button>
+                <button
+                  type="button"
+                  onClick={clearOpenedRouteSelection}
+                  className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+                >
+                  Limpar seleção
+                </button>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -379,3 +461,5 @@ export function StepRota({
     </div>
   )
 }
+
+

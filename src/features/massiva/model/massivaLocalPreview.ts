@@ -23,12 +23,18 @@ export type MassivaSelectedSplitter = {
   label: string
 }
 
+export type MassivaRouteSlotPortPair = {
+  slot: number
+  port: number
+}
+
 export type MassivaRouteConnectionSelection = {
   apId: string
   apLabel: string
   slot: number | null
   porta: number | null
   splitters: MassivaSelectedSplitter[]
+  selectedPairs?: MassivaRouteSlotPortPair[]
 }
 
 export type MassivaLocalPreviewRouteSelection = {

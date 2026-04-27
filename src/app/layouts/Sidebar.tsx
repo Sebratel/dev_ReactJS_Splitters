@@ -5,11 +5,13 @@ import {
   AlertTriangle,
   BarChart2,
   ExternalLink,
+  Users,
+  LogOut,
 } from 'lucide-react'
 import operacaoSebratelMark from '@/assets/operacao-sebratel-mark.svg'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/store/sessionStore'
-import { env, isLocalDevHostname } from '@/shared/config/env'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
 
 type SidebarProps = {
   collapsed: boolean
@@ -18,7 +20,10 @@ type SidebarProps = {
 
 export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
   const currentPath = useLocation().pathname
-  const canAccessMassiva = true
+  const canAccessMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
+  const canAccessIntelligence = useAccessAuthStore((s) => s.hasPermission('canViewIntelligence'))
+  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
+  const signOutUser = useAccessAuthStore((s) => s.signOutUser)
 
   const isActive = (to: string) => {
     if (to === '/') return currentPath === '/'
@@ -28,10 +33,13 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
     { label: 'Splitters', icon: Cpu, to: '/splitters' },
-    { label: 'Painel da rede', icon: BarChart2, to: '/intelligence' },
+    ...(canAccessIntelligence ? [{ label: 'Painel da rede', icon: BarChart2, to: '/intelligence' }] : []),
     ...(canAccessMassiva
       ? [{ label: 'Massivas', icon: AlertTriangle, to: '/massiva', accent: 'danger' as const }]
       : []),
+    /*...(isAdmin
+      ? [{ label: 'Usuários', icon: Users, to: '/usuarios' }]
+      : []),*/
   ]
 
   return (
@@ -145,6 +153,20 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                   </span>
                   Hub Sebratel
                 </a>
+                {isFirebaseAuthConfigured() ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void signOutUser()
+                    }}
+                    className="mt-2 flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                      <LogOut size={18} aria-hidden />
+                    </span>
+                    Sair
+                  </button>
+                ) : null}
               </div>
             ) : (
               <div className="mt-4">
@@ -159,6 +181,20 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                     <ExternalLink size={18} aria-hidden />
                   </span>
                 </a>
+                {isFirebaseAuthConfigured() ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void signOutUser()
+                    }}
+                    title="Sair"
+                    className="mt-2 flex w-full justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                      <LogOut size={18} aria-hidden />
+                    </span>
+                  </button>
+                ) : null}
               </div>
             )}
           </div>

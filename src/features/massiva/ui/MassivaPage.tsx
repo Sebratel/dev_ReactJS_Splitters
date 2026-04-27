@@ -33,7 +33,11 @@ function countRoutesWithExplicitSplitters(
   return connections.filter((connection) => connection.splitters.length > 0).length
 }
 
-export function MassivaPage() {
+type MassivaPageProps = {
+  canOpenMassiva?: boolean
+}
+
+export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   const [currentStep, setCurrentStep] = useState<MassivaStepId>('rota')
   const enableImpactComputation =
     currentStep === 'validacao' || currentStep === 'abertura'
@@ -121,6 +125,10 @@ export function MassivaPage() {
         ? `${configuredRoutes} rota(s) configurada(s)`
         : 'Nenhuma rota pronta para abertura'
 
+  const openPermissionReason = canOpenMassiva
+    ? null
+    : 'Seu perfil tem acesso de leitura em massivas, mas não pode abrir novos chamados.'
+
   const apTitleByCode = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {}
 
@@ -153,30 +161,41 @@ export function MassivaPage() {
       if (routeIndex < 0 || routeIndex >= current.length) return
 
       const base = current[routeIndex]
-      const expanded: MassivaRouteConnectionSelection[] = pairs.map((pair) => ({
-        ...base,
-        slot: pair.slot,
-        porta: pair.port,
-      }))
+      const normalizedPairs = [...new Map(
+        pairs.map((pair) => [`${pair.slot}|${pair.port}`, { slot: pair.slot, port: pair.port }]),
+      ).values()]
+      if (normalizedPairs.length === 0) return
 
-      const merged = [
+      const primary = normalizedPairs[0]
+      const groupedAtRoute: MassivaRouteConnectionSelection = {
+        ...base,
+        slot: primary.slot,
+        porta: primary.port,
+        selectedPairs: normalizedPairs,
+      }
+
+      const replaced = [
         ...current.slice(0, routeIndex),
-        ...expanded,
+        groupedAtRoute,
         ...current.slice(routeIndex + 1),
       ]
 
-      const deduped = new Map<string, MassivaRouteConnectionSelection>()
-      for (const connection of merged) {
+      const oneRoutePerAp = new Map<string, MassivaRouteConnectionSelection>()
+      for (const connection of replaced) {
+        const apKey = connection.apId.trim()
+        if (apKey === '') continue
         const splittersKey = connection.splitters
           .map((splitter) => splitter.id.trim())
           .filter((id) => id !== '')
           .sort((a, b) => a.localeCompare(b, 'pt-BR'))
           .join(',')
-        const key = `${connection.apId.trim()}|${connection.slot ?? ''}|${connection.porta ?? ''}|${splittersKey}`
-        if (!deduped.has(key)) deduped.set(key, connection)
+        const key = `${apKey}|${splittersKey}`
+        if (!oneRoutePerAp.has(key)) oneRoutePerAp.set(key, connection)
       }
 
-      localPreview.setConnections([...deduped.values()])
+      localPreview.setConnections(
+        oneRoutePerAp.size > 0 ? [...oneRoutePerAp.values()] : replaced,
+      )
     }
 
     if (currentStep === 'rota') {
@@ -234,9 +253,9 @@ export function MassivaPage() {
   })()
 
   return (
-    <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
-      <section className="flex min-h-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
-        <div className="space-y-5 px-5 py-5">
+    <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
+      <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
+        <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
           <MassivaStepper
             currentStep={currentStep}
             steps={steps}
@@ -256,20 +275,20 @@ export function MassivaPage() {
                 : 'Aplicando filtros da rota e atualizando clientes...'}
             </div>
           ) : null}
-          <div className="min-h-[420px]">{activeStep}</div>
+          <div className="min-h-[360px] sm:min-h-[420px]">{activeStep}</div>
         </div>
 
         <BottomActionBar
           summary={summary}
-          disabledReason={explainMassivaPostBlocked(readiness)}
-          canSubmit={openMutation.canSubmitOpen}
+          disabledReason={openPermissionReason ?? explainMassivaPostBlocked(readiness)}
+          canSubmit={canOpenMassiva && openMutation.canSubmitOpen}
           isPending={openMutation.isPending}
           isSuccess={openMutation.isSuccess}
           isError={openMutation.isError}
           error={openMutation.error}
           successPayload={openMutation.data}
           apTitleByCode={apTitleByCode}
-          onSubmit={openMutation.submitOpen}
+          onSubmit={canOpenMassiva ? openMutation.submitOpen : () => {}}
           onDismiss={openMutation.dismissMutation}
         />
       </section>
