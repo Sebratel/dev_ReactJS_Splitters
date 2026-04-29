@@ -32,7 +32,7 @@ const BAND_COLOR: Record<SplitterMapNeighbor['occupancyBand'], string> = {
 const BAND_LABEL: Record<SplitterMapNeighbor['occupancyBand'], string> = {
   critical: 'Ocupação crítica',
   warning: 'Ocupação alta',
-  ok: 'Ocupação ok',
+  ok: 'Ocupação normal',
   unknown: 'Ocupação indisponível',
 }
 
@@ -45,7 +45,7 @@ function clientDisplayName(cl: {
   const user = cl.user.trim()
   if (name !== '' && name !== 'Cliente Desconhecido') return name
   if (user !== '') return user
-  return `Cliente (auth ${cl.authenticationId})`
+  return `Cliente (autenticação nº ${cl.authenticationId})`
 }
 
 /** Uma linha: largura acompanha o texto até ao limite da viewport; scroll X fino se necessário (padrão em todos os tooltips do mapa). */
@@ -224,7 +224,7 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
             {(() => {
               const code = currentSplitterCode.trim()
               const title = currentSplitterTitle.trim()
-              const head = title || code || 'Splitter atual'
+              const head = title || code || 'Equipamento atual'
               const showCode = code !== '' && head !== code
               return (
                 <>
@@ -300,7 +300,7 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
                 {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
                   <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
                 ) : null}
-                <p className="mt-1 font-mono text-xs text-neutral-500">Auth #{cl.authenticationId}</p>
+                <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
                 <Link
                   className={
                     corporate
@@ -334,7 +334,7 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
               {(() => {
                 const code = n.code.trim()
                 const title = n.title.trim()
-                const head = title || code || 'Splitter'
+                const head = title || code || 'Splitter vizinho'
                 const showCode = code !== '' && head !== code
                 return (
                   <>

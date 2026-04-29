@@ -67,10 +67,11 @@ function extractSlotAndPortFromSplitterTitle(
 ): { slot: number | null; port: number | null } {
   const title = String(splitterTitle ?? '').trim()
   if (title === '') return { slot: null, port: null }
-  const match = title.match(/-(\d+)-(\d+)-\d+\/\d+$/)
-  if (!match) return { slot: null, port: null }
-  const slot = Number.parseInt(match[1], 10)
-  const port = Number.parseInt(match[2], 10)
+  const beforeSlash = title.split('/')[0] ?? ''
+  const numbers = beforeSlash.match(/\d+/g) ?? []
+  if (numbers.length < 2) return { slot: null, port: null }
+  const slot = Number.parseInt(numbers[numbers.length - 2] ?? '', 10)
+  const port = Number.parseInt(numbers[numbers.length - 1] ?? '', 10)
   return {
     slot: Number.isFinite(slot) ? slot : null,
     port: Number.isFinite(port) ? port : null,
@@ -157,11 +158,13 @@ export function mapConnectionRowsToSplitterBundle(
     const splitterTitle = row['SPLT.SECUNDARIO']
     const parsedRoute = extractSlotAndPortFromSplitterTitle(splitterTitle)
     let slotOlt = toInt(
-      pickRowValue(row, ['SLOT OLT', 'SLOT[OLT]']) ?? parsedRoute.slot ?? 0,
+      pickRowValue(row, ['SLOT[SPLT.SECUNDARIO]', 'SLOT OLT', 'SLOT[OLT]']) ??
+        parsedRoute.slot ??
+        0,
       0,
     )
     let portOlt = toInt(
-      pickRowValue(row, ['PORTA OLT', 'PORTA[OLT]', 'PORTA[SPLT.PRIMARIO]']) ??
+      pickRowValue(row, ['PORTA EXTRAÍDA[SPLT.SECUNDARIO]', 'PORTA OLT', 'PORTA[OLT]']) ??
         parsedRoute.port ??
         0,
       0,

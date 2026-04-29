@@ -4,6 +4,7 @@ import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
 import { useSplitterDetail } from '@/features/splitters/hooks/useSplitterDetail'
+import { useSplitterClientes } from '@/features/splitters/hooks/useSplitterClientes'
 import { SplitterAddressSection } from '@/features/splitters/ui/SplitterAddressSection'
 import { SplitterClientesSection } from '@/features/splitters/ui/SplitterClientesSection'
 import { SplitterDetailSummary } from '@/features/splitters/ui/SplitterDetailSummary'
@@ -44,6 +45,16 @@ export function SplitterDetailScreen() {
       ? buildSplitterOperationalScore(state.splitter, detailMassivaStats)
       : null
 
+  const splitterCodeForConnections =
+    state.status === 'ready' ? state.splitter.code : undefined
+  const connectionsQuery = useSplitterClientes(splitterCodeForConnections)
+  const connectionsLoadState =
+    connectionsQuery.isPending
+      ? ('pending' as const)
+      : connectionsQuery.isError
+        ? ('error' as const)
+        : ('success' as const)
+
   return (
     <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -51,7 +62,7 @@ export function SplitterDetailScreen() {
           <Link
             to={backTo}
             state={location.state}
-            aria-label="Voltar para listagem de splitters"
+            aria-label="Voltar para a listagem de equipamentos"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-outline-variant bg-white text-on-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
             <ChevronLeft size={22} strokeWidth={2} />
@@ -73,12 +84,12 @@ export function SplitterDetailScreen() {
       {state.status === 'invalid-param' ? (
         <EmptyState
           title="Código inválido"
-          description="A rota não inclui o parâmetro :code do splitter."
+          description="A rota não inclui o código do equipamento (parâmetro obrigatório na URL)."
         />
       ) : null}
 
       {state.status === 'loading' ? (
-        <LoadingState label="Sincronizando dados técnicos..." />
+        <LoadingState label="Sincronizando dados técnicos…" />
       ) : null}
 
       {state.status === 'error' ? (
@@ -91,7 +102,7 @@ export function SplitterDetailScreen() {
       {state.status === 'not-found' ? (
         <EmptyState
           title="Splitter não encontrado"
-          description="Não há item com esse código na lista atual do BFF. Confira o código ou atualize a listagem."
+          description="Não há item com esse código na lista atual do backend. Confira o código ou atualize a listagem."
         />
       ) : null}
 
@@ -101,6 +112,8 @@ export function SplitterDetailScreen() {
             splitter={state.splitter}
             massivaStats={detailMassivaStats!}
             operationalScore={detailOperationalScore!}
+            connectionsLoadState={connectionsLoadState}
+            connectionClientes={connectionsQuery.data?.clientes ?? []}
           />
 
           <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">

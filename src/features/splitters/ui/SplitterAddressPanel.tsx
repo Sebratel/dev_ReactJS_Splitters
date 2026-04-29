@@ -28,7 +28,7 @@ export function SplitterAddressPanel({ address }: SplitterAddressPanelProps) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
-            Geocoding
+            Geocodificação
           </p>
           <h2
             id="splitter-address-geo-heading"

@@ -37,7 +37,7 @@ export function SplitterClientesSection({
     )
 
   if (isPending) {
-    return <LoadingState label="Carregando clientes..." />
+    return <LoadingState label="Carregando clientes…" />
   }
 
   if (isError) {
@@ -55,7 +55,7 @@ export function SplitterClientesSection({
   const canValidate = comparisonState.type !== 'disabled' && comparisonState.type !== 'not-configured'
   const buttonLabel =
     comparisonState.type === 'loading'
-      ? 'Validando portas no GeoGrid...'
+      ? 'Validando portas no GeoGrid…'
       : 'Validar portas no GeoGrid'
 
   return (
@@ -123,7 +123,7 @@ export function SplitterClientesSection({
 
         {comparisonState.type === 'loading' ? (
           <div className="mt-4">
-            <LoadingState label="Conferindo portas no GeoGrid..." />
+            <LoadingState label="Conferindo portas no GeoGrid…" />
           </div>
         ) : null}
 

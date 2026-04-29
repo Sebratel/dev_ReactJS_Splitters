@@ -39,6 +39,13 @@ function toNullableString(value: unknown): string | null {
   return text === '' ? null : text
 }
 
+function toNullableDate(value: unknown): Date | null {
+  const text = toStringValue(value).trim()
+  if (text === '') return null
+  const parsed = new Date(text)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 function pickRowValue(
   row: Record<string, unknown>,
   ...possibleKeys: string[]
@@ -145,6 +152,7 @@ export async function fetchSplittersFromLocalDb({
       oltCode: toStringValue(row['CONCENTRADOR_CODE']),
       oltIntegrationCode: toStringValue(row['CONCENTRADOR_CODE']),
       oltDescription: toStringValue(row['CONCENTRADOR']),
+      createdAt: toNullableDate(row['CRIADO EM[SPLT.SECUNDARIO]']),
       busyCount: toNumber(row['BUSY_COUNT']),
       tipoLocal: toTipoLocal(row['TIPO LOCAL']),
       nomeCondominio: toNullableString(
