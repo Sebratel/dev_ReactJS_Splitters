@@ -1124,14 +1124,15 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     // `filterConnectionsBySplitterCode` (normaliza caixa/acentos) e `apCodesMatch` — o mesmo
     // critério do GET completo. O `= ANY(códigos)` no Postgres é exato e zerava o preview.
     const unique = new Map();
-    for (const r of routes) {
+    for (const [routeIndex, r] of routes.entries()) {
       const apCode = String(r?.apCode ?? '').trim();
       const slotN = Number.parseInt(String(r?.slot ?? ''), 10);
-      const portN = Number.parseInt(String(r?.port ?? ''), 10);
+      const rawPort = r?.port ?? r?.porta;
+      const portN = Number.parseInt(String(rawPort ?? ''), 10);
       if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
         return res.status(400).json({
           success: false,
-          error: 'Cada rota requer apCode, slot e port numéricos.',
+          error: `Rota inválida no índice ${routeIndex}: cada rota requer apCode, slot e port numéricos.`,
         });
       }
       const key = `${apCode}|${slotN}|${portN}`;
