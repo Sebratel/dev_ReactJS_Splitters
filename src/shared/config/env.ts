@@ -199,6 +199,7 @@ export function isFirebaseAuthConfigured(): boolean {
 }
 
 /** AutoISP só é consultado no browser quando as quatro variáveis estão definidas. */
+  if (isAuthMockEnabled()) return false
 export function isAutoIspConfigured(): boolean {
   return (
     env.autoIspAuthEndpoint.trim() !== '' &&
