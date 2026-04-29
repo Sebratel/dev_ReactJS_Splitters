@@ -35,7 +35,7 @@ export function MassivaStepper({
 }: MassivaStepperProps) {
   return (
     <nav aria-label="Etapas da abertura de massiva">
-      <ol className="grid auto-rows-fr gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+      <ol className="grid auto-rows-fr gap-2 sm:grid-cols-2 min-[1700px]:grid-cols-4">
         {steps.map((step, index) => {
           const isCurrent = currentStep === step.id
           const toneClass =

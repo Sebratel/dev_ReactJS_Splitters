@@ -20,11 +20,63 @@ import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOp
 import { bffClient } from '@/shared/api/bffClient'
 import { env } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
+import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 
 const AUTO_CLOSE_NO_CLIENTS = 'Não foi acionado nenhum cliente na abertura.'
 
 function closePathConfigured(): boolean {
   return env.massivaClosePath.trim() !== ''
+}
+
+function normalizeAp(value: string | null | undefined): string {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function canonicalAp(value: string | null | undefined): string {
+  return normalizeAp(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function apNumericTokens(value: string | null | undefined): Set<string> {
+  const tokens = String(value ?? '').match(/\d+/g) ?? []
+  return new Set(tokens.filter((token) => token.length >= 3))
+}
+
+function apCodesMatch(actual: string, expected: string): boolean {
+  const actualNorm = normalizeAp(actual)
+  const expectedNorm = normalizeAp(expected)
+  if (actualNorm === '' || expectedNorm === '') return false
+  const actualCanonical = canonicalAp(actualNorm)
+  const expectedCanonical = canonicalAp(expectedNorm)
+  if (
+    actualCanonical === expectedCanonical ||
+    actualCanonical.includes(expectedCanonical) ||
+    expectedCanonical.includes(actualCanonical)
+  ) {
+    return true
+  }
+
+  const actualTokens = apNumericTokens(actualNorm)
+  const expectedTokens = apNumericTokens(expectedNorm)
+  if (actualTokens.size === 0 || expectedTokens.size === 0) return false
+  for (const token of actualTokens) {
+    if (expectedTokens.has(token)) return true
+  }
+  return false
+}
+
+function clientesForAccessPoint(
+  clientes: readonly SplitterCliente[],
+  accessPointCode: string,
+): SplitterCliente[] {
+  return clientes.filter((cliente) => {
+    const access = cliente.accessPoint
+    if (access == null) return false
+    const codeOrTitle = access.code.trim() !== '' ? access.code : access.title
+    return apCodesMatch(codeOrTitle, accessPointCode)
+  })
 }
 
 /**
@@ -120,28 +172,38 @@ export async function openMassivaFromContext(
     return payload
   }
 
-  if (ids == null) {
-    throw new Error(
-      'Abertura concluída, mas a resposta não trouxe protocolo e assignmentId para registrar os afetados.',
+  let afetadosPostedCount = 0
+  for (const opened of successes) {
+    const ids = resolveProtocolAndAssignment(opened)
+    if (ids == null) {
+      throw new Error(
+        'Abertura concluída, mas a resposta não trouxe protocolo e assignmentId para registrar os afetados.',
+      )
+    }
+
+    const scopedClientes = clientesForAccessPoint(
+      context.basis.collectedClientes,
+      opened.accessPointCode,
     )
+    const afetadosBody = buildMassivaAfetadosRequestBody(
+      context,
+      ids.protocol,
+      ids.assignmentId,
+      scopedClientes,
+    )
+
+    await bffClient.request({
+      path: afetadosPath,
+      method: 'POST',
+      body: afetadosBody,
+      signal,
+    })
+    afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
   }
-
-  const afetadosBody = buildMassivaAfetadosRequestBody(
-    context,
-    ids.protocol,
-    ids.assignmentId,
-  )
-
-  await bffClient.request({
-    path: afetadosPath,
-    method: 'POST',
-    body: afetadosBody,
-    signal,
-  })
 
   const payload = {
     ...base,
-    afetadosPostedCount: afetadosBody.usuarioAfetadoEntities.length,
+    afetadosPostedCount,
   }
 
   try {

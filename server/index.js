@@ -175,6 +175,8 @@ function normalizeMassivaHistoryResults(results) {
     protocol: result?.protocol ?? null,
     assignmentId: result?.assignmentId ?? null,
     accessPointCode: String(result?.accessPointCode ?? '').trim(),
+    title: String(result?.title ?? '').trim(),
+    affectedClients: result?.affectedClients ?? null,
   }));
 }
 
@@ -247,18 +249,14 @@ secondary_splitters AS (
         ss.lat,
         ss.lng,
         ss.type,
-        parts.parts,
-        parts.parts_count,
         CASE
-            WHEN parts.parts_count >= 3
-                 AND parts.parts[parts.parts_count - 2] ~ '^\\d+$'
-            THEN parts.parts[parts.parts_count - 2]::int
+            WHEN regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$') IS NOT NULL
+            THEN (regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$'))[1]::int
             ELSE NULL
         END AS slot,
         CASE
-            WHEN parts.parts_count >= 2
-                 AND parts.parts[parts.parts_count - 1] ~ '^\\d+$'
-            THEN parts.parts[parts.parts_count - 1]::int
+            WHEN regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$') IS NOT NULL
+            THEN (regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$'))[2]::int
             ELSE NULL
         END AS porta_extraida,
         CASE
@@ -272,11 +270,6 @@ secondary_splitters AS (
             ELSE NULL
         END AS nome_condominio
     FROM authentication_splitters ss
-    CROSS JOIN LATERAL (
-        SELECT
-            string_to_array(ss.title, '-') AS parts,
-            array_length(string_to_array(ss.title, '-'), 1) AS parts_count
-    ) parts
 )
 SELECT
     ps.id                             AS "ID[SPLT.PRIMARIO]",
@@ -1304,42 +1297,51 @@ app.get('/api/massiva/history/open-splitter-codes', async (_req, res) => {
   }
 });
 
+async function captureSplitterSnapshots() {
+  if (!massivaHistoryStore.configured) {
+    throw new Error('Snapshots de splitters não configurados no MySQL.');
+  }
+
+  const splitterRows = await fetchCurrentSplitterSnapshotRows();
+  const openSplitterCodes = await massivaHistoryStore.getOpenSplitterCodes();
+  const openSet = new Set(openSplitterCodes);
+  const splitterCodes = splitterRows
+    .map((row) => String(row.splitterCode ?? '').trim())
+    .filter((code) => code !== '');
+  const statsBySplitter = await massivaHistoryStore.getSplitterStats(splitterCodes);
+  const snapshotRows = splitterRows.map((row) => ({
+    splitterCode: String(row.splitterCode ?? '').trim(),
+    splitterTitle: String(row.splitterTitle ?? '').trim(),
+    accessPointCode: String(row.accessPointCode ?? '').trim(),
+    active: row.active === true,
+    outPorts: Number(row.outPorts ?? 0),
+    busyCount: Number(row.busyCount ?? 0),
+    usagePercent: Number(row.usagePercent ?? 0),
+    city: row.city,
+    street: row.street,
+    tipoLocal: row.tipoLocal,
+    nomeCondominio: row.nomeCondominio,
+    massivaOpenCount:
+      statsBySplitter.get(String(row.splitterCode ?? '').trim())?.openTickets ??
+      (openSet.has(String(row.splitterCode ?? '').trim()) ? 1 : 0),
+    massivaTotalCount:
+      statsBySplitter.get(String(row.splitterCode ?? '').trim())?.totalTickets ?? 0,
+    capturedAt: new Date().toISOString(),
+  }));
+
+  const result = await massivaHistoryStore.upsertSplitterSnapshots(snapshotRows);
+  return {
+    ...result,
+    snapshotCount: snapshotRows.length,
+  };
+}
+
 app.post('/api/splitters/snapshots/capture', async (_req, res) => {
   try {
-    if (!massivaHistoryStore.configured) {
-      return res.status(503).json({
-        success: false,
-        message: 'Snapshots de splitters não configurados no MySQL.',
-      });
-    }
-
-    const splitterRows = await fetchCurrentSplitterSnapshotRows();
-    const openSplitterCodes = await massivaHistoryStore.getOpenSplitterCodes();
-    const openSet = new Set(openSplitterCodes);
-    const snapshotRows = splitterRows.map((row) => ({
-      splitterCode: String(row.splitterCode ?? '').trim(),
-      splitterTitle: String(row.splitterTitle ?? '').trim(),
-      accessPointCode: String(row.accessPointCode ?? '').trim(),
-      active: row.active === true,
-      outPorts: Number(row.outPorts ?? 0),
-      busyCount: Number(row.busyCount ?? 0),
-      usagePercent: Number(row.usagePercent ?? 0),
-      city: row.city,
-      street: row.street,
-      tipoLocal: row.tipoLocal,
-      nomeCondominio: row.nomeCondominio,
-      massivaOpenCount: openSet.has(String(row.splitterCode ?? '').trim()) ? 1 : 0,
-      massivaTotalCount: 0,
-      capturedAt: new Date().toISOString(),
-    }));
-
-    const result = await massivaHistoryStore.upsertSplitterSnapshots(snapshotRows);
+    const data = await captureSplitterSnapshots();
     res.json({
       success: true,
-      data: {
-        ...result,
-        snapshotCount: snapshotRows.length,
-      },
+      data,
     });
   } catch (error) {
     console.error('Erro ao capturar snapshots diários de splitters:', error);
@@ -1780,6 +1782,33 @@ async function startServer() {
     );
   } else {
     logger.info('[dashboard-kpi] Cron desativado (DASHBOARD_KPI_CRON_DISABLED=true).');
+  }
+
+  const splitterSnapshotCronDisabled =
+    String(process.env.SPLITTER_SNAPSHOT_CRON_DISABLED ?? '').toLowerCase() === 'true';
+  const splitterSnapshotCronExpr = (process.env.SPLITTER_SNAPSHOT_CRON ?? '59 23 * * *').trim();
+  if (!massivaHistoryStore.configured) {
+    logger.info('[splitter-snapshot] Cron não registrado (MySQL de massivas não configurado).');
+  } else if (!splitterSnapshotCronDisabled) {
+    cron.schedule(
+      splitterSnapshotCronExpr,
+      async () => {
+        try {
+          const data = await captureSplitterSnapshots();
+          logger.info(
+            `[splitter-snapshot] Captura agendada OK (${data.insertedOrUpdated} alterados, ${data.skippedUnchanged} sem mudança, ${data.snapshotCount} avaliados).`,
+          );
+        } catch (error) {
+          logger.error('[splitter-snapshot] Falha na captura agendada:', { error });
+        }
+      },
+      { timezone: 'America/Sao_Paulo' },
+    );
+    logger.info(
+      `[splitter-snapshot] Cron ativo: "${splitterSnapshotCronExpr}" America/Sao_Paulo (padrão 23:59). Desative com SPLITTER_SNAPSHOT_CRON_DISABLED=true.`,
+    );
+  } else {
+    logger.info('[splitter-snapshot] Cron desativado (SPLITTER_SNAPSHOT_CRON_DISABLED=true).');
   }
 }
 

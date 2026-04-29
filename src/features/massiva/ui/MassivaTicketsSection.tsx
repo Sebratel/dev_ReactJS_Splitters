@@ -225,7 +225,7 @@ export function MassivaTicketsSection({
         <div
           className={
             embedded
-              ? 'grid grid-cols-2 gap-2'
+              ? 'grid grid-cols-1 gap-2 sm:grid-cols-2'
               : 'grid gap-3 md:grid-cols-4'
           }
         >
@@ -233,7 +233,7 @@ export function MassivaTicketsSection({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Pesquisar…"
-            className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'col-span-2' : 'md:col-span-2'}`}
+            className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
           <select
             value={statusFilter}
