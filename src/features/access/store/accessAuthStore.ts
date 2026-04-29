@@ -1,12 +1,13 @@
 ﻿import { create } from 'zustand'
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth'
 import { firebaseAuth } from '@/shared/config/firebase'
-import { isFirebaseAuthConfigured } from '@/shared/config/env'
+import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
 import {
   ensureSplittersUserProfile,
   getSplittersUserProfile,
@@ -26,7 +27,7 @@ type AccessAuthState = {
   profile: SplittersUserProfile | null
   error: string | null
   initialize: () => void
-  signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOutUser: () => Promise<void>
   refreshProfile: () => Promise<void>
   hasPermission: (permission: keyof SplittersPermissionSet) => boolean
@@ -41,6 +42,23 @@ function displayNameFromFirebaseUser(user: User): string {
 }
 
 let unsubscribeAuthListener: null | (() => void) = null
+const googleProvider = new GoogleAuthProvider()
+
+function isAllowedFirebaseEmail(email: string | null | undefined): boolean {
+  const normalized = (email ?? '').trim().toLowerCase()
+  if (normalized === '') return false
+
+  const allowed = env.accessAllowedEmails
+  if (allowed.length > 0 && allowed.includes(normalized)) return true
+
+  const allowedDomain = env.accessAllowedEmailDomain
+  if (allowedDomain !== '') {
+    const domain = allowedDomain.startsWith('@') ? allowedDomain : `@${allowedDomain}`
+    return normalized.endsWith(domain)
+  }
+
+  return allowed.length === 0
+}
 
 export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
   status: isFirebaseAuthConfigured() ? 'loading' : 'unauthenticated',
@@ -70,6 +88,18 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
       }
 
       try {
+        if (!isAllowedFirebaseEmail(firebaseUser.email)) {
+          await signOut(firebaseAuth)
+          set({
+            initialized: true,
+            status: 'unauthenticated',
+            user: null,
+            profile: null,
+            error: 'Seu e-mail não está liberado para acesso nesta fase.',
+          })
+          return
+        }
+
         const profile = await ensureSplittersUserProfile({
           uid: firebaseUser.uid,
           email: firebaseUser.email ?? '',
@@ -95,7 +125,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
     })
   },
 
-  signIn: async (email, password) => {
+  signInWithGoogle: async () => {
     if (!firebaseAuth) {
       throw new Error('Firebase Auth nao configurado.')
     }
@@ -103,19 +133,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
     set({ status: 'loading', error: null })
 
     try {
-      await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
-
-      const current = firebaseAuth.currentUser
-      if (!current) {
-        throw new Error('Nao foi possivel validar o usuario autenticado.')
-      }
-
-      const profile = await getSplittersUserProfile(current.uid)
-      if (profile && profile.isActive === false) {
-        await signOut(firebaseAuth)
-        throw new Error('Seu usuario esta inativo. Contate um administrador.')
-      }
-
+      await signInWithPopup(firebaseAuth, googleProvider)
       set({ error: null })
     } catch (error) {
       set({
@@ -147,11 +165,6 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
   },
 
   hasPermission: (permission) => {
-    // Liberação temporária do módulo de massivas para todos os usuários.
-    if (permission === 'canViewMassiva' || permission === 'canOpenMassiva') {
-      return true
-    }
-
     if (!isFirebaseAuthConfigured()) {
       return true
     }

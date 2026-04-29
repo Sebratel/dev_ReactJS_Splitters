@@ -47,13 +47,13 @@ export function SplitterOltPanel({ olt }: SplitterOltPanelProps) {
         </div>
         <div>
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/50">
-            Status
+            Estado
           </dt>
           <dd className="mt-1 font-medium text-on-surface">{olt.active ? 'Ativa' : 'Inativa'}</dd>
         </div>
         <div>
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/50">
-            Slots
+            Quantidade de slots
           </dt>
           <dd className="mt-1 font-medium tabular-nums text-on-surface">{olt.slotsNumber}</dd>
         </div>
@@ -68,7 +68,7 @@ export function SplitterOltPanel({ olt }: SplitterOltPanelProps) {
         {olt.integrationCodeMap ? (
           <div className="sm:col-span-2">
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/50">
-              Integration map
+              Mapa de integração
             </dt>
             <dd className="mt-1 font-mono text-xs text-on-surface-variant">{olt.integrationCodeMap}</dd>
           </div>

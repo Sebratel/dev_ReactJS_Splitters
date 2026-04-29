@@ -75,15 +75,130 @@ export type IntelligenceSaturationCell = {
   capturedAt: Date | null
 }
 
+export type IntelligenceDecisionKpis = {
+  totalSplittersInWindow: number
+  criticalSplitters: number
+  growthSplitters: number
+  openMassivas: number
+  affectedClientsTotal: number
+  highRiskAffectedClients: number
+  attentionSharePercent: number
+}
+
+export type IntelligenceRiskRankingRow = {
+  splitterCode: string
+  splitterTitle: string
+  oltCode: string | null
+  oltDescription: string | null
+  street: string | null
+  tipoLocal: Splitter['tipoLocal']
+  nomeCondominio: string | null
+  currentUsagePercent: number
+  ageYears: number
+  delta7d: number
+  delta30d: number
+  selectedDelta: number
+  openTickets: number
+  totalTickets: number
+  affectedClientsTotal: number
+  riskScore: number
+  riskBand: 'critico' | 'alto' | 'moderado' | 'baixo'
+}
+
+export type IntelligenceImpactUrgencyCell = {
+  key: 'altoImpactoAltaUrgencia' | 'altoImpactoBaixaUrgencia' | 'baixoImpactoAltaUrgencia' | 'baixoImpactoBaixaUrgencia'
+  label: string
+  count: number
+  splitters: IntelligenceRiskRankingRow[]
+}
+
+export type IntelligenceOltDrilldownRow = {
+  oltCode: string
+  oltDescription: string
+  splitters: number
+  criticalSplitters: number
+  avgUsagePercent: number
+  avgDeltaReference: number
+  openTickets: number
+  totalTickets: number
+  affectedClientsTotal: number
+}
+
+export type IntelligenceGeoDrilldown = {
+  tipoLocal: Array<{ key: 'CONDOMÍNIO' | 'UNIDADE' | 'SEM_CLASSIFICACAO'; count: number }>
+  topCondominios: Array<{ nome: string; splitters: number; affectedClientsTotal: number }>
+  topStreets: Array<{ nome: string; splitters: number; criticalSplitters: number }>
+}
+
+export type LifecycleBucketKey = '0-1' | '1-3' | '3-5' | '5+'
+
+export type IntelligenceLifecycleKpis = {
+  avgAgeYears: number
+  agedSplitters: number
+  agedCriticalSplitters: number
+  agedPressurePercent: number
+}
+
+export type IntelligenceLifecycleBucketRow = {
+  bucket: LifecycleBucketKey
+  splitters: number
+  avgUsagePercent: number
+  avgDeltaReference: number
+  massivaTickets: number
+}
+
+export type IntelligenceLifecycleHeatmapCell = {
+  bucket: LifecycleBucketKey
+  usageBand: '<70' | '70-94' | '95+'
+  count: number
+}
+
+export type IntelligenceLifecycleReplacementRow = {
+  splitterCode: string
+  splitterTitle: string
+  ageYears: number
+  lifecycleRiskScore: number
+  etaTo95Days: number | null
+  currentUsagePercent: number
+  selectedDelta: number
+  affectedClientsTotal: number
+}
+
+export type IntelligenceLifecycleCohortRow = {
+  cohortYear: number
+  splitters: number
+  avgUsagePercent: number
+  incidentsPerYear: number
+}
+
+export type IntelligenceLifecycleAlertRow = {
+  splitterCode: string
+  splitterTitle: string
+  reason: string
+}
+
 export type IntelligenceDataset = {
   trends: IntelligenceTrendRow[]
   massivaStats: IntelligenceMassivaRow[]
   kpis: IntelligenceKpis
+  splittersMeta: Splitter[]
   source: 'live' | 'mock'
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function diffDays(a: Date, b: Date): number {
+  const ms = Math.max(0, b.getTime() - a.getTime())
+  return ms / (24 * 60 * 60 * 1000)
+}
+
+function toLifecycleBucket(ageYears: number): LifecycleBucketKey {
+  if (ageYears < 1) return '0-1'
+  if (ageYears < 3) return '1-3'
+  if (ageYears < 5) return '3-5'
+  return '5+'
 }
 
 function asTrendLabel(label: string): TrendLabel {
@@ -101,14 +216,14 @@ function parseSplitterCoord(raw: string): number | null {
   return n
 }
 
-/** Páginas grandes na listagem; tendências/massivas vão em lotes (query string). */
-const INTELLIGENCE_SPLITTER_PAGE_SIZE = 500
-/** Evita URL gigante em `/trends` e `/splitter-stats` (~2–3k caracteres por lote). */
-const INTELLIGENCE_CODE_QUERY_CHUNK = 200
+/** Páginas maiores reduzem roundtrips na carga inicial do painel. */
+const INTELLIGENCE_SPLITTER_PAGE_SIZE = 1200
+/** Lote maior de códigos reduz número total de requests para trends/stats. */
+const INTELLIGENCE_CODE_QUERY_CHUNK = 320
 const INTELLIGENCE_MAX_SPLITTER_PAGES = 500
 /** Requisições simultâneas ao BFF (splitters / trends / massivas em fila por worker). */
-const INTELLIGENCE_HTTP_CONCURRENCY = 6
-const INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY = 6
+const INTELLIGENCE_HTTP_CONCURRENCY = 10
+const INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY = 8
 
 function chunkBy<T>(items: readonly T[], size: number): T[][] {
   if (size <= 0) return [items.slice() as T[]]
@@ -289,6 +404,7 @@ export function stratifiedSaturationTrendsForMap(
 function makeMockDataset(): IntelligenceDataset {
   const trends: IntelligenceTrendRow[] = []
   const massivaStats: IntelligenceMassivaRow[] = []
+  const splittersMeta: Splitter[] = []
   const now = new Date()
 
   for (let i = 1; i <= 40; i++) {
@@ -344,6 +460,30 @@ function makeMockDataset(): IntelligenceDataset {
       affectedClientsTotal,
       latestOpenedAt,
     })
+
+    splittersMeta.push({
+      id: i,
+      code: splitterCode,
+      integrationCode: splitterCode,
+      title: `Splitter mock · ${splitterCode}`,
+      outPorts: 16,
+      active: true,
+      typeText: 'Distribuição',
+      description: 'Mock',
+      latitude: latitude == null ? '' : String(latitude),
+      longitude: longitude == null ? '' : String(longitude),
+      street: i % 2 === 0 ? `Rua ${i}` : null,
+      networkBoxCode: null,
+      networkBoxTitle: null,
+      networkBoxType: null,
+      oltCode: `OLT-${(i % 6) + 1}`,
+      oltIntegrationCode: `OLT-${(i % 6) + 1}`,
+      oltDescription: `OLT ${(i % 6) + 1}`,
+      createdAt: new Date(now.getTime() - ((i % 12) + 1) * 365 * 24 * 60 * 60 * 1000),
+      busyCount: Math.round((currentUsagePercent / 100) * 16),
+      tipoLocal: i % 3 === 0 ? 'CONDOMÍNIO' : 'UNIDADE',
+      nomeCondominio: i % 3 === 0 ? `Condomínio ${Math.ceil(i / 3)}` : null,
+    })
   }
 
   const kpis: IntelligenceKpis = {
@@ -353,14 +493,18 @@ function makeMockDataset(): IntelligenceDataset {
     oltCount: 214,
   }
 
-  return { trends, massivaStats, kpis, source: 'mock' }
+  return { trends, massivaStats, splittersMeta, kpis, source: 'mock' }
 }
 
 const NETWORK_STATS_QUERY_KEY = ['network-intelligence', 'network-stats'] as const
 const NETWORK_STATS_STALE_MS = 3 * 60_000
+const SPLITTERS_CATALOG_QUERY_KEY = ['network-intelligence', 'splitters-catalog'] as const
+const SPLITTERS_CATALOG_STALE_MS = 30 * 60_000
 
-async function fetchLiveDataset(queryClient: QueryClient): Promise<IntelligenceDataset> {
-  const splitters = await fetchAllSplittersCatalogForIntelligence()
+async function fetchLiveDataset(
+  queryClient: QueryClient,
+  splitters: { items: Splitter[]; totalCount: number },
+): Promise<IntelligenceDataset> {
   const codes = splitters.items.map((item) => item.code).filter((value) => value.trim() !== '')
 
   const networkStats = await queryClient.fetchQuery({
@@ -426,13 +570,17 @@ async function fetchLiveDataset(queryClient: QueryClient): Promise<IntelligenceD
       overallOccupancyPercent,
       oltCount: networkStats.oltCount,
     },
+    splittersMeta: splitters.items,
     source: 'live',
   }
 }
 
-async function fetchIntelligenceDataset(queryClient: QueryClient): Promise<IntelligenceDataset> {
+async function fetchIntelligenceDataset(
+  queryClient: QueryClient,
+  splitters: { items: Splitter[]; totalCount: number },
+): Promise<IntelligenceDataset> {
   try {
-    return await fetchLiveDataset(queryClient)
+    return await fetchLiveDataset(queryClient, splitters)
   } catch {
     return makeMockDataset()
   }
@@ -470,6 +618,19 @@ function buildDateWindow(
   return { start, end }
 }
 
+type DeltaReference = '7d' | '30d'
+
+function resolveDeltaReference(
+  preset: IntelligenceDateRangePreset,
+  window: { start: Date; end: Date },
+): DeltaReference {
+  if (preset === '7d') return '7d'
+  if (preset === '30d' || preset === '90d') return '30d'
+  const ms = Math.max(0, window.end.getTime() - window.start.getTime())
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000))
+  return days <= 14 ? '7d' : '30d'
+}
+
 export function useNetworkIntelligenceData(
   preset: IntelligenceDateRangePreset,
   customStart: Date | null,
@@ -484,13 +645,30 @@ export function useNetworkIntelligenceData(
     refetchInterval: false,
   })
 
+  const splittersCatalogQuery = useQuery({
+    queryKey: SPLITTERS_CATALOG_QUERY_KEY,
+    queryFn: fetchAllSplittersCatalogForIntelligence,
+    staleTime: SPLITTERS_CATALOG_STALE_MS,
+    gcTime: 2 * 60 * 60_000,
+    refetchInterval: false,
+  })
+
   const query = useQuery({
     queryKey: ['network-intelligence', 'dataset'],
-    queryFn: () => fetchIntelligenceDataset(queryClient),
+    queryFn: async () => {
+      const splitters =
+        splittersCatalogQuery.data ??
+        (await queryClient.fetchQuery({
+          queryKey: SPLITTERS_CATALOG_QUERY_KEY,
+          queryFn: fetchAllSplittersCatalogForIntelligence,
+          staleTime: SPLITTERS_CATALOG_STALE_MS,
+        }))
+      return fetchIntelligenceDataset(queryClient, splitters)
+    },
     placeholderData: keepPreviousData,
     /** Dataset é pesado; cache longo. Sem polling automático (evita reexecutar centenas de requests). */
-    staleTime: 3 * 60_000,
-    gcTime: 15 * 60_000,
+    staleTime: 15 * 60_000,
+    gcTime: 60 * 60_000,
     refetchInterval: false,
   })
 
@@ -515,6 +693,18 @@ export function useNetworkIntelligenceData(
 
     return { ...data, trends, massivaStats }
   }, [query.data, window.end, window.start])
+
+  const splittersMetaByCode = useMemo(() => {
+    const out = new Map<string, Splitter>()
+    if (!filtered) return out
+    for (const splitter of filtered.splittersMeta) {
+      if (splitter.code.trim() !== '') out.set(splitter.code, splitter)
+    }
+    return out
+  }, [filtered])
+
+  const deltaReference = useMemo(() => resolveDeltaReference(preset, window), [preset, window])
+  const deltaReferenceLabel = deltaReference === '7d' ? 'Δ7d' : 'Δ30d'
 
   const areaPoints = useMemo<IntelligenceAreaPoint[]>(() => {
     if (!filtered || filtered.trends.length === 0) return []
@@ -609,6 +799,334 @@ export function useNetworkIntelligenceData(
     }))
   }, [filtered])
 
+  const riskRanking = useMemo<IntelligenceRiskRankingRow[]>(() => {
+    if (!filtered) return []
+    const massivaByCode = new Map(filtered.massivaStats.map((row) => [row.splitterCode, row]))
+    return filtered.trends
+      .map((trend) => {
+        const massiva = massivaByCode.get(trend.splitterCode)
+        const meta = splittersMetaByCode.get(trend.splitterCode)
+        const ageYears =
+          meta?.createdAt != null
+            ? Number((diffDays(meta.createdAt, new Date()) / 365.25).toFixed(2))
+            : 0
+        const selectedDelta = deltaReference === '7d' ? trend.delta7d : trend.delta30d
+        const usageScore = clamp(trend.currentUsagePercent, 0, 100)
+        const growthScore = clamp(selectedDelta * 4, -20, 40)
+        const openMassivaScore = clamp((massiva?.openTickets ?? 0) * 8, 0, 24)
+        const affectedScore = clamp(Math.log10((massiva?.affectedClientsTotal ?? 0) + 1) * 12, 0, 36)
+        const score = clamp(usageScore + growthScore + openMassivaScore + affectedScore, 0, 200)
+        const riskBand: IntelligenceRiskRankingRow['riskBand'] =
+          score >= 120 ? 'critico' : score >= 90 ? 'alto' : score >= 60 ? 'moderado' : 'baixo'
+        return {
+          splitterCode: trend.splitterCode,
+          splitterTitle: trend.splitterTitle,
+          oltCode: meta?.oltCode ?? null,
+          oltDescription: meta?.oltDescription ?? null,
+          street: meta?.street ?? null,
+          tipoLocal: meta?.tipoLocal,
+          nomeCondominio: meta?.nomeCondominio ?? null,
+          currentUsagePercent: trend.currentUsagePercent,
+          ageYears,
+          delta7d: trend.delta7d,
+          delta30d: trend.delta30d,
+          selectedDelta,
+          openTickets: massiva?.openTickets ?? 0,
+          totalTickets: massiva?.totalTickets ?? 0,
+          affectedClientsTotal: massiva?.affectedClientsTotal ?? 0,
+          riskScore: Number(score.toFixed(2)),
+          riskBand,
+        }
+      })
+      .sort((a, b) => b.riskScore - a.riskScore)
+  }, [filtered, splittersMetaByCode, deltaReference])
+
+  const decisionKpis = useMemo<IntelligenceDecisionKpis>(() => {
+    const totalSplittersInWindow = riskRanking.length
+    const criticalSplitters = riskRanking.filter((row) => row.currentUsagePercent >= 95).length
+    const growthSplitters = riskRanking.filter((row) => row.selectedDelta >= 5).length
+    const openMassivas = riskRanking.reduce((sum, row) => sum + row.openTickets, 0)
+    const affectedClientsTotal = riskRanking.reduce((sum, row) => sum + row.affectedClientsTotal, 0)
+    const highRiskAffectedClients = riskRanking
+      .filter((row) => row.riskBand === 'critico' || row.riskBand === 'alto')
+      .reduce((sum, row) => sum + row.affectedClientsTotal, 0)
+    const attentionSharePercent =
+      totalSplittersInWindow > 0
+        ? Number((((criticalSplitters + growthSplitters) / totalSplittersInWindow) * 100).toFixed(1))
+        : 0
+
+    return {
+      totalSplittersInWindow,
+      criticalSplitters,
+      growthSplitters,
+      openMassivas,
+      affectedClientsTotal,
+      highRiskAffectedClients,
+      attentionSharePercent,
+    }
+  }, [riskRanking])
+
+  const impactUrgencyMatrix = useMemo<IntelligenceImpactUrgencyCell[]>(() => {
+    const quadrants: IntelligenceImpactUrgencyCell[] = [
+      { key: 'altoImpactoAltaUrgencia', label: 'Alto impacto · Alta urgência', count: 0, splitters: [] },
+      { key: 'altoImpactoBaixaUrgencia', label: 'Alto impacto · Baixa urgência', count: 0, splitters: [] },
+      { key: 'baixoImpactoAltaUrgencia', label: 'Baixo impacto · Alta urgência', count: 0, splitters: [] },
+      { key: 'baixoImpactoBaixaUrgencia', label: 'Baixo impacto · Baixa urgência', count: 0, splitters: [] },
+    ]
+    const index = new Map(quadrants.map((q) => [q.key, q]))
+    for (const row of riskRanking) {
+      const highImpact = row.affectedClientsTotal >= 50 || row.totalTickets >= 4
+      const highUrgency = row.currentUsagePercent >= 85 || row.selectedDelta >= 5 || row.openTickets > 0
+      const key: IntelligenceImpactUrgencyCell['key'] = highImpact
+        ? highUrgency
+          ? 'altoImpactoAltaUrgencia'
+          : 'altoImpactoBaixaUrgencia'
+        : highUrgency
+          ? 'baixoImpactoAltaUrgencia'
+          : 'baixoImpactoBaixaUrgencia'
+      const bucket = index.get(key)
+      if (!bucket) continue
+      bucket.count += 1
+      if (bucket.splitters.length < 6) bucket.splitters.push(row)
+    }
+    return quadrants
+  }, [riskRanking])
+
+  const oltDrilldown = useMemo<IntelligenceOltDrilldownRow[]>(() => {
+    const grouped = new Map<string, {
+      oltCode: string
+      oltDescription: string
+      splitters: number
+      criticalSplitters: number
+      sumUsage: number
+      sumDeltaReference: number
+      openTickets: number
+      totalTickets: number
+      affectedClientsTotal: number
+    }>()
+    for (const row of riskRanking) {
+      const key = row.oltCode?.trim() || row.oltDescription?.trim() || 'SEM_OLT'
+      const current = grouped.get(key) ?? {
+        oltCode: row.oltCode?.trim() || 'SEM_OLT',
+        oltDescription: row.oltDescription?.trim() || 'OLT não informada',
+        splitters: 0,
+        criticalSplitters: 0,
+        sumUsage: 0,
+        sumDeltaReference: 0,
+        openTickets: 0,
+        totalTickets: 0,
+        affectedClientsTotal: 0,
+      }
+      current.splitters += 1
+      if (row.currentUsagePercent >= 95) current.criticalSplitters += 1
+      current.sumUsage += row.currentUsagePercent
+      current.sumDeltaReference += row.selectedDelta
+      current.openTickets += row.openTickets
+      current.totalTickets += row.totalTickets
+      current.affectedClientsTotal += row.affectedClientsTotal
+      grouped.set(key, current)
+    }
+
+    return [...grouped.values()]
+      .map((entry) => ({
+        oltCode: entry.oltCode,
+        oltDescription: entry.oltDescription,
+        splitters: entry.splitters,
+        criticalSplitters: entry.criticalSplitters,
+        avgUsagePercent: Number((entry.sumUsage / Math.max(1, entry.splitters)).toFixed(1)),
+        avgDeltaReference: Number((entry.sumDeltaReference / Math.max(1, entry.splitters)).toFixed(2)),
+        openTickets: entry.openTickets,
+        totalTickets: entry.totalTickets,
+        affectedClientsTotal: entry.affectedClientsTotal,
+      }))
+      .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.avgUsagePercent - a.avgUsagePercent)
+      .slice(0, 8)
+  }, [riskRanking])
+
+  const geoDrilldown = useMemo<IntelligenceGeoDrilldown>(() => {
+    const tipoCounts = new Map<'CONDOMÍNIO' | 'UNIDADE' | 'SEM_CLASSIFICACAO', number>([
+      ['CONDOMÍNIO', 0],
+      ['UNIDADE', 0],
+      ['SEM_CLASSIFICACAO', 0],
+    ])
+    const condos = new Map<string, { nome: string; splitters: number; affectedClientsTotal: number }>()
+    const streets = new Map<string, { nome: string; splitters: number; criticalSplitters: number }>()
+    for (const row of riskRanking) {
+      const tipo = row.tipoLocal ?? 'SEM_CLASSIFICACAO'
+      tipoCounts.set(tipo, (tipoCounts.get(tipo) ?? 0) + 1)
+
+      const condoName = row.nomeCondominio?.trim() ?? ''
+      if (condoName !== '') {
+        const c = condos.get(condoName) ?? { nome: condoName, splitters: 0, affectedClientsTotal: 0 }
+        c.splitters += 1
+        c.affectedClientsTotal += row.affectedClientsTotal
+        condos.set(condoName, c)
+      }
+
+      const streetName = row.street?.trim() ?? ''
+      if (streetName !== '') {
+        const s = streets.get(streetName) ?? { nome: streetName, splitters: 0, criticalSplitters: 0 }
+        s.splitters += 1
+        if (row.currentUsagePercent >= 95) s.criticalSplitters += 1
+        streets.set(streetName, s)
+      }
+    }
+
+    return {
+      tipoLocal: [
+        { key: 'CONDOMÍNIO', count: tipoCounts.get('CONDOMÍNIO') ?? 0 },
+        { key: 'UNIDADE', count: tipoCounts.get('UNIDADE') ?? 0 },
+        { key: 'SEM_CLASSIFICACAO', count: tipoCounts.get('SEM_CLASSIFICACAO') ?? 0 },
+      ],
+      topCondominios: [...condos.values()]
+        .sort((a, b) => b.affectedClientsTotal - a.affectedClientsTotal || b.splitters - a.splitters)
+        .slice(0, 6),
+      topStreets: [...streets.values()]
+        .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.splitters - a.splitters)
+        .slice(0, 6),
+    }
+  }, [riskRanking])
+
+  const lifecycleAnalytics = useMemo(() => {
+    const metaByCode = splittersMetaByCode
+    const rows = riskRanking.map((row) => {
+      const createdAt = metaByCode.get(row.splitterCode)?.createdAt ?? null
+      const incidentsPerYear =
+        row.ageYears > 0 ? Number((row.totalTickets / Math.max(0.25, row.ageYears)).toFixed(2)) : row.totalTickets
+      const etaTo95Days =
+        row.selectedDelta > 0
+          ? (() => {
+              const periodsTo95 = (95 - row.currentUsagePercent) / row.selectedDelta
+              if (!Number.isFinite(periodsTo95) || periodsTo95 <= 0) return 0
+              const periodDays = deltaReference === '7d' ? 7 : 30
+              return Math.round(periodsTo95 * periodDays)
+            })()
+          : null
+      const lifecycleRiskScore = clamp(
+        row.riskScore * 0.6 + clamp(row.ageYears * 10, 0, 80) + clamp(incidentsPerYear * 2.5, 0, 40),
+        0,
+        240,
+      )
+      return { ...row, createdAt, incidentsPerYear, etaTo95Days, lifecycleRiskScore }
+    })
+
+    const lifecycleKpis: IntelligenceLifecycleKpis = {
+      avgAgeYears:
+        rows.length > 0
+          ? Number((rows.reduce((sum, row) => sum + row.ageYears, 0) / rows.length).toFixed(2))
+          : 0,
+      agedSplitters: rows.filter((row) => row.ageYears >= 5).length,
+      agedCriticalSplitters: rows.filter((row) => row.ageYears >= 5 && row.currentUsagePercent >= 95).length,
+      agedPressurePercent:
+        rows.length > 0
+          ? Number(
+              (
+                (rows.filter((row) => row.ageYears >= 5 && row.currentUsagePercent >= 85).length / rows.length) *
+                100
+              ).toFixed(1),
+            )
+          : 0,
+    }
+
+    const bucketOrder: LifecycleBucketKey[] = ['0-1', '1-3', '3-5', '5+']
+    const bucketMap = new Map<LifecycleBucketKey, {
+      splitters: number
+      sumUsage: number
+      sumDelta: number
+      massivaTickets: number
+    }>(bucketOrder.map((bucket) => [bucket, { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }]))
+
+    for (const row of rows) {
+      const bucket = toLifecycleBucket(row.ageYears)
+      const current = bucketMap.get(bucket)
+      if (!current) continue
+      current.splitters += 1
+      current.sumUsage += row.currentUsagePercent
+      current.sumDelta += row.selectedDelta
+      current.massivaTickets += row.totalTickets
+    }
+    const lifecycleBuckets: IntelligenceLifecycleBucketRow[] = bucketOrder.map((bucket) => {
+      const current = bucketMap.get(bucket) ?? { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }
+      return {
+        bucket,
+        splitters: current.splitters,
+        avgUsagePercent: Number((current.sumUsage / Math.max(1, current.splitters)).toFixed(1)),
+        avgDeltaReference: Number((current.sumDelta / Math.max(1, current.splitters)).toFixed(2)),
+        massivaTickets: current.massivaTickets,
+      }
+    })
+
+    const heatmapCounts = new Map<string, number>()
+    for (const row of rows) {
+      const bucket = toLifecycleBucket(row.ageYears)
+      const usageBand: IntelligenceLifecycleHeatmapCell['usageBand'] =
+        row.currentUsagePercent >= 95 ? '95+' : row.currentUsagePercent >= 70 ? '70-94' : '<70'
+      const key = `${bucket}|${usageBand}`
+      heatmapCounts.set(key, (heatmapCounts.get(key) ?? 0) + 1)
+    }
+    const usageBands: IntelligenceLifecycleHeatmapCell['usageBand'][] = ['<70', '70-94', '95+']
+    const lifecycleHeatmap: IntelligenceLifecycleHeatmapCell[] = bucketOrder.flatMap((bucket) =>
+      usageBands.map((usageBand) => ({
+        bucket,
+        usageBand,
+        count: heatmapCounts.get(`${bucket}|${usageBand}`) ?? 0,
+      })),
+    )
+
+    const lifecycleReplacementRanking: IntelligenceLifecycleReplacementRow[] = [...rows]
+      .sort((a, b) => b.lifecycleRiskScore - a.lifecycleRiskScore)
+      .slice(0, 12)
+      .map((row) => ({
+        splitterCode: row.splitterCode,
+        splitterTitle: row.splitterTitle,
+        ageYears: row.ageYears,
+        lifecycleRiskScore: Number(row.lifecycleRiskScore.toFixed(1)),
+        etaTo95Days: row.etaTo95Days,
+        currentUsagePercent: row.currentUsagePercent,
+        selectedDelta: row.selectedDelta,
+        affectedClientsTotal: row.affectedClientsTotal,
+      }))
+
+    const cohortMap = new Map<number, { splitters: number; sumUsage: number; sumIncidentsPerYear: number }>()
+    for (const row of rows) {
+      if (!row.createdAt) continue
+      const cohortYear = row.createdAt.getFullYear()
+      const current = cohortMap.get(cohortYear) ?? { splitters: 0, sumUsage: 0, sumIncidentsPerYear: 0 }
+      current.splitters += 1
+      current.sumUsage += row.currentUsagePercent
+      current.sumIncidentsPerYear += row.incidentsPerYear
+      cohortMap.set(cohortYear, current)
+    }
+    const lifecycleCohorts: IntelligenceLifecycleCohortRow[] = [...cohortMap.entries()]
+      .map(([cohortYear, row]) => ({
+        cohortYear,
+        splitters: row.splitters,
+        avgUsagePercent: Number((row.sumUsage / Math.max(1, row.splitters)).toFixed(1)),
+        incidentsPerYear: Number((row.sumIncidentsPerYear / Math.max(1, row.splitters)).toFixed(2)),
+      }))
+      .sort((a, b) => a.cohortYear - b.cohortYear)
+      .slice(-8)
+
+    const lifecycleAlerts: IntelligenceLifecycleAlertRow[] = rows
+      .filter((row) => row.ageYears >= 5 && row.currentUsagePercent >= 85 && row.selectedDelta >= 3)
+      .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+      .slice(0, 8)
+      .map((row) => ({
+        splitterCode: row.splitterCode,
+        splitterTitle: row.splitterTitle,
+        reason: `>${row.ageYears.toFixed(1)} anos, uso ${row.currentUsagePercent.toFixed(1)}% e ${deltaReferenceLabel} ${row.selectedDelta.toFixed(2)}%`,
+      }))
+
+    return {
+      lifecycleKpis,
+      lifecycleBuckets,
+      lifecycleHeatmap,
+      lifecycleReplacementRanking,
+      lifecycleCohorts,
+      lifecycleAlerts,
+    }
+  }, [riskRanking, splittersMetaByCode, deltaReference, deltaReferenceLabel])
+
   return {
     query,
     /** `/api/stats` — costuma concluir antes do dataset; útil para prévia na UI. */
@@ -621,6 +1139,14 @@ export function useNetworkIntelligenceData(
     barPoints,
     recurrenceCells,
     saturationCells,
+    decisionKpis,
+    riskRanking,
+    impactUrgencyMatrix,
+    oltDrilldown,
+    geoDrilldown,
+    ...lifecycleAnalytics,
+    deltaReference,
+    deltaReferenceLabel,
     dateWindow: window,
   }
 }

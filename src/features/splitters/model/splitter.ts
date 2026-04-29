@@ -22,6 +22,7 @@ export type Splitter = {
   oltCode: string | null
   oltIntegrationCode: string | null
   oltDescription: string | null
+  createdAt: Date | null
   /** Informação de ocupação real vinda do banco local. */
   busyCount: number
   /** Informação de condomínio extraída via SQL no BFF Local. */
@@ -112,6 +113,7 @@ export function parseSplitterFromApi(raw: unknown): Splitter {
       olt.description === null || olt.description === undefined
         ? null
         : pickString(olt.description),
+    createdAt: null,
     busyCount: 0,
   }
 }

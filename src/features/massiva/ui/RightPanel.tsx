@@ -34,7 +34,7 @@ export function RightPanel() {
           </p>
         </div>
         <div
-          className="flex w-full flex-wrap gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:flex-nowrap sm:rounded-full"
+          className="grid w-full grid-cols-1 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:grid-cols-2 sm:rounded-full"
           role="tablist"
           aria-label="Abas do painel lateral"
         >
@@ -44,7 +44,7 @@ export function RightPanel() {
             aria-selected={tab === 'autoisp'}
             onClick={() => setTab('autoisp')}
             className={cn(
-              'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:flex-none',
+              'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
               tab === 'autoisp'
                 ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200'
                 : 'text-neutral-600 hover:bg-neutral-50',
@@ -59,7 +59,7 @@ export function RightPanel() {
             aria-selected={tab === 'protocolos'}
             onClick={() => setTab('protocolos')}
             className={cn(
-              'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition sm:flex-none',
+              'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
               tab === 'protocolos'
                 ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
                 : 'text-neutral-600 hover:bg-neutral-50',

@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { nowInBrazilIsoLike } from '@/features/massiva/lib/formatBrazilDateTime'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
 type RegisterClosedMassivaHistoryInput = {
@@ -10,6 +11,7 @@ type RegisterClosedMassivaHistoryInput = {
 export async function registerClosedMassivaHistoryInLocalDb(
   input: RegisterClosedMassivaHistoryInput,
 ): Promise<void> {
+  const nowBrazil = nowInBrazilIsoLike()
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/massiva/history/close`, {
     method: 'POST',
     headers: {
@@ -20,7 +22,7 @@ export async function registerClosedMassivaHistoryInLocalDb(
       protocol: input.protocol,
       assignmentId: input.assignmentId,
       closeDescription: input.closeDescription,
-      closedAt: new Date().toISOString(),
+      closedAt: nowBrazil,
     }),
   })
 

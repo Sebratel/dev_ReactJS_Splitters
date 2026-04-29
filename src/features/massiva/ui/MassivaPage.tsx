@@ -184,12 +184,22 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
       for (const connection of replaced) {
         const apKey = connection.apId.trim()
         if (apKey === '') continue
+        const slotPortKey =
+          connection.selectedPairs != null && connection.selectedPairs.length > 0
+            ? connection.selectedPairs
+                .map((pair) => `${pair.slot}/${pair.port}`)
+                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                .join(';')
+            : connection.slot !== null && connection.porta !== null
+              ? `${connection.slot}/${connection.porta}`
+              : 'sem-rota'
         const splittersKey = connection.splitters
           .map((splitter) => splitter.id.trim())
           .filter((id) => id !== '')
           .sort((a, b) => a.localeCompare(b, 'pt-BR'))
           .join(',')
-        const key = `${apKey}|${splittersKey}`
+        // Nao colapsa rotas distintas da mesma AP (ex.: AP igual, slot/porta diferentes).
+        const key = `${apKey}|${slotPortKey}|${splittersKey}`
         if (!oneRoutePerAp.has(key)) oneRoutePerAp.set(key, connection)
       }
 
@@ -224,7 +234,6 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         <StepSplitters
           connections={localPreview.selection.connections}
           onToggleConnectionSplitter={localPreview.toggleConnectionSplitter}
-          onClearConnectionSplitters={localPreview.clearConnectionSplitters}
           searchSplitterOptionsForConnection={
             localPreview.searchSplitterOptionsForConnection
           }
@@ -253,7 +262,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   })()
 
   return (
-    <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(320px,3fr)]">
+    <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 min-[1700px]:grid-cols-[minmax(0,7fr)_minmax(380px,3fr)]">
       <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
         <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
           <MassivaStepper

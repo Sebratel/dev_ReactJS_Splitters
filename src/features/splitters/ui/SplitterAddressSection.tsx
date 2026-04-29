@@ -26,7 +26,7 @@ export function SplitterAddressSection({
     return (
       <EmptyState
         title="Sem coordenadas"
-        description="Este splitter não possui latitude/longitude válidas para reverse geocode."
+        description="Este equipamento não possui latitude e longitude válidas para geocodificação reversa."
       />
     )
   }
@@ -48,7 +48,7 @@ export function SplitterAddressSection({
     return (
       <EmptyState
         title="Endereço não encontrado"
-        description="O serviço de geocoding não retornou dados para estas coordenadas."
+        description="O serviço de geocodificação não retornou dados para estas coordenadas."
       />
     )
   }

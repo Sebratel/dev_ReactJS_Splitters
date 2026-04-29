@@ -9,6 +9,14 @@ function str(value: unknown, fallback: string): string {
   return t.length > 0 ? t : fallback
 }
 
+function csv(value: unknown): string[] {
+  if (typeof value !== 'string') return []
+  return value
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item !== '')
+}
+
 /**
  * Base do BFF usada em `bffClient`.
  * Em `npm run dev`, se `VITE_BFF_BASE_URL` estiver vazio, usa URL relativa (`/api/...`) no mesmo
@@ -170,6 +178,8 @@ export const env = {
   firebaseStorageBucket: str(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, ''),
   firebaseMessagingSenderId: str(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, ''),
   firebaseAppId: str(import.meta.env.VITE_FIREBASE_APP_ID, ''),
+  accessAllowedEmails: csv(import.meta.env.VITE_ACCESS_ALLOWED_EMAILS),
+  accessAllowedEmailDomain: str(import.meta.env.VITE_ACCESS_ALLOWED_EMAIL_DOMAIN, '').toLowerCase(),
 } as const
 
 
