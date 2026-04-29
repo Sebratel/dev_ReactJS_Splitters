@@ -209,9 +209,9 @@ export function isAutoIspConfigured(): boolean {
   )
 }
 
-  if (isAuthMockEnabled()) return false
 export function isGoogleIdentityConfigured(): boolean {
   const clientId = env.googleClientId.trim()
+  if (isAuthMockEnabled()) return false
   if (clientId === '') return false
   if (clientId === 'seu_client_id_web_do_google.apps.googleusercontent.com') {
     return false
