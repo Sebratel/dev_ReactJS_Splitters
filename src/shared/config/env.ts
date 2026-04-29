@@ -199,8 +199,8 @@ export function isFirebaseAuthConfigured(): boolean {
 }
 
 /** AutoISP só é consultado no browser quando as quatro variáveis estão definidas. */
-  if (isAuthMockEnabled()) return false
 export function isAutoIspConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return (
     env.autoIspAuthEndpoint.trim() !== '' &&
     env.autoIspEventsEndpoint.trim() !== '' &&
@@ -209,6 +209,7 @@ export function isAutoIspConfigured(): boolean {
   )
 }
 
+  if (isAuthMockEnabled()) return false
 export function isGoogleIdentityConfigured(): boolean {
   const clientId = env.googleClientId.trim()
   if (clientId === '') return false
