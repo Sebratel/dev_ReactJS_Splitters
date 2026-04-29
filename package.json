@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:mock": "concurrently \"npm run dev:frontend:mock\" \"npm run dev:backend\"",
     "dev:frontend": "vite",
-    "dev:frontend:mock": "vite --mode mock",
+    "dev:frontend:mock": "npx vite --mode mock",
     "dev:backend": "npm --prefix server run dev",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
