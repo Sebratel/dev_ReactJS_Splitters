@@ -170,16 +170,26 @@ export const env = {
   firebaseStorageBucket: str(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, ''),
   firebaseMessagingSenderId: str(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, ''),
   firebaseAppId: str(import.meta.env.VITE_FIREBASE_APP_ID, ''),
+  /** Modo de autenticação mockada (pula login OIDC/Google). */
+  authMock: import.meta.env.VITE_AUTH_MOCK === 'true',
+  mockUserEmail: str(import.meta.env.VITE_MOCK_USER_EMAIL, ''),
+  mockUserName: str(import.meta.env.VITE_MOCK_USER_NAME, ''),
 } as const
 
 
 export type Env = typeof env
 
+export function isAuthMockEnabled(): boolean {
+  return env.authMock
+}
+
 export function isOidcConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return env.oidcAuthority.trim() !== '' && env.oidcClientId.trim() !== ''
 }
 
 export function isFirebaseAuthConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return (
     env.firebaseApiKey.trim() !== '' &&
     env.firebaseAuthDomain.trim() !== '' &&

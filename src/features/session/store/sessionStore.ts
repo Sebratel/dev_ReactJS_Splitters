@@ -15,7 +15,12 @@ import {
   persistSessionToken,
   type PersistedSession,
 } from '@/shared/lib/storage'
-import { isGoogleIdentityConfigured, isLocalDevHostname } from '@/shared/config/env'
+import {
+  env,
+  isAuthMockEnabled,
+  isGoogleIdentityConfigured,
+  isLocalDevHostname,
+} from '@/shared/config/env'
 
 /** Em localhost o Hub pode não expor `/api/hub/session`; usa claims do JWT + defaults locais. */
 function sessionUserFallbackLocalWithGoogleToken(token: string): SessionUser {
@@ -67,6 +72,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     if (token && isGoogleIdTokenExpired(token)) {
       get().clearSession()
+      return
+    }
+
+    if (isAuthMockEnabled()) {
+      set({
+        status: 'authenticated',
+        sessionToken: 'mock-session-token',
+        user: {
+          ...defaultLocalSessionUser,
+          email: env.mockUserEmail || defaultLocalSessionUser.email,
+          name: env.mockUserName || defaultLocalSessionUser.name,
+        },
+      })
       return
     }
 
