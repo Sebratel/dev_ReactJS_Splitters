@@ -1114,12 +1114,6 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     if (routes.length === 0) {
       return res.json({ success: true, count: 0, data: [] });
     }
-    if (routes.length > 80) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Máximo 80 rotas por lote.' });
-    }
-
     // Uma query por (AP, slot, port). Não filtrar `splitterCodes` no SQL: o client usa
     // `filterConnectionsBySplitterCode` (normaliza caixa/acentos) e `apCodesMatch` — o mesmo
     // critério do GET completo. O `= ANY(códigos)` no Postgres é exato e zerava o preview.
@@ -1150,21 +1144,40 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
 
     const merged = [];
     const seenKeys = new Set();
-    for (const route of unique.values()) {
-      const { where, values } = buildMassivaConnectionsWhere({
-        apCode: route.apCode,
-        slot: route.slot,
-        port: route.port,
-      });
-      const result = await queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
-        retries: 1,
-        delayMs: 180,
-      });
-      for (const row of result.rows) {
-        const dk = massivaRowDedupeKey(row);
-        if (seenKeys.has(dk)) continue;
-        seenKeys.add(dk);
-        merged.push(row);
+    const uniqueRoutes = Array.from(unique.values());
+    const chunkSizeRaw = Number.parseInt(
+      String(process.env.MASSIVA_BATCH_ROUTE_CHUNK_SIZE ?? '80'),
+      10,
+    );
+    const chunkSize =
+      Number.isFinite(chunkSizeRaw) && chunkSizeRaw > 0 ? chunkSizeRaw : 80;
+    let chunksProcessed = 0;
+
+    for (let index = 0; index < uniqueRoutes.length; index += chunkSize) {
+      const chunk = uniqueRoutes.slice(index, index + chunkSize);
+      chunksProcessed += 1;
+
+      const chunkResults = await Promise.all(
+        chunk.map(async (route) => {
+          const { where, values } = buildMassivaConnectionsWhere({
+            apCode: route.apCode,
+            slot: route.slot,
+            port: route.port,
+          });
+          return queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
+            retries: 1,
+            delayMs: 180,
+          });
+        }),
+      );
+
+      for (const result of chunkResults) {
+        for (const row of result.rows) {
+          const dk = massivaRowDedupeKey(row);
+          if (seenKeys.has(dk)) continue;
+          seenKeys.add(dk);
+          merged.push(row);
+        }
       }
     }
     res.json({
@@ -1173,6 +1186,10 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       data: merged,
       ignoredInvalidRoutes: invalidIndexes.length,
       invalidRouteIndexes: invalidIndexes,
+      totalRoutesReceived: routes.length,
+      uniqueRoutesProcessed: uniqueRoutes.length,
+      chunkSize,
+      chunksProcessed,
     });
   } catch (error) {
     console.error('Erro ao listar conexões (batch) para Massiva:', error);
