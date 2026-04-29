@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Splitter } from '@/features/splitters/model/splitter'
+import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import type {
   SplitterMassivaStats,
   SplitterOperationalScore,
@@ -7,19 +8,18 @@ import type {
 import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOperationalDate'
 import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
-import {
-  AlertTriangle,
-  BellOff,
-  Cable,
-  Cpu,
-  Hash,
-  Layers,
-} from 'lucide-react'
+import { BellOff, Cable, Cpu, Hash, Layers } from 'lucide-react'
+
+/** Estado da consulta `/connections`: espelho por porta; fallback usa apenas busyCount do splitter. */
+type ConnectionsMirrorLoadState = 'pending' | 'success' | 'error'
 
 type SplitterDetailSummaryProps = {
   splitter: Splitter
   massivaStats: SplitterMassivaStats
   operationalScore: SplitterOperationalScore
+  connectionsLoadState: ConnectionsMirrorLoadState
+  /** Clientes da consulta de conexões (portas reais); ignorado até `success`. */
+  connectionClientes: SplitterCliente[]
 }
 
 function parseSlotAndPortFromTitle(raw: string | null | undefined): {
@@ -31,46 +31,82 @@ function parseSlotAndPortFromTitle(raw: string | null | undefined): {
 
   const beforeSlash = title.split('/')[0] ?? ''
   const numbers = beforeSlash.match(/\d+/g) ?? []
-  if (numbers.length < 3) return { slot: null, port: null }
+  if (numbers.length < 2) return { slot: null, port: null }
 
   return {
-    slot: numbers[numbers.length - 3] ?? null,
-    port: numbers[numbers.length - 2] ?? null,
+    slot: numbers[numbers.length - 2] ?? null,
+    port: numbers[numbers.length - 1] ?? null,
   }
 }
 
-function scoreToneTextClassName(tone: SplitterOperationalScore['tone']): string {
+const CRITICALITY_DOT_COUNT = 10
+
+function criticalityDotToneClasses(tone: SplitterOperationalScore['tone']): {
+  filled: string
+  muted: string
+} {
   switch (tone) {
     case 'critical':
-      return 'text-rose-600'
+      return { filled: 'bg-rose-500 shadow-sm', muted: 'bg-rose-100' }
     case 'attention':
-      return 'text-amber-600'
+      return { filled: 'bg-amber-500 shadow-sm', muted: 'bg-amber-100' }
     default:
-      return 'text-emerald-600'
+      return { filled: 'bg-emerald-500 shadow-sm', muted: 'bg-emerald-100' }
   }
 }
 
-function scoreToneIconClassName(tone: SplitterOperationalScore['tone']): string {
-  switch (tone) {
-    case 'critical':
-      return 'text-rose-600'
-    case 'attention':
-      return 'text-amber-500'
-    default:
-      return 'text-emerald-500'
+type PortCellKind = 'free' | 'residential' | 'corporate'
+
+/**
+ * Espelho por número de porta a partir dos clientes (mesma regra da lista de portas).
+ * Vários clientes na mesma porta: prevalece corporativo se qualquer um for.
+ */
+function buildPortCellsFromClientes(
+  outPorts: number,
+  clientes: SplitterCliente[],
+): Array<{ port: number; kind: PortCellKind }> {
+  const total = Math.max(0, Math.round(outPorts))
+  const byPort = new Map<number, 'residential' | 'corporate'>()
+
+  for (const c of clientes) {
+    const p = c.port
+    if (p === null || !Number.isFinite(p)) continue
+    const portNum = Math.trunc(p)
+    if (portNum < 1 || portNum > total) continue
+
+    const next: 'residential' | 'corporate' = c.isCorporate ? 'corporate' : 'residential'
+    const prev = byPort.get(portNum)
+    if (!prev) {
+      byPort.set(portNum, next)
+    } else if (next === 'corporate' || prev === 'residential') {
+      byPort.set(portNum, 'corporate')
+    }
   }
+
+  return Array.from({ length: total }, (_, index) => {
+    const port = index + 1
+    const occ = byPort.get(port)
+    const kind: PortCellKind = occ === 'corporate' ? 'corporate' : occ === 'residential' ? 'residential' : 'free'
+    return { port, kind }
+  })
 }
 
-function buildPortDistribution(
+/** Fallback quando a consulta de conexões não está disponível: apenas total ocupado (sem posição real). */
+function buildPortCellsFromBusyTotal(
   totalPorts: number,
   busyCount: number,
-): Array<{ port: number; active: boolean }> {
-  const normalizedTotal = Math.max(0, Math.round(totalPorts))
-  const shownTotal = Math.min(normalizedTotal, 16)
-  return Array.from({ length: shownTotal }, (_, index) => ({
-    port: index + 1,
-    active: index < Math.max(0, busyCount),
-  }))
+): Array<{ port: number; kind: PortCellKind }> {
+  const total = Math.max(0, Math.round(totalPorts))
+  const busy = Math.max(0, Math.min(total, Math.round(busyCount)))
+  return Array.from({ length: total }, (_, index) => {
+    const port = index + 1
+    const kind: PortCellKind = index < busy ? 'residential' : 'free'
+    return { port, kind }
+  })
+}
+
+function occupiedCountFromCells(cells: Array<{ kind: PortCellKind }>): number {
+  return cells.filter((c) => c.kind !== 'free').length
 }
 
 function OccupancyPercentToneClass(usagePercent: number): string {
@@ -121,8 +157,21 @@ export function SplitterDetailSummary({
   splitter,
   massivaStats,
   operationalScore,
+  connectionsLoadState,
+  connectionClientes,
 }: SplitterDetailSummaryProps) {
-  const usageRatio = splitter.outPorts > 0 ? splitter.busyCount / splitter.outPorts : 0
+  const mirrorLive = connectionsLoadState === 'success'
+  const portCells = mirrorLive
+    ? buildPortCellsFromClientes(splitter.outPorts, connectionClientes)
+    : connectionsLoadState === 'pending'
+      ? null
+      : buildPortCellsFromBusyTotal(splitter.outPorts, splitter.busyCount)
+
+  const occupiedPorts =
+    portCells !== null ? occupiedCountFromCells(portCells) : splitter.busyCount
+
+  const usageRatio =
+    splitter.outPorts > 0 ? occupiedPorts / splitter.outPorts : 0
   const usagePercent = Math.round(Math.min(100, usageRatio * 100))
   const animatedUsagePercent = Math.round(
     Math.max(0, Math.min(100, useAnimatedNumber(usagePercent, 750))),
@@ -145,9 +194,13 @@ export function SplitterDetailSummary({
   }, [operationalScore.tone])
 
   const { slot, port } = parseSlotAndPortFromTitle(splitter.title || splitter.code)
-  const ports = buildPortDistribution(splitter.outPorts, splitter.busyCount)
-  const hiddenPorts = Math.max(0, splitter.outPorts - 16)
   const integrationRef = splitter.integrationCode || splitter.code || '-'
+
+  const dotTone = criticalityDotToneClasses(operationalScore.tone)
+  const filledCriticalityDots = Math.min(
+    CRITICALITY_DOT_COUNT,
+    Math.max(0, Math.round((animatedCriticality / 100) * CRITICALITY_DOT_COUNT)),
+  )
 
   return (
     <section
@@ -200,21 +253,23 @@ export function SplitterDetailSummary({
             )}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
-              Criticality
+              Criticidade
             </p>
-            <p
-              className={cn(
-                'mt-1 inline-flex items-center gap-1.5 text-3xl font-bold leading-tight',
-                scoreToneTextClassName(operationalScore.tone),
-              )}
+            <div
+              className="mt-2 flex items-center gap-1"
+              role="img"
+              aria-label={`Criticidade ${operationalScore.label}, índice ${animatedCriticality} de 100`}
             >
-              {operationalScore.label} {animatedCriticality}
-              <AlertTriangle
-                size={14}
-                className={scoreToneIconClassName(operationalScore.tone)}
-                strokeWidth={2}
-              />
-            </p>
+              {Array.from({ length: CRITICALITY_DOT_COUNT }, (_, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    'h-2.5 w-2.5 shrink-0 rounded-full transition-colors duration-300',
+                    i < filledCriticalityDots ? dotTone.filled : dotTone.muted,
+                  )}
+                />
+              ))}
+            </div>
           </div>
           <div className="rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
@@ -233,11 +288,24 @@ export function SplitterDetailSummary({
           <div className="mb-1.5 flex items-end justify-between gap-2">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
-                Port occupancy
+                Ocupação das portas
               </p>
               <p className="text-sm font-semibold text-on-surface-variant/80">
-                {splitter.busyCount} de {splitter.outPorts} portas utilizadas
+                {occupiedPorts} de {splitter.outPorts} portas utilizadas
               </p>
+              {connectionsLoadState === 'pending' ? (
+                <p className="mt-0.5 text-[11px] font-normal normal-case tracking-normal text-on-surface-variant/55">
+                  Carregando espelho por porta (total provisório pelo cadastro).
+                </p>
+              ) : connectionsLoadState === 'error' ? (
+                <p className="mt-0.5 text-[11px] font-normal normal-case tracking-normal text-on-surface-variant/55">
+                  Consulta de conexões indisponível — uso apenas do total ocupado do equipamento.
+                </p>
+              ) : mirrorLive ? (
+                <p className="mt-0.5 text-[11px] font-normal normal-case tracking-normal text-on-surface-variant/60">
+                  Percentual alinhado às portas listadas na consulta de conexões.
+                </p>
+              ) : null}
             </div>
             <p className={cn('text-3xl font-bold leading-none', OccupancyPercentToneClass(usagePercent))}>
               {animatedUsagePercent}%
@@ -256,30 +324,52 @@ export function SplitterDetailSummary({
 
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
-            Port distribution map
+            Mapa de distribuição das portas
           </p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {ports.map((cell) => (
-              <span
-                key={cell.port}
-                className={cn(
-                  'inline-flex h-7 min-w-8 items-center justify-center rounded-md border px-1.5 text-[9px] font-semibold transition-all duration-300 hover:-translate-y-0.5',
-                  cell.active && 'animate-in fade-in zoom-in-95 duration-300',
-                  cell.active
-                    ? 'border-emerald-300 bg-emerald-500 text-white'
-                    : 'border-outline-variant/70 bg-surface-container-low/20 text-on-surface-variant/45',
-                )}
-                style={cell.active ? { animationDelay: `${cell.port * 28}ms` } : undefined}
-              >
-                {cell.port}
-              </span>
-            ))}
-            {hiddenPorts > 0 ? (
-              <span className="inline-flex h-7 items-center justify-center rounded-md border border-outline-variant/70 bg-surface-container-low/20 px-2 text-[9px] font-semibold text-on-surface-variant/55">
-                +{hiddenPorts}
-              </span>
-            ) : null}
-          </div>
+          {mirrorLive ? (
+            <p className="mt-0.5 text-[10px] leading-snug text-on-surface-variant/55">
+              Verde: cliente PF/residencial · Roxo: corporativo · Cinza: livre.
+            </p>
+          ) : null}
+
+          {portCells === null ? (
+            <div className="mt-3 flex min-h-[3rem] items-center justify-center rounded-lg border border-dashed border-outline-variant/70 bg-surface-container-low/25 px-3 py-2 text-center text-xs text-on-surface-variant/65">
+              Carregando espelho das portas…
+            </div>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {portCells.map((cell) => {
+                const occupied = cell.kind !== 'free'
+                const corp = cell.kind === 'corporate'
+                const res = cell.kind === 'residential'
+                return (
+                  <span
+                    key={cell.port}
+                    title={
+                      corp
+                        ? `Porta ${cell.port} · cliente corporativo`
+                        : res
+                          ? `Porta ${cell.port} · ocupada`
+                          : `Porta ${cell.port} · livre`
+                    }
+                    className={cn(
+                      'inline-flex h-7 min-w-8 items-center justify-center rounded-md border px-1.5 text-[9px] font-semibold transition-all duration-300 hover:-translate-y-0.5',
+                      occupied && 'animate-in fade-in zoom-in-95 duration-300',
+                      corp &&
+                        'border-violet-500 bg-violet-600 text-white shadow-sm',
+                      res &&
+                        'border-emerald-300 bg-emerald-500 text-white',
+                      cell.kind === 'free' &&
+                        'border-outline-variant/70 bg-surface-container-low/20 text-on-surface-variant/45',
+                    )}
+                    style={occupied ? { animationDelay: `${cell.port * 28}ms` } : undefined}
+                  >
+                    {cell.port}
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 

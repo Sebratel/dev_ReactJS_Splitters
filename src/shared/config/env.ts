@@ -9,6 +9,14 @@ function str(value: unknown, fallback: string): string {
   return t.length > 0 ? t : fallback
 }
 
+function csv(value: unknown): string[] {
+  if (typeof value !== 'string') return []
+  return value
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => item !== '')
+}
+
 /**
  * Base do BFF usada em `bffClient`.
  * Em `npm run dev`, se `VITE_BFF_BASE_URL` estiver vazio, usa URL relativa (`/api/...`) no mesmo
@@ -174,6 +182,8 @@ export const env = {
   authMock: import.meta.env.VITE_AUTH_MOCK === 'true',
   mockUserEmail: str(import.meta.env.VITE_MOCK_USER_EMAIL, ''),
   mockUserName: str(import.meta.env.VITE_MOCK_USER_NAME, ''),
+  accessAllowedEmails: csv(import.meta.env.VITE_ACCESS_ALLOWED_EMAILS),
+  accessAllowedEmailDomain: str(import.meta.env.VITE_ACCESS_ALLOWED_EMAIL_DOMAIN, '').toLowerCase(),
 } as const
 
 

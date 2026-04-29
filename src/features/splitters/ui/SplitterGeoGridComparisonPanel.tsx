@@ -104,7 +104,7 @@ export function SplitterGeoGridComparisonPanel({
               Comparativo
             </p>
             <h2 className="mt-0.5 text-base font-semibold tracking-tight text-on-surface">
-              Portas x GeoGrid
+              Portas e GeoGrid
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-on-surface-variant/70">
               Conferência por nome dos clientes do splitter com os atendimentos retornados pela GeoGrid.
@@ -135,7 +135,7 @@ export function SplitterGeoGridComparisonPanel({
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-700/80">
-            Sem resolucao
+            Sem resolução
           </p>
           <p className="mt-1 text-xl font-bold tracking-tight text-slate-700">
             {unresolved}

@@ -547,7 +547,7 @@ export function StepValidacao({
                   {'Visualiza\u00e7\u00e3o do mapa'}
                 </p>
                 <p className="text-xs leading-relaxed text-neutral-500">
-                  Pins a partir de latitude/longitude do BFF. A coluna{' '}
+                  Pins agrupados por splitter a partir de latitude/longitude do BFF. A coluna{' '}
                   <span className="font-medium text-neutral-600">Local</span>{' '}
                   {`segue o endere\u00e7o em texto.`}
                 </p>

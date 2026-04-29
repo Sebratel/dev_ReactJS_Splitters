@@ -19,8 +19,8 @@ export type SplittersUserProfile = {
 
 export const defaultSplittersPermissions: SplittersPermissionSet = {
   canViewSplitters: true,
-  canViewMassiva: false,
-  canOpenMassiva: false,
+  canViewMassiva: true,
+  canOpenMassiva: true,
   canViewIntelligence: true,
   isAdmin: false,
 }

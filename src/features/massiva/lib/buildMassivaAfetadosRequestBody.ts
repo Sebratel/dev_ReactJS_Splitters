@@ -1,6 +1,7 @@
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import type { MassivaOpenSingleResult } from '@/features/massiva/model/massivaOpenMutation'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
+import { formatInBrazilIsoLike, nowInBrazilIsoLike } from '@/features/massiva/lib/formatBrazilDateTime'
 
 /** Corpo do POST `/api/v1/afetados` (paridade curl manual). */
 export type UsuarioAfetadoEntity = {
@@ -106,14 +107,18 @@ export function buildMassivaAfetadosRequestBody(
   context: MassivaOpenFinalContext,
   protocol: number,
   assignmentId: number,
+  clientesOverride?: SplitterCliente[],
 ): MassivaAfetadosRequestBody {
-  const createdIso = new Date().toISOString()
+  const createdIso = nowInBrazilIsoLike()
+  const finishDateBrazil =
+    formatInBrazilIsoLike(context.assignmentFinalDateIsoUtc) ??
+    context.assignmentFinalDateIsoUtc
   const createdBy = massivaCreatedByFromOperatorEmail(context.operatorEmail)
   const entities = buildUsuarioAfetadoEntities({
-    clientes: context.basis.collectedClientes,
+    clientes: clientesOverride ?? context.basis.collectedClientes,
     protocol,
     reason: context.assignmentDescription,
-    finishDateIsoUtc: context.assignmentFinalDateIsoUtc,
+    finishDateIsoUtc: finishDateBrazil,
     createdIsoUtc: createdIso,
     createdBy,
   })

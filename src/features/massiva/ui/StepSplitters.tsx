@@ -7,7 +7,6 @@ import type {
 type StepSplittersProps = {
   connections: MassivaRouteConnectionSelection[]
   onToggleConnectionSplitter: (index: number, splitter: MassivaSelectedSplitter) => void
-  onClearConnectionSplitters: (index: number) => void
   searchSplitterOptionsForConnection: (
     connection: MassivaRouteConnectionSelection,
     search: string,
@@ -21,7 +20,6 @@ const searchClass =
 export function StepSplitters({
   connections,
   onToggleConnectionSplitter,
-  onClearConnectionSplitters,
   searchSplitterOptionsForConnection,
 }: StepSplittersProps) {
   const [searchByRoute, setSearchByRoute] = useState<Record<number, string>>({})
@@ -54,7 +52,7 @@ export function StepSplitters({
               key={`splitter-route-${index}`}
               className="space-y-3 rounded-lg bg-white/80 px-4 py-4 shadow-[0_1px_4px_rgba(15,23,42,0.05)] ring-1 ring-neutral-200/70"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
                     Rota {index + 1}
@@ -65,13 +63,6 @@ export function StepSplitters({
                       : 'Complete a rota para restringir melhor os splitters'}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onClearConnectionSplitters(index)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
-                >
-                  Selecionar todos da rota
-                </button>
               </div>
 
               <label className="block">
@@ -108,7 +99,16 @@ export function StepSplitters({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500">Todos os splitters da rota serão considerados.</p>
+                <div
+                  className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-100"
+                  role="note"
+                  aria-live="polite"
+                >
+                  <p className="font-semibold">Nenhum splitter selecionado manualmente.</p>
+                  <p className="mt-0.5 text-amber-800">
+                    Todos os splitters da rota serao considerados automaticamente.
+                  </p>
+                </div>
               )}
 
               {search.trim() !== '' ? (
@@ -150,11 +150,7 @@ export function StepSplitters({
                     </ul>
                   )}
                 </div>
-              ) : (
-                <p className="text-sm text-neutral-500">
-                  Digite para buscar splitters sem carregar listas grandes de uma vez.
-                </p>
-              )}
+              ) : null}
             </section>
           )
         })}

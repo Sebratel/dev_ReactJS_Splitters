@@ -251,6 +251,11 @@ export function createMassivaHistoryStore(config) {
       const protocol = normalizePositiveInt(result?.protocol);
       const assignmentId = normalizePositiveInt(result?.assignmentId);
       const accessPointCode = normalizeText(result?.accessPointCode);
+      const titleForResult = normalizeText(result?.title) || title;
+      const affectedClientsForResult = normalizeNonNegativeInt(
+        result?.affectedClients,
+        affectedClients,
+      );
 
       if (protocol === null && assignmentId === null) continue;
 
@@ -281,11 +286,11 @@ export function createMassivaHistoryStore(config) {
             assignmentId,
             accessPointCode,
             accessPointCode,
-            title,
-            title,
+            titleForResult,
+            titleForResult,
             operatorEmail,
             operatorEmail,
-            affectedClients,
+            affectedClientsForResult,
             status,
             openedAt,
             expectedCloseAt,
@@ -320,9 +325,9 @@ export function createMassivaHistoryStore(config) {
             protocol,
             assignmentId,
             accessPointCode,
-            title,
+            titleForResult,
             operatorEmail,
-            affectedClients,
+            affectedClientsForResult,
             status,
             openedAt,
             expectedCloseAt,

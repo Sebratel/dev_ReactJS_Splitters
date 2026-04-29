@@ -5,7 +5,6 @@ import clsx from 'clsx'
 import { MapPin } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
-import { massivaClientDedupeKey } from '@/features/massiva/lib/massivaClientDedupeKey'
 import {
   formatMassivaClienteLocationLine,
   hasMassivaClienteMapCoords,
@@ -17,8 +16,8 @@ const OSM_ATTR =
 
 const BR_FALLBACK_CENTER: [number, number] = [-14.235, -51.9253]
 
-function markerIcon(isCorporate: boolean): L.DivIcon {
-  const fill = isCorporate ? '#d97706' : '#0284c7'
+function markerIcon(hasCorporate: boolean): L.DivIcon {
+  const fill = hasCorporate ? '#7c3aed' : '#16a34a'
   return L.divIcon({
     className: 'massiva-cliente-map-marker',
     html: `<div style="width:20px;height:20px;border-radius:9999px;background:${fill};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
@@ -65,19 +64,26 @@ function MapLegend() {
       <span className="inline-flex items-center gap-1.5">
         <span
           className="h-2.5 w-2.5 rounded-full shadow-sm ring-2 ring-white"
-          style={{ background: '#0284c7' }}
+          style={{ background: '#16a34a' }}
         />
-        Residencial
+        Splitter sem corporativo
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span
           className="h-2.5 w-2.5 rounded-full shadow-sm ring-2 ring-white"
-          style={{ background: '#d97706' }}
+          style={{ background: '#7c3aed' }}
         />
-        Corporativo
+        Splitter com corporativo
       </span>
     </div>
   )
+}
+
+function splitterDisplayName(cliente: SplitterCliente): string {
+  const title = cliente.splitterTitle?.trim() ?? ''
+  if (title !== '') return title
+  const code = cliente.splitterCode?.trim() ?? ''
+  return code !== '' ? code : 'Splitter'
 }
 
 type MassivaClientesMapPreviewProps = {
@@ -99,31 +105,83 @@ export function MassivaClientesMapPreview({
   mapChrome = 'light',
   minimalChrome = false,
 }: MassivaClientesMapPreviewProps) {
+  const totalSplitters = useMemo(() => {
+    const keys = new Set<string>()
+    for (const c of clientes) {
+      const label = splitterDisplayName(c).trim()
+      if (label !== '') keys.add(label)
+    }
+    return keys.size
+  }, [clientes])
+
   const points = useMemo(() => {
-    const out: Array<{
+    const grouped = new Map<string, {
       key: string
-      lat: number
-      lng: number
-      title: string
-      pppoe: string
-      endereco: string
-      isCorporate: boolean
-    }> = []
+      splitterLabel: string
+      splitterCode: string
+      sumLat: number
+      sumLng: number
+      count: number
+      affectedClients: number
+      hasCorporate: boolean
+      sampleAddress: string
+    }>()
+
     for (const c of clientes) {
       if (!hasMassivaClienteMapCoords(c)) continue
       const lat = c.address!.latitude!
       const lng = c.address!.longitude!
+      const splitterLabel = splitterDisplayName(c)
+      const splitterCode = c.splitterCode?.trim() || '-'
+      const groupKey = splitterCode !== '-' ? splitterCode : splitterLabel
+      const existing = grouped.get(groupKey)
+
+      if (existing) {
+        existing.sumLat += lat
+        existing.sumLng += lng
+        existing.count += 1
+        existing.affectedClients += 1
+        if (c.isCorporate) existing.hasCorporate = true
+      } else {
+        grouped.set(groupKey, {
+          key: groupKey,
+          splitterLabel,
+          splitterCode,
+          sumLat: lat,
+          sumLng: lng,
+          count: 1,
+          affectedClients: 1,
+          hasCorporate: c.isCorporate,
+          sampleAddress: formatMassivaClienteLocationLine(c),
+        })
+      }
+    }
+
+    const out: Array<{
+      key: string
+      lat: number
+      lng: number
+      splitterLabel: string
+      splitterCode: string
+      affectedClients: number
+      hasCorporate: boolean
+      endereco: string
+    }> = []
+
+    for (const group of grouped.values()) {
       out.push({
-        key: massivaClientDedupeKey(c),
-        lat,
-        lng,
-        title: c.name?.trim() || c.user || 'Cliente',
-        pppoe: c.user || '—',
-        endereco: formatMassivaClienteLocationLine(c),
-        isCorporate: c.isCorporate,
+        key: group.key,
+        lat: group.sumLat / group.count,
+        lng: group.sumLng / group.count,
+        splitterLabel: group.splitterLabel,
+        splitterCode: group.splitterCode,
+        affectedClients: group.affectedClients,
+        hasCorporate: group.hasCorporate,
+        endereco: group.sampleAddress,
       })
     }
-    return out
+
+    return out.sort((a, b) => a.splitterLabel.localeCompare(b.splitterLabel, 'pt-BR'))
   }, [clientes])
 
   const fitPoints: [number, number][] = useMemo(
@@ -168,7 +226,7 @@ export function MassivaClientesMapPreview({
           : 'border border-neutral-200/80 shadow-[0_1px_4px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/50',
       )}
       role="img"
-      aria-label="Mapa de clientes afetados com coordenadas"
+      aria-label="Mapa de splitters afetados com coordenadas"
     >
       <MapContainer
         center={fitPoints[0] ?? BR_FALLBACK_CENTER}
@@ -184,12 +242,25 @@ export function MassivaClientesMapPreview({
         />
         <FitBoundsController fitPoints={fitPoints} fallbackCenter={BR_FALLBACK_CENTER} />
         {points.map((p) => (
-          <Marker key={p.key} position={[p.lat, p.lng]} icon={markerIcon(p.isCorporate)}>
+          <Marker key={p.key} position={[p.lat, p.lng]} icon={markerIcon(p.hasCorporate)}>
             <Popup className="!text-sm !font-sans">
               <p className="m-0 text-[13px] font-semibold leading-tight text-neutral-900">
-                {p.title}
+                {p.splitterLabel}
               </p>
-              <p className="m-0 mt-1 font-mono text-[11px] text-sky-800">{p.pppoe}</p>
+              <p className="m-0 mt-1 font-mono text-[11px] text-neutral-700">
+                {p.splitterCode}
+              </p>
+              <p className="m-0 mt-1 text-[12px] text-neutral-700">
+                {p.affectedClients} cliente(s) nesta referência
+              </p>
+              <p
+                className={clsx(
+                  'm-0 mt-1 text-[11px] font-semibold',
+                  p.hasCorporate ? 'text-violet-700' : 'text-emerald-700',
+                )}
+              >
+                {p.hasCorporate ? 'Contém corporativo' : 'Sem corporativo'}
+              </p>
               <p className="m-0 mt-1.5 border-t border-neutral-200/80 pt-1.5 text-[12px] leading-snug text-neutral-700">
                 {p.endereco}
               </p>
@@ -206,11 +277,11 @@ export function MassivaClientesMapPreview({
         <>
           <p className="text-xs text-neutral-500">
             <span className="font-semibold text-neutral-700">
-              {points.length} de {clientes.length}
+              {points.length} de {totalSplitters}
             </span>{' '}
-            com coordenadas para o mapa
-            {points.some((p) => p.isCorporate) ? (
-              <span className="text-neutral-500"> · há corporativos no mapa</span>
+            splitters com coordenadas no mapa
+            {points.some((p) => p.hasCorporate) ? (
+              <span className="text-neutral-500"> · há splitters com corporativo</span>
             ) : null}
           </p>
           <MapLegend />

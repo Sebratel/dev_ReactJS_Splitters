@@ -99,7 +99,7 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
   }
 
   if (mapState.type === 'loading') {
-    return <LoadingState label="Carregando dados do mapa..." />
+    return <LoadingState label="Carregando dados do mapa…" />
   }
 
   if (mapState.type === 'error') {
@@ -144,8 +144,8 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              <LegendDot color="#ef4444" label="Splitter atual" />
-              <LegendDot color="#4ade80" label="Ocupação ok" />
+              <LegendDot color="#ef4444" label="Equipamento atual" />
+              <LegendDot color="#4ade80" label="Ocupação normal" />
               <LegendDot color="#fb923c" label="Ocupação alta" />
               <LegendDot color="#f87171" label="Ocupação crítica" />
               <LegendDot color="#3b82f6" label="OLT" />
@@ -226,7 +226,7 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
             <Suspense
               fallback={
                 <div className="flex h-full items-center justify-center bg-surface-container-low text-sm text-on-surface-variant/65">
-                  Carregando mapa...
+                  Carregando mapa…
                 </div>
               }
             >

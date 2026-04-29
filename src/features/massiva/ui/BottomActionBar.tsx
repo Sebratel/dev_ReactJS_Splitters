@@ -94,12 +94,12 @@ export function BottomActionBar({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           {(isSuccess || isError) ? (
             <button
               type="button"
               onClick={onDismiss}
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+              className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 sm:w-auto"
             >
               Limpar resultado
             </button>
@@ -108,7 +108,7 @@ export function BottomActionBar({
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit || isPending}
-            className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300"
+            className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
             aria-disabled={!canSubmit || isPending}
             title={!canSubmit && disabledReason ? disabledReason : undefined}
           >
