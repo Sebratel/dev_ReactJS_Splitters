@@ -1124,21 +1124,28 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     // `filterConnectionsBySplitterCode` (normaliza caixa/acentos) e `apCodesMatch` — o mesmo
     // critério do GET completo. O `= ANY(códigos)` no Postgres é exato e zerava o preview.
     const unique = new Map();
+    const invalidIndexes = [];
     for (const [routeIndex, r] of routes.entries()) {
-      const apCode = String(r?.apCode ?? '').trim();
-      const slotN = Number.parseInt(String(r?.slot ?? ''), 10);
-      const rawPort = r?.port ?? r?.porta;
+      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
+      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
+      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
       const portN = Number.parseInt(String(rawPort ?? ''), 10);
       if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
-        return res.status(400).json({
-          success: false,
-          error: `Rota inválida no índice ${routeIndex}: cada rota requer apCode, slot e port numéricos.`,
-        });
+        invalidIndexes.push(routeIndex);
+        continue;
       }
       const key = `${apCode}|${slotN}|${portN}`;
       if (!unique.has(key)) {
         unique.set(key, { apCode, slot: slotN, port: portN });
       }
+    }
+
+    if (unique.size === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma rota válida recebida no lote.',
+        invalidRouteIndexes: invalidIndexes,
+      });
     }
 
     const merged = [];
@@ -1160,7 +1167,13 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
         merged.push(row);
       }
     }
-    res.json({ success: true, count: merged.length, data: merged });
+    res.json({
+      success: true,
+      count: merged.length,
+      data: merged,
+      ignoredInvalidRoutes: invalidIndexes.length,
+      invalidRouteIndexes: invalidIndexes,
+    });
   } catch (error) {
     console.error('Erro ao listar conexões (batch) para Massiva:', error);
     res.status(500).json({ success: false, error: error.message });
