@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
+import { useSplitterMassivaStatsFromLocalDb } from '@/features/splitters/hooks/useSplitterMassivaStatsFromLocalDb'
 import { useSplitterDetail } from '@/features/splitters/hooks/useSplitterDetail'
 import { useSplitterClientes } from '@/features/splitters/hooks/useSplitterClientes'
 import { SplitterAddressSection } from '@/features/splitters/ui/SplitterAddressSection'
@@ -19,8 +20,11 @@ import { ChevronLeft, Database } from 'lucide-react'
 export function SplitterDetailScreen() {
   const { code } = useParams<{ code: string }>()
   const location = useLocation()
-  const { state, refetch } = useSplitterDetail(code)
+  const { state, refetch, dataUpdatedAt: splitterUpdatedAt, isFetching: splitterIsFetching } = useSplitterDetail(code)
   const { view: massivaView } = useMassivaTickets()
+  const localMassivaStatsQuery = useSplitterMassivaStatsFromLocalDb(
+    state.status === 'ready' ? [state.splitter.code] : [],
+  )
   const backTo =
     typeof location.state?.splittersListHref === 'string'
       ? location.state.splittersListHref
@@ -32,14 +36,19 @@ export function SplitterDetailScreen() {
         : new Map(),
     [massivaView],
   )
-  const detailMassivaStats =
-    state.status === 'ready'
-      ? findMassivaStatsForSplitter(
-          massivaStatsByMatcher,
-          state.splitter.code,
-          state.splitter.title,
-        )
-      : null
+  const detailMassivaStats = useMemo(() => {
+    if (state.status !== 'ready') return null
+    const codeKey = String(state.splitter.code ?? '').trim()
+    const localMassiva = localMassivaStatsQuery.data?.get(codeKey)
+    if (localMassiva && localMassiva.totalTickets > 0) {
+      return localMassiva
+    }
+    return findMassivaStatsForSplitter(
+      massivaStatsByMatcher,
+      state.splitter.code,
+      state.splitter.title,
+    )
+  }, [state, localMassivaStatsQuery.data, massivaStatsByMatcher])
   const detailOperationalScore =
     state.status === 'ready' && detailMassivaStats !== null
       ? buildSplitterOperationalScore(state.splitter, detailMassivaStats)
@@ -54,6 +63,19 @@ export function SplitterDetailScreen() {
       : connectionsQuery.isError
         ? ('error' as const)
         : ('success' as const)
+  const lastUpdatedAtMs = Math.max(
+    0,
+    Number(splitterUpdatedAt ?? 0),
+    Number(connectionsQuery.dataUpdatedAt ?? 0),
+    Number(localMassivaStatsQuery.dataUpdatedAt ?? 0),
+  )
+  const isRefreshingDetail =
+    splitterIsFetching || connectionsQuery.isFetching || localMassivaStatsQuery.isFetching
+  const refreshDetailNow = () => {
+    void connectionsQuery.refetch()
+    void localMassivaStatsQuery.refetch()
+    void refetch()
+  }
 
   return (
     <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -114,6 +136,9 @@ export function SplitterDetailScreen() {
             operationalScore={detailOperationalScore!}
             connectionsLoadState={connectionsLoadState}
             connectionClientes={connectionsQuery.data?.clientes ?? []}
+            onRefreshNow={refreshDetailNow}
+            isRefreshing={isRefreshingDetail}
+            lastUpdatedAtMs={lastUpdatedAtMs}
           />
 
           <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">

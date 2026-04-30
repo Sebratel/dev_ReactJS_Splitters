@@ -17,6 +17,15 @@ function csv(value: unknown): string[] {
     .filter((item) => item !== '')
 }
 
+function int(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
+  if (typeof value === 'string') {
+    const n = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(n)) return n
+  }
+  return fallback
+}
+
 /**
  * Base do BFF usada em `bffClient`.
  * Em `npm run dev`, se `VITE_BFF_BASE_URL` estiver vazio, usa URL relativa (`/api/...`) no mesmo
@@ -180,6 +189,14 @@ export const env = {
   firebaseAppId: str(import.meta.env.VITE_FIREBASE_APP_ID, ''),
   accessAllowedEmails: csv(import.meta.env.VITE_ACCESS_ALLOWED_EMAILS),
   accessAllowedEmailDomain: str(import.meta.env.VITE_ACCESS_ALLOWED_EMAIL_DOMAIN, '').toLowerCase(),
+  /**
+   * Auto-refresh do detalhe de splitter (clientes/portas + dados técnicos), em ms.
+   * Padrão conservador para reduzir carga no BFF.
+   */
+  splitterDetailRefreshMs: Math.min(
+    5 * 60_000,
+    Math.max(15_000, int(import.meta.env.VITE_SPLITTER_DETAIL_REFRESH_MS, 60_000)),
+  ),
 } as const
 
 

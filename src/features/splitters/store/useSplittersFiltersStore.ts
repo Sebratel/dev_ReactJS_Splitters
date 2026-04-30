@@ -18,6 +18,12 @@ interface SplittersFiltersStore {
   setCorporateClientFilter: (
     value: SplittersListFilterState['corporateClientFilter'],
   ) => void
+  setMaintenanceWindowDays: (
+    value: SplittersListFilterState['maintenanceWindowDays'],
+  ) => void
+  setMaintenanceFilter: (
+    value: SplittersListFilterState['maintenanceFilter'],
+  ) => void
   toggleOltCode: (oltCode: string) => void
   setOltCodes: (codes: string[]) => void
   togglePrimarySplitterTitle: (title: string) => void
@@ -73,6 +79,12 @@ export const useSplittersFiltersStore = create<SplittersFiltersStore>((set) => (
 
   setCorporateClientFilter: (value) =>
     set((s) => ({ state: { ...s.state, corporateClientFilter: value } })),
+
+  setMaintenanceWindowDays: (value) =>
+    set((s) => ({ state: { ...s.state, maintenanceWindowDays: value } })),
+
+  setMaintenanceFilter: (value) =>
+    set((s) => ({ state: { ...s.state, maintenanceFilter: value } })),
 
   setOltCodes: (codes) =>
     set((s) => ({ state: { ...s.state, oltCodes: sortCodes(codes) } })),

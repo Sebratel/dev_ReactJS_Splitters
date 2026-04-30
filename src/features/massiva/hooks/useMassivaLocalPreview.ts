@@ -118,6 +118,10 @@ export function useMassivaLocalPreview(options?: {
     limit?: number,
   ) => SplitterOption[]
   apDisplayLabel: (code: string) => string
+  findRoutesBySplitterCode: (
+    splitterCode: string,
+    limit?: number,
+  ) => Array<{ apCode: string; apLabel: string; slot: number; port: number }>
   refetchConnections: () => void
   connections: SplitterCliente[]
   isApplyingFilters: boolean
@@ -266,6 +270,34 @@ export function useMassivaLocalPreview(options?: {
     const title = catalog.apTitles.get(code)?.trim() ?? ''
     return title !== '' ? title : code
   }, [catalog])
+
+  const findRoutesBySplitterCode = useCallback((
+    splitterCode: string,
+    limit = 10,
+  ): Array<{ apCode: string; apLabel: string; slot: number; port: number }> => {
+    const normalized = splitterCode.trim().toLowerCase()
+    if (normalized === '') return []
+    const unique = new Map<string, { apCode: string; apLabel: string; slot: number; port: number }>()
+    for (const entry of routeEntries) {
+      if (entry.splitterCode.trim().toLowerCase() !== normalized) continue
+      const key = `${entry.apCode}|${entry.slot}|${entry.port}`
+      if (unique.has(key)) continue
+      unique.set(key, {
+        apCode: entry.apCode,
+        apLabel: apDisplayLabel(entry.apCode),
+        slot: entry.slot,
+        port: entry.port,
+      })
+      if (unique.size >= limit) break
+    }
+    return [...unique.values()].sort((a, b) =>
+      a.apCode !== b.apCode
+        ? a.apCode.localeCompare(b.apCode, 'pt-BR')
+        : a.slot !== b.slot
+          ? a.slot - b.slot
+          : a.port - b.port,
+    )
+  }, [apDisplayLabel, routeEntries])
 
   const setConnectionAp = (index: number, apCode: string | null) => {
     const normalized = (apCode ?? '').trim()
@@ -646,6 +678,7 @@ export function useMassivaLocalPreview(options?: {
     slotPortOptionsForConnection,
     searchSplitterOptionsForConnection,
     apDisplayLabel,
+    findRoutesBySplitterCode,
     refetchConnections,
     connections: connectionsQuery.data ?? [],
     isApplyingFilters,

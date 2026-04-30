@@ -89,7 +89,9 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
 
       try {
         if (!isAllowedFirebaseEmail(firebaseUser.email)) {
-          await signOut(firebaseAuth)
+          if (firebaseAuth) {
+            await signOut(firebaseAuth)
+          }
           set({
             initialized: true,
             status: 'unauthenticated',

@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Filter, Search, X } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Activity, AlertTriangle, Filter, Search, X } from 'lucide-react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
@@ -9,7 +11,15 @@ import { useAccessPointsForFilters } from '@/features/splitters/hooks/useAccessP
 import { useOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesFromLocalDb'
 import { useSplitterMassivaStatsFromLocalDb } from '@/features/splitters/hooks/useSplitterMassivaStatsFromLocalDb'
 import { useSplitterTrendsFromLocalDb } from '@/features/splitters/hooks/useSplitterTrendsFromLocalDb'
+import {
+  type SplitterMaintenanceStats,
+} from '@/features/splitters/api/fetchSplitterMaintenanceStatsFromLocalDb'
+import {
+  fetchMaintenanceBySplitter,
+} from '@/features/intelligence/api/fetchMaintenanceBySplitter'
 import type { Splitter } from '@/features/splitters/model/splitter'
+import { OperationalScoreHealthDots } from '@/features/splitters/ui/OperationalScoreHealthDots'
+import { scoreToneClassName } from '@/features/splitters/ui/operationalScoreVisual'
 import { SplittersList } from '@/features/splitters/ui/SplittersList'
 import { SplittersFiltersDrawer } from '@/features/splitters/ui/SplittersFiltersDrawer'
 import { useSplittersFiltersStore } from '@/features/splitters/store/useSplittersFiltersStore'
@@ -21,6 +31,8 @@ import type { SplitterMassivaStats, SplitterOperationalScore } from '@/features/
 type SplittersSortMode =
   | 'risk-desc'
   | 'risk-asc'
+  | 'maintenance-desc'
+  | 'maintenance-asc'
   | 'occupancy-desc'
   | 'occupancy-asc'
   | 'code-asc'
@@ -29,6 +41,7 @@ type SplittersSortMode =
 type SplitterListEntry = {
   splitter: Splitter
   massivaStats: SplitterMassivaStats
+  maintenanceStats: SplitterMaintenanceStats
   operationalScore: SplitterOperationalScore
   trendLabel: string
 }
@@ -54,6 +67,7 @@ function compareByRisk(a: SplitterListEntry, b: SplitterListEntry): number {
 }
 
 export function SplittersPage() {
+  const reduceMotion = useReducedMotion()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -69,6 +83,7 @@ export function SplittersPage() {
     toggleStreetSelection,
     setMassivaOpenState,
     setCorporateClientFilter,
+    setMaintenanceFilter,
     clearAll,
   } = useSplittersFiltersStore()
   const { data: accessPoints } = useAccessPointsForFilters()
@@ -177,6 +192,13 @@ export function SplittersPage() {
         onRemove: () => setCorporateClientFilter('all'),
       })
     }
+    if (state.maintenanceFilter === 'with-maintenance') {
+      chips.push({
+        key: 'maintenance:with',
+        label: `Manutenção: com ocorrências (${state.maintenanceWindowDays}d)`,
+        onRemove: () => setMaintenanceFilter('all'),
+      })
+    }
     return chips
   }, [
     state.searchQuery,
@@ -198,6 +220,8 @@ export function SplittersPage() {
     toggleStreetSelection,
     setMassivaOpenState,
     setCorporateClientFilter,
+    state.maintenanceFilter,
+    state.maintenanceWindowDays,
   ])
 
   const activeFilterCount = countActiveSplittersFilters(state)
@@ -234,9 +258,55 @@ export function SplittersPage() {
     state.condominiumSelections,
     state.massivaOpenState,
     state.corporateClientFilter,
+    state.maintenanceFilter,
+    state.maintenanceWindowDays,
   ])
 
-  const splittersQuery = useSplittersList(page, { openMassivaSplitterCodes })
+  const maintenanceWindow = useMemo(() => {
+    const end = new Date()
+    const start = new Date(end.getTime() - (state.maintenanceWindowDays - 1) * 24 * 60 * 60 * 1000)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return { start, end }
+  }, [state.maintenanceWindowDays])
+  const maintenanceUniverseQuery = useQuery({
+    queryKey: [
+      'splitters-maintenance-universe',
+      state.maintenanceWindowDays,
+      maintenanceWindow.start.toISOString(),
+      maintenanceWindow.end.toISOString(),
+    ],
+    queryFn: () => fetchMaintenanceBySplitter(maintenanceWindow.start, maintenanceWindow.end),
+    staleTime: 5 * 60_000,
+    refetchInterval: false,
+  })
+  const maintenanceStatsByCode = useMemo(() => {
+    const map = new Map<string, SplitterMaintenanceStats>()
+    for (const row of maintenanceUniverseQuery.data?.rows ?? []) {
+      const code = String(row.splitterCode ?? '').trim()
+      if (code === '' || code === 'SEM_MAPEAMENTO') continue
+      map.set(code, {
+        totalMaintenances: row.totalMaintenances,
+        uniqueProtocols: row.uniqueProtocols,
+        uniqueClients: row.uniqueClients,
+        openMaintenances: row.openMaintenances,
+        rompimentoCount: row.rompimentoCount,
+        trocaFlatCount: row.trocaFlatCount,
+        latestCreatedAt: row.latestCreatedAt,
+      })
+    }
+    return map
+  }, [maintenanceUniverseQuery.data?.rows])
+  const maintenanceSplitterCodes = useMemo(
+    () => [...maintenanceStatsByCode.keys()],
+    [maintenanceStatsByCode],
+  )
+
+  const splittersQuery = useSplittersList(page, {
+    openMassivaSplitterCodes,
+    maintenanceSplitterCodes:
+      state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
+  })
 
   const items = useMemo(
     () => splittersQuery.data?.items ?? [],
@@ -275,11 +345,20 @@ export function SplittersPage() {
       return {
         splitter,
         massivaStats,
+        maintenanceStats: maintenanceStatsByCode.get(code) ?? {
+          totalMaintenances: 0,
+          uniqueProtocols: 0,
+          uniqueClients: 0,
+          openMaintenances: 0,
+          rompimentoCount: 0,
+          trocaFlatCount: 0,
+          latestCreatedAt: null,
+        },
         operationalScore,
         trendLabel,
       }
     })
-  }, [items, localMassivaStatsQuery.data, localTrendsQuery.data, massivaStatsByMatcher])
+  }, [items, localMassivaStatsQuery.data, localTrendsQuery.data, massivaStatsByMatcher, maintenanceStatsByCode])
 
   const orderedEntries = useMemo(() => {
     const next = [...entries]
@@ -289,6 +368,16 @@ export function SplittersPage() {
           return compareByRisk(a, b)
         case 'risk-asc':
           return compareByRisk(b, a)
+        case 'maintenance-desc':
+          return (
+            b.maintenanceStats.totalMaintenances - a.maintenanceStats.totalMaintenances ||
+            compareByRisk(a, b)
+          )
+        case 'maintenance-asc':
+          return (
+            a.maintenanceStats.totalMaintenances - b.maintenanceStats.totalMaintenances ||
+            compareByRisk(a, b)
+          )
         case 'occupancy-desc':
           return occupancyPercent(b.splitter) - occupancyPercent(a.splitter)
         case 'occupancy-asc':
@@ -358,6 +447,17 @@ export function SplittersPage() {
   const getTrendLabel = (splitter: Splitter) =>
     trendLabelByCode.get(String(splitter.code ?? '')) ?? 'Estável'
 
+  const getMaintenanceStats = (splitter: Splitter) =>
+    maintenanceStatsByCode.get(String(splitter.code ?? '')) ?? {
+      totalMaintenances: 0,
+      uniqueProtocols: 0,
+      uniqueClients: 0,
+      openMaintenances: 0,
+      rompimentoCount: 0,
+      trocaFlatCount: 0,
+      latestCreatedAt: null,
+    }
+
   const showSummary =
     !splittersQuery.isPending &&
     !splittersQuery.isError &&
@@ -422,6 +522,8 @@ export function SplittersPage() {
               >
                 <option value="risk-desc">Maior risco primeiro</option>
                 <option value="risk-asc">Menor risco primeiro</option>
+                <option value="maintenance-desc">Maior manutenção</option>
+                <option value="maintenance-asc">Menor manutenção</option>
                 <option value="occupancy-desc">{'Maior ocupa\u00E7\u00E3o'}</option>
                 <option value="occupancy-asc">{'Menor ocupa\u00E7\u00E3o'}</option>
                 <option value="code-asc">{'C\u00F3digo A-Z'}</option>
@@ -449,7 +551,10 @@ export function SplittersPage() {
             {activeFilterCount > 0 ? (
               <button
                 type="button"
-                onClick={() => clearAll()}
+                onClick={() => {
+                  clearAll()
+                  setMaintenanceFilter('all')
+                }}
                 className="rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-tertiary underline-offset-2 hover:underline"
               >
                 Limpar tudo
@@ -501,30 +606,54 @@ export function SplittersPage() {
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {prioritizedEntries.map((entry, index) => (
-              <Link
+              <motion.div
                 key={String(entry.splitter.code ?? '')}
-                to={`/splitters/${encodeURIComponent(entry.splitter.code)}`}
-                state={{ splittersListHref: location.pathname + location.search }}
-                className="rounded-xl border border-rose-200/80 bg-white px-3 py-2 shadow-sm transition-colors hover:border-rose-300 hover:bg-rose-50/40"
+                initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: index * 0.07 }
+                }
               >
-                <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-                  Prioridade {index + 1}
-                </p>
-                <p className="mt-1 truncate text-sm font-semibold text-on-surface">
-                  {entry.splitter.title || entry.splitter.code}
-                </p>
-                <p className="font-mono text-[11px] text-on-surface-variant/60">
-                  {entry.splitter.code}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
-                    {entry.operationalScore.label} {entry.operationalScore.score}
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-outline-variant bg-surface-container-low px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
-                    {entry.massivaStats.openTickets} abertas
-                  </span>
-                </div>
-              </Link>
+                <Link
+                  to={`/splitters/${encodeURIComponent(entry.splitter.code)}`}
+                  state={{ splittersListHref: location.pathname + location.search }}
+                  className="block rounded-xl border border-rose-200/80 bg-white px-3 py-2 shadow-sm transition-colors hover:border-rose-300 hover:bg-rose-50/40"
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
+                    Prioridade {index + 1}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-on-surface">
+                    {entry.splitter.title || entry.splitter.code}
+                  </p>
+                  <p className="font-mono text-[11px] text-on-surface-variant/60">
+                    {entry.splitter.code}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                        scoreToneClassName(entry.operationalScore.tone),
+                      )}
+                      title={`Criticidade ${entry.operationalScore.score}`}
+                    >
+                      <Activity size={11} strokeWidth={2.25} className="shrink-0 opacity-90" />
+                      {entry.operationalScore.label}
+                      <OperationalScoreHealthDots
+                        key={`prio-dots-${entry.splitter.code}-${entry.operationalScore.score}`}
+                        score={entry.operationalScore.score}
+                        tone={entry.operationalScore.tone}
+                        className="ml-0.5"
+                      />
+                      <span className="sr-only">{` Score ${entry.operationalScore.score}`}</span>
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-outline-variant bg-surface-container-low px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
+                      {entry.massivaStats.openTickets} abertas
+                    </span>
+                  </div>
+                </Link>
+              </motion.div>
             ))}
           </div>
         </section>
@@ -543,6 +672,7 @@ export function SplittersPage() {
         }}
         isRefetching={splittersQuery.isRefetching}
         getMassivaStats={getMassivaStats}
+        getMaintenanceStats={getMaintenanceStats}
         getOperationalScore={getOperationalScore}
         getTrendLabel={getTrendLabel}
       />

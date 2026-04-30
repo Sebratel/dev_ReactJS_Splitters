@@ -45,7 +45,7 @@ export function HomePage() {
   const totalAffectedInOpenMassivas = tickets
     .filter((t) => t.status === 'aberta')
     .reduce((acc, t) => acc + t.affectedClients, 0)
-  const recentMassivas = tickets.slice(0, 3)
+  const recentMassivas = tickets.filter((t) => t.status === 'aberta').slice(0, 3)
 
   const equipmentOccupancy = networkStats?.equipmentOccupancy ?? {
     green: 0,

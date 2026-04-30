@@ -26,6 +26,8 @@ export function useFilteredSplitters(
   const condominiumSelections = filters.condominiumSelections
   const massivaOpenState = filters.massivaOpenState
   const corporateClientFilter = filters.corporateClientFilter
+  const maintenanceWindowDays = filters.maintenanceWindowDays
+  const maintenanceFilter = filters.maintenanceFilter
 
   return useMemo(() => {
     if (!splitters?.length) return []
@@ -39,6 +41,8 @@ export function useFilteredSplitters(
       condominiumSelections,
       massivaOpenState,
       corporateClientFilter,
+      maintenanceWindowDays,
+      maintenanceFilter,
     }
     return applySplittersListFilters(splitters, filterSlice, {
       clientNamesIndex,

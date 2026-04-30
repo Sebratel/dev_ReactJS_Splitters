@@ -27,6 +27,7 @@ import {
   Sun,
   Sunrise,
   Ticket,
+  Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -136,6 +137,9 @@ function DateRangeSelector({
   const presets: IntelligenceDateRangePreset[] = ['7d', '30d', '90d', 'custom']
   return (
     <section className="rounded-3xl border border-white/45 bg-white/65 p-4 shadow-lg shadow-amber-500/10 backdrop-blur-xl">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        Período de análise
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         {presets.map((item) => (
           <button
@@ -149,7 +153,7 @@ function DateRangeSelector({
                 : 'bg-white/80 text-slate-600 hover:bg-amber-50 hover:text-amber-700',
             )}
           >
-            {item}
+            {presetButtonLabel(item)}
           </button>
         ))}
         {preset === 'custom' ? (
@@ -170,6 +174,10 @@ function DateRangeSelector({
           </div>
         ) : null}
       </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+        Todo o painel (todas as abas, ranking e gráficos) usa esta janela de datas. Em{" "}
+        <span className="font-semibold">Personalizado</span>, escolha início e fim inclusivos.
+      </p>
     </section>
   )
 }
@@ -195,6 +203,69 @@ const TREND_PIE_COLOR: Record<TrendLabel, string> = {
   'Quase saturando': '#f43f5e',
 }
 
+/** Texto curto para tooltip / ajuda contextual nas fatias da pizza de tendência */
+const TREND_SLICE_HELP: Record<TrendLabel, string> = {
+  Estavel: 'Uso oscilando pouco em relação ao histórico recente.',
+  'Em crescimento': 'Ocupação subindo — vale acompanhar capacidade.',
+  'Em queda': 'Ocupação em redução no período observado.',
+  'Quase saturando': 'Próximo do limite de portas — alto risco operacional.',
+}
+
+const TAB_INTRO: Record<IntelligenceWindow, string> = {
+  'visao-geral':
+    'Panorama da rede no período: ocupação global, como os splitters estão classificados por tendência, massivas e indicadores para decisão rápida.',
+  risco:
+    'Priorização: score único mistura ocupação, variação no tempo, massivas e clientes afetados. A matriz separa “impacto” (volume de gente/tickets) de “urgência” (uso alto, delta forte ou massivas abertas).',
+  operacao:
+    'Leitura operacional: evolução média da ocupação, volume de massivas por splitter, padrão de horários de abertura e status por equipamento.',
+  geografico:
+    'Agregações por OLT e por local (condomínio/rua) mais o mapa de saturação — sempre entre splitters que passam pelo filtro atual.',
+  'ciclo-vida':
+    'Idade do equipamento cruzada com pressão de uso: buckets de idade, ranking preventivo, alertas e cohorts por ano de implantação.',
+  manutencao:
+    'Manutenções registradas no ERP no intervalo de datas, consolidadas por splitter e ponto de acesso (útil para cruzar com risco no terreno).',
+}
+
+function presetButtonLabel(p: IntelligenceDateRangePreset): string {
+  switch (p) {
+    case '7d':
+      return '7 dias'
+    case '30d':
+      return '30 dias'
+    case '90d':
+      return '90 dias'
+    case 'custom':
+      return 'Personalizado'
+    default:
+      return p
+  }
+}
+
+type TrendPieTooltipProps = {
+  active?: boolean
+  payload?: ReadonlyArray<{ name?: unknown; value?: unknown }>
+  totalSplitters: number
+}
+
+function TrendPieTooltip({ active, payload, totalSplitters }: TrendPieTooltipProps) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]
+  const name = String(item.name ?? '')
+  const value = Number(item.value ?? 0)
+  const sharePct = totalSplitters > 0 ? (value / totalSplitters) * 100 : 0
+  const key = TREND_LABEL_ORDER.find((k) => TREND_PIE_LABEL[k] === name)
+  const hint = key ? TREND_SLICE_HELP[key] : ''
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] shadow-lg">
+      <p className="font-bold text-slate-900">{name}</p>
+      <p className="tabular-nums text-slate-700">
+        {value.toLocaleString('pt-BR')} splitter{value === 1 ? '' : 's'} ({sharePct.toFixed(1)}% do total com tendência)
+      </p>
+      {hint ? <p className="mt-1 max-w-[14rem] leading-snug text-slate-500">{hint}</p> : null}
+    </div>
+  )
+}
+
 function hasValidSplitterCoords(latitude: number | null, longitude: number | null): boolean {
   return (
     latitude !== null &&
@@ -213,7 +284,7 @@ function trendBadgeClass(label: string): string {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200'
 }
 
-type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'ciclo-vida'
+type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'ciclo-vida' | 'manutencao'
 
 type AgeFilter = 'all' | '0-1' | '1-3' | '3-5' | '5+'
 
@@ -245,6 +316,7 @@ export function NetworkIntelligencePage() {
 
   const {
     query,
+    maintenanceQuery,
     networkStatsPreview,
     source,
     kpis,
@@ -260,6 +332,8 @@ export function NetworkIntelligencePage() {
     deltaReferenceLabel,
     lifecycleCohorts,
     lifecycleAlerts,
+    maintenanceBySplitter,
+    maintenanceTotals,
   } = useNetworkIntelligenceData(preset, customStartDate, customEndDate)
 
   const showFullSkeleton = query.isPending && query.isFetching
@@ -539,6 +613,25 @@ export function NetworkIntelligencePage() {
     return { kpis, buckets, heatmap }
   }, [contextualRiskRanking])
 
+  const contextualMaintenanceRows = useMemo(() => {
+    const term = splitterSearch.trim().toLowerCase()
+    if (term === '') return maintenanceBySplitter
+    return maintenanceBySplitter.filter((row) => {
+      return (
+        row.splitterCode.toLowerCase().includes(term) ||
+        row.splitterTitle.toLowerCase().includes(term) ||
+        row.accessPointCode.toLowerCase().includes(term)
+      )
+    })
+  }, [maintenanceBySplitter, splitterSearch])
+
+  const maintenanceOpenRate = useMemo(() => {
+    if (maintenanceTotals.totalMaintenances <= 0) return 0
+    return Number(
+      ((maintenanceTotals.openMaintenances / maintenanceTotals.totalMaintenances) * 100).toFixed(1),
+    )
+  }, [maintenanceTotals.openMaintenances, maintenanceTotals.totalMaintenances])
+
   const hasActiveFilters =
     selectedMatrixKey !== null || riskBandFilter !== 'all' || ageFilter !== 'all' || splitterSearch.trim() !== ''
 
@@ -556,8 +649,10 @@ export function NetworkIntelligencePage() {
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/70">Novo Módulo</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight">Painel da rede</h1>
-            <p className="mt-1 text-sm text-white/80">
-              Tendências e recorrência operacional para suporte à decisão de rede.
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/85">
+              Cruza ocupação de portas, classificação de tendência por splitter, massivas e — nas outras abas —
+              risco, geografia e manutenções. Escolha o período abaixo e use busca/filtros para focar OLT, faixa de
+              risco ou idade; os números respondem sempre à mesma janela.
             </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wide">
@@ -593,6 +688,7 @@ export function NetworkIntelligencePage() {
                 { id: 'operacao', label: 'Operação' },
                 { id: 'geografico', label: 'Geográfico' },
                 { id: 'ciclo-vida', label: 'Ciclo de Vida' },
+                  { id: 'manutencao', label: 'Manutenção' },
               ] as Array<{ id: IntelligenceWindow; label: string }>).map((item) => (
                 <button
                   key={item.id}
@@ -657,15 +753,26 @@ export function NetworkIntelligencePage() {
               Limpar filtros
             </button>
           </div>
+          <p className="rounded-xl border border-white/40 bg-white/50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
+            <span className="font-bold text-slate-800">Esta aba:</span> {TAB_INTRO[activeWindow]}
+          </p>
         </div>
       </section>
 
       <section className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
         <p className="font-semibold">
           Base do ranking: <span className="font-black">{deltaReferenceLabel}</span>
+          <span className="font-normal text-amber-800/95">
+            {" "}
+            (variação de ocupação em 7 ou 30 dias, conforme o período escolhido)
+          </span>
         </p>
-        <p className="text-amber-800/90">
-          O score e os deltas exibidos seguem o período selecionado no filtro de datas.
+        <p className="mt-1 text-amber-800/90">
+          Score, deltas das tabelas e séries temporais usam a mesma janela do seletor de datas. Na matriz impacto ×
+          urgência: <span className="font-semibold">impacto alto</span> = ≥50 clientes afetados ou ≥4 tickets de massiva;
+          {" "}
+          <span className="font-semibold">urgência alta</span> = ocupação ≥85%, ou {deltaReferenceLabel} ≥5 pontos
+          percentuais, ou massivas ainda abertas.
         </p>
       </section>
 
@@ -723,10 +830,19 @@ export function NetworkIntelligencePage() {
               {(kpis.overallOccupancyPercent ?? 0).toFixed(1)}%
               <span className="ml-1.5 text-sm font-semibold text-slate-500">ocupação geral (rede)</span>
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {trends.length} splitter{trends.length === 1 ? '' : 's'} com tendência no intervalo
+            <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              Razão entre portas ocupadas e splitters ativos no snapshot da rede (clientes online ÷ equipamentos), não a
+              média aritmética dos percentuais por splitter abaixo.
             </p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <p className="mt-0.5 text-xs text-slate-500">
+              {trends.length} splitter{trends.length === 1 ? '' : 's'} com histórico de tendência capturado neste
+              intervalo
+            </p>
+            <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
+              Contagem de splitters pela <span className="font-semibold text-slate-600">ocupação atual de portas</span>{" "}
+              (não pela tendência): verde folga, âmbar atenção, vermelho saturado.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
               <div className="rounded-2xl bg-emerald-50/90 px-2 py-3 text-center ring-1 ring-emerald-200/80">
                 <p className="text-2xl font-black tabular-nums text-emerald-800">{intelligenceSnapshot.folga}</p>
                 <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/90">&lt; 70%</p>
@@ -749,7 +865,11 @@ export function NetworkIntelligencePage() {
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
               Distribuição de tendência
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">Classificação dos splitters no intervalo (rótulo de tendência).</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+              Cada fatia é quantos splitters receberam o rótulo operacional (comparando ocupação atual com movimento
+              recente). Passe o mouse na fatia para ver quantidade e percentual. Verde = estável; âmbar = crescimento;
+              ciano = queda; vermelho = quase saturando.
+            </p>
             <div className="mt-2 h-56">
               {intelligenceSnapshot.trendPieData.length === 0 ? (
                 <p className="flex h-full items-center justify-center text-center text-sm text-slate-500">
@@ -773,7 +893,15 @@ export function NetworkIntelligencePage() {
                         <Cell key={entry.key} fill={TREND_PIE_COLOR[entry.key]} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#e2e8f0' }} />
+                    <Tooltip
+                      content={(props) => (
+                        <TrendPieTooltip
+                          active={props.active}
+                          payload={props.payload as TrendPieTooltipProps['payload']}
+                          totalSplitters={trends.length}
+                        />
+                      )}
+                    />
                     <Legend
                       verticalAlign="bottom"
                       height={28}
@@ -788,7 +916,11 @@ export function NetworkIntelligencePage() {
 
           <div className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Massivas no período</p>
-            <p className="mt-0.5 text-xs text-slate-500">Soma no recorte temporal (histórico por splitter).</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+              Agregado de todos os splitters cuja última movimentação de massiva caiu neste intervalo.{" "}
+              <span className="font-semibold text-slate-700">Afetados</span> soma clientes únicos impactados conforme o
+              cadastro da massiva (pode repetir cliente em vários tickets).
+            </p>
             <dl className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-slate-50/90 px-3 py-2.5 ring-1 ring-slate-200/80">
                 <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Tickets</dt>
@@ -819,7 +951,10 @@ export function NetworkIntelligencePage() {
 
           <div className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Destaques</p>
-            <p className="mt-0.5 text-xs text-slate-500">Maior uso, maior {deltaReferenceLabel} e mais massivas no intervalo.</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+              Três campeões no recorte: maior ocupação atual; maior {deltaReferenceLabel} (mudança de ocupação em 7 ou 30
+              dias); mais tickets de massiva registrados.
+            </p>
             <ul className="mt-3 space-y-3">
               <li className="rounded-xl bg-slate-50/90 px-3 py-2.5 ring-1 ring-slate-200/80">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Maior ocupação</p>
@@ -946,34 +1081,49 @@ export function NetworkIntelligencePage() {
           </p>
 
           {decisionKpis ? (
-            <div className="grid gap-3 lg:col-span-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="lg:col-span-2">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Indicadores de decisão (mesmo período e filtros)
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-rose-200/80 bg-rose-50/80 px-3 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700">Risco crítico</p>
                 <p className="mt-1 text-2xl font-black tabular-nums text-rose-800">
                   {decisionKpis.criticalSplitters.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] text-rose-700/90">splitters ≥95% ocupação</p>
+                <p className="text-[11px] leading-snug text-rose-700/90">
+                  Splitters em uso de portas ≥95% — prioridade máxima de capacidade ou remanejamento.
+                </p>
               </div>
               <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-3 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">Crescimento forte</p>
                 <p className="mt-1 text-2xl font-black tabular-nums text-amber-900">
                   {decisionKpis.growthSplitters.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] text-amber-800/90">splitters com {deltaReferenceLabel} ≥ 5%</p>
+                <p className="text-[11px] leading-snug text-amber-800/90">
+                  Subiram pelo menos 5 pontos percentuais de ocupação no {deltaReferenceLabel} — checar tendência antes de
+                  virar crítico.
+                </p>
               </div>
               <div className="rounded-2xl border border-violet-200/80 bg-violet-50/80 px-3 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-violet-800">Impacto em risco alto</p>
                 <p className="mt-1 text-2xl font-black tabular-nums text-violet-900">
                   {decisionKpis.highRiskAffectedClients.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] text-violet-800/90">clientes afetados (alto/crítico)</p>
+                <p className="text-[11px] leading-snug text-violet-800/90">
+                  Soma de clientes afetados por massiva apenas nos splitters classificados como risco alto ou crítico.
+                </p>
               </div>
               <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-3 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-sky-800">Pressão operacional</p>
                 <p className="mt-1 text-2xl font-black tabular-nums text-sky-900">
                   {decisionKpis.attentionSharePercent.toFixed(1)}%
                 </p>
-                <p className="text-[11px] text-sky-800/90">crítico + crescimento forte</p>
+                <p className="text-[11px] leading-snug text-sky-800/90">
+                  Participação dos splitters que estão críticos OU em crescimento forte — mostra quanto da base exige
+                  atenção simultânea.
+                </p>
+              </div>
               </div>
             </div>
           ) : null}
@@ -1003,10 +1153,17 @@ export function NetworkIntelligencePage() {
           transition={{ duration: 0.45, delay: 0.03 }}
           className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-bold text-slate-800">Ranking de risco por splitter</h2>
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Ranking de risco por splitter</h2>
+              <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-600">
+                Ordenação pelo score composto (maior = mais prioridade). Colunas: uso atual de portas;{" "}
+                {deltaReferenceLabel} (quanto a ocupação mudou); massivas abertas vs total no período; clientes afetados
+                somados nas massivas. Clique na matriz ao lado para filtrar este quadro por quadrante.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] text-slate-500">Score combina ocupação, crescimento, massivas e afetados</p>
+              <p className="text-[11px] text-slate-500 shrink-0">Faixas de cor = banda de risco do score</p>
               {selectedMatrixKey ? (
                 <button
                   type="button"
@@ -1056,11 +1213,21 @@ export function NetworkIntelligencePage() {
               <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-2 py-2">Splitter</th>
-                  <th className="px-2 py-2">Score</th>
-                  <th className="px-2 py-2">Uso</th>
-                  <th className="px-2 py-2">{deltaReferenceLabel}</th>
-                  <th className="px-2 py-2">Massivas</th>
-                  <th className="px-2 py-2">Afetados</th>
+                  <th className="px-2 py-2" title="Índice composto de prioridade (quanto maior, mais urgente atuar)">
+                    Score
+                  </th>
+                  <th className="px-2 py-2" title="Percentual de portas de saída em uso neste splitter">
+                    Uso
+                  </th>
+                  <th className="px-2 py-2" title={`Variação de ocupação no período de referência (${deltaReferenceLabel})`}>
+                    {deltaReferenceLabel}
+                  </th>
+                  <th className="px-2 py-2" title="Tickets abertos no período / total histórico considerado">
+                    Massivas
+                  </th>
+                  <th className="px-2 py-2" title="Soma de clientes impactados nas massivas deste splitter">
+                    Afetados
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1104,7 +1271,12 @@ export function NetworkIntelligencePage() {
           transition={{ duration: 0.45, delay: 0.06 }}
           className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
-          <h2 className="text-sm font-bold text-slate-800">Matriz impacto x urgência</h2>
+          <h2 className="text-sm font-bold text-slate-800">Matriz impacto × urgência</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Cada quadrante conta splitters no filtro atual. Combinação de alto impacto (muitos afetados ou vários
+            tickets) com alta urgência (uso elevado, delta forte ou massivas abertas) aparece no quadrante superior
+            esquerdo da grade — costuma ser o primeiro a tratar.
+          </p>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {impactUrgencyMatrix.map((cell) => (
               <button
@@ -1146,6 +1318,10 @@ export function NetworkIntelligencePage() {
           className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-slate-800">Risco por ciclo de vida</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Idade calculada a partir da data de implantação no cadastro. Combine com uso e massivas para decidir troca
+            preventiva ou reforço de porta.
+          </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-slate-50/90 px-2 py-2 ring-1 ring-slate-200/70">
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Idade média</p>
@@ -1172,6 +1348,11 @@ export function NetworkIntelligencePage() {
           className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-slate-800">Ranking de substituição preventiva</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Ordenação pelo mesmo score de risco, enfatizando equipamentos velhos com pressão de uso.{" "}
+            <span className="font-semibold">ETA 95%</span>: estimativa em dias para chegar a 95% de ocupação se a taxa
+            recente de variação continuar linear — é cenário simplificado, não previsão garantida.
+          </p>
           <div className="mt-3 space-y-2 sm:hidden">
             {contextualRiskRanking.slice(0, 8).map((row) => (
               <article key={row.splitterCode} className="rounded-xl bg-slate-50/90 p-2.5 ring-1 ring-slate-200/70">
@@ -1195,7 +1376,9 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Idade</th>
                   <th className="px-2 py-2">Uso</th>
                   <th className="px-2 py-2">{deltaReferenceLabel}</th>
-                  <th className="px-2 py-2">ETA 95%</th>
+                  <th className="px-2 py-2" title="Projeção linear simplificada: dias até 95% de ocupação se o ritmo recente se mantiver">
+                    ETA 95%
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1209,7 +1392,7 @@ export function NetworkIntelligencePage() {
                     <td className="px-2 py-2 tabular-nums">{row.ageYears.toFixed(2)} anos</td>
                     <td className="px-2 py-2 tabular-nums">{row.currentUsagePercent.toFixed(1)}%</td>
                     <td className="px-2 py-2 tabular-nums">{row.selectedDelta >= 0 ? '+' : ''}{row.selectedDelta.toFixed(2)}%</td>
-                    <td className="px-2 py-2 tabular-nums">{row.etaTo95Days == null ? '—' : `${row.etaTo95Days} dias`}</td>
+                    <td className="px-2 py-2 tabular-nums" title={row.etaTo95Days == null ? undefined : `Projeção: ~${row.etaTo95Days} dias para 95% ao ritmo atual`}>{row.etaTo95Days == null ? '—' : `${row.etaTo95Days} dias`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1219,6 +1402,10 @@ export function NetworkIntelligencePage() {
       </section>
       <section className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
         <h2 className="text-sm font-bold text-slate-800">Alertas de ciclo de vida</h2>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+          Regras automáticas (ex.: idade alta + uso alto ou queda brusca). Só aparecem equipamentos que continuam no filtro
+          atual da página.
+        </p>
         <ul className="mt-3 grid gap-2 md:grid-cols-2">
           {lifecycleAlerts.filter((item) => contextualRiskRanking.some((row) => row.splitterCode === item.splitterCode)).length === 0 ? (
             <li className="rounded-xl bg-slate-50/90 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200/70">
@@ -1245,6 +1432,10 @@ export function NetworkIntelligencePage() {
           className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-slate-800">Curva de envelhecimento por faixa</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Linhas da tabela = faixas de idade do equipamento. Tickets = massivas associadas a splitters naquela faixa no
+            período.
+          </p>
           <div className="mt-3 overflow-auto">
             <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
@@ -1276,7 +1467,11 @@ export function NetworkIntelligencePage() {
           transition={{ duration: 0.45, delay: 0.24 }}
           className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
-          <h2 className="text-sm font-bold text-slate-800">Heatmap idade x saturação</h2>
+          <h2 className="text-sm font-bold text-slate-800">Heatmap idade × saturação</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Linhas = faixa etária (anos); colunas = faixa de uso atual (&lt;70%, 70–94%, ≥95%). Número = quantidade de
+            splitters na interseção; tom mais escuro = mais equipamentos (compare relativamente ao quadro).
+          </p>
           <div className="mt-3 grid grid-cols-3 gap-1.5">
             {contextualLifecycle.heatmap.map((cell) => {
               const intensity = Math.min(1, cell.count / Math.max(1, contextualLifecycle.heatmap.reduce((m, c) => Math.max(m, c.count), 0)))
@@ -1294,6 +1489,11 @@ export function NetworkIntelligencePage() {
       </section>
       <section className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
         <h2 className="text-sm font-bold text-slate-800">Cohorts por ano de implantação</h2>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+          Agrupa splitters pelo ano de entrada em operação.{" "}
+          <span className="font-semibold">Incidentes/ano</span> divide tickets de massiva do cohort pela idade média em
+          anos — útil para comparar gerações de equipamento.
+        </p>
         <div className="mt-3 overflow-auto">
           <table className="w-full min-w-[620px] text-left text-xs">
             <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
@@ -1334,9 +1534,14 @@ export function NetworkIntelligencePage() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ChartSpline size={16} className="text-amber-600" />
-              <h2 className="text-sm font-bold text-slate-800">Tendência de Ocupação (Média)</h2>
+              <h2 className="text-sm font-bold text-slate-800">Tendência de ocupação (média)</h2>
             </div>
           </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+            Para cada splitter são estimados três pontos no tempo (hoje, menos 7 dias e menos 30 dias) a partir da
+            ocupação atual e dos deltas; a linha mostra a <span className="font-semibold">média entre todos os
+            splitters</span> em cada dia. Serve para ver direção da rede, não o valor exato de um equipamento isolado.
+          </p>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={areaPoints.map((point) => ({ ...point, date: formatDateLabel(point.at) }))}>
@@ -1351,9 +1556,10 @@ export function NetworkIntelligencePage() {
                 <YAxis stroke="#64748b" domain={[0, 100]} />
                 <Tooltip
                   contentStyle={{ borderRadius: 12, borderColor: '#e2e8f0' }}
-                  formatter={(value: unknown) => [`${Number(value ?? 0).toFixed(2)}%`, 'Uso']}
+                  formatter={(value: unknown) => [`${Number(value ?? 0).toFixed(2)}%`, 'Ocupação média']}
+                  labelFormatter={(label) => `Data: ${label}`}
                 />
-                <Area type="monotone" dataKey="usagePercent" stroke="#f59e0b" strokeWidth={2.2} fill="url(#usageGradient)" />
+                <Area type="monotone" dataKey="usagePercent" name="Ocupação média (%)" stroke="#f59e0b" strokeWidth={2.2} fill="url(#usageGradient)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -1367,8 +1573,12 @@ export function NetworkIntelligencePage() {
         >
           <div className="mb-3 flex items-center gap-2">
             <AlertTriangle size={16} className="text-amber-600" />
-            <h2 className="text-sm font-bold text-slate-800">Status por Splitter</h2>
+            <h2 className="text-sm font-bold text-slate-800">Status por splitter</h2>
           </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+            Lista dos primeiros splitters com tendência no período. O selo colorido repete a mesma classificação da pizza
+            de tendências. &quot;Variação 7d&quot; é quanto a ocupação mudou em uma semana (em pontos percentuais).
+          </p>
           <ul className="space-y-2">
             {trends.slice(0, 8).map((row) => (
               <li key={row.splitterCode} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50/80 px-2.5 py-2">
@@ -1383,7 +1593,7 @@ export function NetworkIntelligencePage() {
                   ) : (
                     <p className="text-xs font-bold text-slate-700">{row.splitterCode}</p>
                   )}
-                  <p className="text-[11px] text-slate-500">delta7d: {row.delta7d.toFixed(2)}%</p>
+                  <p className="text-[11px] text-slate-500">Variação 7d: {row.delta7d >= 0 ? "+" : ""}{row.delta7d.toFixed(2)} pp</p>
                 </div>
                 <span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', trendBadgeClass(row.label))}>
                   {row.label}
@@ -1403,8 +1613,13 @@ export function NetworkIntelligencePage() {
         >
           <div className="mb-3 flex items-center gap-2">
             <Ticket size={16} className="text-amber-600" />
-            <h2 className="text-sm font-bold text-slate-800">Histórico de Massivas por Splitter</h2>
+            <h2 className="text-sm font-bold text-slate-800">Massivas por splitter (top 10)</h2>
           </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+            Barras lado a lado por código: <span className="font-semibold text-amber-800">âmbar escuro</span> = quantidade
+            de tickets de massiva no período; <span className="font-semibold text-amber-700">âmbar claro</span> = total de
+            clientes afetados somados nos registros (escalas diferentes — compare pelo tooltip).
+          </p>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barPoints}>
@@ -1418,8 +1633,9 @@ export function NetworkIntelligencePage() {
                     String(name ?? ''),
                   ]}
                 />
-                <Bar dataKey="totalTickets" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="affectedClientsTotal" fill="#fbbf24" radius={[8, 8, 0, 0]} />
+                <Legend wrapperStyle={{ fontSize: "11px", paddingTop: 8 }} />
+                <Bar dataKey="totalTickets" name="Tickets de massiva" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="affectedClientsTotal" name="Clientes afetados (soma)" fill="#fbbf24" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1433,8 +1649,13 @@ export function NetworkIntelligencePage() {
         >
           <div className="mb-3 flex items-center gap-2">
             <Database size={16} className="text-amber-600" />
-            <h2 className="text-sm font-bold text-slate-800">Recorrência (Dia x Turno)</h2>
+            <h2 className="text-sm font-bold text-slate-800">Recorrência dia × turno</h2>
           </div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+            Cada célula soma quantas massivas tiveram <span className="font-semibold">última abertura</span> naquele dia da
+            semana e faixa de horário (madrugada &lt;6h, manhã 6–12h, tarde 12–18h, noite 18–24h — horário do servidor).
+            Quanto mais escura a célula, maior o volume — ajuda a planejar plantão e capacidade.
+          </p>
           <div className="grid grid-cols-4 gap-1.5">
             {recurrenceCells.map((cell) => {
               const intensity = cell.count / maxRecurrence
@@ -1475,6 +1696,10 @@ export function NetworkIntelligencePage() {
           className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-slate-800">Drill-down por AP/OLT</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Agrega apenas splitters que passam pelos filtros desta página. Mostra onde se concentram uso, criticidade e
+            volume de massivas por equipamento de origem (OLT).
+          </p>
           <div className="mt-3 space-y-2 sm:hidden">
             {contextualOltDrilldown.map((row) => (
               <article key={`${row.oltCode}-${row.oltDescription}`} className="rounded-xl bg-slate-50/90 p-2.5 ring-1 ring-slate-200/70">
@@ -1540,6 +1765,10 @@ export function NetworkIntelligencePage() {
           className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-slate-800">Geo e contexto local</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+            Resumo textual do mesmo conjunto filtrado: tipo de local (condomínio/unidade), condomínios com mais clientes
+            afetados por massiva e ruas com mais splitters em uso crítico (≥95%).
+          </p>
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {contextualGeoDrilldown.tipoLocal.map((item) => (
@@ -1582,9 +1811,10 @@ export function NetworkIntelligencePage() {
         className="overflow-visible rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
       >
         <h2 className="mb-1 text-sm font-bold text-slate-800">Mapa de saturação por splitter</h2>
-        <p className="mb-3 text-xs leading-relaxed text-slate-500">
-          Pontos na posição cadastrada (OpenStreetMap), cores por uso de portas; passe o mouse para o resumo ou clique para
-          abrir o splitter — mesmo estilo de mapa da ficha individual.
+        <p className="mb-3 text-xs leading-relaxed text-slate-600">
+          Amostra estratificada de até 80 splitters do período (mistura folga/atenção/crítico quando existirem). Pontos na
+          posição cadastrada (OpenStreetMap); cor = faixa de ocupação atual (ver legenda abaixo do mapa). Tooltip com
+          resumo; clique para abrir a ficha — mesmo estilo do mapa no detalhe do splitter.
         </p>
         <Suspense
           fallback={
@@ -1597,6 +1827,182 @@ export function NetworkIntelligencePage() {
           <IntelligenceSaturationMap cells={saturationCells} />
         </Suspense>
       </motion.section>
+        </>
+      ) : null}
+
+      {activeWindow === 'manutencao' ? (
+        <>
+          <p className="text-[11px] leading-relaxed text-slate-600">
+            Dados do Elleven/ERP no intervalo de datas. Protocolos podem incluir rompimento, troca de flat e outros tipos
+            mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita busca e filtros da barra superior.
+          </p>
+          <section className="mt-3 grid gap-4 xl:grid-cols-4">
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.04 }}
+              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Splitters com manutenção
+              </p>
+              <p className="mt-1 flex items-center gap-2 text-2xl font-black tabular-nums text-slate-900">
+                <Wrench size={20} className="text-amber-600" />
+                {maintenanceTotals.splittersWithMaintenances.toLocaleString('pt-BR')}
+              </p>
+            </motion.article>
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
+              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Manutenções no período
+              </p>
+              <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+                {maintenanceTotals.totalMaintenances.toLocaleString('pt-BR')}
+              </p>
+            </motion.article>
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.12 }}
+              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Protocolos únicos
+              </p>
+              <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+                {maintenanceTotals.totalProtocols.toLocaleString('pt-BR')}
+              </p>
+            </motion.article>
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.16 }}
+              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Protocolos em aberto
+              </p>
+              <p className="mt-1 text-2xl font-black tabular-nums text-amber-900">
+                {maintenanceTotals.openMaintenances.toLocaleString('pt-BR')}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">{maintenanceOpenRate.toFixed(1)}% do total</p>
+            </motion.article>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-3">
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.14 }}
+              className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">Ranking de manutenção por splitter</h2>
+                  <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-600">
+                    Uma linha por combinação splitter + ponto de acesso quando aplicável. Rompimento/troca flat contam
+                    tipos de manutenção registrados; Abertas = protocolos sem encerramento no ERP.
+                  </p>
+                </div>
+                {maintenanceQuery.isFetching ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700">
+                    <Loader2 className="size-3 animate-spin" />
+                    Atualizando…
+                  </span>
+                ) : null}
+              </div>
+
+              {maintenanceQuery.isPending ? (
+                <div className="h-40 animate-pulse rounded-2xl bg-slate-100/90" />
+              ) : maintenanceQuery.isError ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  Não foi possível carregar as manutenções por splitter no período.
+                </p>
+              ) : contextualMaintenanceRows.length === 0 ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Nenhum dado de manutenção encontrado para o filtro selecionado.
+                </p>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[820px] text-left text-xs">
+                    <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-2 py-2">Splitter</th>
+                        <th className="px-2 py-2">AP</th>
+                        <th className="px-2 py-2">Manutenções</th>
+                        <th className="px-2 py-2">Protocolos</th>
+                        <th className="px-2 py-2">Clientes</th>
+                        <th className="px-2 py-2">Abertas</th>
+                        <th className="px-2 py-2">Rompimento</th>
+                        <th className="px-2 py-2">Troca flat</th>
+                        <th className="px-2 py-2">Última</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {contextualMaintenanceRows.slice(0, 80).map((row) => (
+                        <tr key={`${row.splitterCode}-${row.accessPointCode}`} className="hover:bg-slate-50/70">
+                          <td className="px-2 py-2">
+                            <p className="font-semibold text-slate-900">
+                              {row.splitterTitle || row.splitterCode}
+                            </p>
+                            <p className="font-mono text-[10px] text-slate-500">{row.splitterCode}</p>
+                          </td>
+                          <td className="px-2 py-2 font-mono text-[11px] text-slate-700">{row.accessPointCode || '—'}</td>
+                          <td className="px-2 py-2 tabular-nums font-semibold text-slate-900">{row.totalMaintenances.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueProtocols.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueClients.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 tabular-nums text-amber-900">{row.openMaintenances.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.rompimentoCount.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.trocaFlatCount.toLocaleString('pt-BR')}</td>
+                          <td className="px-2 py-2 text-[11px] text-slate-600">
+                            {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.article>
+
+            <motion.article
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.18 }}
+              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+            >
+              <h2 className="text-sm font-bold text-slate-800">Qualidade do mapeamento</h2>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                Clientes únicos ligados a protocolos; registros sem vínculo claro com splitter aparecem como não mapeados.
+              </p>
+              <dl className="mt-3 space-y-2 text-xs">
+                <div className="rounded-xl bg-slate-50/90 px-3 py-2 ring-1 ring-slate-200/70">
+                  <dt className="font-semibold text-slate-600">Clientes únicos afetados</dt>
+                  <dd className="mt-0.5 text-lg font-black tabular-nums text-slate-900">
+                    {maintenanceTotals.totalClients.toLocaleString('pt-BR')}
+                  </dd>
+                </div>
+                <div className="rounded-xl bg-amber-50/85 px-3 py-2 ring-1 ring-amber-200/70">
+                  <dt className="font-semibold text-amber-800">Sem splitter mapeado</dt>
+                  <dd className="mt-0.5 text-lg font-black tabular-nums text-amber-900">
+                    {maintenanceTotals.unmappedMaintenances.toLocaleString('pt-BR')}
+                  </dd>
+                </div>
+                <div className="rounded-xl bg-slate-50/90 px-3 py-2 ring-1 ring-slate-200/70">
+                  <dt className="font-semibold text-slate-600">Janela analisada</dt>
+                  <dd className="mt-0.5 text-[11px] font-semibold text-slate-800">
+                    {new Intl.DateTimeFormat('pt-BR').format(customStartDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))}
+                    {' '}até{' '}
+                    {new Intl.DateTimeFormat('pt-BR').format(customEndDate ?? new Date())}
+                  </dd>
+                </div>
+              </dl>
+            </motion.article>
+          </section>
         </>
       ) : null}
           </motion.div>

@@ -14,8 +14,13 @@ export function ProtocolosPanel() {
   return <MassivaTicketsSection layout="embedded" />
 }
 
-export function RightPanel() {
+type RightPanelProps = {
+  showProtocolsTab?: boolean
+}
+
+export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
   const [tab, setTab] = useState<RightPanelTab>('autoisp')
+  const activeTab: RightPanelTab = showProtocolsTab ? tab : 'autoisp'
 
   return (
     <aside className="flex min-h-0 min-w-0 flex-col rounded-xl bg-neutral-50/80 px-3 py-3 ring-1 ring-neutral-200/70 sm:px-4 sm:py-4">
@@ -25,54 +30,56 @@ export function RightPanel() {
             Apoio operacional
           </p>
           <h2 className="mt-1 text-base font-semibold text-neutral-900">
-            {tab === 'autoisp' ? 'AutoISP' : 'Protocolos'}
+            {activeTab === 'autoisp' ? 'AutoISP' : 'Protocolos'}
           </h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {tab === 'autoisp'
+            {activeTab === 'autoisp'
               ? 'Sugestões de eventos e preenchimento assistido.'
               : 'Consulta e encerramento de protocolos existentes.'}
           </p>
         </div>
-        <div
-          className="grid w-full grid-cols-1 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:grid-cols-2 sm:rounded-full"
-          role="tablist"
-          aria-label="Abas do painel lateral"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'autoisp'}
-            onClick={() => setTab('autoisp')}
-            className={cn(
-              'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
-              tab === 'autoisp'
-                ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200'
-                : 'text-neutral-600 hover:bg-neutral-50',
-            )}
+        {showProtocolsTab ? (
+          <div
+            className="grid w-full grid-cols-1 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:grid-cols-2 sm:rounded-full"
+            role="tablist"
+            aria-label="Abas do painel lateral"
           >
-            <BotMessageSquare size={14} aria-hidden />
-            AutoISP
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'protocolos'}
-            onClick={() => setTab('protocolos')}
-            className={cn(
-              'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
-              tab === 'protocolos'
-                ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
-                : 'text-neutral-600 hover:bg-neutral-50',
-            )}
-          >
-            <ClipboardList size={14} aria-hidden />
-            Protocolos
-          </button>
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'autoisp'}
+              onClick={() => setTab('autoisp')}
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
+                tab === 'autoisp'
+                  ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200'
+                  : 'text-neutral-600 hover:bg-neutral-50',
+              )}
+            >
+              <BotMessageSquare size={14} aria-hidden />
+              AutoISP
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'protocolos'}
+              onClick={() => setTab('protocolos')}
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
+                tab === 'protocolos'
+                  ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
+                  : 'text-neutral-600 hover:bg-neutral-50',
+              )}
+            >
+              <ClipboardList size={14} aria-hidden />
+              Protocolos
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === 'autoisp' ? (
+        {activeTab === 'autoisp' ? (
           <div role="tabpanel" aria-label="Painel do AutoISP">
             <AutoISPPanel />
           </div>

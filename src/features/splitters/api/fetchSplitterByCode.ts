@@ -100,6 +100,7 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     nomeCondominio: toNullableString(
       pickRowValue(row, 'NOME CONDOMNIO', 'NOME CONDOMNIO', 'NOME CONDOM?NIO'),
     ),
+    createdAt: null,
   }
 }
 

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type MouseEventHandler } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from 'react-oidc-context'
 import {
+  AlertTriangle,
   Calendar,
   Clock,
   Eye,
@@ -64,6 +66,15 @@ function defaultDraftExpectedClose(ticket: MassivaTicket): string {
     )
   }
   return toDateTimeLocalInputValue(new Date(Date.now() + 3 * 60 * 60 * 1000))
+}
+
+type MassivaRecordKind = 'incidente' | 'evento' | 'outro'
+
+function classifyMassivaRecordKind(ticket: MassivaTicket): MassivaRecordKind {
+  const source = `${ticket.title} ${ticket.description}`.trim().toLowerCase()
+  if (source.includes('incidente massivo') || source.includes('incidente')) return 'incidente'
+  if (source.includes('evento massivo') || source.includes('evento')) return 'evento'
+  return 'outro'
 }
 
 function ProtocolOccurrenceContent({ text }: { text: string }) {
@@ -142,7 +153,7 @@ function ProtocolDescriptionDialog({
     }
   }
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       role="presentation"
@@ -220,6 +231,9 @@ function ProtocolDescriptionDialog({
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
 
 export function MassivaTicketCard({
@@ -289,25 +303,34 @@ export function MassivaTicketCard({
 
   const apKnown = ticket.apCode.trim() !== ''
   const splitterKnown = ticket.splitterCode.trim() !== ''
+  const recordKind = classifyMassivaRecordKind(ticket)
 
   return (
     <article
-      className="overflow-hidden rounded-2xl border border-neutral-200/85 bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-shadow hover:shadow-[0_8px_28px_-8px_rgba(15,23,42,0.12)]"
+      className="h-full overflow-hidden rounded-2xl border border-neutral-200/85 bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1"
       aria-label={`Massiva protocolo ${protocolLabel}`}
     >
-      <div className="flex flex-col gap-3 border-b border-neutral-100/90 bg-gradient-to-r from-white to-neutral-50/40 p-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2.5 border-b border-neutral-100/90 bg-gradient-to-r from-white to-neutral-50/40 p-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-1 gap-3">
           <div
             className={cn(
               'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1',
-              ticket.status === 'aberta'
-                ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                : ticket.status === 'encerrada'
-                  ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
-                  : 'bg-amber-100 text-amber-800 ring-amber-200/70',
+              recordKind === 'incidente'
+                ? 'bg-rose-100 text-rose-800 ring-rose-200/70'
+                : recordKind === 'evento'
+                  ? 'bg-sky-100 text-sky-800 ring-sky-200/70'
+                  : ticket.status === 'aberta'
+                    ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
+                    : ticket.status === 'encerrada'
+                      ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
+                      : 'bg-amber-100 text-amber-800 ring-amber-200/70',
             )}
           >
-            <Megaphone size={20} strokeWidth={2} aria-hidden />
+            {recordKind === 'incidente' ? (
+              <AlertTriangle size={20} strokeWidth={2} aria-hidden />
+            ) : (
+              <Megaphone size={20} strokeWidth={2} aria-hidden />
+            )}
           </div>
           <div className="min-w-0 space-y-1.5">
             <p className="font-mono text-xs font-semibold tabular-nums text-neutral-500">
@@ -346,22 +369,12 @@ export function MassivaTicketCard({
           >
             <Eye size={18} strokeWidth={2} />
           </button>
-          {ticket.status === 'aberta' ? (
-            <button
-              type="button"
-              disabled={!closeConfigured}
-              onClick={() => onRequestClose(ticket.protocol)}
-              className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none sm:flex-initial"
-            >
-              Encerrar massiva
-            </button>
-          ) : null}
         </div>
       </div>
 
       <div
         className={cn(
-          'flex items-start gap-3 border-b border-neutral-100 px-4 py-3',
+          'flex items-start gap-2.5 border-b border-neutral-100 px-3 py-2.5',
           apKnown || splitterKnown
             ? 'bg-sky-50/40'
             : 'bg-amber-50/35',
@@ -402,8 +415,8 @@ export function MassivaTicketCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-amber-100/30 px-4 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-amber-100/30 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 text-amber-900 ring-1 ring-amber-200/60">
             <Users size={18} aria-hidden />
           </div>
@@ -417,17 +430,17 @@ export function MassivaTicketCard({
           </div>
         </div>
         {ticket.affectedClients > 0 ? (
-          <span className="rounded-full border border-amber-300/80 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 shadow-sm">
+          <span className="shrink-0 whitespace-nowrap rounded-full border border-amber-300/80 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 shadow-sm">
             Impactados
           </span>
         ) : (
-          <span className="rounded-full border border-neutral-200/90 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          <span className="shrink-0 whitespace-nowrap rounded-full border border-neutral-200/90 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
             Sem impacto mapeado
           </span>
         )}
       </div>
 
-      <div className="grid gap-3 bg-neutral-50/50 p-4 sm:grid-cols-2">
+      <div className="grid gap-2.5 bg-neutral-50/50 p-3 sm:grid-cols-2">
         <div className="flex gap-2.5 text-xs">
           <Clock className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
           <div>
@@ -536,7 +549,7 @@ export function MassivaTicketCard({
             </p>
           </div>
         </div>
-               <div className="flex gap-2.5 text-xs">
+        <div className="flex gap-2.5 text-xs">
           <IdCard className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
           <div className="min-w-0">
             <p className="font-semibold text-neutral-500">Responsável</p>
@@ -551,6 +564,24 @@ export function MassivaTicketCard({
             <span className="font-mono font-medium text-neutral-500">{ticket.assignmentId}</span>
           </p>
         ) : null}
+        <div className="pt-0.5 sm:col-span-2">
+          <div className="flex min-h-[34px] items-center justify-center">
+            {ticket.status === 'aberta' ? (
+              <button
+                type="button"
+                disabled={!closeConfigured}
+                onClick={() => onRequestClose(ticket.protocol)}
+                className="mx-auto inline-flex min-w-[165px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              >
+                Encerrar massiva
+              </button>
+            ) : (
+              <span aria-hidden="true" className="invisible inline-flex min-w-[165px] px-3.5 py-2 text-xs">
+                placeholder
+              </span>
+            )}
+          </div>
+        </div>
       </div>
       {detailsOpen ? (
         <ProtocolDescriptionDialog

@@ -9,6 +9,11 @@ import { fetchNetworkStats } from '@/shared/api/fetchNetworkStats'
 import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
 import { fetchSplitterMassivaStatsFromLocalDb } from '@/features/splitters/api/fetchSplitterMassivaStatsFromLocalDb'
 import { fetchSplitterTrendsFromLocalDb } from '@/features/splitters/api/fetchSplitterTrendsFromLocalDb'
+import {
+  fetchMaintenanceBySplitter,
+  type MaintenanceBySplitterRow,
+  type MaintenanceBySplitterTotals,
+} from '@/features/intelligence/api/fetchMaintenanceBySplitter'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
@@ -98,6 +103,8 @@ export type IntelligenceRiskRankingRow = {
   delta7d: number
   delta30d: number
   selectedDelta: number
+  /** Dias até ~95% de ocupação se `selectedDelta` (pp / período de referência) for ritmo linear constante; `null` se não projetável. */
+  etaTo95Days: number | null
   openTickets: number
   totalTickets: number
   affectedClientsTotal: number
@@ -176,6 +183,10 @@ export type IntelligenceLifecycleAlertRow = {
   splitterTitle: string
   reason: string
 }
+
+export type IntelligenceMaintenanceBySplitterRow = MaintenanceBySplitterRow
+
+export type IntelligenceMaintenanceBySplitterTotals = MaintenanceBySplitterTotals
 
 export type IntelligenceDataset = {
   trends: IntelligenceTrendRow[]
@@ -662,7 +673,8 @@ export function useNetworkIntelligenceData(
           queryKey: SPLITTERS_CATALOG_QUERY_KEY,
           queryFn: fetchAllSplittersCatalogForIntelligence,
           staleTime: SPLITTERS_CATALOG_STALE_MS,
-        }))
+        })) ??
+        { items: [] as Splitter[], totalCount: 0 }
       return fetchIntelligenceDataset(queryClient, splitters)
     },
     placeholderData: keepPreviousData,
@@ -676,6 +688,20 @@ export function useNetworkIntelligenceData(
     () => buildDateWindow(preset, customStart, customEnd),
     [preset, customStart, customEnd],
   )
+
+  const maintenanceQuery = useQuery({
+    queryKey: [
+      'network-intelligence',
+      'maintenance-by-splitter',
+      window.start.toISOString(),
+      window.end.toISOString(),
+    ],
+    queryFn: () => fetchMaintenanceBySplitter(window.start, window.end),
+    staleTime: 10 * 60_000,
+    gcTime: 60 * 60_000,
+    refetchInterval: false,
+    placeholderData: keepPreviousData,
+  })
 
   const filtered = useMemo(() => {
     const data = query.data
@@ -811,6 +837,16 @@ export function useNetworkIntelligenceData(
             ? Number((diffDays(meta.createdAt, new Date()) / 365.25).toFixed(2))
             : 0
         const selectedDelta = deltaReference === '7d' ? trend.delta7d : trend.delta30d
+        const referenceDays = deltaReference === '7d' ? 7 : 30
+        const dailyDeltaPP =
+          referenceDays > 0 ? selectedDelta / referenceDays : 0
+        let etaTo95Days: number | null = null
+        if (trend.currentUsagePercent < 95 && dailyDeltaPP > 0) {
+          const rawDays = (95 - trend.currentUsagePercent) / dailyDeltaPP
+          if (Number.isFinite(rawDays) && rawDays > 0) {
+            etaTo95Days = Math.max(1, Math.ceil(rawDays))
+          }
+        }
         const usageScore = clamp(trend.currentUsagePercent, 0, 100)
         const growthScore = clamp(selectedDelta * 4, -20, 40)
         const openMassivaScore = clamp((massiva?.openTickets ?? 0) * 8, 0, 24)
@@ -831,6 +867,7 @@ export function useNetworkIntelligenceData(
           delta7d: trend.delta7d,
           delta30d: trend.delta30d,
           selectedDelta,
+          etaTo95Days,
           openTickets: massiva?.openTickets ?? 0,
           totalTickets: massiva?.totalTickets ?? 0,
           affectedClientsTotal: massiva?.affectedClientsTotal ?? 0,
@@ -993,21 +1030,12 @@ export function useNetworkIntelligenceData(
       const createdAt = metaByCode.get(row.splitterCode)?.createdAt ?? null
       const incidentsPerYear =
         row.ageYears > 0 ? Number((row.totalTickets / Math.max(0.25, row.ageYears)).toFixed(2)) : row.totalTickets
-      const etaTo95Days =
-        row.selectedDelta > 0
-          ? (() => {
-              const periodsTo95 = (95 - row.currentUsagePercent) / row.selectedDelta
-              if (!Number.isFinite(periodsTo95) || periodsTo95 <= 0) return 0
-              const periodDays = deltaReference === '7d' ? 7 : 30
-              return Math.round(periodsTo95 * periodDays)
-            })()
-          : null
       const lifecycleRiskScore = clamp(
         row.riskScore * 0.6 + clamp(row.ageYears * 10, 0, 80) + clamp(incidentsPerYear * 2.5, 0, 40),
         0,
         240,
       )
-      return { ...row, createdAt, incidentsPerYear, etaTo95Days, lifecycleRiskScore }
+      return { ...row, createdAt, incidentsPerYear, lifecycleRiskScore }
     })
 
     const lifecycleKpis: IntelligenceLifecycleKpis = {
@@ -1129,6 +1157,7 @@ export function useNetworkIntelligenceData(
 
   return {
     query,
+    maintenanceQuery,
     /** `/api/stats` — costuma concluir antes do dataset; útil para prévia na UI. */
     networkStatsPreview: statsQuery.data ?? null,
     source: filtered?.source ?? null,
@@ -1145,6 +1174,15 @@ export function useNetworkIntelligenceData(
     oltDrilldown,
     geoDrilldown,
     ...lifecycleAnalytics,
+    maintenanceBySplitter: maintenanceQuery.data?.rows ?? [],
+    maintenanceTotals: maintenanceQuery.data?.totals ?? {
+      totalMaintenances: 0,
+      totalProtocols: 0,
+      totalClients: 0,
+      openMaintenances: 0,
+      splittersWithMaintenances: 0,
+      unmappedMaintenances: 0,
+    },
     deltaReference,
     deltaReferenceLabel,
     dateWindow: window,

@@ -6,6 +6,7 @@ import { useSplittersFiltersStore } from '@/features/splitters/store/useSplitter
 
 type UseSplittersListMassivaOptions = {
   openMassivaSplitterCodes?: string[]
+  maintenanceSplitterCodes?: string[]
 }
 
 /**
@@ -18,6 +19,7 @@ export function useSplittersList(
 ) {
   const { state } = useSplittersFiltersStore()
   const openMassivaSplitterCodes = options?.openMassivaSplitterCodes ?? []
+  const maintenanceSplitterCodes = options?.maintenanceSplitterCodes ?? []
   const withOpenMassiva =
     state.massivaOpenState === 'all'
       ? undefined
@@ -37,6 +39,8 @@ export function useSplittersList(
       state.massivaOpenState,
       state.corporateClientFilter,
       openMassivaSplitterCodes,
+      state.maintenanceFilter,
+      maintenanceSplitterCodes,
     ],
     queryFn: () => fetchSplittersFromLocalDb({
       page,
@@ -51,6 +55,11 @@ export function useSplittersList(
       withOpenMassiva,
       openMassivaSplitterCodes,
       corporateClientFilter: state.corporateClientFilter,
+      withMaintenance:
+        state.maintenanceFilter === 'all'
+          ? undefined
+          : state.maintenanceFilter === 'with-maintenance',
+      maintenanceSplitterCodes,
     }),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
   })

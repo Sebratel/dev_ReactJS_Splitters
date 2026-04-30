@@ -48,6 +48,10 @@ export type SplittersListFilterState = {
    * - `without-corporate`: nenhum cliente corporativo
    */
   corporateClientFilter: 'all' | 'with-corporate' | 'without-corporate'
+  /** Janela temporal para análise de manutenção por splitter. */
+  maintenanceWindowDays: 7 | 30 | 90
+  /** Filtro de manutenção por splitter no período selecionado. */
+  maintenanceFilter: 'all' | 'with-maintenance'
 }
 
 export const initialSplittersListFilters: SplittersListFilterState = {
@@ -60,6 +64,8 @@ export const initialSplittersListFilters: SplittersListFilterState = {
   condominiumSelections: [],
   massivaOpenState: 'all',
   corporateClientFilter: 'all',
+  maintenanceWindowDays: 30,
+  maintenanceFilter: 'all',
 }
 
 export function countActiveSplittersFilters(state: SplittersListFilterState): number {
@@ -73,6 +79,7 @@ export function countActiveSplittersFilters(state: SplittersListFilterState): nu
   if (state.condominiumSelections.length > 0) n += 1
   if (state.massivaOpenState !== 'all') n += 1
   if (state.corporateClientFilter !== 'all') n += 1
+  if (state.maintenanceFilter !== 'all') n += 1
   return n
 }
 

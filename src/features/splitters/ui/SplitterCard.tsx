@@ -4,6 +4,7 @@ import type {
   SplitterMassivaStats,
   SplitterOperationalScore,
 } from '@/features/splitters/model/splitterOperationalInsights'
+import type { SplitterMaintenanceStats } from '@/features/splitters/api/fetchSplitterMaintenanceStatsFromLocalDb'
 import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOperationalDate'
 import {
   Activity,
@@ -13,14 +14,19 @@ import {
   MapPin,
   Siren,
 } from 'lucide-react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/shared/lib/utils'
+import { OperationalScoreHealthDots } from '@/features/splitters/ui/OperationalScoreHealthDots'
 import { OccupancyBar } from '@/features/splitters/ui/OccupancyBar'
+import { scoreToneClassName } from '@/features/splitters/ui/operationalScoreVisual'
 import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { getOccupancyVisualTone } from '@/features/splitters/ui/occupancyVisual'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 type SplitterCardProps = {
   splitter: Splitter
   massivaStats: SplitterMassivaStats
+  maintenanceStats: SplitterMaintenanceStats
   operationalScore: SplitterOperationalScore
   trendLabel: string
 }
@@ -30,57 +36,37 @@ function formatTrendLabel(label: string): string {
   return label
 }
 
-function scoreToneClassName(tone: SplitterOperationalScore['tone']): string {
-  switch (tone) {
-    case 'critical':
-      return 'border-rose-200 bg-rose-50 text-rose-700'
-    case 'attention':
-      return 'border-amber-200 bg-amber-50 text-amber-700'
-    default:
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+function maintenanceToneClass(openMaintenances: number): string {
+  if (openMaintenances > 0) {
+    return 'border-rose-200 bg-rose-50 text-rose-800'
   }
-}
-
-function scoreDotToneClassName(tone: SplitterOperationalScore['tone']): string {
-  switch (tone) {
-    case 'critical':
-      return 'bg-rose-500'
-    case 'attention':
-      return 'bg-amber-500'
-    default:
-      return 'bg-emerald-500'
-  }
-}
-
-function criticalityDotsFromScore(score: number): number {
-  const clampedScore = Math.min(100, Math.max(0, score))
-  return Math.max(1, Math.ceil(clampedScore / 20))
+  return 'border-amber-200 bg-amber-50 text-amber-800'
 }
 
 export function SplitterCard({
   splitter,
   massivaStats,
+  maintenanceStats,
   operationalScore,
   trendLabel,
 }: SplitterCardProps) {
+  const reduceMotion = useReducedMotion()
   const to = `/splitters/${encodeURIComponent(splitter.code)}`
+  const canOpenMassiva = useAccessAuthStore((state) => state.hasPermission('canOpenMassiva'))
   const isCondominio = splitter.tipoLocal === 'CONDOM\u00CDNIO'
   const usageRatio = splitter.outPorts > 0 ? splitter.busyCount / splitter.outPorts : 0
   const usagePercent = Math.round(Math.min(100, usageRatio * 100))
   const occupancyTone = getOccupancyVisualTone(usagePercent)
-  const filledCriticalityDots = criticalityDotsFromScore(operationalScore.score)
 
   const titleLine = splitter.nomeCondominio || splitter.title || splitter.code
 
   return (
     <div className="group h-auto animate-in fade-in zoom-in-95 duration-500">
-      <Link
-        to={to}
+      <article
         className={cn(
           'flex h-auto flex-col rounded-2xl border border-outline-variant bg-white p-4 shadow-sm',
           'transition-all duration-300 ease-out',
           'hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg hover:shadow-on-surface/[0.06]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -104,15 +90,23 @@ export function SplitterCard({
           </div>
 
           <div className="shrink-0 text-right">
-            <p
+            <motion.p
+              key={`occ-${splitter.code}-${usagePercent}`}
               className={cn(
                 'text-3xl font-bold tabular-nums leading-none tracking-tight',
                 occupancyTone.text,
               )}
+              initial={reduceMotion ? false : { opacity: 0.55, scale: 0.88 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 380, damping: 26, mass: 0.65 }
+              }
             >
               {usagePercent}
               <span className="text-lg font-semibold align-top">%</span>
-            </p>
+            </motion.p>
             <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/70">
               {'Ocupa\u00E7\u00E3o'}
             </p>
@@ -135,27 +129,26 @@ export function SplitterCard({
               >
                 <Activity size={12} strokeWidth={2} />
                 {operationalScore.label}
-                <span className="ml-1 inline-flex items-center gap-1" aria-hidden="true">
-                  {Array.from({ length: 5 }, (_, index) => {
-                    const active = index < filledCriticalityDots
-                    return (
-                      <span
-                        key={index}
-                        className={cn(
-                          'h-1.5 w-1.5 rounded-full',
-                          active
-                            ? scoreDotToneClassName(operationalScore.tone)
-                            : 'bg-slate-300',
-                        )}
-                      />
-                    )
-                  })}
-                </span>
+                <OperationalScoreHealthDots
+                  score={operationalScore.score}
+                  tone={operationalScore.tone}
+                  className="ml-1"
+                />
                 <span className="sr-only">{`Score ${operationalScore.score}`}</span>
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-low/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70">
                 <Siren size={12} strokeWidth={2} />
                 {massivaStats.totalTickets} massivas
+              </span>
+              <span
+                title={`Rompimento: ${maintenanceStats.rompimentoCount} · Troca flat: ${maintenanceStats.trocaFlatCount}`}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
+                  maintenanceToneClass(maintenanceStats.openMaintenances),
+                )}
+              >
+                <Activity size={12} strokeWidth={2} />
+                {maintenanceStats.totalMaintenances} manut.
               </span>
             </div>
 
@@ -204,6 +197,27 @@ export function SplitterCard({
                   {formatTrendLabel(trendLabel)}
                 </p>
               </div>
+              <div>
+                <p className="font-semibold uppercase tracking-wider text-on-surface-variant/50">
+                  {'Manutenção'}
+                </p>
+                <p className="mt-1 font-semibold text-on-surface">
+                  {maintenanceStats.totalMaintenances.toLocaleString('pt-BR')} ocorrências
+                </p>
+              </div>
+              <div>
+                <p className="font-semibold uppercase tracking-wider text-on-surface-variant/50">
+                  {'Abertas'}
+                </p>
+                <p
+                  className={cn(
+                    'mt-1 font-semibold',
+                    maintenanceStats.openMaintenances > 0 ? 'text-rose-700' : 'text-on-surface',
+                  )}
+                >
+                  {maintenanceStats.openMaintenances.toLocaleString('pt-BR')}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -213,29 +227,59 @@ export function SplitterCard({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/50">
               {'Portas em uso'}
             </p>
-            <p className="mt-1 text-xl font-bold tabular-nums tracking-tight text-on-surface">
+            <motion.p
+              key={`ports-${splitter.code}-${splitter.busyCount}-${splitter.outPorts}`}
+              className="mt-1 text-xl font-bold tabular-nums tracking-tight text-on-surface"
+              initial={reduceMotion ? false : { opacity: 0.6, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { duration: 0.35, ease: [0.22, 1, 0.36, 1], delay: 0.12 }
+              }
+            >
               <span className="text-on-surface">{splitter.busyCount}</span>
               <span className="mx-1 font-semibold text-on-surface-variant/35">/</span>
               <span className="text-on-surface-variant/80">{splitter.outPorts}</span>
-            </p>
+            </motion.p>
           </div>
 
-          <span
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-outline-variant bg-surface-container-low/80 px-3 py-2',
-              'text-xs font-semibold text-on-surface transition-colors duration-300',
-              'group-hover:border-primary/30 group-hover:bg-primary group-hover:text-on-surface',
-            )}
-          >
-            {'Ver detalhes'}
-            <ArrowRight
-              size={16}
-              strokeWidth={2}
-              className="transition-transform duration-300 group-hover:translate-x-0.5"
-            />
-          </span>
+          <div className="flex items-center gap-2">
+            {canOpenMassiva ? (
+              <Link
+                to="/massiva"
+                state={{
+                  massivaPrefill: {
+                    splitterCode: splitter.code,
+                    splitterLabel: splitter.title || splitter.code,
+                  },
+                }}
+                className="inline-flex shrink-0 items-center rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                title="Abrir massiva com este splitter pré-selecionado"
+              >
+                Abrir massiva
+              </Link>
+            ) : null}
+            <Link
+              to={to}
+              state={{ splittersListHref: '/splitters' }}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-outline-variant bg-surface-container-low/80 px-3 py-2',
+                'text-xs font-semibold text-on-surface transition-colors duration-300',
+                'group-hover:border-primary/30 group-hover:bg-primary group-hover:text-on-surface',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+              )}
+            >
+              {'Ver detalhes'}
+              <ArrowRight
+                size={16}
+                strokeWidth={2}
+                className="transition-transform duration-300 group-hover:translate-x-0.5"
+              />
+            </Link>
+          </div>
         </div>
-      </Link>
+      </article>
     </div>
   )
 }

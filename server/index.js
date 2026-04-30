@@ -678,11 +678,15 @@ app.get('/api/splitters', async (req, res) => {
       ? req.query.condominiums.split(',')
       : [];
     const withOpenMassivaRaw = String(req.query.withOpenMassiva || '').trim();
+    const withMaintenanceRaw = String(req.query.withMaintenance || '').trim();
     const corporateClientsRaw = String(req.query.corporateClients || '')
       .trim()
       .toLowerCase();
     const openMassivaSplitterCodes = req.query.openMassivaSplitterCodes
       ? req.query.openMassivaSplitterCodes.split(',')
+      : [];
+    const maintenanceSplitterCodes = req.query.maintenanceSplitterCodes
+      ? req.query.maintenanceSplitterCodes.split(',')
       : [];
     const primarySplitters = req.query.primarySplitters
       ? req.query.primarySplitters.split(',')
@@ -779,6 +783,30 @@ app.get('/api/splitters', async (req, res) => {
             : `base."CÓDIGO[SPLT.SECUNDARIO]" <> ALL($${currentParam})`,
         );
         values.push(normalizedOpenMassivaSplitterCodes);
+        currentParam++;
+      }
+    }
+
+    const normalizedMaintenanceSplitterCodes = maintenanceSplitterCodes
+      .map((code) => String(code || '').trim())
+      .filter((code) => code !== '');
+    const withMaintenance = withMaintenanceRaw === '1'
+      ? true
+      : withMaintenanceRaw === '0'
+        ? false
+        : null;
+    if (withMaintenance !== null) {
+      if (normalizedMaintenanceSplitterCodes.length === 0) {
+        if (withMaintenance) {
+          whereClauses.push('1 = 0');
+        }
+      } else {
+        whereClauses.push(
+          withMaintenance
+            ? `base."CÓDIGO[SPLT.SECUNDARIO]" = ANY($${currentParam})`
+            : `base."CÓDIGO[SPLT.SECUNDARIO]" <> ALL($${currentParam})`,
+        );
+        values.push(normalizedMaintenanceSplitterCodes);
         currentParam++;
       }
     }
@@ -1328,6 +1356,46 @@ app.get('/api/massiva/history/open-splitter-codes', async (_req, res) => {
   }
 });
 
+app.get('/api/massiva/history/list', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const statusRaw = String(req.query.status ?? '').trim().toLowerCase();
+    const status = statusRaw === 'aberta' || statusRaw === 'encerrada' ? statusRaw : null;
+    const startDateText = String(req.query.startDate ?? '').trim();
+    const endDateText = String(req.query.endDate ?? '').trim();
+    const limitRaw = Number.parseInt(String(req.query.limit ?? ''), 10);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 3000;
+
+    const startDate = startDateText !== '' ? new Date(startDateText) : null;
+    const endDate = endDateText !== '' ? new Date(endDateText) : null;
+
+    const data = await massivaHistoryStore.getHistoryList({
+      status,
+      startDate: startDate && !Number.isNaN(startDate.getTime()) ? startDate.toISOString() : null,
+      endDate: endDate && !Number.isNaN(endDate.getTime()) ? endDate.toISOString() : null,
+      limit,
+    });
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar listagem histórica local de massivas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar listagem histórica local de massivas.',
+      error: error.message,
+    });
+  }
+});
+
 async function captureSplitterSnapshots() {
   if (!massivaHistoryStore.configured) {
     throw new Error('Snapshots de splitters não configurados no MySQL.');
@@ -1419,6 +1487,189 @@ app.get('/api/splitters/trends', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao consultar tendências dos splitters.',
+      error: error.message,
+    });
+  }
+});
+
+function parseIsoDateParam(rawValue, fallback) {
+  const txt = String(rawValue ?? '').trim();
+  if (txt === '') return fallback;
+  const parsed = new Date(txt);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed;
+}
+
+app.get('/api/intelligence/maintenance-by-splitter', async (req, res) => {
+  try {
+    const now = new Date();
+    const defaultStart = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
+    defaultStart.setHours(0, 0, 0, 0);
+    const defaultEnd = new Date(now);
+    defaultEnd.setHours(23, 59, 59, 999);
+
+    const start = parseIsoDateParam(req.query.start, defaultStart);
+    const end = parseIsoDateParam(req.query.end, defaultEnd);
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetros inválidos: start precisa ser menor ou igual a end.',
+      });
+    }
+
+    const catalogsRaw = String(req.query.catalogs ?? '').trim();
+    const catalogs = catalogsRaw
+      ? catalogsRaw.split(',').map((value) => value.trim()).filter((value) => value !== '')
+      : ['Equipe reparo', 'Equipe tecnologia'];
+    const splitterCodes = String(req.query.splitterCodes ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value !== '');
+    const limitRaw = Number.parseInt(String(req.query.limit ?? '5000'), 10);
+    const rowsLimit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 20000) : 5000;
+
+    const query = `
+      WITH maintenance_raw AS (
+        SELECT
+          ai.protocol::bigint AS protocol,
+          a.id::bigint AS assignment_id,
+          a.title::text AS solicitation_title,
+          a.created AS created_at,
+          ai.client_id::bigint AS client_id,
+          p.name::text AS client_name,
+          cs.title::text AS catalog_title,
+          ss.title::text AS solution_title,
+          t.title::text AS incident_status
+        FROM assignments a
+        INNER JOIN assignment_incidents ai
+          ON ai.assignment_id = a.id
+        INNER JOIN catalog_services cs
+          ON cs.id = ai.catalog_service_id
+        LEFT JOIN people p
+          ON p.id = ai.client_id
+        LEFT JOIN solicitation_solutions ss
+          ON ss.id = ai.solicitation_solution_id
+        LEFT JOIN incident_status t
+          ON t.id = ai.incident_status_id
+        WHERE
+          a.created >= $1
+          AND a.created <= $2
+          AND cs.title = ANY($3::text[])
+      ),
+      splitter_client_map AS (
+        SELECT DISTINCT ON (base."ID[CLIENTE]")
+          base."ID[CLIENTE]"::bigint AS client_id,
+          TRIM(base."CÓDIGO[SPLT.SECUNDARIO]") AS splitter_code,
+          COALESCE(
+            NULLIF(TRIM(base."SPLT.SECUNDARIO"), ''),
+            TRIM(base."CÓDIGO[SPLT.SECUNDARIO]")
+          ) AS splitter_title,
+          COALESCE(
+            NULLIF(TRIM(base."PONTO DE ACESSO CODE"), ''),
+            NULLIF(TRIM(base."PONTO DE ACESSO"), ''),
+            ''
+          ) AS access_point_code
+        FROM (${SPLITTERS_BASE_QUERY}) base
+        WHERE
+          base."ID[CLIENTE]" IS NOT NULL
+          AND base."CÓDIGO[SPLT.SECUNDARIO]" IS NOT NULL
+          AND TRIM(base."CÓDIGO[SPLT.SECUNDARIO]") <> ''
+        ORDER BY
+          base."ID[CLIENTE]",
+          base."ATIVO[SPLT.SECUNDARIO]" DESC,
+          base."ID CONEXAO[CLIENTE]" DESC
+      ),
+      enriched AS (
+        SELECT
+          m.protocol,
+          m.assignment_id,
+          m.created_at,
+          m.client_id,
+          m.catalog_title,
+          m.solution_title,
+          m.incident_status,
+          map.splitter_code,
+          map.splitter_title,
+          map.access_point_code
+        FROM maintenance_raw m
+        LEFT JOIN splitter_client_map map
+          ON map.client_id = m.client_id
+      )
+      SELECT
+        COALESCE(splitter_code, 'SEM_MAPEAMENTO') AS "splitterCode",
+        COALESCE(splitter_title, 'Sem splitter mapeado') AS "splitterTitle",
+        COALESCE(access_point_code, '') AS "accessPointCode",
+        COUNT(*)::int AS "totalMaintenances",
+        COUNT(DISTINCT protocol)::int AS "uniqueProtocols",
+        COUNT(DISTINCT client_id)::int AS "uniqueClients",
+        COUNT(*) FILTER (
+          WHERE lower(COALESCE(incident_status, '')) LIKE '%abert%'
+        )::int AS "openMaintenances",
+        COUNT(*) FILTER (
+          WHERE lower(COALESCE(solution_title, '')) LIKE '%romp%'
+        )::int AS "rompimentoCount",
+        COUNT(*) FILTER (
+          WHERE lower(COALESCE(solution_title, '')) LIKE '%flat%'
+        )::int AS "trocaFlatCount",
+        MAX(created_at) AS "latestCreatedAt"
+      FROM enriched
+      ${splitterCodes.length > 0 ? 'WHERE splitter_code = ANY($4::text[])' : ''}
+      GROUP BY
+        COALESCE(splitter_code, 'SEM_MAPEAMENTO'),
+        COALESCE(splitter_title, 'Sem splitter mapeado'),
+        COALESCE(access_point_code, '')
+      ORDER BY "totalMaintenances" DESC, "splitterCode" ASC
+      LIMIT ${rowsLimit};
+    `;
+
+    const values = splitterCodes.length > 0
+      ? [start.toISOString(), end.toISOString(), catalogs, splitterCodes]
+      : [start.toISOString(), end.toISOString(), catalogs];
+
+    const grouped = await queryWithTransientRetry(query, values, {
+      retries: 1,
+      delayMs: 180,
+    });
+
+    const rows = grouped.rows;
+    const totals = rows.reduce(
+      (acc, row) => {
+        acc.totalMaintenances += Number(row.totalMaintenances ?? 0);
+        acc.totalProtocols += Number(row.uniqueProtocols ?? 0);
+        acc.totalClients += Number(row.uniqueClients ?? 0);
+        acc.openMaintenances += Number(row.openMaintenances ?? 0);
+        if (String(row.splitterCode ?? '') === 'SEM_MAPEAMENTO') {
+          acc.unmappedMaintenances += Number(row.totalMaintenances ?? 0);
+        } else {
+          acc.splittersWithMaintenances += 1;
+        }
+        return acc;
+      },
+      {
+        totalMaintenances: 0,
+        totalProtocols: 0,
+        totalClients: 0,
+        openMaintenances: 0,
+        splittersWithMaintenances: 0,
+        unmappedMaintenances: 0,
+      },
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        catalogs,
+        rows,
+        totals,
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao consultar manutenções por splitter:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar manutenções por splitter.',
       error: error.message,
     });
   }

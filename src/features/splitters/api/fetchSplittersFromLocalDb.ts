@@ -23,6 +23,8 @@ export type SplittersFetchParams = {
   withOpenMassiva?: boolean
   openMassivaSplitterCodes?: string[]
   corporateClientFilter?: 'all' | 'with-corporate' | 'without-corporate'
+  withMaintenance?: boolean
+  maintenanceSplitterCodes?: string[]
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -81,6 +83,8 @@ export async function fetchSplittersFromLocalDb({
   withOpenMassiva,
   openMassivaSplitterCodes = [],
   corporateClientFilter = 'all',
+  withMaintenance,
+  maintenanceSplitterCodes = [],
 }: SplittersFetchParams = {}): Promise<SplittersFetchResult> {
   const queryParams = new URLSearchParams({
     page: String(page),
@@ -108,6 +112,12 @@ export async function fetchSplittersFromLocalDb({
     queryParams.append('corporateClients', 'with')
   } else if (corporateClientFilter === 'without-corporate') {
     queryParams.append('corporateClients', 'without')
+  }
+  if (withMaintenance !== undefined) {
+    queryParams.append('withMaintenance', withMaintenance ? '1' : '0')
+  }
+  if (maintenanceSplitterCodes.length > 0) {
+    queryParams.append('maintenanceSplitterCodes', maintenanceSplitterCodes.join(','))
   }
 
   const url = `${env.localBffUrl}/api/splitters?${queryParams.toString()}`

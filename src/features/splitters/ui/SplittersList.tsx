@@ -4,6 +4,7 @@ import type {
   SplitterMassivaStats,
   SplitterOperationalScore,
 } from '@/features/splitters/model/splitterOperationalInsights'
+import type { SplitterMaintenanceStats } from '@/features/splitters/api/fetchSplitterMaintenanceStatsFromLocalDb'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -21,6 +22,7 @@ export type SplittersListProps = {
   refetch: () => void
   isRefetching: boolean
   getMassivaStats: (splitter: Splitter) => SplitterMassivaStats
+  getMaintenanceStats: (splitter: Splitter) => SplitterMaintenanceStats
   getOperationalScore: (splitter: Splitter) => SplitterOperationalScore
   getTrendLabel: (splitter: Splitter) => string
 }
@@ -70,6 +72,7 @@ export function SplittersList({
   refetch,
   isRefetching,
   getMassivaStats,
+  getMaintenanceStats,
   getOperationalScore,
   getTrendLabel,
 }: SplittersListProps) {
@@ -148,6 +151,7 @@ export function SplittersList({
             key={splitter.code ? splitter.code : `id-${splitter.id}`}
             splitter={splitter}
             massivaStats={getMassivaStats(splitter)}
+            maintenanceStats={getMaintenanceStats(splitter)}
             operationalScore={getOperationalScore(splitter)}
             trendLabel={getTrendLabel(splitter)}
           />
