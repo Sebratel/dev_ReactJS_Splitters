@@ -1,6 +1,9 @@
 import { env } from '@/shared/config/env';
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
+/** Mesma chave em `useNetworkStats` e no painel de inteligência — evita GET duplicado ao mudar de rota. */
+export const NETWORK_STATS_QUERY_KEY = ['network', 'stats'] as const
+
 /** Faixas de ocupação no catálogo (paridade `resolveSplitterStatus` / filtros da lista). */
 export type EquipmentOccupancyBands = {
   /** Normal — até 70% */
