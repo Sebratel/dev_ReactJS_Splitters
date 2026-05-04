@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
+import { isAuthMockEnabled } from "@/shared/config/env"
 import { env, isGoogleIdentityConfigured, isLocalDevHostname } from '@/shared/config/env'
 import { useSessionStore } from '@/features/session/store/sessionStore'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
@@ -23,6 +24,7 @@ export function SessionGate({ children }: SessionGateProps) {
       clearSession()
     }
 
+    if (isAuthMockEnabled()) return
     if (isLocalDevHostname()) return
 
     if (!googleConfigured && (status === 'invalid-session' || status === 'unauthenticated')) {

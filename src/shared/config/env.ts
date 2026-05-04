@@ -189,6 +189,10 @@ export const env = {
   firebaseStorageBucket: str(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, ''),
   firebaseMessagingSenderId: str(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, ''),
   firebaseAppId: str(import.meta.env.VITE_FIREBASE_APP_ID, ''),
+  /** Modo de autenticação mockada (pula login OIDC/Google). */
+  authMock: import.meta.env.VITE_AUTH_MOCK === 'true',
+  mockUserEmail: str(import.meta.env.VITE_MOCK_USER_EMAIL, ''),
+  mockUserName: str(import.meta.env.VITE_MOCK_USER_NAME, ''),
   accessAllowedEmails: csv(import.meta.env.VITE_ACCESS_ALLOWED_EMAILS),
   accessAllowedEmailDomain: str(import.meta.env.VITE_ACCESS_ALLOWED_EMAIL_DOMAIN, '').toLowerCase(),
   /**
@@ -213,11 +217,17 @@ export const env = {
 
 export type Env = typeof env
 
+export function isAuthMockEnabled(): boolean {
+  return env.authMock
+}
+
 export function isOidcConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return env.oidcAuthority.trim() !== '' && env.oidcClientId.trim() !== ''
 }
 
 export function isFirebaseAuthConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return (
     env.firebaseApiKey.trim() !== '' &&
     env.firebaseAuthDomain.trim() !== '' &&
@@ -228,6 +238,7 @@ export function isFirebaseAuthConfigured(): boolean {
 
 /** AutoISP só é consultado no browser quando as quatro variáveis estão definidas. */
 export function isAutoIspConfigured(): boolean {
+  if (isAuthMockEnabled()) return false
   return (
     env.autoIspAuthEndpoint.trim() !== '' &&
     env.autoIspEventsEndpoint.trim() !== '' &&
@@ -238,6 +249,7 @@ export function isAutoIspConfigured(): boolean {
 
 export function isGoogleIdentityConfigured(): boolean {
   const clientId = env.googleClientId.trim()
+  if (isAuthMockEnabled()) return false
   if (clientId === '') return false
   if (clientId === 'seu_client_id_web_do_google.apps.googleusercontent.com') {
     return false
