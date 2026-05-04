@@ -2,14 +2,104 @@ import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
 import { useEffect, useMemo } from 'react'
-import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import {
+  CircleMarker,
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import type { IntelligenceSaturationCell } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
+import { cn } from '@/shared/lib/utils'
 
 const OSM_ATTR =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 const BR_FALLBACK_CENTER: [number, number] = [-14.235, -51.9253]
+
+/** Mesmo roxo dos mapas de splitter / legenda corporativo no app. */
+export const CORPORATE_BRAND_PURPLE = '#7c3aed'
+
+/** leaflet.heat é UMD e espera `global L`; no bundle Vite garantimos isso antes do import dinâmico. */
+let leafletHeatLoader: Promise<void> | null = null
+
+function ensureLeafletHeat(leafletRef: typeof L): Promise<void> {
+  if (!leafletHeatLoader) {
+    leafletHeatLoader = (async () => {
+      const g = globalThis as unknown as { L?: typeof L }
+      g.L = leafletRef
+      await import('leaflet.heat/dist/leaflet-heat.js')
+    })()
+  }
+  return leafletHeatLoader
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n))
+}
+
+/**
+ * Intensidade do heatmap: uso base + reforço para corporativo e massivas abertas,
+ * para não reduzir o mapa só à coordenada geográfica.
+ */
+function heatIntensityFromCell(c: IntelligenceSaturationCell): number {
+  const u = clamp(c.usagePercent, 0, 100)
+  let base: number
+  if (u >= 95) base = 0.65 + ((u - 95) / 5) * 0.35
+  else if (u >= 70) base = 0.28 + ((u - 70) / 25) * 0.32
+  else base = 0.06 + (u / 70) * 0.18
+
+  if (c.hasCorporateClients) base = Math.min(1, base + 0.11)
+  if (c.openTickets > 0) base = Math.min(1, base + 0.038 * Math.min(c.openTickets, 6))
+
+  return base
+}
+
+const HEAT_GRADIENT: Record<number, string> = {
+  0.2: '#10b981',
+  0.4: '#84cc16',
+  0.55: '#eab308',
+  0.72: '#f59e0b',
+  0.88: '#f97316',
+  1: '#e11d48',
+}
+
+function SaturationHeatLayer({ latlngs }: { latlngs: [number, number, number][] }) {
+  const map = useMap()
+
+  useEffect(() => {
+    let layer: L.HeatLayer | null = null
+    let cancelled = false
+
+    void (async () => {
+      await ensureLeafletHeat(L)
+      if (cancelled || latlngs.length === 0) return
+      const heat = L.heatLayer(latlngs, {
+        radius: 38,
+        blur: 28,
+        maxZoom: 17,
+        max: 1.05,
+        minOpacity: 0.12,
+        gradient: HEAT_GRADIENT,
+      }).addTo(map)
+      if (cancelled) {
+        map.removeLayer(heat)
+        return
+      }
+      layer = heat
+    })()
+
+    return () => {
+      cancelled = true
+      if (layer) map.removeLayer(layer)
+    }
+  }, [map, latlngs])
+
+  return null
+}
 
 function formatDeltaPercent(value: number): string {
   const sign = value > 0 ? '+' : ''
@@ -28,13 +118,29 @@ const BAND_COLOR: Record<ReturnType<typeof saturationBand>, string> = {
   ok: '#10b981',
 }
 
-function saturationDivIcon(usagePercent: number): L.DivIcon {
-  const fill = BAND_COLOR[saturationBand(usagePercent)]
+/** Halo proporcional a clientes afetados por massivas (âmbito do período) — “pegada” de impacto além do ponto. */
+function haloRadiusPx(affectedClientsTotal: number): number {
+  return Math.round(clamp(7 + Math.sqrt(affectedClientsTotal + 1) * 2.15, 9, 46))
+}
+
+function saturationMarkerDivIcon(cell: IntelligenceSaturationCell): L.DivIcon {
+  const fill = BAND_COLOR[saturationBand(cell.usagePercent)]
+  const score = cell.attentionScore
+  const outer = Math.round(14 + (score / 100) * 26)
+  const inner = Math.max(11, outer - 8)
+  const corporate = cell.hasCorporateClients
+  const shadow = corporate
+    ? `0 0 0 3px ${CORPORATE_BRAND_PURPLE}, 0 2px 9px rgba(0,0,0,0.38)`
+    : '0 2px 9px rgba(0,0,0,0.38)'
+  const badge = corporate
+    ? `<span style="position:absolute;right:-4px;bottom:-3px;z-index:3;font-size:7px;font-weight:900;line-height:1;padding:2px 4px;border-radius:4px;background:${CORPORATE_BRAND_PURPLE};color:#fff;font-family:system-ui,sans-serif;border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.25)">PJ</span>`
+    : ''
+  const html = `<div style="position:relative;width:${outer}px;height:${outer}px;display:flex;align-items:center;justify-content:center">${badge}<div style="width:${inner}px;height:${inner}px;border-radius:50%;background:${fill};border:2px solid #fff;box-shadow:${shadow}"></div></div>`
   return L.divIcon({
-    className: 'intelligence-sat-marker',
-    html: `<div style="width:22px;height:22px;border-radius:9999px;background:${fill};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
+    className: 'intel-map-marker-wrap',
+    html,
+    iconSize: [outer, outer],
+    iconAnchor: [Math.round(outer / 2), Math.round(outer / 2)],
   })
 }
 
@@ -70,33 +176,80 @@ function FitBoundsController({
 }
 
 const TOOLTIP_CLASS =
-  '!rounded-lg !border !border-slate-600 !bg-slate-900 !px-2.5 !py-2 !text-[11px] !leading-snug !text-white !shadow-xl !max-w-[18rem]'
+  '!rounded-lg !border !border-slate-600 !bg-slate-900 !px-2.5 !py-2 !text-[11px] !leading-snug !text-white !shadow-xl !max-w-[20rem]'
 
 function SaturationMapLegend() {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
-      <span className="font-bold uppercase tracking-wide text-slate-500">Legenda</span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm ring-1 ring-slate-200" />
-        {'<'} 70% folga
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-3 w-3 rounded-full bg-amber-500 shadow-sm ring-1 ring-slate-200" />
-        70–94% atenção
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-3 w-3 rounded-full bg-rose-500 shadow-sm ring-1 ring-slate-200" />
-        ≥ 95% crítico
-      </span>
+    <div className="mb-3 space-y-3">
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Leitura do mapa</p>
+        <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-600">
+          Não é só GPS: o <span className="font-semibold text-slate-800">tamanho do marcador</span> reflete um índice de
+          atenção (ocupação + massivas abertas + tendência de crescimento). O{' '}
+          <span className="font-semibold text-slate-800">círculo semitransparente</span> ao redor estima a{' '}
+          <span className="font-semibold text-slate-800">pegada de impacto</span> pelos clientes afetados em massivas no
+          período. O calor de fundo agrega pressão regional e{' '}
+          <span className="font-semibold" style={{ color: CORPORATE_BRAND_PURPLE }}>
+            reforça violeta/corporativo + incidentes
+          </span>{' '}
+          onde aplicável.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
+        <span className="font-bold uppercase tracking-wide text-slate-500">Calor</span>
+        <span className="max-w-xl text-[11px] font-normal leading-snug text-slate-600">
+          Verde → âmbar → vermelho: concentração de pressão de uso; mais intenso com PJ ou massivas abertas.
+        </span>
+      </div>
+      <div
+        className="h-2.5 max-w-md rounded-full shadow-inner ring-1 ring-slate-200/80"
+        style={{
+          background:
+            'linear-gradient(90deg, #10b981 0%, #84cc16 18%, #eab308 40%, #f59e0b 58%, #f97316 78%, #e11d48 100%)',
+        }}
+        role="img"
+        aria-label="Escala do mapa de calor"
+      />
+
+      <div className="flex flex-wrap items-start gap-x-5 gap-y-2 text-[11px] text-slate-600">
+        <span className="font-bold uppercase tracking-wide text-slate-500">Marcador</span>
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm ring-1 ring-slate-200" />
+          &lt; 70%
+        </span>
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          <span className="h-3 w-3 rounded-full bg-amber-500 shadow-sm ring-1 ring-slate-200" />
+          70–94%
+        </span>
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          <span className="h-3 w-3 rounded-full bg-rose-500 shadow-sm ring-1 ring-slate-200" />
+          ≥ 95%
+        </span>
+        <span className="inline-flex items-center gap-1.5 font-semibold">
+          <span
+            className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded px-1 text-[8px] font-black text-white shadow-sm ring-1 ring-white"
+            style={{ backgroundColor: CORPORATE_BRAND_PURPLE }}
+          >
+            PJ
+          </span>
+          Corporativo (anel + selo)
+        </span>
+        <span className="font-normal text-slate-500">
+          Tamanho maior = índice de atenção mais alto · halo maior = mais clientes afetados (massivas).
+        </span>
+      </div>
     </div>
   )
 }
 
 export type IntelligenceSaturationMapProps = {
   cells: IntelligenceSaturationCell[]
+  /** Quando `cells` está vazio por filtro «só corporativo», evita mensagem genérica enganosa. */
+  mapEmptyHint?: string | null
 }
 
-export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapProps) {
+export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceSaturationMapProps) {
   const plotted = useMemo(
     () =>
       cells.filter((c) => {
@@ -113,6 +266,18 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
     [cells],
   )
 
+  const heatLatLngs = useMemo(
+    () =>
+      plotted.map((c) => {
+        const lat = c.latitude as number
+        const lng = c.longitude as number
+        return [lat, lng, heatIntensityFromCell(c)] as [number, number, number]
+      }),
+    [plotted],
+  )
+
+  const heatKey = useMemo(() => JSON.stringify(heatLatLngs), [heatLatLngs])
+
   const fitPoints = useMemo(
     () => plotted.map((c) => [c.latitude as number, c.longitude as number] as [number, number]),
     [plotted],
@@ -121,9 +286,20 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
   const skipped = cells.length - plotted.length
 
   if (cells.length === 0) {
+    const hint =
+      mapEmptyHint?.trim() ??
+      'Nenhum splitter com tendência no período selecionado. Ajuste o intervalo de datas ou aguarde snapshots no BFF local.'
+    const corporateEmpty = Boolean(mapEmptyHint?.trim())
     return (
-      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-8 text-center text-sm text-slate-500">
-        Nenhum splitter com tendência no período selecionado. Ajuste o intervalo de datas ou aguarde snapshots no BFF local.
+      <p
+        className={cn(
+          'rounded-2xl border border-dashed py-8 text-center text-sm',
+          corporateEmpty
+            ? 'border-[#7c3aed]/40 bg-[#7c3aed]/[0.06] text-[#4c1d95]'
+            : 'border-slate-200 bg-slate-50/80 text-slate-500',
+        )}
+      >
+        {hint}
       </p>
     )
   }
@@ -157,11 +333,33 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
           scrollWheelZoom
         >
           <TileLayer attribution={OSM_ATTR} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <SaturationHeatLayer key={heatKey} latlngs={heatLatLngs} />
           <FitBoundsController
             fitPoints={fitPoints}
             fallbackCenter={BR_FALLBACK_CENTER}
             fallbackZoom={4}
           />
+          {plotted.map((cell) => {
+            const lat = cell.latitude as number
+            const lng = cell.longitude as number
+            const bandColor = BAND_COLOR[saturationBand(cell.usagePercent)]
+            const haloR = haloRadiusPx(cell.affectedClientsTotal)
+            const haloStroke = cell.hasCorporateClients ? CORPORATE_BRAND_PURPLE : bandColor
+            return (
+              <CircleMarker
+                key={`halo-${cell.splitterCode}`}
+                center={[lat, lng]}
+                radius={haloR}
+                pathOptions={{
+                  fillColor: cell.hasCorporateClients ? CORPORATE_BRAND_PURPLE : bandColor,
+                  color: haloStroke,
+                  fillOpacity: cell.hasCorporateClients ? 0.16 : 0.11,
+                  weight: cell.hasCorporateClients ? 2 : 1,
+                  opacity: 0.55,
+                }}
+              />
+            )
+          })}
           {plotted.map((cell) => {
             const title = cell.splitterTitle.trim()
             const captured =
@@ -175,13 +373,16 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
                   }).format(cell.capturedAt)
                 : '—'
 
+            const lat = cell.latitude as number
+            const lng = cell.longitude as number
+
             return (
               <Marker
                 key={cell.splitterCode}
-                position={[cell.latitude as number, cell.longitude as number]}
-                icon={saturationDivIcon(cell.usagePercent)}
+                position={[lat, lng]}
+                icon={saturationMarkerDivIcon(cell)}
               >
-                <Tooltip direction="top" offset={[0, -10]} opacity={1} className={TOOLTIP_CLASS}>
+                <Tooltip direction="top" offset={[0, -12]} opacity={1} className={TOOLTIP_CLASS}>
                   <div className="text-left">
                     {title !== '' ? (
                       <>
@@ -193,7 +394,17 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
                     ) : (
                       <p className="font-mono font-bold text-amber-300">{cell.splitterCode}</p>
                     )}
+                    {cell.hasCorporateClients ? (
+                      <p className="mt-1 text-[10px] font-bold text-violet-200">
+                        ● Cliente corporativo neste splitter
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-white/95">
+                      Atenção visual:{' '}
+                      <span className="font-semibold tabular-nums">{cell.attentionScore.toFixed(0)}</span>
+                      <span className="text-white/70"> /100</span>
+                    </p>
+                    <p className="text-white/95">
                       Uso:{' '}
                       <span className="font-semibold tabular-nums">{cell.usagePercent.toFixed(2)}%</span>
                     </p>
@@ -202,6 +413,15 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
                       {' · '}
                       Δ30d: <span className="tabular-nums">{formatDeltaPercent(cell.delta30d)}</span>
                     </p>
+                    <p className="mt-1 text-white/85">
+                      Massivas abertas:{' '}
+                      <span className="font-semibold tabular-nums">{cell.openTickets}</span>
+                      {' · '}
+                      Afetados (período):{' '}
+                      <span className="font-semibold tabular-nums">
+                        {cell.affectedClientsTotal.toLocaleString('pt-BR')}
+                      </span>
+                    </p>
                     <p className="mt-1 text-white/75">
                       Status: <span className="font-semibold">{cell.label}</span>
                     </p>
@@ -209,14 +429,30 @@ export function IntelligenceSaturationMap({ cells }: IntelligenceSaturationMapPr
                   </div>
                 </Tooltip>
                 <Popup>
-                  <div className="min-w-[200px] text-sm">
+                  <div className="min-w-[220px] text-sm">
                     <p className="font-semibold text-slate-900">{title !== '' ? title : cell.splitterCode}</p>
                     <p className="font-mono text-xs text-slate-600">{cell.splitterCode}</p>
+                    {cell.hasCorporateClients ? (
+                      <p
+                        className="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white"
+                        style={{ backgroundColor: CORPORATE_BRAND_PURPLE }}
+                      >
+                        Cliente corporativo (PJ)
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs text-slate-700">
+                      Índice de atenção:{' '}
+                      <span className="font-semibold tabular-nums">{cell.attentionScore.toFixed(0)}</span>/100
+                    </p>
+                    <p className="text-xs text-slate-700">
                       Uso:{' '}
                       <span className="font-semibold tabular-nums">{cell.usagePercent.toFixed(1)}%</span>
                       {' · '}
                       {cell.label}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Massivas abertas: {cell.openTickets} · Afetados:{' '}
+                      {cell.affectedClientsTotal.toLocaleString('pt-BR')}
                     </p>
                     <Link
                       to={`/splitters/${encodeURIComponent(cell.splitterCode)}`}

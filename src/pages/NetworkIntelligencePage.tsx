@@ -18,6 +18,8 @@ import {
 } from 'recharts'
 import {
   AlertTriangle,
+  Briefcase,
+  Building2,
   ChartSpline,
   Database,
   Loader2,
@@ -30,6 +32,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
 import type { NetworkStats } from '@/shared/api/fetchNetworkStats'
 import {
@@ -119,7 +122,7 @@ function IntelligenceLowerDashboardSkeleton() {
   )
 }
 
-function DateRangeSelector({
+function DateRangePresetButtons({
   preset,
   onPresetChange,
   customStart,
@@ -136,49 +139,42 @@ function DateRangeSelector({
 }) {
   const presets: IntelligenceDateRangePreset[] = ['7d', '30d', '90d', 'custom']
   return (
-    <section className="rounded-3xl border border-white/45 bg-white/65 p-4 shadow-lg shadow-amber-500/10 backdrop-blur-xl">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-        Período de análise
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
+    <>
+      <div className="flex flex-wrap items-center gap-1.5">
         {presets.map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => onPresetChange(item)}
             className={cn(
-              'rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wide transition',
+              'rounded-lg px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs',
               preset === item
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md shadow-amber-500/25'
                 : 'bg-white/80 text-slate-600 hover:bg-amber-50 hover:text-amber-700',
             )}
           >
             {presetButtonLabel(item)}
           </button>
         ))}
-        {preset === 'custom' ? (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => onCustomStartChange(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-xs text-slate-700"
-            />
-            <span className="text-xs font-semibold text-slate-500">até</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => onCustomEndChange(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1.5 text-xs text-slate-700"
-            />
-          </div>
-        ) : null}
       </div>
-      <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
-        Todo o painel (todas as abas, ranking e gráficos) usa esta janela de datas. Em{" "}
-        <span className="font-semibold">Personalizado</span>, escolha início e fim inclusivos.
-      </p>
-    </section>
+      {preset === 'custom' ? (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => onCustomStartChange(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1 text-[11px] text-slate-700 sm:text-xs"
+          />
+          <span className="text-[11px] font-semibold text-slate-500">até</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => onCustomEndChange(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1 text-[11px] text-slate-700 sm:text-xs"
+          />
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -211,6 +207,16 @@ const TREND_SLICE_HELP: Record<TrendLabel, string> = {
   'Quase saturando': 'Próximo do limite de portas — alto risco operacional.',
 }
 
+/** Rótulos da barra de abas — alinhados ao que cada vista mostra no painel. */
+const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: string }> = [
+  { id: 'visao-geral', label: 'Panorama' },
+  { id: 'risco', label: 'Priorização' },
+  { id: 'operacao', label: 'Uso e massivas' },
+  { id: 'geografico', label: 'Mapa e OLTs' },
+  { id: 'ciclo-vida', label: 'Idade e cohorts' },
+  { id: 'manutencao', label: 'Manutenções ERP' },
+]
+
 const TAB_INTRO: Record<IntelligenceWindow, string> = {
   'visao-geral':
     'Panorama da rede no período: ocupação global, como os splitters estão classificados por tendência, massivas e indicadores para decisão rápida.',
@@ -219,7 +225,7 @@ const TAB_INTRO: Record<IntelligenceWindow, string> = {
   operacao:
     'Leitura operacional: evolução média da ocupação, volume de massivas por splitter, padrão de horários de abertura e status por equipamento.',
   geografico:
-    'Agregações por OLT e por local (condomínio/rua) mais o mapa de saturação — sempre entre splitters que passam pelo filtro atual.',
+    'Indicadores por cidade, bairro e presença corporativa (cadastro do equipamento), agregações por OLT, contexto de condomínio/rua e mapa de calor — sempre no recorte filtrado.',
   'ciclo-vida':
     'Idade do equipamento cruzada com pressão de uso: buckets de idade, ranking preventivo, alertas e cohorts por ano de implantação.',
   manutencao:
@@ -299,6 +305,86 @@ function matrixKeyForRiskRow(
   return 'baixoImpactoBaixaUrgencia'
 }
 
+type RegionalInsightRow = {
+  label: string
+  splitters: number
+  criticalSplitters: number
+  avgUsagePercent: number
+  avgDeltaReference: number
+  openTickets: number
+  affectedClientsTotal: number
+  splittersWithCorporate: number
+  directive: string
+}
+
+function regionalInsightDirective(args: {
+  splitters: number
+  criticalSplitters: number
+  avgUsagePercent: number
+  avgDeltaReference: number
+  openTickets: number
+  affectedClientsTotal: number
+  splittersWithCorporate: number
+}): string {
+  const n = args.splitters
+  const critShare = n > 0 ? args.criticalSplitters / n : 0
+  const parts: string[] = []
+  if (critShare >= 0.35 && args.criticalSplitters >= 2) {
+    parts.push('Alta fração de equipamentos críticos — priorizar capacidade ou remanejamento na área.')
+  } else if (args.criticalSplitters >= 1 && args.avgUsagePercent >= 88) {
+    parts.push('Uso médio elevado com saturados — revisar ordem de obra e transmissão.')
+  }
+  if (args.avgDeltaReference >= 4) {
+    parts.push('Crescimento rápido de ocupação — antecipar expansão de porta ou OLT.')
+  }
+  if (args.openTickets >= 3) {
+    parts.push('Várias massivas abertas — investigar causa raiz e plantão.')
+  }
+  if (args.affectedClientsTotal >= 120) {
+    parts.push('Alto volume de clientes afetados por incidentes — reforçar comunicação e SLA.')
+  }
+  if (args.splittersWithCorporate >= 1 && args.criticalSplitters >= 1) {
+    parts.push('Corporativo em zona sensível — dar peso a SLA comercial.')
+  }
+  if (parts.length === 0) {
+    if (args.avgUsagePercent < 72 && args.avgDeltaReference <= 1.5 && args.criticalSplitters === 0) {
+      return 'Perfil mais folgado neste recorte — manter monitoramento periódico.'
+    }
+    return 'Sem alerta prioritário automático; acompanhar tendência no período.'
+  }
+  return parts.slice(0, 2).join(' ')
+}
+
+function corporateRegionalInsightDirective(args: {
+  splittersTotal: number
+  splittersWithCorporate: number
+  criticalAmongCorporate: number
+  avgUsageAmongCorporate: number
+  openMassivasAmongCorporate: number
+  affectedAmongCorporate: number
+}): string {
+  if (args.splittersTotal === 0) {
+    return 'Sem equipamentos no recorte filtrado.'
+  }
+  if (args.splittersWithCorporate === 0) {
+    return 'Nenhum splitter com cliente corporativo no recorte filtrado.'
+  }
+  const parts: string[] = []
+  if (args.criticalAmongCorporate >= 1) {
+    parts.push('Há corporativo em uso crítico — priorizar continuidade e escalação N2/N3.')
+  }
+  if (args.openMassivasAmongCorporate >= 2) {
+    parts.push('Massivas abertas envolvendo corporativo — revisar causa raiz com urgência.')
+  }
+  if (args.avgUsageAmongCorporate >= 90) {
+    parts.push('Pressão média alta nos splitters com PJ — planejar capacidade.')
+  }
+  if (parts.length === 0) {
+    return 'Base corporativa presente com pressão moderada — ritmo habitual de governança.'
+  }
+  return parts.slice(0, 2).join(' ')
+}
+
 export function NetworkIntelligencePage() {
   const [preset, setPreset] = useState<IntelligenceDateRangePreset>('30d')
   const [customStart, setCustomStart] = useState('')
@@ -310,6 +396,7 @@ export function NetworkIntelligencePage() {
   const [selectedMatrixKey, setSelectedMatrixKey] = useState<
     'altoImpactoAltaUrgencia' | 'altoImpactoBaixaUrgencia' | 'baixoImpactoAltaUrgencia' | 'baixoImpactoBaixaUrgencia' | null
   >(null)
+  const [mapCorporateOnly, setMapCorporateOnly] = useState(false)
 
   const customStartDate = customStart ? new Date(`${customStart}T00:00:00`) : null
   const customEndDate = customEnd ? new Date(`${customEnd}T23:59:59`) : null
@@ -334,10 +421,17 @@ export function NetworkIntelligencePage() {
     lifecycleAlerts,
     maintenanceBySplitter,
     maintenanceTotals,
-  } = useNetworkIntelligenceData(preset, customStartDate, customEndDate)
+  } = useNetworkIntelligenceData(preset, customStartDate, customEndDate, mapCorporateOnly)
 
-  const showFullSkeleton = query.isPending && query.isFetching
-  const showBackgroundRefresh = query.isFetching && !query.isPending
+  const mapCorporateEmptyHint = useMemo(() => {
+    if (!mapCorporateOnly || saturationCells.length > 0) return null
+    if (trends.length === 0) return null
+    return 'Com «só corporativo» ativo, nenhum splitter com cliente PJ entrou na amostra de tendência deste período com os filtros atuais. Desligue o filtro ou afrouxe período / busca.'
+  }, [mapCorporateOnly, saturationCells.length, trends.length])
+
+  /** Só skeleton “vazio” na primeira carga; com cache (Dashboard ou visita anterior) mostra dados logo. */
+  const showFullSkeleton = query.fetchStatus === 'fetching' && query.dataUpdatedAt === 0
+  const showBackgroundRefresh = query.isFetching && query.dataUpdatedAt > 0
 
   const intelligenceSnapshot = useMemo(() => {
     const folga = trends.filter((t) => t.currentUsagePercent < 70).length
@@ -543,6 +637,133 @@ export function NetworkIntelligencePage() {
     }
   }, [contextualRiskRanking])
 
+  const contextualRegionalInsights = useMemo(() => {
+    type Agg = {
+      splitters: number
+      criticalSplitters: number
+      sumUsage: number
+      sumDelta: number
+      openTickets: number
+      affectedClientsTotal: number
+      corporateCodes: Set<string>
+    }
+    const mk = (): Agg => ({
+      splitters: 0,
+      criticalSplitters: 0,
+      sumUsage: 0,
+      sumDelta: 0,
+      openTickets: 0,
+      affectedClientsTotal: 0,
+      corporateCodes: new Set<string>(),
+    })
+    const bump = (agg: Agg, row: IntelligenceRiskRankingRow) => {
+      agg.splitters += 1
+      if (row.currentUsagePercent >= 95) agg.criticalSplitters += 1
+      agg.sumUsage += row.currentUsagePercent
+      agg.sumDelta += row.selectedDelta
+      agg.openTickets += row.openTickets
+      agg.affectedClientsTotal += row.affectedClientsTotal
+      if (row.hasCorporateClients) agg.corporateCodes.add(row.splitterCode)
+    }
+    const finalize = (label: string, agg: Agg): RegionalInsightRow => {
+      const n = agg.splitters
+      return {
+        label,
+        splitters: n,
+        criticalSplitters: agg.criticalSplitters,
+        avgUsagePercent: Number((agg.sumUsage / Math.max(1, n)).toFixed(1)),
+        avgDeltaReference: Number((agg.sumDelta / Math.max(1, n)).toFixed(2)),
+        openTickets: agg.openTickets,
+        affectedClientsTotal: agg.affectedClientsTotal,
+        splittersWithCorporate: agg.corporateCodes.size,
+        directive: regionalInsightDirective({
+          splitters: n,
+          criticalSplitters: agg.criticalSplitters,
+          avgUsagePercent: Number((agg.sumUsage / Math.max(1, n)).toFixed(1)),
+          avgDeltaReference: Number((agg.sumDelta / Math.max(1, n)).toFixed(2)),
+          openTickets: agg.openTickets,
+          affectedClientsTotal: agg.affectedClientsTotal,
+          splittersWithCorporate: agg.corporateCodes.size,
+        }),
+      }
+    }
+
+    const byCity = new Map<string, Agg>()
+    const byBairro = new Map<string, Agg>()
+    for (const row of contextualRiskRanking) {
+      const cityLabel = row.cityCadastro?.trim() ? row.cityCadastro.trim() : 'Sem cidade no cadastro'
+      let cAgg = byCity.get(cityLabel)
+      if (!cAgg) {
+        cAgg = mk()
+        byCity.set(cityLabel, cAgg)
+      }
+      bump(cAgg, row)
+
+      const nh = row.neighborhoodCadastro?.trim()
+      const bairroLabel = nh ? `${nh} · ${cityLabel}` : `Sem bairro · ${cityLabel}`
+      let bAgg = byBairro.get(bairroLabel)
+      if (!bAgg) {
+        bAgg = mk()
+        byBairro.set(bairroLabel, bAgg)
+      }
+      bump(bAgg, row)
+    }
+
+    const topCidades = [...byCity.entries()]
+      .map(([label, agg]) => finalize(label, agg))
+      .sort(
+        (a, b) =>
+          b.criticalSplitters - a.criticalSplitters ||
+          b.avgUsagePercent - a.avgUsagePercent ||
+          b.openTickets - a.openTickets,
+      )
+      .slice(0, 8)
+
+    const topBairros = [...byBairro.entries()]
+      .map(([label, agg]) => finalize(label, agg))
+      .sort(
+        (a, b) =>
+          b.criticalSplitters - a.criticalSplitters ||
+          b.affectedClientsTotal - a.affectedClientsTotal ||
+          b.splitters - a.splitters,
+      )
+      .slice(0, 12)
+
+    const splittersTotal = contextualRiskRanking.length
+    const corpRows = contextualRiskRanking.filter((r) => r.hasCorporateClients)
+    const splittersWithCorporate = corpRows.length
+    const criticalAmongCorporate = corpRows.filter((r) => r.currentUsagePercent >= 95).length
+    const avgUsageAmongCorporate =
+      corpRows.length > 0
+        ? Number(
+            (corpRows.reduce((s, r) => s + r.currentUsagePercent, 0) / corpRows.length).toFixed(1),
+          )
+        : 0
+    const openMassivasAmongCorporate = corpRows.reduce((s, r) => s + r.openTickets, 0)
+    const affectedAmongCorporate = corpRows.reduce((s, r) => s + r.affectedClientsTotal, 0)
+
+    return {
+      topCidades,
+      topBairros,
+      corporateSnapshot: {
+        splittersTotal,
+        splittersWithCorporate,
+        criticalAmongCorporate,
+        avgUsageAmongCorporate,
+        openMassivasAmongCorporate,
+        affectedAmongCorporate,
+        directive: corporateRegionalInsightDirective({
+          splittersTotal,
+          splittersWithCorporate,
+          criticalAmongCorporate,
+          avgUsageAmongCorporate,
+          openMassivasAmongCorporate,
+          affectedAmongCorporate,
+        }),
+      },
+    }
+  }, [contextualRiskRanking])
+
   const contextualLifecycle = useMemo(() => {
     const rows = contextualRiskRanking
     const kpis = {
@@ -643,138 +864,149 @@ export function NetworkIntelligencePage() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="rounded-[28px] border border-white/50 bg-gradient-to-br from-amber-500 via-yellow-500 to-amber-600 p-6 text-white shadow-2xl shadow-amber-500/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/70">Novo Módulo</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight">Painel da rede</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-white/85">
-              Cruza ocupação de portas, classificação de tendência por splitter, massivas e — nas outras abas —
-              risco, geografia e manutenções. Escolha o período abaixo e use busca/filtros para focar OLT, faixa de
-              risco ou idade; os números respondem sempre à mesma janela.
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-wide">
-            {showBackgroundRefresh ? (
-              <Loader2 className="size-3.5 shrink-0 animate-spin text-white/95" aria-hidden />
-            ) : null}
-            {showBackgroundRefresh ? (
-              <span className="text-[10px] font-bold normal-case tracking-normal text-white/90">
-                Atualizando dados…
-              </span>
-            ) : null}
-            <span>Fonte: {source === 'mock' ? 'Mock fallback' : 'BFF local'}</span>
-          </span>
-        </div>
-      </header>
-
-      <DateRangeSelector
-        preset={preset}
-        onPresetChange={setPreset}
-        customStart={customStart}
-        customEnd={customEnd}
-        onCustomStartChange={setCustomStart}
-        onCustomEndChange={setCustomEnd}
+    <div className="min-w-0 space-y-5">
+      <AppPageHeader
+        icon={ChartSpline}
+        badge="Inteligência de rede"
+        title="Painel da rede"
+        description="Cruza ocupação de portas, tendência por splitter, massivas e, nas outras abas, risco, geografia e manutenções. Escolha o período abaixo e use busca e filtros para focar OLT, faixa de risco ou idade; os números respondem sempre à mesma janela."
+        trailing={
+          showBackgroundRefresh ? (
+            <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-amber-200/80 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-sm">
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-700" aria-hidden />
+              <span className="text-[10px] font-bold normal-case text-neutral-600">Atualizando dados…</span>
+            </span>
+          ) : null
+        }
       />
 
-      <section className="rounded-3xl border border-white/45 bg-white/65 p-3 shadow-lg shadow-amber-500/10 backdrop-blur-xl">
-        <div className="space-y-2.5">
-          <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="inline-flex min-w-full items-center gap-2 pr-2 sm:flex sm:min-w-0 sm:flex-wrap sm:pr-0">
-              {([
-                { id: 'visao-geral', label: 'Visão Geral' },
-                { id: 'risco', label: 'Risco' },
-                { id: 'operacao', label: 'Operação' },
-                { id: 'geografico', label: 'Geográfico' },
-                { id: 'ciclo-vida', label: 'Ciclo de Vida' },
-                  { id: 'manutencao', label: 'Manutenção' },
-              ] as Array<{ id: IntelligenceWindow; label: string }>).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveWindow(item.id)}
-                  className={cn(
-                    'shrink-0 whitespace-nowrap rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-wide transition sm:text-xs',
-                    activeWindow === item.id
-                      ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30'
-                      : 'bg-white/80 text-slate-600 hover:bg-amber-50 hover:text-amber-700',
-                  )}
-                >
-                  {item.label}
-                </button>
-              ))}
+      <section className="rounded-2xl border border-white/45 bg-white/70 p-3 shadow-md shadow-amber-500/10 backdrop-blur-xl md:p-3.5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              Período
+            </span>
+            <DateRangePresetButtons
+              preset={preset}
+              onPresetChange={setPreset}
+              customStart={customStart}
+              customEnd={customEnd}
+              onCustomStartChange={setCustomStart}
+              onCustomEndChange={setCustomEnd}
+            />
+          </div>
+          <div className="min-w-0 flex-1 lg:max-w-none">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 lg:text-right">
+              Aba
+            </p>
+            <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:thin] lg:flex lg:justify-end">
+              <div className="inline-flex items-center gap-1.5 lg:flex-wrap lg:justify-end">
+                {INTELLIGENCE_TAB_ITEMS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveWindow(item.id)}
+                    className={cn(
+                      'shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs',
+                      activeWindow === item.id
+                        ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md shadow-amber-500/25'
+                        : 'bg-white/80 text-slate-600 hover:bg-amber-50 hover:text-amber-700',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
-            <input
-              value={splitterSearch}
-              onChange={(e) => setSplitterSearch(e.target.value)}
-              placeholder="Buscar splitter/OLT..."
-              className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-xs text-slate-700 sm:w-52 sm:py-1.5"
-            />
-            <select
-              value={riskBandFilter}
-              onChange={(e) =>
-                setRiskBandFilter(
-                  e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo',
-                )
-              }
-              className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-xs text-slate-700 sm:w-auto sm:py-1.5"
-            >
-              <option value="all">Risco: todos</option>
-              <option value="critico">Risco crítico</option>
-              <option value="alto">Risco alto</option>
-              <option value="moderado">Risco moderado</option>
-              <option value="baixo">Risco baixo</option>
-            </select>
-            <select
-              value={ageFilter}
-              onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
-              className="w-full rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-xs text-slate-700 sm:w-auto sm:py-1.5"
-            >
-              <option value="all">Idade: todas</option>
-              <option value="0-1">Idade: 0-1 ano</option>
-              <option value="1-3">Idade: 1-3 anos</option>
-              <option value="3-5">Idade: 3-5 anos</option>
-              <option value="5+">Idade: 5+ anos</option>
-            </select>
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              disabled={!hasActiveFilters}
-              className={cn(
-                'w-full rounded-lg border px-2 py-2 text-xs font-bold transition sm:w-auto sm:py-1.5',
-                hasActiveFilters
-                  ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                  : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
-              )}
-            >
-              Limpar filtros
-            </button>
-          </div>
-          <p className="rounded-xl border border-white/40 bg-white/50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
-            <span className="font-bold text-slate-800">Esta aba:</span> {TAB_INTRO[activeWindow]}
-          </p>
         </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/40 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <input
+            value={splitterSearch}
+            onChange={(e) => setSplitterSearch(e.target.value)}
+            placeholder="Buscar splitter/OLT..."
+            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-48 md:w-52"
+          />
+          <select
+            value={riskBandFilter}
+            onChange={(e) =>
+              setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
+            }
+            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+          >
+            <option value="all">Risco: todos</option>
+            <option value="critico">Risco crítico</option>
+            <option value="alto">Risco alto</option>
+            <option value="moderado">Risco moderado</option>
+            <option value="baixo">Risco baixo</option>
+          </select>
+          <select
+            value={ageFilter}
+            onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
+            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+          >
+            <option value="all">Idade: todas</option>
+            <option value="0-1">Idade: 0-1 ano</option>
+            <option value="1-3">Idade: 1-3 anos</option>
+            <option value="3-5">Idade: 3-5 anos</option>
+            <option value="5+">Idade: 5+ anos</option>
+          </select>
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            disabled={!hasActiveFilters}
+            className={cn(
+              'rounded-lg border px-2 py-1.5 text-xs font-bold transition sm:ml-auto',
+              hasActiveFilters
+                ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
+            )}
+          >
+            Limpar filtros
+          </button>
+        </div>
+
+        <details className="mt-2 border-t border-slate-200/40 pt-2">
+          <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
+            <span className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">
+              Ajuda: período, filtros e o que esta aba mostra
+            </span>
+          </summary>
+          <div className="mt-2 space-y-2 rounded-lg border border-white/50 bg-white/50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
+            <p>
+              Todo o painel usa a mesma janela de datas. Em{' '}
+              <span className="font-semibold">Personalizado</span>, defina início e fim inclusivos.
+            </p>
+            <p>
+              <span className="font-bold text-slate-800">Esta aba:</span> {TAB_INTRO[activeWindow]}
+            </p>
+          </div>
+        </details>
       </section>
 
-      <section className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
-        <p className="font-semibold">
-          Base do ranking: <span className="font-black">{deltaReferenceLabel}</span>
-          <span className="font-normal text-amber-800/95">
-            {" "}
-            (variação de ocupação em 7 ou 30 dias, conforme o período escolhido)
+      <details className="group rounded-xl border border-amber-200/80 bg-amber-50/80 text-[11px] text-amber-950 shadow-sm">
+        <summary className="cursor-pointer list-none px-3 py-2 font-semibold text-amber-950 [&::-webkit-details-marker]:hidden">
+          <span className="underline decoration-amber-300/80 underline-offset-2 group-open:no-underline">
+            Como lemos ranking, score e matriz impacto × urgência
           </span>
-        </p>
-        <p className="mt-1 text-amber-800/90">
-          Score, deltas das tabelas e séries temporais usam a mesma janela do seletor de datas. Na matriz impacto ×
-          urgência: <span className="font-semibold">impacto alto</span> = ≥50 clientes afetados ou ≥4 tickets de massiva;
-          {" "}
-          <span className="font-semibold">urgência alta</span> = ocupação ≥85%, ou {deltaReferenceLabel} ≥5 pontos
-          percentuais, ou massivas ainda abertas.
-        </p>
-      </section>
+        </summary>
+        <div className="space-y-1.5 border-t border-amber-200/60 px-3 pb-3 pt-2 text-amber-900/95">
+          <p className="font-semibold">
+            Base do ranking: <span className="font-black">{deltaReferenceLabel}</span>
+            <span className="font-normal text-amber-800/95">
+              {' '}
+              (variação de ocupação em 7 ou 30 dias, conforme o período escolhido)
+            </span>
+          </p>
+          <p>
+            Score, deltas das tabelas e séries temporais usam a mesma janela do seletor de datas. Na matriz impacto ×
+            urgência: <span className="font-semibold">impacto alto</span> = ≥50 clientes afetados ou ≥4 tickets de
+            massiva; <span className="font-semibold">urgência alta</span> = ocupação ≥85%, ou {deltaReferenceLabel} ≥5
+            pontos percentuais, ou massivas ainda abertas.
+          </p>
+        </div>
+      </details>
 
       {showFullSkeleton && networkStatsPreview ? (
         <div
@@ -1688,6 +1920,218 @@ export function NetworkIntelligencePage() {
 
       {activeWindow === 'geografico' ? (
         <>
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, delay: 0.02 }}
+        className="rounded-3xl border border-[#7c3aed]/25 bg-white/70 p-4 shadow-xl shadow-amber-500/10 shadow-[#7c3aed]/08 backdrop-blur-xl ring-1 ring-[#7c3aed]/15"
+      >
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Building2 size={18} className="shrink-0 text-amber-600" aria-hidden />
+            <h2 className="text-sm font-bold text-slate-800">
+              Indicadores por cidade, bairro e{' '}
+              <span className="font-extrabold text-[#7c3aed]">corporativo</span>
+            </h2>
+          </div>
+          <p className="max-w-3xl text-[11px] leading-relaxed text-slate-600">
+            Cidade e bairro usam o cadastro do equipamento (
+            <span className="font-mono text-[10px] text-slate-500">CIDADE/BAIRRO[SPLT.SECUNDARIO]</span>). Corporativo:
+            pelo menos um cliente PJ (insígnia contrato corporativo / PME). Tudo abaixo obedece aos filtros desta página —
+            serve para comparar regiões e decidir onde concentrar obra, NOC ou relacionamento com cliente.
+          </p>
+        </div>
+
+        {contextualRiskRanking.length === 0 ? (
+          <p className="rounded-xl bg-slate-50/90 px-3 py-4 text-center text-sm text-slate-600">
+            Nenhum splitter no recorte atual. Afrouxe filtros ou o período para ver indicadores regionais.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-3 py-3 ring-1 ring-slate-200/60">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Splitters no recorte</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
+                  {contextualRegionalInsights.corporateSnapshot.splittersTotal.toLocaleString('pt-BR')}
+                </p>
+              </article>
+              <article className="rounded-2xl border-2 border-[#7c3aed]/45 bg-[#7c3aed]/[0.07] px-3 py-3 shadow-sm shadow-[#7c3aed]/10">
+                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#5b21b6]">
+                  <Briefcase size={12} className="shrink-0 text-[#7c3aed]" aria-hidden />
+                  Com corporativo
+                </p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-[#4c1d95]">
+                  {contextualRegionalInsights.corporateSnapshot.splittersWithCorporate.toLocaleString('pt-BR')}
+                  <span className="ml-1 text-xs font-semibold text-[#7c3aed]">
+                    (
+                    {contextualRegionalInsights.corporateSnapshot.splittersTotal > 0
+                      ? (
+                          (contextualRegionalInsights.corporateSnapshot.splittersWithCorporate /
+                            contextualRegionalInsights.corporateSnapshot.splittersTotal) *
+                          100
+                        ).toFixed(1)
+                      : '0.0'}
+                    %)
+                  </span>
+                </p>
+              </article>
+              <article className="rounded-2xl border-2 border-[#7c3aed]/35 bg-gradient-to-br from-rose-50/95 to-[#7c3aed]/10 px-3 py-3 shadow-sm shadow-[#7c3aed]/10">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[#5b21b6]">
+                  Críticos (≥95%) entre PJ
+                </p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-rose-700">
+                  {contextualRegionalInsights.corporateSnapshot.criticalAmongCorporate.toLocaleString('pt-BR')}
+                </p>
+              </article>
+              <article className="rounded-2xl border-2 border-[#7c3aed]/40 bg-[#7c3aed]/[0.09] px-3 py-3 shadow-sm shadow-[#7c3aed]/12">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[#5b21b6]">Uso médio nos splitters PJ</p>
+                <p className="mt-1 text-2xl font-black tabular-nums text-[#4c1d95]">
+                  {contextualRegionalInsights.corporateSnapshot.splittersWithCorporate > 0
+                    ? `${contextualRegionalInsights.corporateSnapshot.avgUsageAmongCorporate.toFixed(1)}%`
+                    : '—'}
+                </p>
+                <p className="mt-1 text-[10px] text-[#5b21b6]/95">
+                  Massivas abertas (soma):{' '}
+                  <span className="font-bold tabular-nums text-[#4c1d95]">
+                    {contextualRegionalInsights.corporateSnapshot.openMassivasAmongCorporate.toLocaleString('pt-BR')}
+                  </span>
+                  {' · '}
+                  Afetados (soma):{' '}
+                  <span className="font-bold tabular-nums text-[#4c1d95]">
+                    {contextualRegionalInsights.corporateSnapshot.affectedAmongCorporate.toLocaleString('pt-BR')}
+                  </span>
+                </p>
+              </article>
+            </div>
+
+            <div className="mt-4 rounded-xl border-2 border-[#7c3aed]/35 bg-[#7c3aed]/[0.08] px-3 py-2.5 text-[11px] leading-snug text-[#4c1d95]">
+              <span className="font-bold text-[#7c3aed]">Direção (corporativo):</span>{' '}
+              {contextualRegionalInsights.corporateSnapshot.directive}
+            </div>
+
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              <div className="min-w-0 rounded-2xl border border-slate-200/70 bg-white/60 p-3 ring-1 ring-slate-200/50">
+                <h3 className="text-xs font-bold text-slate-800">Por cidade</h3>
+                <p className="mt-0.5 text-[10px] text-slate-500">
+                  Ordenado por criticidade e uso médio. Última coluna sugere foco de ação.
+                </p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-[11px]">
+                    <thead className="border-b border-slate-200/80 text-[9px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-1.5 py-1.5">Cidade</th>
+                        <th className="px-1.5 py-1.5">Spl.</th>
+                        <th className="px-1.5 py-1.5">Crít.</th>
+                        <th className="px-1.5 py-1.5">Uso ∅</th>
+                        <th className="px-1.5 py-1.5">{deltaReferenceLabel} ∅</th>
+                        <th className="px-1.5 py-1.5">M.ab.</th>
+                        <th className="px-1.5 py-1.5">Afet.</th>
+                        <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {contextualRegionalInsights.topCidades.map((row) => (
+                        <tr key={row.label} className="align-top hover:bg-slate-50/70">
+                          <td className="px-1.5 py-1.5 font-semibold text-slate-900">{row.label}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.splitters}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.criticalSplitters}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.avgUsagePercent.toFixed(1)}%</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
+                            {row.avgDeltaReference >= 0 ? '+' : ''}
+                            {row.avgDeltaReference.toFixed(2)}%
+                          </td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.openTickets}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
+                            {row.affectedClientsTotal.toLocaleString('pt-BR')}
+                          </td>
+                          <td
+                            className={cn(
+                              'px-1.5 py-1.5 tabular-nums',
+                              row.splittersWithCorporate > 0
+                                ? 'font-bold text-[#7c3aed]'
+                                : 'text-slate-700',
+                            )}
+                          >
+                            {row.splittersWithCorporate}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                  {contextualRegionalInsights.topCidades.slice(0, 4).map((row) => (
+                    <li key={`d-${row.label}`} className="text-[10px] leading-snug text-slate-600">
+                      <span className="font-semibold text-slate-700">{row.label}:</span> {row.directive}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="min-w-0 rounded-2xl border border-slate-200/70 bg-white/60 p-3 ring-1 ring-slate-200/50">
+                <h3 className="text-xs font-bold text-slate-800">Por bairro</h3>
+                <p className="mt-0.5 text-[10px] text-slate-500">
+                  Chave &quot;bairro · cidade&quot; para evitar homônimos. Mesmas métricas da cidade.
+                </p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-[11px]">
+                    <thead className="border-b border-slate-200/80 text-[9px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-1.5 py-1.5">Bairro · cidade</th>
+                        <th className="px-1.5 py-1.5">Spl.</th>
+                        <th className="px-1.5 py-1.5">Crít.</th>
+                        <th className="px-1.5 py-1.5">Uso ∅</th>
+                        <th className="px-1.5 py-1.5">{deltaReferenceLabel} ∅</th>
+                        <th className="px-1.5 py-1.5">M.ab.</th>
+                        <th className="px-1.5 py-1.5">Afet.</th>
+                        <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {contextualRegionalInsights.topBairros.map((row) => (
+                        <tr key={row.label} className="align-top hover:bg-slate-50/70">
+                          <td className="max-w-[14rem] px-1.5 py-1.5 font-semibold text-slate-900">
+                            <span className="line-clamp-2">{row.label}</span>
+                          </td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.splitters}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.criticalSplitters}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.avgUsagePercent.toFixed(1)}%</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
+                            {row.avgDeltaReference >= 0 ? '+' : ''}
+                            {row.avgDeltaReference.toFixed(2)}%
+                          </td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.openTickets}</td>
+                          <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
+                            {row.affectedClientsTotal.toLocaleString('pt-BR')}
+                          </td>
+                          <td
+                            className={cn(
+                              'px-1.5 py-1.5 tabular-nums',
+                              row.splittersWithCorporate > 0
+                                ? 'font-bold text-[#7c3aed]'
+                                : 'text-slate-700',
+                            )}
+                          >
+                            {row.splittersWithCorporate}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                  {contextualRegionalInsights.topBairros.slice(0, 5).map((row) => (
+                    <li key={`bd-${row.label}`} className="text-[10px] leading-snug text-slate-600">
+                      <span className="font-semibold text-slate-700">{row.label}:</span> {row.directive}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </>
+        )}
+      </motion.section>
+
       <section className="grid gap-4 xl:grid-cols-3">
         <motion.article
           initial={{ opacity: 0, y: 20 }}
@@ -1810,12 +2254,37 @@ export function NetworkIntelligencePage() {
         transition={{ duration: 0.45, delay: 0.22 }}
         className="overflow-visible rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
       >
-        <h2 className="mb-1 text-sm font-bold text-slate-800">Mapa de saturação por splitter</h2>
+        <h2 className="mb-1 text-sm font-bold text-slate-800">Mapa inteligente de pressão na rede</h2>
         <p className="mb-3 text-xs leading-relaxed text-slate-600">
-          Amostra estratificada de até 80 splitters do período (mistura folga/atenção/crítico quando existirem). Pontos na
-          posição cadastrada (OpenStreetMap); cor = faixa de ocupação atual (ver legenda abaixo do mapa). Tooltip com
-          resumo; clique para abrir a ficha — mesmo estilo do mapa no detalhe do splitter.
+          Até 80 splitters em amostra estratificada. Além do calor regional, cada ponto combina{' '}
+          <span className="font-semibold text-slate-800">tamanho</span> (índice de atenção: uso + massivas + tendência),{' '}
+          <span className="font-semibold text-slate-800">halo</span> (volume de clientes afetados em massivas no período) e{' '}
+          <span className="font-semibold text-[#7c3aed]">destaque roxo</span> para equipamentos com cliente corporativo.
+          Com o filtro abaixo você vê <span className="font-semibold text-slate-800">apenas splitters com PJ</span>; desligado,
+          a amostra mistura toda a base (crítico / atenção / folga), e o <span className="font-semibold text-[#7c3aed]">roxo</span>{' '}
+          marca só quem tem corporativo.
+          Passe o mouse ou clique para métricas completas e link para a ficha.
         </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] text-slate-500">
+            Filtro do mapa (não altera tabelas acima).
+          </p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={mapCorporateOnly}
+            onClick={() => setMapCorporateOnly((v) => !v)}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-full border-2 px-3 py-1.5 text-[11px] font-bold transition',
+              mapCorporateOnly
+                ? 'border-[#7c3aed] bg-[#7c3aed]/12 text-[#5b21b6] shadow-sm shadow-[#7c3aed]/15'
+                : 'border-slate-200 bg-white/90 text-slate-600 hover:border-[#7c3aed]/35',
+            )}
+          >
+            <Briefcase className="size-3.5 shrink-0 text-[#7c3aed]" aria-hidden />
+            Só corporativo no mapa
+          </button>
+        </div>
         <Suspense
           fallback={
             <div
@@ -1824,7 +2293,7 @@ export function NetworkIntelligencePage() {
             />
           }
         >
-          <IntelligenceSaturationMap cells={saturationCells} />
+          <IntelligenceSaturationMap cells={saturationCells} mapEmptyHint={mapCorporateEmptyHint} />
         </Suspense>
       </motion.section>
         </>
@@ -1832,11 +2301,11 @@ export function NetworkIntelligencePage() {
 
       {activeWindow === 'manutencao' ? (
         <>
-          <p className="text-[11px] leading-relaxed text-slate-600">
+          <p className="break-words text-[11px] leading-relaxed text-slate-600">
             Dados do Elleven/ERP no intervalo de datas. Protocolos podem incluir rompimento, troca de flat e outros tipos
             mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita busca e filtros da barra superior.
           </p>
-          <section className="mt-3 grid gap-4 xl:grid-cols-4">
+          <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <motion.article
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1893,12 +2362,12 @@ export function NetworkIntelligencePage() {
             </motion.article>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-3">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <motion.article
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.14 }}
-              className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="min-w-0 xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -1927,45 +2396,122 @@ export function NetworkIntelligencePage() {
                   Nenhum dado de manutenção encontrado para o filtro selecionado.
                 </p>
               ) : (
-                <div className="overflow-auto">
-                  <table className="w-full min-w-[820px] text-left text-xs">
-                    <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-2 py-2">Splitter</th>
-                        <th className="px-2 py-2">AP</th>
-                        <th className="px-2 py-2">Manutenções</th>
-                        <th className="px-2 py-2">Protocolos</th>
-                        <th className="px-2 py-2">Clientes</th>
-                        <th className="px-2 py-2">Abertas</th>
-                        <th className="px-2 py-2">Rompimento</th>
-                        <th className="px-2 py-2">Troca flat</th>
-                        <th className="px-2 py-2">Última</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {contextualMaintenanceRows.slice(0, 80).map((row) => (
-                        <tr key={`${row.splitterCode}-${row.accessPointCode}`} className="hover:bg-slate-50/70">
-                          <td className="px-2 py-2">
-                            <p className="font-semibold text-slate-900">
-                              {row.splitterTitle || row.splitterCode}
-                            </p>
-                            <p className="font-mono text-[10px] text-slate-500">{row.splitterCode}</p>
-                          </td>
-                          <td className="px-2 py-2 font-mono text-[11px] text-slate-700">{row.accessPointCode || '—'}</td>
-                          <td className="px-2 py-2 tabular-nums font-semibold text-slate-900">{row.totalMaintenances.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueProtocols.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueClients.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 tabular-nums text-amber-900">{row.openMaintenances.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.rompimentoCount.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 tabular-nums text-slate-700">{row.trocaFlatCount.toLocaleString('pt-BR')}</td>
-                          <td className="px-2 py-2 text-[11px] text-slate-600">
-                            {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
-                          </td>
+                <>
+                  <div className="space-y-3 lg:hidden">
+                    {contextualMaintenanceRows.slice(0, 80).map((row) => (
+                      <article
+                        key={`m-${row.splitterCode}-${row.accessPointCode}`}
+                        className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm ring-1 ring-slate-200/50"
+                      >
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold leading-snug text-slate-900">
+                            {row.splitterTitle || row.splitterCode}
+                          </p>
+                          <p className="mt-0.5 break-all font-mono text-[10px] text-slate-500">
+                            {row.splitterCode}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-600">
+                            <span className="font-semibold text-slate-500">AP</span>{' '}
+                            <span className="font-mono">{row.accessPointCode || '—'}</span>
+                          </p>
+                        </div>
+                        <dl className="mt-3 grid grid-cols-2 gap-2.5 text-xs sm:grid-cols-3">
+                          <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/60">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              Manutenções
+                            </dt>
+                            <dd className="mt-0.5 text-base font-bold tabular-nums text-slate-900">
+                              {row.totalMaintenances.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                          <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/60">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              Protocolos
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums font-semibold text-slate-800">
+                              {row.uniqueProtocols.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                          <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/60">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              Clientes
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums font-semibold text-slate-800">
+                              {row.uniqueClients.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                          <div className="rounded-lg bg-amber-50/90 px-2.5 py-2 ring-1 ring-amber-200/70">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                              Abertas
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums font-bold text-amber-950">
+                              {row.openMaintenances.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                          <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/60">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              Rompimento
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums text-slate-800">
+                              {row.rompimentoCount.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                          <div className="rounded-lg bg-slate-50/90 px-2.5 py-2 ring-1 ring-slate-200/60">
+                            <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                              Troca flat
+                            </dt>
+                            <dd className="mt-0.5 tabular-nums text-slate-800">
+                              {row.trocaFlatCount.toLocaleString('pt-BR')}
+                            </dd>
+                          </div>
+                        </dl>
+                        <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-snug text-slate-600">
+                          <span className="font-semibold text-slate-500">Última</span>{' '}
+                          {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto lg:block">
+                    <table className="w-full min-w-[820px] text-left text-xs">
+                      <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-2 py-2">Splitter</th>
+                          <th className="px-2 py-2">AP</th>
+                          <th className="px-2 py-2">Manutenções</th>
+                          <th className="px-2 py-2">Protocolos</th>
+                          <th className="px-2 py-2">Clientes</th>
+                          <th className="px-2 py-2">Abertas</th>
+                          <th className="px-2 py-2">Rompimento</th>
+                          <th className="px-2 py-2">Troca flat</th>
+                          <th className="px-2 py-2">Última</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {contextualMaintenanceRows.slice(0, 80).map((row) => (
+                          <tr key={`${row.splitterCode}-${row.accessPointCode}`} className="hover:bg-slate-50/70">
+                            <td className="px-2 py-2">
+                              <p className="font-semibold text-slate-900">
+                                {row.splitterTitle || row.splitterCode}
+                              </p>
+                              <p className="font-mono text-[10px] text-slate-500">{row.splitterCode}</p>
+                            </td>
+                            <td className="px-2 py-2 font-mono text-[11px] text-slate-700">{row.accessPointCode || '—'}</td>
+                            <td className="px-2 py-2 tabular-nums font-semibold text-slate-900">{row.totalMaintenances.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueProtocols.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 tabular-nums text-slate-700">{row.uniqueClients.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 tabular-nums text-amber-900">{row.openMaintenances.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 tabular-nums text-slate-700">{row.rompimentoCount.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 tabular-nums text-slate-700">{row.trocaFlatCount.toLocaleString('pt-BR')}</td>
+                            <td className="px-2 py-2 text-[11px] text-slate-600">
+                              {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </motion.article>
 
@@ -1973,7 +2519,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.18 }}
-              className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="min-w-0 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <h2 className="text-sm font-bold text-slate-800">Qualidade do mapeamento</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
