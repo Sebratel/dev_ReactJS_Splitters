@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowDown,
   ArrowUp,
@@ -19,9 +20,9 @@ import {
   loginRecency,
   SPLITTERS_ROLE_LABEL,
   applySplittersRolePreset,
-  userInitials,
   type SplittersRoleId,
 } from '@/features/access/lib/splittersUserRoles'
+import { SplittersUserAvatar } from '@/features/access/ui/SplittersUserAvatar'
 import { UserEditDrawer } from '@/features/access/ui/UserEditDrawer'
 import { AccessRequestsAdminPanel } from '@/features/access/ui/AccessRequestsAdminPanel'
 import { cn } from '@/shared/lib/utils'
@@ -140,6 +141,63 @@ function LoginDot({ recency }: { recency: ReturnType<typeof loginRecency> }) {
   return <span className={cn('inline-block size-2 shrink-0 rounded-full', cls)} aria-hidden />
 }
 
+const ACTION_MENU_W = 208
+const ACTION_MENU_MIN_H = 120
+
+function getVisualViewportBox(): {
+  top: number
+  left: number
+  width: number
+  height: number
+} {
+  const vv = window.visualViewport
+  if (vv != null) {
+    return {
+      top: vv.offsetTop,
+      left: vv.offsetLeft,
+      width: vv.width,
+      height: vv.height,
+    }
+  }
+  return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight }
+}
+
+/**
+ * Posiciona o menu junto ao botão usando altura/medidas reais (evita última linha invisível).
+ */
+function placeMenuNearAnchor(
+  anchor: DOMRect,
+  menuWidth: number,
+  menuHeight: number,
+): { top: number; left: number } {
+  const margin = 4
+  const pad = 8
+  const vp = getVisualViewportBox()
+  const vpBottom = vp.top + vp.height
+  const vpRight = vp.left + vp.width
+
+  const mh = Math.max(menuHeight, ACTION_MENU_MIN_H)
+
+  const fitsBelow = anchor.bottom + margin + mh <= vpBottom - pad
+  const fitsAbove = anchor.top - margin - mh >= vp.top + pad
+
+  let top: number
+  if (fitsBelow) {
+    top = anchor.bottom + margin
+  } else if (fitsAbove) {
+    top = anchor.top - mh - margin
+  } else {
+    top = vpBottom - pad - mh
+  }
+
+  top = Math.max(vp.top + pad, Math.min(top, vpBottom - pad - mh))
+
+  let left = anchor.right - menuWidth
+  left = Math.max(vp.left + pad, Math.min(left, vpRight - pad - menuWidth))
+
+  return { top, left }
+}
+
 function UsersTableSkeleton() {
   return (
     <div className="divide-y divide-neutral-100">
@@ -173,7 +231,14 @@ export function UsersManagementWorkspace({
   const [editUser, setEditUser] = useState<SplittersUserProfile | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [menuOpenUid, setMenuOpenUid] = useState<string | null>(null)
+  const [actionMenu, setActionMenu] = useState<
+    null | {
+      user: SplittersUserProfile
+      anchor: DOMRect
+      placed?: { top: number; left: number }
+    }
+  >(null)
+  const actionMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [sort, setSort] = useState<{ column: SortColumn; dir: 'asc' | 'desc' }>({
     column: 'user',
@@ -259,11 +324,42 @@ export function UsersManagementWorkspace({
   const openEdit = (u: SplittersUserProfile) => {
     setEditUser(u)
     setDrawerOpen(true)
-    setMenuOpenUid(null)
+    setActionMenu(null)
   }
 
+  useLayoutEffect(() => {
+    if (actionMenu === null || actionMenu.placed !== undefined) return
+    const el = actionMenuPanelRef.current
+    if (el === null) return
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    setActionMenu((prev) => {
+      if (!prev || prev.placed !== undefined) return prev
+      return {
+        ...prev,
+        placed: placeMenuNearAnchor(prev.anchor, w, Math.max(h, 1)),
+      }
+    })
+  }, [actionMenu])
+
+  useEffect(() => {
+    if (actionMenu === null) return
+    const close = () => setActionMenu(null)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [actionMenu])
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {toast ? (
         <div
           className="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-2 text-sm text-amber-950 shadow-sm"
@@ -443,19 +539,24 @@ export function UsersManagementWorkspace({
                     onChange={() => toggleSelect(u.uid)}
                     aria-label={`Selecionar ${u.email}`}
                   />
-                  <div
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-200/90 to-amber-400/50 text-xs font-bold text-amber-950 ring-2 ring-white"
-                    aria-hidden
-                  >
-                    {userInitials(u.displayName, u.email)}
-                  </div>
+                  <SplittersUserAvatar user={u} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-neutral-900">{u.displayName || '—'}</p>
                     <p className="break-all text-xs text-neutral-500">{u.email}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setMenuOpenUid(menuOpenUid === u.uid ? null : u.uid)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (actionMenu?.user.uid === u.uid) {
+                        setActionMenu(null)
+                        return
+                      }
+                      setActionMenu({
+                        user: u,
+                        anchor: e.currentTarget.getBoundingClientRect(),
+                      })
+                    }}
                     className="flex size-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
                     aria-label={`Mais ações: ${u.email}`}
                   >
@@ -509,52 +610,6 @@ export function UsersManagementWorkspace({
                   </div>
                 </div>
 
-                {menuOpenUid === u.uid ? (
-                  <>
-                    <button
-                      type="button"
-                      className="fixed inset-0 z-10 cursor-default bg-transparent"
-                      aria-label="Fechar menu"
-                      onClick={() => setMenuOpenUid(null)}
-                    />
-                    <div className="relative z-20 mt-3 w-full rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="flex min-h-[44px] w-full px-4 py-3 text-left text-sm text-neutral-800 hover:bg-neutral-50"
-                        onClick={() => openEdit(u)}
-                      >
-                        Editar permissões…
-                      </button>
-                      <button
-                        type="button"
-                        disabled={pending || isSelf}
-                        className="flex min-h-[44px] w-full px-4 py-3 text-left text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                        onClick={() => {
-                          onSaveUser({
-                            uid: u.uid,
-                            permissions: u.permissions,
-                            isActive: !u.isActive,
-                          })
-                          setMenuOpenUid(null)
-                        }}
-                      >
-                        {u.isActive ? 'Desativar conta' : 'Ativar conta'}
-                      </button>
-                      <button
-                        type="button"
-                        className="flex min-h-[44px] w-full px-4 py-3 text-left text-sm text-neutral-800 hover:bg-neutral-50"
-                        onClick={() => {
-                          setMenuOpenUid(null)
-                          setToast(
-                            'Acesso via Google: a recuperação de senha é feita na conta Google do usuário.',
-                          )
-                        }}
-                      >
-                        Redefinir acesso…
-                      </button>
-                    </div>
-                  </>
-                ) : null}
               </article>
             )
           })
@@ -567,8 +622,8 @@ export function UsersManagementWorkspace({
       </div>
 
       {/* Tabela — desktop / tablet */}
-      <div className="hidden overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-sm md:block">
-        <div className="overflow-x-auto">
+      <div className="hidden rounded-2xl border border-neutral-200/90 bg-white shadow-sm md:block">
+        <div className="overflow-x-auto pb-8">
           <table className="w-full min-w-[720px] text-left">
             <thead>
               <tr className="border-b border-neutral-100 bg-neutral-50/90 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
@@ -645,12 +700,7 @@ export function UsersManagementWorkspace({
                     </td>
                     <td className="px-3 py-3 align-middle">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-200/90 to-amber-400/50 text-xs font-bold text-amber-950 ring-2 ring-white"
-                          aria-hidden
-                        >
-                          {userInitials(u.displayName, u.email)}
-                        </div>
+                        <SplittersUserAvatar user={u} size="sm" />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-neutral-900">{u.displayName || '—'}</p>
                           <p className="truncate text-xs text-neutral-500">{u.email}</p>
@@ -728,62 +778,26 @@ export function UsersManagementWorkspace({
                         ) : null}
                       </div>
                     </td>
-                    <td className="relative px-2 py-3 align-middle">
+                    <td className="px-2 py-3 align-middle">
                       <button
                         type="button"
-                        onClick={() => setMenuOpenUid(menuOpenUid === u.uid ? null : u.uid)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (actionMenu?.user.uid === u.uid) {
+                            setActionMenu(null)
+                            return
+                          }
+                          setActionMenu({
+                            user: u,
+                            anchor: e.currentTarget.getBoundingClientRect(),
+                          })
+                        }}
                         className="rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
                         aria-label={`Mais ações: ${u.email}`}
+                        aria-expanded={actionMenu?.user.uid === u.uid}
                       >
                         <MoreHorizontal className="size-5" />
                       </button>
-                      {menuOpenUid === u.uid ? (
-                        <>
-                          <button
-                            type="button"
-                            className="fixed inset-0 z-10 cursor-default bg-transparent"
-                            aria-label="Fechar menu"
-                            onClick={() => setMenuOpenUid(null)}
-                          />
-                          <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
-                            <button
-                              type="button"
-                              className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
-                              onClick={() => openEdit(u)}
-                            >
-                              Editar permissões…
-                            </button>
-                            <button
-                              type="button"
-                              disabled={pending || isSelf}
-                              className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
-                              onClick={() => {
-                                onSaveUser({
-                                  uid: u.uid,
-                                  permissions: u.permissions,
-                                  isActive: !u.isActive,
-                                })
-                                setMenuOpenUid(null)
-                              }}
-                            >
-                              {u.isActive ? 'Desativar conta' : 'Ativar conta'}
-                            </button>
-                            <button
-                              type="button"
-                              className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
-                              onClick={() => {
-                                setMenuOpenUid(null)
-                                setToast(
-                                  'Acesso via Google: a recuperação de senha é feita na conta Google do usuário. ' +
-                                    'Se usar outro provedor de auth no futuro, integre reset por e-mail no backend.',
-                                )
-                              }}
-                            >
-                              Redefinir acesso…
-                            </button>
-                          </div>
-                        </>
-                      ) : null}
                     </td>
                   </tr>
                 )
@@ -797,6 +811,74 @@ export function UsersManagementWorkspace({
           </p>
         ) : null}
       </div>
+
+      {typeof document !== 'undefined' && actionMenu !== null
+        ? createPortal(
+            <>
+              {actionMenu.placed ? (
+                <button
+                  type="button"
+                  className="fixed inset-0 z-[9998] cursor-default bg-transparent"
+                  aria-label="Fechar menu"
+                  onClick={() => setActionMenu(null)}
+                />
+              ) : null}
+              <div
+                ref={actionMenuPanelRef}
+                role="menu"
+                className="pointer-events-auto fixed z-[9999] max-h-[min(22rem,calc(100dvh-16px))] w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-2xl outline-none ring-1 ring-black/5"
+                style={
+                  actionMenu.placed
+                    ? { top: actionMenu.placed.top, left: actionMenu.placed.left, visibility: 'visible' }
+                    : {
+                        top: 0,
+                        left: 0,
+                        visibility: 'hidden',
+                        pointerEvents: 'none',
+                      }
+                }
+              >
+                <button
+                  type="button"
+                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
+                  onClick={() => openEdit(actionMenu.user)}
+                >
+                  Editar permissões…
+                </button>
+                <button
+                  type="button"
+                  disabled={pending || actionMenu.user.uid === currentUid}
+                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
+                  onClick={() => {
+                    const u = actionMenu.user
+                    onSaveUser({
+                      uid: u.uid,
+                      permissions: u.permissions,
+                      isActive: !u.isActive,
+                    })
+                    setActionMenu(null)
+                  }}
+                >
+                  {actionMenu.user.isActive ? 'Desativar conta' : 'Ativar conta'}
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
+                  onClick={() => {
+                    setActionMenu(null)
+                    setToast(
+                      'Acesso via Google: a recuperação de senha é feita na conta Google do usuário. ' +
+                        'Se usar outro provedor de auth no futuro, integre reset por e-mail no backend.',
+                    )
+                  }}
+                >
+                  Redefinir acesso…
+                </button>
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
 
       <UserEditDrawer
         user={editUser}
