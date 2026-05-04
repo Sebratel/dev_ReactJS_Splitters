@@ -6,13 +6,12 @@ import {
   stripQueryParams,
 } from '@/features/session/lib/urlParams'
 import { readGoogleIdTokenFromCallback } from '@/features/session/lib/googleIdentity'
-import { loadPersistedSession, persistSessionToken } from '@/shared/lib/storage'
 import {
-  env,
-  isLocalDevHostname,
-  isOidcConfigured,
-} from '@/shared/config/env'
-import { getGoogleIdTokenExpiryMs } from '@/features/session/lib/googleToken'
+  getGoogleIdTokenExpiryMs,
+  isFirebaseAuthIdTokenJwt,
+} from '@/features/session/lib/googleToken'
+import { loadPersistedSession, persistSessionToken, clearPersistedSession } from '@/shared/lib/storage'
+import { env, isLocalDevHostname, isOidcConfigured } from '@/shared/config/env'
 
 export function bootstrapSession(): void {
   const store = useSessionStore.getState()
@@ -46,12 +45,16 @@ export function bootstrapSession(): void {
     stripQueryParams('token', 'googleIdToken')
     stripHashParams('id_token', 'state', 'authuser', 'prompt')
   } else if (cached) {
-    store.setSessionTokenWithExpiry(
-      cached.token,
-      typeof cached.expiresAt === 'number'
-        ? cached.expiresAt
-        : getGoogleIdTokenExpiryMs(cached.token),
-    )
+    if (isFirebaseAuthIdTokenJwt(cached.token)) {
+      clearPersistedSession()
+    } else {
+      store.setSessionTokenWithExpiry(
+        cached.token,
+        typeof cached.expiresAt === 'number'
+          ? cached.expiresAt
+          : getGoogleIdTokenExpiryMs(cached.token),
+      )
+    }
   } else if (isLocalDevHostname() && !isOidcConfigured()) {
     const dev = env.devSessionToken.trim()
     if (dev) {

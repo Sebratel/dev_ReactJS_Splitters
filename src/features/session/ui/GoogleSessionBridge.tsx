@@ -11,7 +11,7 @@ import {
   shouldRefreshGoogleIdToken,
 } from '@/features/session/lib/googleToken'
 import { useSessionStore } from '@/features/session/store/sessionStore'
-import { isGoogleIdentityConfigured } from '@/shared/config/env'
+import { isFirebaseAuthConfigured, isGoogleIdentityConfigured } from '@/shared/config/env'
 
 export function GoogleSessionBridge() {
   const status = useSessionStore((s) => s.status)
@@ -22,6 +22,11 @@ export function GoogleSessionBridge() {
 
   useEffect(() => {
     if (!isGoogleIdentityConfigured()) return
+    /**
+     * Com Firebase Auth, o login interativo é só na `/login` — evita redirect OAuth extra ao
+     * abrir o app. O refresh silencioso do JWT Google (outro `useEffect`) continua ativo.
+     */
+    if (isFirebaseAuthConfigured()) return
     if (typeof sessionToken === 'string' && sessionToken.trim() !== '') return
     if (status === 'loading') return
     if (attemptedRef.current) return

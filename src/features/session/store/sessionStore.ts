@@ -3,6 +3,7 @@ import { fetchHubSessionProfile } from '@/features/session/api/fetchHubSessionPr
 import {
   decodeGoogleIdToken,
   getGoogleIdTokenExpiryMs,
+  isFirebaseAuthIdTokenJwt,
   isGoogleIdTokenExpired,
 } from '@/features/session/lib/googleToken'
 import { mapHubPayloadToUser } from '@/features/session/lib/mapHubPayloadToUser'
@@ -66,6 +67,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const googleConfigured = isGoogleIdentityConfigured()
 
     if (token && isGoogleIdTokenExpired(token)) {
+      get().clearSession()
+      return
+    }
+
+    if (token && isFirebaseAuthIdTokenJwt(token)) {
       get().clearSession()
       return
     }
