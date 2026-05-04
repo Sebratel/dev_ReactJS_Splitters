@@ -34,6 +34,7 @@
     "i18next": "^26.0.4",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.8.0",
     "oidc-client-ts": "^3.5.0",

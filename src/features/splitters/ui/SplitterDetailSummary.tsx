@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import type {
@@ -8,7 +9,8 @@ import type {
 import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOperationalDate'
 import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
-import { BellOff, Cable, Cpu, Hash, Layers } from 'lucide-react'
+import { BellOff, BellRing, Cable, Cpu, Hash, Layers } from 'lucide-react'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 /** Estado da consulta `/connections`: espelho por porta; fallback usa apenas busyCount do splitter. */
 type ConnectionsMirrorLoadState = 'pending' | 'success' | 'error'
@@ -20,6 +22,19 @@ type SplitterDetailSummaryProps = {
   connectionsLoadState: ConnectionsMirrorLoadState
   /** Clientes da consulta de conexões (portas reais); ignorado até `success`. */
   connectionClientes: SplitterCliente[]
+  onRefreshNow: () => void
+  isRefreshing: boolean
+  lastUpdatedAtMs: number
+}
+
+function formatLastUpdatedAge(lastUpdatedAtMs: number, nowMs: number): string {
+  if (!Number.isFinite(lastUpdatedAtMs) || lastUpdatedAtMs <= 0) return 'ainda sem sincronização'
+  const seconds = Math.max(0, Math.floor((nowMs - lastUpdatedAtMs) / 1000))
+  if (seconds < 60) return `há ${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `há ${minutes}min`
+  const hours = Math.floor(minutes / 60)
+  return `há ${hours}h`
 }
 
 function parseSlotAndPortFromTitle(raw: string | null | undefined): {
@@ -159,7 +174,12 @@ export function SplitterDetailSummary({
   operationalScore,
   connectionsLoadState,
   connectionClientes,
+  onRefreshNow,
+  isRefreshing,
+  lastUpdatedAtMs,
 }: SplitterDetailSummaryProps) {
+  const canOpenMassiva = useAccessAuthStore((state) => state.hasPermission('canOpenMassiva'))
+  const [clockMs, setClockMs] = useState(() => Date.now())
   const mirrorLive = connectionsLoadState === 'success'
   const portCells = mirrorLive
     ? buildPortCellsFromClientes(splitter.outPorts, connectionClientes)
@@ -180,6 +200,7 @@ export function SplitterDetailSummary({
     Math.max(0, Math.min(100, useAnimatedNumber(operationalScore.score, 700))),
   )
   const animatedMassivas = Math.max(0, Math.round(useAnimatedNumber(massivaStats.totalTickets, 650)))
+  const hasOpenMassiva = massivaStats.openTickets > 0
   const [criticalityPulse, setCriticalityPulse] = useState(false)
   const toneRef = useRef<SplitterOperationalScore['tone']>(operationalScore.tone)
 
@@ -201,6 +222,12 @@ export function SplitterDetailSummary({
     CRITICALITY_DOT_COUNT,
     Math.max(0, Math.round((animatedCriticality / 100) * CRITICALITY_DOT_COUNT)),
   )
+  const lastUpdatedLabel = formatLastUpdatedAge(lastUpdatedAtMs, clockMs)
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setClockMs(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   return (
     <section
@@ -222,6 +249,38 @@ export function SplitterDetailSummary({
             <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
               ID: {integrationRef}
             </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md border border-outline-variant/60 bg-surface-container-low/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
+              Atualizado {lastUpdatedLabel}
+            </span>
+            {canOpenMassiva ? (
+              <Link
+                to="/massiva"
+                state={{
+                  massivaPrefill: {
+                    splitterCode: splitter.code,
+                    splitterLabel: splitter.title || splitter.code,
+                  },
+                }}
+                className="inline-flex items-center rounded-md border border-amber-200/80 bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-900 transition hover:bg-amber-100"
+              >
+                Abrir massiva
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={onRefreshNow}
+              disabled={isRefreshing}
+              className={cn(
+                'inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition',
+                isRefreshing
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                  : 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15',
+              )}
+            >
+              {isRefreshing ? 'Atualizando…' : 'Atualizar agora'}
+            </button>
           </div>
 
           <h1
@@ -275,10 +334,34 @@ export function SplitterDetailSummary({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
               Massivas
             </p>
-            <p className="mt-1 inline-flex items-center gap-1.5 text-3xl font-bold leading-tight text-on-surface">
+            <p
+              className={cn(
+                'mt-1 inline-flex items-center gap-1.5 text-3xl font-bold leading-tight',
+                hasOpenMassiva ? 'text-rose-600' : 'text-on-surface',
+              )}
+            >
               {animatedMassivas}
-              <BellOff size={14} className="text-on-surface-variant/50" strokeWidth={2} />
+              {hasOpenMassiva ? (
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600 ring-1 ring-rose-200 motion-safe:animate-pulse">
+                  <BellRing size={13} strokeWidth={2.2} />
+                </span>
+              ) : (
+                <BellOff
+                  size={14}
+                  className="text-on-surface-variant/50"
+                  strokeWidth={2}
+                />
+              )}
             </p>
+            {hasOpenMassiva ? (
+              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                {massivaStats.openTickets} aberta{massivaStats.openTickets === 1 ? '' : 's'} agora
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/55">
+                Sem aberta no momento
+              </p>
+            )}
           </div>
         </div>
       </div>

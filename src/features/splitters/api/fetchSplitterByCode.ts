@@ -68,8 +68,8 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
   const splitterCode = toStringValue(
     pickRowValue(
       row,
-      'CÓDIGO[SPLT.SECUNDARIO]',
-      'CDIGO[SPLT.SECUNDARIO]',
+      'Cï¿½DIGO[SPLT.SECUNDARIO]',
+      'Cï¿½DIGO[SPLT.SECUNDARIO]',
       'C?DIGO[SPLT.SECUNDARIO]',
     ),
   )
@@ -98,8 +98,12 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     busyCount: toNumber(row['BUSY_COUNT']),
     tipoLocal: toTipoLocal(row['TIPO LOCAL']),
     nomeCondominio: toNullableString(
-      pickRowValue(row, 'NOME CONDOMNIO', 'NOME CONDOMNIO', 'NOME CONDOM?NIO'),
+      pickRowValue(row, 'NOME CONDOMï¿½NIO', 'NOME CONDOMï¿½NIO', 'NOME CONDOM?NIO'),
     ),
+    cityCadastro: toNullableString(row['CIDADE[SPLT.SECUNDARIO]']),
+    neighborhoodCadastro: toNullableString(row['BAIRRO[SPLT.SECUNDARIO]']),
+    hasCorporateClients: row['TEM_CORPORATIVO_SPLITTER'] === true,
+    createdAt: null,
   }
 }
 

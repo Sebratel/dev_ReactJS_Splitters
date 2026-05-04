@@ -4,12 +4,14 @@ import { ClienteDetailAccessPointSection } from '@/features/clientes/ui/ClienteD
 import { ClienteDetailAddressSection } from '@/features/clientes/ui/ClienteDetailAddressSection'
 import { ClienteDetailClienteSection } from '@/features/clientes/ui/ClienteDetailClienteSection'
 import { ClienteDetailContractSection } from '@/features/clientes/ui/ClienteDetailContractSection'
+import { ClienteDetailMaintenanceSection } from '@/features/clientes/ui/ClienteDetailMaintenanceSection'
 import { ClienteDetailSolicitationsSection } from '@/features/clientes/ui/ClienteDetailSolicitationsSection'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { ChevronLeft, Server } from 'lucide-react'
+import { Server } from 'lucide-react'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 
 export function ClienteDetailScreen() {
   const { id } = useParams<{ id: string }>()
@@ -17,38 +19,27 @@ export function ClienteDetailScreen() {
 
   return (
     <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Link
-            to="/splitters"
-            aria-label="Voltar para splitters"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-outline-variant bg-white text-on-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-          >
-            <ChevronLeft size={22} strokeWidth={2} />
-          </Link>
-          <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-on-surface-variant/55">
-              Assinante
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-on-surface md:text-[1.75rem] md:leading-tight">
-              Dados do cliente
-            </h1>
-            <p className="font-mono text-sm font-medium text-on-surface-variant/60">
-              ID autenticação {id}
-            </p>
-          </div>
-        </div>
-
-        {state.status === 'ready' && state.cliente.splitterCode ? (
-          <Link
-            to={`/splitters/${encodeURIComponent(state.cliente.splitterCode)}`}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-outline-variant bg-surface-container-low/80 px-4 py-2.5 text-xs font-semibold text-on-surface shadow-sm transition-colors hover:border-primary/30 hover:bg-primary hover:text-on-surface"
-          >
-            <Server size={16} strokeWidth={1.75} />
-            Ver splitter
-          </Link>
-        ) : null}
-      </header>
+      <AppPageHeader
+        icon={Server}
+        badge="Assinante"
+        title="Dados do cliente"
+        description={
+          id
+            ? `Identificador de autenticação (BFF): ${id}. Contrato, endereço e ponto de acesso quando disponíveis.`
+            : undefined
+        }
+        trailing={
+          state.status === 'ready' && state.cliente.splitterCode ? (
+            <Link
+              to={`/splitters/${encodeURIComponent(state.cliente.splitterCode)}`}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-neutral-200/90 bg-white/90 px-4 py-2.5 text-xs font-semibold text-neutral-800 shadow-sm transition hover:border-amber-300/70 hover:bg-amber-50/90"
+            >
+              <Server size={16} strokeWidth={1.75} aria-hidden />
+              Ver splitter
+            </Link>
+          ) : null
+        }
+      />
 
       {state.status === 'invalid-param' ? (
         <EmptyState
@@ -98,6 +89,8 @@ export function ClienteDetailScreen() {
           {state.cliente.accessPoint && (
             <ClienteDetailAccessPointSection accessPoint={state.cliente.accessPoint} />
           )}
+
+          <ClienteDetailMaintenanceSection clientId={state.cliente.clientId} />
 
           <ClienteDetailSolicitationsSection clientId={state.cliente.clientId} />
         </div>

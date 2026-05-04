@@ -31,6 +31,67 @@ export function decodeGoogleIdToken(token: string): GoogleIdTokenPayload {
   return JSON.parse(base64UrlDecode(parts[1])) as GoogleIdTokenPayload
 }
 
+/**
+ * JWT emitido por **Firebase Auth** (`getIdToken`), não aceito pelo gateway como Bearer Google.
+ */
+export function isFirebaseAuthIdTokenJwt(token: string): boolean {
+  try {
+    const aud = String(decodeGoogleIdToken(token).aud ?? '')
+    return aud.includes('securetoken.google.com')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Google **OAuth** ID token (vários Web clients `.apps.googleusercontent.com` no mesmo projeto).
+ * `expectedWebClientId` opcional: se preenchido, exige `aud` exatamente igual (validação estrita).
+ */
+export function isLikelyGoogleOAuthWebClientJwt(
+  token: string,
+  expectedWebClientId: string,
+): boolean {
+  try {
+    const p = decodeGoogleIdToken(token)
+    const aud = String(p.aud ?? '')
+    if (aud.includes('securetoken.google.com')) return false
+    const expected = expectedWebClientId.trim()
+    if (expected !== '') return aud === expected
+    return aud.endsWith('.apps.googleusercontent.com')
+  } catch {
+    return false
+  }
+}
+
+/** Bearer aceitável pelo gateway: JWT com payload Google e `aud` não é o do Firebase Auth. */
+export function isBffGatewayGoogleBearerToken(token: string): boolean {
+  try {
+    const aud = String(decodeGoogleIdToken(token).aud ?? '')
+    return !aud.includes('securetoken.google.com')
+  } catch {
+    return false
+  }
+}
+
+/**
+ * O gateway valida o `aud` do JWT. O popup Firebase pode emitir id_token com **outro** Web Client
+ * que o definido em `VITE_GOOGLE_CLIENT_ID` (o que o openresty espera). Se `expectedGoogleClientId`
+ * estiver vazio, aceita qualquer JWT Google que não seja do Firebase Auth.
+ */
+export function isSessionTokenAlignedWithGatewayGoogleAudience(
+  token: string,
+  expectedGoogleClientId: string,
+): boolean {
+  if (!isBffGatewayGoogleBearerToken(token)) return false
+  const expected = expectedGoogleClientId.trim()
+  if (expected === '') return true
+  try {
+    return String(decodeGoogleIdToken(token).aud ?? '') === expected
+  } catch {
+    return false
+  }
+}
+
 export function getGoogleIdTokenExpiryMs(token: string): number | null {
   try {
     const payload = decodeGoogleIdToken(token)

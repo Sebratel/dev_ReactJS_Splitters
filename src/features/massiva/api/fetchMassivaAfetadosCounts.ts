@@ -26,7 +26,12 @@ export async function fetchMassivaAfetadoEnrichmentForProtocol(
 ): Promise<MassivaAfetadoProtocolEnrichment> {
   const path = massivaAfetadosProtocolRequestPath(protocol)
   if (path === '') {
-    return { count: null, estimateTimeOfRestoration: null }
+    return {
+      count: null,
+      estimateTimeOfRestoration: null,
+      affectedClientsResidential: null,
+      affectedClientsCorporate: null,
+    }
   }
   const data: unknown = await bffClient.request({ path, method: 'GET' })
   const e = parseMassivaAfetadoProtocolEnrichment(data)
@@ -61,7 +66,11 @@ export async function fetchMassivaAfetadosCountsByProtocols(
     unique.map(async (protocol) => {
       try {
         const e = await fetchMassivaAfetadoEnrichmentForProtocol(protocol)
-        if (e.count === null && e.estimateTimeOfRestoration === null) {
+        if (
+          e.count === null &&
+          e.estimateTimeOfRestoration === null &&
+          (e.affectedClientsResidential === null || e.affectedClientsCorporate === null)
+        ) {
           return null
         }
         if (e.count !== null && e.count < 0) return null

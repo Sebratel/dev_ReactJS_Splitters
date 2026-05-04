@@ -31,6 +31,12 @@ export type MassivaTicket = {
   estimateTimeOfRestoration: number | null
   closedAt: Date | null
   affectedClients: number
+  /**
+   * Discriminação PF/PJ quando a listagem ou o GET `…/afetados/protocol/{id}` a expuserem.
+   * Ambos `null` = origem não discrimina (o cartão do *dashboard* agrega só o total).
+   */
+  affectedClientsResidential: number | null
+  affectedClientsCorporate: number | null
   usedFallback: boolean
 }
 
@@ -58,6 +64,14 @@ function pickOptionalPositiveInt(value: unknown): number | null {
   if (s === '') return null
   const n = Number.parseInt(s, 10)
   if (!Number.isFinite(n) || n <= 0) return null
+  return n
+}
+
+/** Contagem ≥ 0 ou `null` se ausente / inválida. */
+function pickOptionalNonNegativeInt(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  const n = pickInt(value, -1)
+  if (n < 0) return null
   return n
 }
 
@@ -476,6 +490,29 @@ export function parseMassivaTicketFromApi(
       0,
   )
 
+  const affectedClientsResidential = pickOptionalNonNegativeInt(
+    merged.affectedClientsResidential ??
+      merged.quantidadeAfetadosResidencial ??
+      merged.qtdAfetadosResidencial ??
+      merged.totalAfetadosResidencial ??
+      merged.afetadosResidenciais ??
+      merged.residentialAffected ??
+      merged.affectedResidential ??
+      merged.affected_clients_residential,
+  )
+  const affectedClientsCorporate = pickOptionalNonNegativeInt(
+    merged.affectedClientsCorporate ??
+      merged.quantidadeAfetadosCorporativo ??
+      merged.qtdAfetadosCorporativo ??
+      merged.totalAfetadosCorporativo ??
+      merged.afetadosCorporativos ??
+      merged.corporateAffected ??
+      merged.affectedCorporate ??
+      merged.affected_clients_corporate,
+  )
+  const hasListSplit =
+    affectedClientsResidential !== null && affectedClientsCorporate !== null
+
   const usedFallback =
     pickString(merged.strategy) === 'bulk_individual' ||
     merged.usedFallback === true
@@ -540,6 +577,8 @@ export function parseMassivaTicketFromApi(
     estimateTimeOfRestoration,
     closedAt,
     affectedClients,
+    affectedClientsResidential: hasListSplit ? affectedClientsResidential : null,
+    affectedClientsCorporate: hasListSplit ? affectedClientsCorporate : null,
     usedFallback,
   }
 }

@@ -3,6 +3,7 @@ import { fetchSplitterByCode } from '@/features/splitters/api/fetchSplitterByCod
 import { SPLITTERS_LIST_STALE_TIME_MS } from '@/features/splitters/model/constants'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
+import { env } from '@/shared/config/env'
 
 /**
  * Busca os dados completos de um splitter pelo seu código via endpoint dedicado.
@@ -33,6 +34,8 @@ function normalizeRouteCodeParam(codeParam: string | undefined): string {
 export function useSplitterDetail(codeParam: string | undefined): {
   state: SplitterDetailViewState
   refetch: () => void
+  dataUpdatedAt: number
+  isFetching: boolean
 } {
   const code = normalizeRouteCodeParam(codeParam)
 
@@ -40,6 +43,8 @@ export function useSplitterDetail(codeParam: string | undefined): {
     queryKey: [...splittersKeys.detail(code)],
     queryFn: () => fetchSplitterByCode(code),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
+    refetchInterval: env.splitterDetailRefreshMs,
+    refetchIntervalInBackground: false,
     enabled: code.length > 0,
     refetchOnMount: 'always',
   })
@@ -49,26 +54,30 @@ export function useSplitterDetail(codeParam: string | undefined): {
   }
 
   if (code.length === 0) {
-    return { state: { status: 'invalid-param' }, refetch }
+    return { state: { status: 'invalid-param' }, refetch, dataUpdatedAt: 0, isFetching: false }
   }
 
   if (query.isPending) {
-    return { state: { status: 'loading' }, refetch }
+    return { state: { status: 'loading' }, refetch, dataUpdatedAt: query.dataUpdatedAt, isFetching: query.isFetching }
   }
 
   if (query.isError) {
     return {
       state: { status: 'error', error: query.error },
       refetch,
+      dataUpdatedAt: query.dataUpdatedAt,
+      isFetching: query.isFetching,
     }
   }
 
   if (query.data === null || query.data === undefined) {
-    return { state: { status: 'not-found' }, refetch }
+    return { state: { status: 'not-found' }, refetch, dataUpdatedAt: query.dataUpdatedAt, isFetching: query.isFetching }
   }
 
   return {
     state: { status: 'ready', splitter: query.data },
     refetch,
+    dataUpdatedAt: query.dataUpdatedAt,
+    isFetching: query.isFetching,
   }
 }

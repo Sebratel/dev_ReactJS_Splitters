@@ -37,6 +37,8 @@ export function SplittersFiltersDrawer({
     toggleStreetSelection,
     setMassivaOpenState,
     setCorporateClientFilter,
+    setMaintenanceWindowDays,
+    setMaintenanceFilter,
     clearAll,
   } = useSplittersFiltersStore()
 
@@ -371,6 +373,49 @@ export function SplittersFiltersDrawer({
                   )
                 })}
               </ul>
+            </div>
+
+            <div className="space-y-2">
+              <SectionTitle>Manutenção</SectionTitle>
+              <div className="rounded-xl border border-outline-variant/50 bg-surface p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-on-surface-variant/75">
+                    Janela
+                  </span>
+                  <select
+                    value={state.maintenanceWindowDays}
+                    onChange={(e) =>
+                      setMaintenanceWindowDays(Number(e.target.value) as 7 | 30 | 90)
+                    }
+                    className="rounded-lg border border-outline-variant/50 bg-white px-2 py-1 text-xs font-semibold text-on-surface"
+                  >
+                    <option value={7}>7 dias</option>
+                    <option value={30}>30 dias</option>
+                    <option value={90}>90 dias</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  {(
+                    [
+                      { id: 'all' as const, label: 'Todos os splitters' },
+                      { id: 'with-maintenance' as const, label: 'Somente com manutenção' },
+                    ] as const
+                  ).map((opt) => (
+                    <label
+                      key={opt.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-surface-container-low"
+                    >
+                      <input
+                        type="radio"
+                        name="maintenance-filter"
+                        checked={state.maintenanceFilter === opt.id}
+                        onChange={() => setMaintenanceFilter(opt.id)}
+                      />
+                      <span className="text-sm">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">

@@ -42,6 +42,10 @@ export function StepRota({
   isRoutesCatalogError,
   onRefetchRoutesCatalog,
 }: StepRotaProps) {
+  /** Props legadas da API do passo; a UI atual usa `slotPortOptionsForConnection`. */
+  void slotOptionsForConnection
+  void portOptionsForConnection
+
   const [openDropdownRouteIndex, setOpenDropdownRouteIndex] = useState<number | null>(null)
   const [selectedSlots, setSelectedSlots] = useState<Record<number, boolean>>({})
   const [selectedPorts, setSelectedPorts] = useState<Record<number, boolean>>({})

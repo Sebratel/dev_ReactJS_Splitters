@@ -17,6 +17,15 @@ function csv(value: unknown): string[] {
     .filter((item) => item !== '')
 }
 
+function int(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
+  if (typeof value === 'string') {
+    const n = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(n)) return n
+  }
+  return fallback
+}
+
 /**
  * Base do BFF usada em `bffClient`.
  * Em `npm run dev`, se `VITE_BFF_BASE_URL` estiver vazio, usa URL relativa (`/api/...`) no mesmo
@@ -77,17 +86,19 @@ function massivaListPathResolved(): string {
 }
 
 /**
- * URL do BFF operacional usado por consultas SQL/auxiliares.
- * Em dev: localhost:3001 por padrao.
- * Em staging/prod: cai para o mesmo host base do BFF remoto para evitar
- * build apontando para localhost no navegador dos usuarios.
+ * Base URL para GET `/api/splitters` e rotas SQL no projeto `server/`.
+ * Em dev, sem `VITE_LOCAL_BFF_URL`, assume-se o Node local em `http://localhost:3001`
+ * (comportamento histórico). Para apontar para outro host, defina `VITE_LOCAL_BFF_URL`.
+ *
+ * Nota: usar base vazia para passar só pelo proxy do Vite quebra quem depende do `server/`
+ * na 3001 — por isso não é o default.
  */
 function localBffUrlResolved(): string {
   const fromEnv = str(import.meta.env.VITE_LOCAL_BFF_URL, '')
-  if (fromEnv !== '') return fromEnv
+  if (fromEnv !== '') return fromEnv.replace(/\/$/, '')
 
   if (import.meta.env.DEV) return 'http://localhost:3001'
-  
+
   return ''
 }
 
@@ -184,6 +195,23 @@ export const env = {
   mockUserName: str(import.meta.env.VITE_MOCK_USER_NAME, ''),
   accessAllowedEmails: csv(import.meta.env.VITE_ACCESS_ALLOWED_EMAILS),
   accessAllowedEmailDomain: str(import.meta.env.VITE_ACCESS_ALLOWED_EMAIL_DOMAIN, '').toLowerCase(),
+  /**
+   * Auto-refresh do detalhe de splitter (clientes/portas + dados técnicos), em ms.
+   * Padrão conservador para reduzir carga no BFF.
+   */
+  splitterDetailRefreshMs: Math.min(
+    5 * 60_000,
+    Math.max(15_000, int(import.meta.env.VITE_SPLITTER_DETAIL_REFRESH_MS, 60_000)),
+  ),
+  /**
+   * URL ou path do ícone do botão flutuante "Solicitar acesso" (ex. `/meu-icone.png` em `public/`
+   * ou `https://...`). Se vazio, usa ícone padrão ou imagem guardada no navegador (ver componente).
+   */
+  accessRequestFabImage: str(import.meta.env.VITE_ACCESS_REQUEST_FAB_IMAGE, ''),
+  /**
+   * Retrato ISA no hero da home (`public/` ou URL absoluta). Se vazio, usa `/isa-hero.png`.
+   */
+  isaHeroImage: str(import.meta.env.VITE_ISA_HERO_IMAGE, ''),
 } as const
 
 

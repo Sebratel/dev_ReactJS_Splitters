@@ -40,22 +40,57 @@ type MassivaOpenDraftState = {
   reset: () => void
 }
 
-const initial = {
+function formatDateInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatTimeInputValue(date: Date): string {
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${hour}:${minute}`
+}
+
+function buildInitialDraft() {
+  const now = new Date()
+  const today = formatDateInputValue(now)
+  const currentTime = formatTimeInputValue(now)
+
+  return {
+    assignmentDescription: '',
+    descriptionAutoSync: true,
+    assignmentForecastDate: '',
+    assignmentForecastTime: '',
+    eventStartDate: today,
+    eventStartTime: currentTime,
+    eventIdentifiedDate: today,
+    eventIdentifiedTime: currentTime,
+    initialReport: '',
+    fieldTechnicianRequesting: false,
+    affectedUsersQuantityAutoIspOverride: null,
+  }
+}
+
+const initial = buildInitialDraft()
+
+const createInitialState = () => ({
   assignmentDescription: '',
   descriptionAutoSync: true,
   assignmentForecastDate: '',
   assignmentForecastTime: '',
-  eventStartDate: '',
-  eventStartTime: '',
-  eventIdentifiedDate: '',
-  eventIdentifiedTime: '',
+  eventStartDate: initial.eventStartDate,
+  eventStartTime: initial.eventStartTime,
+  eventIdentifiedDate: initial.eventIdentifiedDate,
+  eventIdentifiedTime: initial.eventIdentifiedTime,
   initialReport: '',
   fieldTechnicianRequesting: false,
   affectedUsersQuantityAutoIspOverride: null,
-}
+})
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>((set) => ({
-  ...initial,
+  ...createInitialState(),
   setAssignmentDescription: (assignmentDescription) =>
     set({ assignmentDescription }),
   setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
@@ -75,5 +110,5 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>((set) => (
   setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
     set({ affectedUsersQuantityAutoIspOverride }),
   enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
-  reset: () => set(initial),
+  reset: () => set(buildInitialDraft()),
 }))

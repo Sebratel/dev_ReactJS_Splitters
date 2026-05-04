@@ -26,7 +26,7 @@ function timestampToDate(value: unknown): Date | null {
   return null
 }
 
-function parsePermissions(value: unknown): SplittersPermissionSet {
+export function parsePermissions(value: unknown): SplittersPermissionSet {
   const raw = (value ?? {}) as Partial<SplittersPermissionSet>
   return {
     canViewSplitters: raw.canViewSplitters ?? defaultSplittersPermissions.canViewSplitters,
@@ -38,10 +38,14 @@ function parsePermissions(value: unknown): SplittersPermissionSet {
 }
 
 function mapUserDoc(uid: string, data: DocumentData): SplittersUserProfile {
+  const rawPhoto = data.photoURL
+  const photoURL =
+    typeof rawPhoto === 'string' && rawPhoto.trim() !== '' ? rawPhoto.trim() : null
   return {
     uid,
     email: String(data.email ?? '').trim(),
     displayName: String(data.displayName ?? '').trim(),
+    photoURL,
     isActive: data.isActive !== false,
     permissions: parsePermissions(data.permissions),
     createdAt: timestampToDate(data.createdAt),
@@ -50,10 +54,17 @@ function mapUserDoc(uid: string, data: DocumentData): SplittersUserProfile {
   }
 }
 
+function normalizePhotoURL(value: string | null | undefined): string | null {
+  if (value == null) return null
+  const t = value.trim()
+  return t !== '' ? t : null
+}
+
 export async function ensureSplittersUserProfile(input: {
   uid: string
   email: string
   displayName: string
+  photoURL?: string | null
 }): Promise<SplittersUserProfile> {
   if (!firestoreDb) {
     throw new Error('Firestore nao configurado.')
@@ -81,6 +92,7 @@ export async function ensureSplittersUserProfile(input: {
       uid: input.uid,
       email: input.email.trim().toLowerCase(),
       displayName: input.displayName.trim(),
+      photoURL: normalizePhotoURL(input.photoURL ?? null),
       isActive: true,
       permissions: firstUserPermissions,
       createdAt: serverTimestamp(),
@@ -97,6 +109,7 @@ export async function ensureSplittersUserProfile(input: {
   await updateDoc(ref, {
     email: input.email.trim().toLowerCase(),
     displayName: input.displayName.trim(),
+    photoURL: normalizePhotoURL(input.photoURL ?? null),
     updatedAt: serverTimestamp(),
     lastLoginAt: serverTimestamp(),
   })

@@ -23,6 +23,8 @@ export type SplittersFetchParams = {
   withOpenMassiva?: boolean
   openMassivaSplitterCodes?: string[]
   corporateClientFilter?: 'all' | 'with-corporate' | 'without-corporate'
+  withMaintenance?: boolean
+  maintenanceSplitterCodes?: string[]
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -81,6 +83,8 @@ export async function fetchSplittersFromLocalDb({
   withOpenMassiva,
   openMassivaSplitterCodes = [],
   corporateClientFilter = 'all',
+  withMaintenance,
+  maintenanceSplitterCodes = [],
 }: SplittersFetchParams = {}): Promise<SplittersFetchResult> {
   const queryParams = new URLSearchParams({
     page: String(page),
@@ -109,6 +113,12 @@ export async function fetchSplittersFromLocalDb({
   } else if (corporateClientFilter === 'without-corporate') {
     queryParams.append('corporateClients', 'without')
   }
+  if (withMaintenance !== undefined) {
+    queryParams.append('withMaintenance', withMaintenance ? '1' : '0')
+  }
+  if (maintenanceSplitterCodes.length > 0) {
+    queryParams.append('maintenanceSplitterCodes', maintenanceSplitterCodes.join(','))
+  }
 
   const url = `${env.localBffUrl}/api/splitters?${queryParams.toString()}`
 
@@ -123,6 +133,16 @@ export async function fetchSplittersFromLocalDb({
   }
 
   const rawRows = result.data as Record<string, unknown>[]
+
+  function parseTotalCount(raw: unknown, itemsLength: number): number {
+    const n =
+      typeof raw === 'number' && Number.isFinite(raw)
+        ? Math.trunc(raw)
+        : Number.parseInt(String(raw ?? '').trim(), 10)
+    const parsed = Number.isFinite(n) && n >= 0 ? n : 0
+    return Math.max(parsed, itemsLength)
+  }
+
   const items: Splitter[] = rawRows.map((row) => {
     const splitterCode = toStringValue(
       pickRowValue(
@@ -158,12 +178,15 @@ export async function fetchSplittersFromLocalDb({
       nomeCondominio: toNullableString(
         pickRowValue(row, 'NOME CONDOMÍNIO', 'NOME CONDOM�NIO'),
       ),
+      cityCadastro: toNullableString(row['CIDADE[SPLT.SECUNDARIO]']),
+      neighborhoodCadastro: toNullableString(row['BAIRRO[SPLT.SECUNDARIO]']),
+      hasCorporateClients: row['TEM_CORPORATIVO_SPLITTER'] === true,
     }
   })
 
   return {
     items,
-    totalCount: result.totalCount || items.length,
+    totalCount: parseTotalCount(result.totalCount, items.length),
   }
 }
 

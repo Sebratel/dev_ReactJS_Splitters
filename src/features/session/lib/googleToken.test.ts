@@ -3,7 +3,11 @@ import {
   decodeGoogleIdToken,
   getGoogleIdTokenExpiryMs,
   getGoogleTokenRefreshDelayMs,
+  isBffGatewayGoogleBearerToken,
+  isFirebaseAuthIdTokenJwt,
+  isSessionTokenAlignedWithGatewayGoogleAudience,
   isGoogleIdTokenExpired,
+  isLikelyGoogleOAuthWebClientJwt,
   shouldRefreshGoogleIdToken,
   validateCorporateGoogleIdToken,
 } from '@/features/session/lib/googleToken'
@@ -72,5 +76,34 @@ describe('googleToken', () => {
     const t = tokenWithPayload({ exp })
     expect(getGoogleTokenRefreshDelayMs(t)).toBeGreaterThanOrEqual(0)
     expect(getGoogleTokenRefreshDelayMs('nope')).toBeNull()
+  })
+
+  it('isFirebaseAuthIdTokenJwt e isBffGatewayGoogleBearerToken', () => {
+    const webClientA = '111.apps.googleusercontent.com'
+    const webClientB = '222.apps.googleusercontent.com'
+    const googleJwtA = tokenWithPayload({ aud: webClientA, exp: 9_999_999_999 })
+    const googleJwtB = tokenWithPayload({ aud: webClientB, exp: 9_999_999_999 })
+    const firebaseJwt = tokenWithPayload({
+      aud: 'https://securetoken.google.com/myproj',
+      exp: 9_999_999_999,
+    })
+    expect(isFirebaseAuthIdTokenJwt(firebaseJwt)).toBe(true)
+    expect(isFirebaseAuthIdTokenJwt(googleJwtA)).toBe(false)
+    expect(isBffGatewayGoogleBearerToken(googleJwtA)).toBe(true)
+    expect(isBffGatewayGoogleBearerToken(googleJwtB)).toBe(true)
+    expect(isBffGatewayGoogleBearerToken(firebaseJwt)).toBe(false)
+    expect(isLikelyGoogleOAuthWebClientJwt(googleJwtA, webClientA)).toBe(true)
+    expect(isLikelyGoogleOAuthWebClientJwt(googleJwtB, webClientA)).toBe(false)
+    expect(isLikelyGoogleOAuthWebClientJwt(googleJwtB, '')).toBe(true)
+    expect(isLikelyGoogleOAuthWebClientJwt(firebaseJwt, webClientA)).toBe(false)
+  })
+
+  it('isSessionTokenAlignedWithGatewayGoogleAudience', () => {
+    const webA = '111.apps.googleusercontent.com'
+    const webB = '222.apps.googleusercontent.com'
+    const tA = tokenWithPayload({ aud: webA, exp: 9_999_999_999 })
+    expect(isSessionTokenAlignedWithGatewayGoogleAudience(tA, '')).toBe(true)
+    expect(isSessionTokenAlignedWithGatewayGoogleAudience(tA, webA)).toBe(true)
+    expect(isSessionTokenAlignedWithGatewayGoogleAudience(tA, webB)).toBe(false)
   })
 })

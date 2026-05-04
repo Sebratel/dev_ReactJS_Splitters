@@ -1,5 +1,73 @@
 @import "tailwindcss";
 
+@keyframes login-card-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes login-aurora-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(-3%, 2%) scale(1.06);
+    opacity: 0.75;
+  }
+}
+
+@keyframes login-mesh-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/** Brilho âmbar que percorre o ecrã — login hero (decoração). */
+@keyframes login-hero-crawl {
+  0% {
+    transform: translateX(-35%) skewX(-12deg);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.42;
+  }
+  100% {
+    transform: translateX(35%) skewX(-12deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes login-hero-shimmer {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.04) translate(1%, -0.5%);
+  }
+}
+
 @keyframes operacao-mark-beat {
   0%,
   100% {
@@ -17,6 +85,24 @@
   72% {
     transform: scale(1);
   }
+}
+
+/** Pontinhos “digitando…” no balão ISA (FAB). */
+@keyframes fab-isa-typing-dot {
+  0%,
+  65%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  32% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.fab-isa-typing-dot {
+  animation: fab-isa-typing-dot 1.05s ease-in-out infinite;
 }
 
 @theme {
@@ -38,6 +124,11 @@
   --radius-4xl: 32px;
 
   --animate-operacao-mark: operacao-mark-beat 1.45s ease-in-out infinite;
+  --animate-login-card-shake: login-card-shake 0.42s ease-in-out both;
+  --animate-login-aurora-drift: login-aurora-drift 18s ease-in-out infinite;
+  --animate-login-mesh-pulse: login-mesh-pulse 10s ease-in-out infinite;
+  --animate-login-hero-crawl: login-hero-crawl 14s ease-in-out infinite;
+  --animate-login-hero-shimmer: login-hero-shimmer 22s ease-in-out infinite;
 }
 
 @layer base {

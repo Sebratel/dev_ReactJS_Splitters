@@ -28,6 +28,12 @@ export type Splitter = {
   /** Informação de condomínio extraída via SQL no BFF Local. */
   tipoLocal?: 'CONDOMÍNIO' | 'UNIDADE'
   nomeCondominio?: string | null
+  /** Cidade no cadastro do equipamento (`CIDADE[SPLT.SECUNDARIO]`). */
+  cityCadastro?: string | null
+  /** Bairro no cadastro do equipamento (`BAIRRO[SPLT.SECUNDARIO]`). */
+  neighborhoodCadastro?: string | null
+  /** Pelo menos um cliente corporativo (contrato corporativo / PME) neste splitter. */
+  hasCorporateClients?: boolean
 }
 
 export function mapSplitterTypeText(raw: string): string {

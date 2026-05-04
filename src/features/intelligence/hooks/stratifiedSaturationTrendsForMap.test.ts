@@ -44,4 +44,14 @@ describe('stratifiedSaturationTrendsForMap', () => {
   it('lista vazia retorna vazio', () => {
     expect(stratifiedSaturationTrendsForMap([], 80)).toEqual([])
   })
+
+  it('prioriza códigos corporativos dentro da mesma faixa de uso', () => {
+    const prefer = new Set(['pj-low'])
+    const trends = [
+      row('other', 96),
+      row('pj-low', 95),
+    ]
+    const out = stratifiedSaturationTrendsForMap(trends, 4, { preferCorporateCodes: prefer })
+    expect(out.map((r) => r.splitterCode)).toEqual(['pj-low', 'other'])
+  })
 })

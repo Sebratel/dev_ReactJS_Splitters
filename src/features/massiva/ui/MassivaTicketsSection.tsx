@@ -1,6 +1,16 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
+import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import {
   formatMassivaListDateDisplay,
@@ -8,7 +18,6 @@ import {
 } from '@/features/massiva/lib/formatMassivaListDate'
 import {
   formatMassivaStatusLabel,
-  type MassivaStatus,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
@@ -29,9 +38,28 @@ function ticketKey(t: MassivaTicket, index: number): string {
 }
 
 type ImpactRange = 'all' | 'none' | 'low' | 'medium' | 'high'
+type MassivaListScope = 'abertas' | 'encerradas' | 'todas'
+type PeriodPreset = '7d' | '30d' | '90d'
+type MassivaRecordTypeFilter = 'all' | 'incidente' | 'evento'
+const MASSIVA_PAGE_SIZE = 30
 
 function normalizeText(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function formatDayLabel(date: Date): string {
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+}
+
+function formatHoursLabel(hours: number | null): string {
+  if (hours === null || !Number.isFinite(hours)) return '—'
+  if (hours < 24) return `${hours.toFixed(1)}h`
+  const days = hours / 24
+  return `${days.toFixed(1)}d`
 }
 
 function matchesImpactRange(ticket: MassivaTicket, range: ImpactRange): boolean {
@@ -41,6 +69,18 @@ function matchesImpactRange(ticket: MassivaTicket, range: ImpactRange): boolean 
   if (range === 'low') return affected > 0 && affected <= 100
   if (range === 'medium') return affected > 100 && affected <= 500
   return affected > 500
+}
+
+function classifyMassivaRecordType(ticket: MassivaTicket): MassivaRecordTypeFilter {
+  const source = `${ticket.title} ${ticket.description}`.trim().toLowerCase()
+  if (source.includes('incidente massivo') || source.includes('incidente')) return 'incidente'
+  if (source.includes('evento massivo') || source.includes('evento')) return 'evento'
+  return 'all'
+}
+
+function matchesRecordType(ticket: MassivaTicket, typeFilter: MassivaRecordTypeFilter): boolean {
+  if (typeFilter === 'all') return true
+  return classifyMassivaRecordType(ticket) === typeFilter
 }
 
 function escapeCsvCell(value: string): string {
@@ -98,8 +138,11 @@ export function MassivaTicketsSection({
   const { view, refetch, isRefreshing } = useMassivaTickets()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | MassivaStatus>('all')
+  const [scope, setScope] = useState<MassivaListScope>('abertas')
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('30d')
   const [impactRange, setImpactRange] = useState<ImpactRange>('all')
+  const [recordTypeFilter, setRecordTypeFilter] = useState<MassivaRecordTypeFilter>('all')
+  const [visibleCount, setVisibleCount] = useState(MASSIVA_PAGE_SIZE)
   const [csvCopied, setCsvCopied] = useState(false)
   const [closingProtocol, setClosingProtocol] = useState<number | null>(null)
   const [closeDescription, setCloseDescription] = useState('')
@@ -127,10 +170,75 @@ export function MassivaTicketsSection({
     [view],
   )
 
+  const periodStart = useMemo(() => {
+    const now = new Date()
+    const days = periodPreset === '7d' ? 7 : periodPreset === '30d' ? 30 : 90
+    return startOfDay(new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000))
+  }, [periodPreset])
+
+  const scopedTickets = useMemo(() => {
+    return tickets.filter((ticket) => {
+      if (scope === 'abertas') return ticket.status === 'aberta'
+      if (scope === 'encerradas') return ticket.status === 'encerrada'
+      return true
+    })
+  }, [tickets, scope])
+
+  const scopedTicketsInWindow = useMemo(() => {
+    return scopedTickets.filter((ticket) => {
+      if (!ticket.openedAt) return false
+      return ticket.openedAt >= periodStart
+    })
+  }, [scopedTickets, periodStart])
+
+  const historyStatus =
+    scope === 'abertas' ? 'aberta' : scope === 'encerradas' ? 'encerrada' : null
+  const historyQuery = useQuery({
+    queryKey: massivaKeys.historyList(
+      historyStatus ?? 'all',
+      periodStart.toISOString(),
+      'open-ended',
+      4000,
+    ),
+    queryFn: () =>
+      fetchMassivaHistoryListFromLocalDb({
+        status: historyStatus,
+        startDate: periodStart,
+        limit: 4000,
+      }),
+    staleTime: 60_000,
+    refetchOnMount: false,
+  })
+
+  const historyAffectedByProtocol = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const row of historyQuery.data ?? []) {
+      const protocol = row.protocol
+      if (protocol === null || protocol <= 0) continue
+      const current = map.get(protocol) ?? 0
+      map.set(protocol, Math.max(current, row.affectedClients))
+    }
+    return map
+  }, [historyQuery.data])
+
+  const effectiveScopedTicketsInWindow = useMemo(() => {
+    return scopedTicketsInWindow.map((ticket) => {
+      if (ticket.protocol <= 0) return ticket
+      const historical = historyAffectedByProtocol.get(ticket.protocol)
+      if (historical == null) return ticket
+      if (historical === ticket.affectedClients) return ticket
+      return { ...ticket, affectedClients: Math.max(ticket.affectedClients, historical) }
+    })
+  }, [scopedTicketsInWindow, historyAffectedByProtocol])
+
+  const typeScopedTicketsInWindow = useMemo(
+    () => effectiveScopedTicketsInWindow.filter((ticket) => matchesRecordType(ticket, recordTypeFilter)),
+    [effectiveScopedTicketsInWindow, recordTypeFilter],
+  )
+
   const filteredTickets = useMemo(() => {
     const text = normalizeText(query)
-    return tickets.filter((ticket) => {
-      if (statusFilter !== 'all' && ticket.status !== statusFilter) return false
+    return typeScopedTicketsInWindow.filter((ticket) => {
       if (!matchesImpactRange(ticket, impactRange)) return false
       if (text === '') return true
       const haystack = normalizeText(
@@ -145,7 +253,104 @@ export function MassivaTicketsSection({
       )
       return haystack.includes(text)
     })
-  }, [tickets, query, statusFilter, impactRange])
+  }, [typeScopedTicketsInWindow, query, impactRange])
+
+  const chartSeries = useMemo(() => {
+    const byDay = new Map<string, {
+      at: Date
+      label: string
+      affectedTotal: number
+      affectedIncident: number
+      affectedEvent: number
+      affectedOther: number
+      affectedOpen: number
+      affectedClosed: number
+      protocols: number
+    }>()
+
+    for (const ticket of typeScopedTicketsInWindow) {
+      if (!ticket.openedAt) continue
+      const day = startOfDay(ticket.openedAt)
+      const key = day.toISOString().slice(0, 10)
+      const current = byDay.get(key) ?? {
+        at: day,
+        label: formatDayLabel(day),
+        affectedTotal: 0,
+        affectedIncident: 0,
+        affectedEvent: 0,
+        affectedOther: 0,
+        affectedOpen: 0,
+        affectedClosed: 0,
+        protocols: 0,
+      }
+      const affected = Math.max(0, ticket.affectedClients)
+      const recordType = classifyMassivaRecordType(ticket)
+      current.protocols += 1
+      current.affectedTotal += affected
+      if (recordType === 'incidente') current.affectedIncident += affected
+      else if (recordType === 'evento') current.affectedEvent += affected
+      else current.affectedOther += affected
+      if (ticket.status === 'aberta') current.affectedOpen += affected
+      if (ticket.status === 'encerrada') current.affectedClosed += affected
+      byDay.set(key, current)
+    }
+
+    return [...byDay.values()].sort((a, b) => a.at.getTime() - b.at.getTime())
+  }, [typeScopedTicketsInWindow])
+
+  const chartTotalAffected = useMemo(
+    () => chartSeries.reduce((sum, day) => sum + day.affectedTotal, 0),
+    [chartSeries],
+  )
+  const chartHasOtherType = useMemo(
+    () => chartSeries.some((day) => day.affectedOther > 0),
+    [chartSeries],
+  )
+  const periodKpis = useMemo(() => {
+    const openNow = typeScopedTicketsInWindow.filter((t) => t.status === 'aberta').length
+    const closedNow = typeScopedTicketsInWindow.filter((t) => t.status === 'encerrada').length
+    const totalProtocols = typeScopedTicketsInWindow.length
+    const affectedAvg =
+      totalProtocols > 0
+        ? chartTotalAffected / totalProtocols
+        : 0
+    const topDay = chartSeries.reduce<{ label: string; value: number } | null>(
+      (max, day) => {
+        if (!max || day.affectedTotal > max.value) {
+          return { label: day.label, value: day.affectedTotal }
+        }
+        return max
+      },
+      null,
+    )
+    const closedWithCycle = scopedTicketsInWindow.filter(
+      (t) => t.status === 'encerrada' && t.openedAt && t.closedAt,
+    )
+    const avgClosureHours =
+      closedWithCycle.length > 0
+        ? closedWithCycle.reduce((sum, t) => {
+          const cycleHours = ((t.closedAt as Date).getTime() - (t.openedAt as Date).getTime()) / (1000 * 60 * 60)
+          return sum + Math.max(0, cycleHours)
+        }, 0) / closedWithCycle.length
+        : null
+    return {
+      openNow,
+      closedNow,
+      totalProtocols,
+      affectedAvg,
+      topDay,
+      avgClosureHours,
+    }
+  }, [typeScopedTicketsInWindow, chartTotalAffected, chartSeries])
+
+  useEffect(() => {
+    setVisibleCount(MASSIVA_PAGE_SIZE)
+  }, [scope, periodPreset, query, impactRange, recordTypeFilter])
+
+  const visibleTickets = useMemo(
+    () => filteredTickets.slice(0, visibleCount),
+    [filteredTickets, visibleCount],
+  )
 
   const handleExportCsv = async () => {
     const csv = buildMassivasCsv(filteredTickets)
@@ -229,22 +434,54 @@ export function MassivaTicketsSection({
               : 'grid gap-3 md:grid-cols-4'
           }
         >
+          <div
+            className={`flex items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${embedded ? 'sm:col-span-2' : 'md:col-span-4'}`}
+          >
+            {([
+              { id: 'abertas', label: 'Abertas' },
+              { id: 'encerradas', label: 'Encerradas' },
+              { id: 'todas', label: 'Todas' },
+            ] as Array<{ id: MassivaListScope; label: string }>).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setScope(opt.id)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                  scope === opt.id
+                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
+                    : 'text-neutral-600 hover:bg-neutral-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Pesquisar…"
             className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | MassivaStatus)}
-            className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
-          >
-            <option value="all">Todos os status</option>
-            <option value="aberta">Abertas</option>
-            <option value="encerrada">Encerradas</option>
-            <option value="desconhecida">Desconhecida</option>
-          </select>
+          <div className="flex items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            {([
+              { id: '7d', label: '7d' },
+              { id: '30d', label: '30d' },
+              { id: '90d', label: '90d' },
+            ] as Array<{ id: PeriodPreset; label: string }>).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setPeriodPreset(opt.id)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                  periodPreset === opt.id
+                    ? 'bg-neutral-900 text-white'
+                    : 'text-neutral-600 hover:bg-neutral-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <select
             value={impactRange}
             onChange={(e) => setImpactRange(e.target.value as ImpactRange)}
@@ -255,6 +492,15 @@ export function MassivaTicketsSection({
             <option value="low">1 a 100</option>
             <option value="medium">101 a 500</option>
             <option value="high">Acima de 500</option>
+          </select>
+          <select
+            value={recordTypeFilter}
+            onChange={(e) => setRecordTypeFilter(e.target.value as MassivaRecordTypeFilter)}
+            className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
+          >
+            <option value="all">Tipo: todos</option>
+            <option value="incidente">Tipo: incidente massivo</option>
+            <option value="evento">Tipo: evento massivo</option>
           </select>
         </div>
         <div className={`flex flex-wrap items-center gap-2 ${embedded ? 'mt-2' : 'mt-3'}`}>
@@ -275,13 +521,91 @@ export function MassivaTicketsSection({
             CSV
           </button>
           <span className="text-[11px] text-neutral-500">
-            {filteredTickets.length}/{view.tickets.length}
+            {filteredTickets.length}/{typeScopedTicketsInWindow.length} no período
           </span>
+          {historyQuery.isFetching ? (
+            <span className="text-[11px] text-neutral-500">sincronizando histórico…</span>
+          ) : null}
           {csvCopied ? (
             <span className="text-[11px] font-semibold text-emerald-700">
               CSV copiado
             </span>
           ) : null}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Protocolos no período</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900">
+              {periodKpis.totalProtocols.toLocaleString('pt-BR')}
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800/90">Abertas no período</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-amber-900">
+              {periodKpis.openNow.toLocaleString('pt-BR')}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Encerradas no período</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">
+              {periodKpis.closedNow.toLocaleString('pt-BR')}
+            </p>
+          </div>
+          <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Média afetados/protocolo</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-rose-800">
+              {periodKpis.affectedAvg.toFixed(1)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-sky-200/80 bg-sky-50/60 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Tempo médio de fechamento</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-sky-800">
+              {formatHoursLabel(periodKpis.avgClosureHours)}
+            </p>
+          </div>
+        </div>
+        <div className={`mt-3 rounded-xl border border-neutral-200/80 bg-white px-3 py-3 ${embedded ? '' : 'shadow-[0_1px_2px_rgba(15,23,42,0.04)]'}`}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-neutral-800">
+              Comparativo por tipo no período (massivas {scope === 'todas' ? 'selecionadas' : scope})
+            </p>
+            <p className="text-[11px] text-neutral-500">
+              Total afetados: <span className="font-bold text-neutral-800">{chartTotalAffected.toLocaleString('pt-BR')}</span>
+            </p>
+          </div>
+          {periodKpis.topDay ? (
+            <p className="mb-2 text-[11px] text-neutral-500">
+              Pico diário: <span className="font-semibold text-neutral-700">{periodKpis.topDay.label}</span> com{' '}
+              <span className="font-semibold text-neutral-700">{periodKpis.topDay.value.toLocaleString('pt-BR')}</span> afetados.
+            </p>
+          ) : null}
+          <div className="h-44">
+            {chartSeries.length === 0 ? (
+              <p className="flex h-full items-center justify-center text-center text-xs text-neutral-500">
+                Sem dados no período/filtro atual para montar o gráfico.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#6b7280" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, borderColor: '#e5e7eb' }}
+                    formatter={(value: unknown, name: unknown) => [
+                      Number(value ?? 0).toLocaleString('pt-BR'),
+                      String(name ?? ''),
+                    ]}
+                  />
+                  <Bar dataKey="affectedIncident" name="Afetados (incidente)" fill="#fb7185" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="affectedEvent" name="Afetados (evento)" fill="#38bdf8" radius={[3, 3, 0, 0]} />
+                  {chartHasOtherType ? (
+                    <Bar dataKey="affectedOther" name="Afetados (outros)" fill="#94a3b8" radius={[3, 3, 0, 0]} />
+                  ) : null}
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
         {!closeConfigured ? (
           <p className={`text-[11px] font-medium text-amber-800 ${embedded ? 'mt-2' : 'mt-3'}`}>
@@ -304,9 +628,10 @@ export function MassivaTicketsSection({
             Nenhuma massiva corresponde aos filtros aplicados.
           </p>
         ) : (
-          <ul className="flex w-full flex-col gap-4">
-            {filteredTickets.map((t, i) => (
-              <li key={ticketKey(t, i)}>
+          <>
+             <ul className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
+              {visibleTickets.map((t, i) => (
+              <li key={ticketKey(t, i)} className="h-full">
                 <MassivaTicketCard
                   ticket={t}
                   closeConfigured={closeConfigured}
@@ -316,8 +641,20 @@ export function MassivaTicketsSection({
                   }}
                 />
               </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+            {visibleTickets.length < filteredTickets.length ? (
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((prev) => prev + MASSIVA_PAGE_SIZE)}
+                  className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  Carregar mais ({visibleTickets.length}/{filteredTickets.length})
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 

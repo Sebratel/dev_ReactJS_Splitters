@@ -5,10 +5,12 @@ import type { ReactNode } from 'react'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 
 vi.mock('@/shared/api/fetchNetworkStats', () => ({
+  NETWORK_STATS_QUERY_KEY: ['network', 'stats'],
   fetchNetworkStats: vi.fn(() =>
     Promise.resolve({
       activeSplitters: 1,
       onlineClients: 2,
+      totalPortCapacity: 8,
       oltCount: 3,
       equipmentOccupancy: { green: 0, yellow: 0, red: 0 },
       trends: null,

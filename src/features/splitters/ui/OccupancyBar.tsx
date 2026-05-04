@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/shared/lib/utils'
 import { getOccupancyVisualTone } from '@/features/splitters/ui/occupancyVisual'
 
@@ -11,6 +12,7 @@ type OccupancyBarProps = {
 export function OccupancyBar({ usagePercent, className, compact }: OccupancyBarProps) {
   const clamped = Math.min(100, Math.max(0, usagePercent))
   const tone = getOccupancyVisualTone(clamped)
+  const reduceMotion = useReducedMotion()
 
   return (
     <div className={cn('w-full', className)}>
@@ -22,13 +24,16 @@ export function OccupancyBar({ usagePercent, className, compact }: OccupancyBarP
         )}
         role="presentation"
       >
-        <div
-          className={cn(
-            'h-full min-w-0 rounded-full transition-[width] duration-700 ease-out',
-            tone.bar,
-            tone.barGlow,
-          )}
-          style={{ width: `${clamped}%` }}
+        <motion.div
+          className={cn('h-full w-full min-w-0 rounded-full origin-left', tone.bar, tone.barGlow)}
+          initial={reduceMotion ? false : { scaleX: 0 }}
+          animate={{ scaleX: clamped / 100 }}
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { duration: 0.75, ease: [0.22, 1, 0.36, 1] }
+          }
+          style={{ transformOrigin: '0% 50%' }}
         />
       </div>
     </div>

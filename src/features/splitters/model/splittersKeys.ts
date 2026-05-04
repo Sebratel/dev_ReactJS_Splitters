@@ -10,6 +10,9 @@ export const splittersKeys = {
   /** Lista completa de splitters (BFF `listarSplitters`). */
   list: () => [...splittersKeys.all, 'list'] as const,
 
+  /** Top splitters por risco sobre o universo filtrado (consulta dedicada). */
+  operationalPriorityQueue: () => [...splittersKeys.all, 'operational-priority-queue'] as const,
+
   /** Detalhe por código do splitter. */
   detail: (code: string) => [...splittersKeys.all, 'detail', code] as const,
 

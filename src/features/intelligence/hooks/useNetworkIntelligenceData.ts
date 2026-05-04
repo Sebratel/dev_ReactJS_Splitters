@@ -5,10 +5,18 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
-import { fetchNetworkStats } from '@/shared/api/fetchNetworkStats'
+import {
+  fetchNetworkStats,
+  NETWORK_STATS_QUERY_KEY,
+  type NetworkStats,
+} from '@/shared/api/fetchNetworkStats'
 import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
-import { fetchSplitterMassivaStatsFromLocalDb } from '@/features/splitters/api/fetchSplitterMassivaStatsFromLocalDb'
-import { fetchSplitterTrendsFromLocalDb } from '@/features/splitters/api/fetchSplitterTrendsFromLocalDb'
+import { fetchSplitterIntelligenceBatchFromLocalDb } from '@/features/splitters/api/fetchSplitterIntelligenceBatchFromLocalDb'
+import {
+  fetchMaintenanceBySplitter,
+  type MaintenanceBySplitterRow,
+  type MaintenanceBySplitterTotals,
+} from '@/features/intelligence/api/fetchMaintenanceBySplitter'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
@@ -42,6 +50,8 @@ export type IntelligenceMassivaRow = {
 export type IntelligenceKpis = {
   totalEquipments: number
   occupiedPorts: number
+  /** Soma de portas (capacidade) no catálogo — denominador da ocupação geral. */
+  totalPortCapacity: number
   overallOccupancyPercent: number
   oltCount: number
 }
@@ -73,6 +83,11 @@ export type IntelligenceSaturationCell = {
   delta7d: number
   delta30d: number
   capturedAt: Date | null
+  /** Índice 0–100: pressão operacional visual no mapa (uso + massivas + tendência). */
+  attentionScore: number
+  hasCorporateClients: boolean
+  openTickets: number
+  affectedClientsTotal: number
 }
 
 export type IntelligenceDecisionKpis = {
@@ -93,11 +108,19 @@ export type IntelligenceRiskRankingRow = {
   street: string | null
   tipoLocal: Splitter['tipoLocal']
   nomeCondominio: string | null
+  /** Cidade no cadastro do splitter (regionalização para decisão). */
+  cityCadastro: string | null
+  /** Bairro no cadastro do splitter. */
+  neighborhoodCadastro: string | null
+  /** Pelo menos um cliente corporativo neste equipamento. */
+  hasCorporateClients: boolean
   currentUsagePercent: number
   ageYears: number
   delta7d: number
   delta30d: number
   selectedDelta: number
+  /** Dias até ~95% de ocupação se `selectedDelta` (pp / período de referência) for ritmo linear constante; `null` se não projetável. */
+  etaTo95Days: number | null
   openTickets: number
   totalTickets: number
   affectedClientsTotal: number
@@ -177,6 +200,10 @@ export type IntelligenceLifecycleAlertRow = {
   reason: string
 }
 
+export type IntelligenceMaintenanceBySplitterRow = MaintenanceBySplitterRow
+
+export type IntelligenceMaintenanceBySplitterTotals = MaintenanceBySplitterTotals
+
 export type IntelligenceDataset = {
   trends: IntelligenceTrendRow[]
   massivaStats: IntelligenceMassivaRow[]
@@ -187,6 +214,21 @@ export type IntelligenceDataset = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+/** Combina ocupação, incidentes e ritmo de crescimento para codificar tamanho/intensidade no mapa. */
+function computeMapAttentionScore(
+  usagePercent: number,
+  openTickets: number,
+  affectedClientsTotal: number,
+  delta7d: number,
+  delta30d: number,
+): number {
+  const growthSignal = Math.max(0, delta7d, delta30d * 0.35)
+  const massivaSignal = clamp(openTickets * 14 + Math.log10(affectedClientsTotal + 1) * 18, 0, 46)
+  const usageSignal = usagePercent * 0.52
+  const growthContribution = clamp(growthSignal * 3.4, 0, 28)
+  return Number(clamp(usageSignal + massivaSignal + growthContribution, 0, 100).toFixed(1))
 }
 
 function diffDays(a: Date, b: Date): number {
@@ -217,13 +259,13 @@ function parseSplitterCoord(raw: string): number | null {
 }
 
 /** Páginas maiores reduzem roundtrips na carga inicial do painel. */
-const INTELLIGENCE_SPLITTER_PAGE_SIZE = 1200
-/** Lote maior de códigos reduz número total de requests para trends/stats. */
-const INTELLIGENCE_CODE_QUERY_CHUNK = 320
+const INTELLIGENCE_SPLITTER_PAGE_SIZE = 1600
+/** Lote de códigos por request (URL `codes=` — não ultrapassar ~8k chars no servidor). */
+const INTELLIGENCE_CODE_QUERY_CHUNK = 400
 const INTELLIGENCE_MAX_SPLITTER_PAGES = 500
-/** Requisições simultâneas ao BFF (splitters / trends / massivas em fila por worker). */
-const INTELLIGENCE_HTTP_CONCURRENCY = 10
-const INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY = 8
+/** Requisições simultâneas ao BFF (lotes combinados trends+massiva por worker). */
+const INTELLIGENCE_HTTP_CONCURRENCY = 18
+const INTELLIGENCE_SPLITTER_PAGE_CONCURRENCY = 12
 
 function chunkBy<T>(items: readonly T[], size: number): T[][] {
   if (size <= 0) return [items.slice() as T[]]
@@ -234,26 +276,35 @@ function chunkBy<T>(items: readonly T[], size: number): T[][] {
   return out
 }
 
-async function mergeMapsFromConcurrentChunks<K, V>(
+async function mergeInsightsFromConcurrentChunks(
   chunks: string[][],
   concurrency: number,
-  fetchChunk: (codes: string[]) => Promise<Map<K, V>>,
-): Promise<Map<K, V>> {
-  const merged = new Map<K, V>()
+): Promise<{ trends: Map<string, SplitterTrend>; massiva: Map<string, SplitterMassivaStats> }> {
+  const trends = new Map<string, SplitterTrend>()
+  const massiva = new Map<string, SplitterMassivaStats>()
   const queue = chunks.filter((c) => c.length > 0)
 
   async function worker() {
     for (;;) {
       const chunk = queue.shift()
       if (!chunk) break
-      const part = await fetchChunk(chunk)
-      for (const [k, v] of part) merged.set(k, v)
+      const part = await fetchSplitterIntelligenceBatchFromLocalDb(chunk)
+      for (const [k, v] of part.trends) trends.set(k, v)
+      for (const [k, v] of part.massiva) massiva.set(k, v)
     }
   }
 
   const workers = Math.max(1, Math.min(concurrency, queue.length))
   await Promise.all(Array.from({ length: workers }, () => worker()))
-  return merged
+  return { trends, massiva }
+}
+
+async function fetchSplitterInsightsBatched(splitterCodes: readonly string[]): Promise<{
+  trends: Map<string, SplitterTrend>
+  massiva: Map<string, SplitterMassivaStats>
+}> {
+  const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
+  return mergeInsightsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY)
 }
 
 async function fetchAllSplittersCatalogForIntelligence(): Promise<{
@@ -308,24 +359,6 @@ async function fetchAllSplittersCatalogForIntelligence(): Promise<{
   }
 }
 
-async function fetchSplitterTrendsBatched(
-  splitterCodes: readonly string[],
-): Promise<Map<string, SplitterTrend>> {
-  const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
-  return mergeMapsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY, (codes) =>
-    fetchSplitterTrendsFromLocalDb(codes),
-  )
-}
-
-async function fetchSplitterMassivaStatsBatched(
-  splitterCodes: readonly string[],
-): Promise<Map<string, SplitterMassivaStats>> {
-  const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
-  return mergeMapsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY, (codes) =>
-    fetchSplitterMassivaStatsFromLocalDb(codes),
-  )
-}
-
 function normalizeSplitterLatLng(
   latRaw: string,
   lngRaw: string,
@@ -346,6 +379,11 @@ function normalizeSplitterLatLng(
 /** Limite de marcadores no mapa de saturação (evita sobrecarga do Leaflet). */
 const MAP_SATURATION_POINT_LIMIT = 80
 
+export type StratifiedSaturationMapOptions = {
+  /** Dentro de cada faixa de uso, estes códigos aparecem antes (ex.: corporativo no mapa). */
+  preferCorporateCodes?: ReadonlySet<string> | null
+}
+
 /**
  * Monta a lista do mapa: em rodízio entre crítico (≥95%), atenção (70–94%) e folga (&lt;70%),
  * para não mostrar só os de maior uso (que tendem a ser todos críticos). Completa até o limite
@@ -354,17 +392,26 @@ const MAP_SATURATION_POINT_LIMIT = 80
 export function stratifiedSaturationTrendsForMap(
   trends: IntelligenceTrendRow[],
   limit: number,
+  options?: StratifiedSaturationMapOptions,
 ): IntelligenceTrendRow[] {
   if (trends.length === 0) return []
-  const crit = trends
-    .filter((t) => t.currentUsagePercent >= 95)
-    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+
+  const prefer = options?.preferCorporateCodes ?? null
+
+  const sortBand = (a: IntelligenceTrendRow, b: IntelligenceTrendRow): number => {
+    if (prefer && prefer.size > 0) {
+      const ap = prefer.has(a.splitterCode) ? 1 : 0
+      const bp = prefer.has(b.splitterCode) ? 1 : 0
+      if (ap !== bp) return bp - ap
+    }
+    return b.currentUsagePercent - a.currentUsagePercent
+  }
+
+  const crit = trends.filter((t) => t.currentUsagePercent >= 95).sort(sortBand)
   const alert = trends
     .filter((t) => t.currentUsagePercent >= 70 && t.currentUsagePercent < 95)
-    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
-  const ok = trends
-    .filter((t) => t.currentUsagePercent < 70)
-    .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
+    .sort(sortBand)
+  const ok = trends.filter((t) => t.currentUsagePercent < 70).sort(sortBand)
 
   const bands: IntelligenceTrendRow[][] = [crit, alert, ok]
   const idx = [0, 0, 0]
@@ -388,9 +435,7 @@ export function stratifiedSaturationTrendsForMap(
   }
 
   if (out.length < limit) {
-    const rest = [...trends]
-      .sort((a, b) => b.currentUsagePercent - a.currentUsagePercent)
-      .filter((t) => !seen.has(t.splitterCode))
+    const rest = [...trends].sort(sortBand).filter((t) => !seen.has(t.splitterCode))
     for (const row of rest) {
       if (out.length >= limit) break
       seen.add(row.splitterCode)
@@ -483,40 +528,72 @@ function makeMockDataset(): IntelligenceDataset {
       busyCount: Math.round((currentUsagePercent / 100) * 16),
       tipoLocal: i % 3 === 0 ? 'CONDOMÍNIO' : 'UNIDADE',
       nomeCondominio: i % 3 === 0 ? `Condomínio ${Math.ceil(i / 3)}` : null,
+      cityCadastro: ['Belo Horizonte', 'Contagem', 'Nova Lima', 'Betim'][i % 4],
+      neighborhoodCadastro:
+        i % 5 === 0 ? null : [`Centro`, `Savassi`, `Funcionários`, `Barreiro`, `Pampulha`][i % 5],
+      hasCorporateClients: i % 7 === 0,
     })
   }
 
+  const totalPortCapacity = 17342 * 16
+  const occupiedPorts = Math.round(totalPortCapacity * 0.569)
   const kpis: IntelligenceKpis = {
     totalEquipments: 17342,
-    occupiedPorts: 9864,
-    overallOccupancyPercent: 56.9,
+    occupiedPorts,
+    totalPortCapacity,
+    overallOccupancyPercent:
+      totalPortCapacity > 0
+        ? Number(((occupiedPorts / totalPortCapacity) * 100).toFixed(2))
+        : 0,
     oltCount: 214,
   }
 
   return { trends, massivaStats, splittersMeta, kpis, source: 'mock' }
 }
 
-const NETWORK_STATS_QUERY_KEY = ['network-intelligence', 'network-stats'] as const
 const NETWORK_STATS_STALE_MS = 3 * 60_000
 const SPLITTERS_CATALOG_QUERY_KEY = ['network-intelligence', 'splitters-catalog'] as const
 const SPLITTERS_CATALOG_STALE_MS = 30 * 60_000
 
+const EMPTY_NETWORK_STATS: NetworkStats = {
+  activeSplitters: 0,
+  onlineClients: 0,
+  totalPortCapacity: 0,
+  oltCount: 0,
+  equipmentOccupancy: { green: 0, yellow: 0, red: 0 },
+  trends: null,
+}
+
 async function fetchLiveDataset(
   queryClient: QueryClient,
   splitters: { items: Splitter[]; totalCount: number },
+  /** Quando já obtido em paralelo ao catálogo no `queryFn` do dataset. */
+  prefetchedNetworkStats?: NetworkStats,
 ): Promise<IntelligenceDataset> {
   const codes = splitters.items.map((item) => item.code).filter((value) => value.trim() !== '')
 
-  const networkStats = await queryClient.fetchQuery({
-    queryKey: NETWORK_STATS_QUERY_KEY,
-    queryFn: fetchNetworkStats,
-    staleTime: NETWORK_STATS_STALE_MS,
-  })
+  const statsPromise: Promise<NetworkStats | undefined> = prefetchedNetworkStats
+    ? Promise.resolve(prefetchedNetworkStats)
+    : queryClient.fetchQuery({
+        queryKey: NETWORK_STATS_QUERY_KEY,
+        queryFn: fetchNetworkStats,
+        staleTime: NETWORK_STATS_STALE_MS,
+      })
 
-  const [trendsByCode, statsByCode] = await Promise.all([
-    fetchSplitterTrendsBatched(codes),
-    fetchSplitterMassivaStatsBatched(codes),
+  const insightsPromise =
+    codes.length === 0
+      ? Promise.resolve({
+          trends: new Map<string, SplitterTrend>(),
+          massiva: new Map<string, SplitterMassivaStats>(),
+        })
+      : fetchSplitterInsightsBatched(codes)
+
+  const [networkStatsRaw, { trends: trendsByCode, massiva: statsByCode }] = await Promise.all([
+    statsPromise,
+    insightsPromise,
   ])
+
+  const networkStats: NetworkStats = networkStatsRaw ?? EMPTY_NETWORK_STATS
 
   const titleByCode = new Map(
     splitters.items.map((item) => [item.code, String(item.title ?? '').trim()]),
@@ -558,8 +635,11 @@ async function fetchLiveDataset(
 
   const totalEquipments = networkStats.activeSplitters
   const occupiedPorts = networkStats.onlineClients
+  const totalPortCapacity = networkStats.totalPortCapacity
   const overallOccupancyPercent =
-    totalEquipments > 0 ? Number(((occupiedPorts / totalEquipments) * 100).toFixed(2)) : 0
+    totalPortCapacity > 0
+      ? Number(((occupiedPorts / totalPortCapacity) * 100).toFixed(2))
+      : 0
 
   return {
     trends,
@@ -567,6 +647,7 @@ async function fetchLiveDataset(
     kpis: {
       totalEquipments,
       occupiedPorts,
+      totalPortCapacity,
       overallOccupancyPercent,
       oltCount: networkStats.oltCount,
     },
@@ -578,9 +659,10 @@ async function fetchLiveDataset(
 async function fetchIntelligenceDataset(
   queryClient: QueryClient,
   splitters: { items: Splitter[]; totalCount: number },
+  prefetchedNetworkStats?: NetworkStats,
 ): Promise<IntelligenceDataset> {
   try {
-    return await fetchLiveDataset(queryClient, splitters)
+    return await fetchLiveDataset(queryClient, splitters, prefetchedNetworkStats)
   } catch {
     return makeMockDataset()
   }
@@ -635,6 +717,8 @@ export function useNetworkIntelligenceData(
   preset: IntelligenceDateRangePreset,
   customStart: Date | null,
   customEnd: Date | null,
+  /** Mapa: só splitters com cliente corporativo (cadastro). */
+  mapCorporateOnly = false,
 ) {
   const queryClient = useQueryClient()
 
@@ -656,14 +740,24 @@ export function useNetworkIntelligenceData(
   const query = useQuery({
     queryKey: ['network-intelligence', 'dataset'],
     queryFn: async () => {
-      const splitters =
-        splittersCatalogQuery.data ??
-        (await queryClient.fetchQuery({
-          queryKey: SPLITTERS_CATALOG_QUERY_KEY,
-          queryFn: fetchAllSplittersCatalogForIntelligence,
-          staleTime: SPLITTERS_CATALOG_STALE_MS,
-        }))
-      return fetchIntelligenceDataset(queryClient, splitters)
+      const catalogPromise =
+        splittersCatalogQuery.data !== undefined
+          ? Promise.resolve(splittersCatalogQuery.data)
+          : queryClient.fetchQuery({
+              queryKey: SPLITTERS_CATALOG_QUERY_KEY,
+              queryFn: fetchAllSplittersCatalogForIntelligence,
+              staleTime: SPLITTERS_CATALOG_STALE_MS,
+            })
+
+      const statsPromise = queryClient.fetchQuery({
+        queryKey: NETWORK_STATS_QUERY_KEY,
+        queryFn: fetchNetworkStats,
+        staleTime: NETWORK_STATS_STALE_MS,
+      })
+
+      const [splitters, networkStats] = await Promise.all([catalogPromise, statsPromise])
+
+      return fetchIntelligenceDataset(queryClient, splitters, networkStats)
     },
     placeholderData: keepPreviousData,
     /** Dataset é pesado; cache longo. Sem polling automático (evita reexecutar centenas de requests). */
@@ -676,6 +770,22 @@ export function useNetworkIntelligenceData(
     () => buildDateWindow(preset, customStart, customEnd),
     [preset, customStart, customEnd],
   )
+
+  const maintenanceQuery = useQuery({
+    queryKey: [
+      'network-intelligence',
+      'maintenance-by-splitter',
+      window.start.toISOString(),
+      window.end.toISOString(),
+    ],
+    queryFn: () => fetchMaintenanceBySplitter(window.start, window.end),
+    staleTime: 10 * 60_000,
+    gcTime: 60 * 60_000,
+    refetchInterval: false,
+    placeholderData: keepPreviousData,
+    /** Evita disputar o BFF com centenas de GET de trends/massivas na primeira carga. */
+    enabled: query.data !== undefined,
+  })
 
   const filtered = useMemo(() => {
     const data = query.data
@@ -784,20 +894,56 @@ export function useNetworkIntelligenceData(
     return base
   }, [filtered])
 
+  const corporateSplitterCodes = useMemo(() => {
+    const set = new Set<string>()
+    if (!filtered) return set
+    for (const s of filtered.splittersMeta) {
+      if (s.code.trim() !== '' && s.hasCorporateClients === true) set.add(s.code)
+    }
+    return set
+  }, [filtered])
+
   const saturationCells = useMemo<IntelligenceSaturationCell[]>(() => {
     if (!filtered) return []
-    return stratifiedSaturationTrendsForMap(filtered.trends, MAP_SATURATION_POINT_LIMIT).map((row) => ({
-      splitterCode: row.splitterCode,
-      splitterTitle: row.splitterTitle,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      usagePercent: row.currentUsagePercent,
-      label: row.label,
-      delta7d: row.delta7d,
-      delta30d: row.delta30d,
-      capturedAt: row.capturedAt,
-    }))
-  }, [filtered])
+    const massivaByCode = new Map(filtered.massivaStats.map((r) => [r.splitterCode, r]))
+
+    const trendsForMap = mapCorporateOnly
+      ? filtered.trends.filter((t) => corporateSplitterCodes.has(t.splitterCode))
+      : filtered.trends
+
+    /** Sem «só corporativo»: só estratificação por uso; ordenação por PJ antes ocupava quase todos os 80 pontos. */
+    const stratified = stratifiedSaturationTrendsForMap(trendsForMap, MAP_SATURATION_POINT_LIMIT)
+
+    return stratified.map((row) => {
+      const massiva = massivaByCode.get(row.splitterCode)
+      const meta = splittersMetaByCode.get(row.splitterCode)
+      const openTickets = massiva?.openTickets ?? 0
+      const affectedClientsTotal = massiva?.affectedClientsTotal ?? 0
+      const hasCorporateClients = meta?.hasCorporateClients === true
+      const attentionScore = computeMapAttentionScore(
+        row.currentUsagePercent,
+        openTickets,
+        affectedClientsTotal,
+        row.delta7d,
+        row.delta30d,
+      )
+      return {
+        splitterCode: row.splitterCode,
+        splitterTitle: row.splitterTitle,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        usagePercent: row.currentUsagePercent,
+        label: row.label,
+        delta7d: row.delta7d,
+        delta30d: row.delta30d,
+        capturedAt: row.capturedAt,
+        attentionScore,
+        hasCorporateClients,
+        openTickets,
+        affectedClientsTotal,
+      }
+    })
+  }, [filtered, splittersMetaByCode, mapCorporateOnly, corporateSplitterCodes])
 
   const riskRanking = useMemo<IntelligenceRiskRankingRow[]>(() => {
     if (!filtered) return []
@@ -811,6 +957,16 @@ export function useNetworkIntelligenceData(
             ? Number((diffDays(meta.createdAt, new Date()) / 365.25).toFixed(2))
             : 0
         const selectedDelta = deltaReference === '7d' ? trend.delta7d : trend.delta30d
+        const referenceDays = deltaReference === '7d' ? 7 : 30
+        const dailyDeltaPP =
+          referenceDays > 0 ? selectedDelta / referenceDays : 0
+        let etaTo95Days: number | null = null
+        if (trend.currentUsagePercent < 95 && dailyDeltaPP > 0) {
+          const rawDays = (95 - trend.currentUsagePercent) / dailyDeltaPP
+          if (Number.isFinite(rawDays) && rawDays > 0) {
+            etaTo95Days = Math.max(1, Math.ceil(rawDays))
+          }
+        }
         const usageScore = clamp(trend.currentUsagePercent, 0, 100)
         const growthScore = clamp(selectedDelta * 4, -20, 40)
         const openMassivaScore = clamp((massiva?.openTickets ?? 0) * 8, 0, 24)
@@ -826,11 +982,17 @@ export function useNetworkIntelligenceData(
           street: meta?.street ?? null,
           tipoLocal: meta?.tipoLocal,
           nomeCondominio: meta?.nomeCondominio ?? null,
+          cityCadastro: meta?.cityCadastro?.trim() ? meta.cityCadastro.trim() : null,
+          neighborhoodCadastro: meta?.neighborhoodCadastro?.trim()
+            ? meta.neighborhoodCadastro.trim()
+            : null,
+          hasCorporateClients: meta?.hasCorporateClients === true,
           currentUsagePercent: trend.currentUsagePercent,
           ageYears,
           delta7d: trend.delta7d,
           delta30d: trend.delta30d,
           selectedDelta,
+          etaTo95Days,
           openTickets: massiva?.openTickets ?? 0,
           totalTickets: massiva?.totalTickets ?? 0,
           affectedClientsTotal: massiva?.affectedClientsTotal ?? 0,
@@ -993,21 +1155,12 @@ export function useNetworkIntelligenceData(
       const createdAt = metaByCode.get(row.splitterCode)?.createdAt ?? null
       const incidentsPerYear =
         row.ageYears > 0 ? Number((row.totalTickets / Math.max(0.25, row.ageYears)).toFixed(2)) : row.totalTickets
-      const etaTo95Days =
-        row.selectedDelta > 0
-          ? (() => {
-              const periodsTo95 = (95 - row.currentUsagePercent) / row.selectedDelta
-              if (!Number.isFinite(periodsTo95) || periodsTo95 <= 0) return 0
-              const periodDays = deltaReference === '7d' ? 7 : 30
-              return Math.round(periodsTo95 * periodDays)
-            })()
-          : null
       const lifecycleRiskScore = clamp(
         row.riskScore * 0.6 + clamp(row.ageYears * 10, 0, 80) + clamp(incidentsPerYear * 2.5, 0, 40),
         0,
         240,
       )
-      return { ...row, createdAt, incidentsPerYear, etaTo95Days, lifecycleRiskScore }
+      return { ...row, createdAt, incidentsPerYear, lifecycleRiskScore }
     })
 
     const lifecycleKpis: IntelligenceLifecycleKpis = {
@@ -1129,6 +1282,7 @@ export function useNetworkIntelligenceData(
 
   return {
     query,
+    maintenanceQuery,
     /** `/api/stats` — costuma concluir antes do dataset; útil para prévia na UI. */
     networkStatsPreview: statsQuery.data ?? null,
     source: filtered?.source ?? null,
@@ -1145,8 +1299,38 @@ export function useNetworkIntelligenceData(
     oltDrilldown,
     geoDrilldown,
     ...lifecycleAnalytics,
+    maintenanceBySplitter: maintenanceQuery.data?.rows ?? [],
+    maintenanceTotals: maintenanceQuery.data?.totals ?? {
+      totalMaintenances: 0,
+      totalProtocols: 0,
+      totalClients: 0,
+      openMaintenances: 0,
+      splittersWithMaintenances: 0,
+      unmappedMaintenances: 0,
+    },
     deltaReference,
     deltaReferenceLabel,
     dateWindow: window,
   }
+}
+
+/** Hover no menu «Painel da rede» — começa a baixar o catálogo antes do clique (menos tempo em skeleton). */
+export function prefetchIntelligenceSplittersCatalog(queryClient: QueryClient): Promise<void> {
+  return queryClient.prefetchQuery({
+    queryKey: SPLITTERS_CATALOG_QUERY_KEY,
+    queryFn: fetchAllSplittersCatalogForIntelligence,
+    staleTime: SPLITTERS_CATALOG_STALE_MS,
+  })
+}
+
+/** Catálogo + `/api/stats` em paralelo (alinha com o `queryFn` do dataset). */
+export function prefetchIntelligencePanelPrerequisites(queryClient: QueryClient): Promise<void> {
+  return Promise.all([
+    prefetchIntelligenceSplittersCatalog(queryClient),
+    queryClient.prefetchQuery({
+      queryKey: NETWORK_STATS_QUERY_KEY,
+      queryFn: fetchNetworkStats,
+      staleTime: NETWORK_STATS_STALE_MS,
+    }),
+  ]).then(() => undefined)
 }

@@ -22,6 +22,7 @@ describe('fetchNetworkStats', () => {
         data: {
           catalog_equipment: 10,
           occupied_ports: 20,
+          total_port_capacity: 100,
           olt_count: 3,
           equipment_occupancy_green: 1,
           equipment_occupancy_yellow: 2,
@@ -34,6 +35,7 @@ describe('fetchNetworkStats', () => {
     expect(stats).toEqual({
       activeSplitters: 10,
       onlineClients: 20,
+      totalPortCapacity: 100,
       oltCount: 3,
       equipmentOccupancy: { green: 1, yellow: 2, red: 4 },
       trends: null,
@@ -56,6 +58,7 @@ describe('fetchNetworkStats', () => {
     const stats = await fetchNetworkStats()
     expect(stats.activeSplitters).toBe(0)
     expect(stats.onlineClients).toBe(0)
+    expect(stats.totalPortCapacity).toBe(0)
     expect(stats.oltCount).toBe(0)
     expect(stats.equipmentOccupancy).toEqual({ green: 0, yellow: 0, red: 0 })
     expect(stats.trends).toBeNull()
@@ -69,6 +72,7 @@ describe('fetchNetworkStats', () => {
         data: {
           catalog_equipment: 1,
           occupied_ports: 2,
+          total_port_capacity: 0,
           olt_count: 3,
           equipment_occupancy_green: 0,
           equipment_occupancy_yellow: 0,

@@ -76,6 +76,9 @@ export function createMassivaHistoryStore(config) {
       async getOpenMassivaDashboardKpis() {
         return { openMassivas: 0, affectedClientsOpen: 0 };
       },
+      async getHistoryList() {
+        return [];
+      },
       async end() {},
     };
   }
@@ -719,6 +722,71 @@ export function createMassivaHistoryStore(config) {
     };
   }
 
+  async function getHistoryList(input = {}) {
+    await ensureReady();
+
+    const statusRaw = normalizeText(input?.status).toLowerCase();
+    const status = statusRaw === 'aberta' || statusRaw === 'encerrada' ? statusRaw : null;
+    const startDate = normalizeDate(input?.startDate);
+    const endDate = normalizeDate(input?.endDate);
+    const limit = Math.min(10000, Math.max(1, normalizePositiveInt(input?.limit) ?? 3000));
+
+    const where = [];
+    const values = [];
+    if (status !== null) {
+      where.push('h.status = ?');
+      values.push(status);
+    }
+    if (startDate !== null) {
+      where.push('h.opened_at >= ?');
+      values.push(startDate);
+    }
+    if (endDate !== null) {
+      where.push('h.opened_at <= ?');
+      values.push(endDate);
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          h.id AS id,
+          h.protocol AS protocol,
+          h.assignment_id AS assignmentId,
+          h.access_point_code AS accessPointCode,
+          h.title AS title,
+          h.operator_email AS operatorEmail,
+          h.affected_clients AS affectedClients,
+          h.status AS status,
+          h.opened_at AS openedAt,
+          h.expected_close_at AS expectedCloseAt,
+          h.closed_at AS closedAt,
+          h.updated_at AS updatedAt
+        FROM massiva_history h
+        ${whereSql}
+        ORDER BY h.opened_at DESC, h.id DESC
+        LIMIT ?
+      `,
+      [...values, limit],
+    );
+
+    return rows.map((row) => ({
+      id: Number(row.id ?? 0),
+      protocol: row.protocol == null ? null : Number(row.protocol),
+      assignmentId: row.assignmentId == null ? null : Number(row.assignmentId),
+      accessPointCode: normalizeText(row.accessPointCode),
+      title: normalizeText(row.title),
+      operatorEmail: normalizeText(row.operatorEmail),
+      affectedClients: Number(row.affectedClients ?? 0),
+      status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
+      openedAt: row.openedAt instanceof Date ? row.openedAt : normalizeDate(row.openedAt),
+      expectedCloseAt:
+        row.expectedCloseAt instanceof Date ? row.expectedCloseAt : normalizeDate(row.expectedCloseAt),
+      closedAt: row.closedAt instanceof Date ? row.closedAt : normalizeDate(row.closedAt),
+      updatedAt: row.updatedAt instanceof Date ? row.updatedAt : normalizeDate(row.updatedAt),
+    }));
+  }
+
   async function end() {
     await Promise.allSettled([adminPool.end(), dataPool.end()]);
   }
@@ -733,6 +801,7 @@ export function createMassivaHistoryStore(config) {
     upsertSplitterSnapshots,
     getSplitterTrends,
     getOpenMassivaDashboardKpis,
+    getHistoryList,
     end,
   };
 }

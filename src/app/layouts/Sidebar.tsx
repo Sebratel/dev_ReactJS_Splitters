@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Cpu,
   LayoutDashboard,
@@ -7,18 +8,37 @@ import {
   ExternalLink,
   Users,
   LogOut,
+  X,
 } from 'lucide-react'
 import operacaoSebratelMark from '@/assets/operacao-sebratel-mark.svg'
 import { cn } from '@/shared/lib/utils'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
+import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
+import { prefetchNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 
 type SidebarProps = {
   collapsed: boolean
   onToggleCollapsed: () => void
+  /** Drawer (&lt; xl): painel deslizante */
+  mobileDrawerOpen: boolean
+  onMobileDrawerClose: () => void
+  /** Chamado ao navegar no drawer (fecha o painel). */
+  onNavigate: () => void
 }
 
-export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggleCollapsed,
+  mobileDrawerOpen,
+  onMobileDrawerClose,
+  onNavigate,
+}: SidebarProps) {
+  const queryClient = useQueryClient()
+  const isXl = useMediaQuery(`(min-width: ${BREAKPOINT_PX.xl}px)`)
+  /** No telefone/tablet o drawer mostra sempre rótulos completos. */
+  const navCollapsed = isXl && collapsed
   const currentPath = useLocation().pathname
   const canAccessMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
   const canAccessIntelligence = useAccessAuthStore((s) => s.hasPermission('canViewIntelligence'))
@@ -45,24 +65,39 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-6 top-6 bottom-6 rounded-4xl bg-white shadow-xl shadow-surface-container-low overflow-hidden flex flex-col transition-[width,padding,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width]',
-        collapsed ? 'w-24 p-4 shadow-lg shadow-surface-container-low/70' : 'w-80 p-8',
+        'fixed z-50 flex flex-col overflow-hidden bg-white transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
+        'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
+        mobileDrawerOpen ? 'max-xl:translate-x-0' : 'max-xl:-translate-x-full',
+        'xl:left-6 xl:top-6 xl:bottom-6 xl:rounded-4xl xl:shadow-xl xl:shadow-surface-container-low',
+        navCollapsed
+          ? 'xl:w-24 xl:p-4 xl:shadow-lg xl:shadow-surface-container-low/70'
+          : 'xl:w-80 xl:p-8',
       )}
     >
-      <div className="flex h-full flex-1 flex-col">
+      <div className="flex h-full min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 justify-end pb-2 xl:hidden">
+          <button
+            type="button"
+            onClick={onMobileDrawerClose}
+            className="flex size-11 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-700 shadow-sm transition hover:bg-neutral-50"
+            aria-label="Fechar menu"
+          >
+            <X className="size-5" strokeWidth={2} aria-hidden />
+          </button>
+        </div>
         <div
           className={cn(
-            'mb-8 flex shrink-0',
-            collapsed ? 'justify-center' : 'items-start',
+            'mb-6 flex shrink-0 xl:mb-8',
+            navCollapsed ? 'justify-center' : 'items-start',
           )}
         >
           <button
             type="button"
             onClick={onToggleCollapsed}
-            aria-label={collapsed ? 'Expandir menu lateral' : 'Ocultar menu lateral'}
+            aria-label={navCollapsed ? 'Expandir menu lateral' : 'Ocultar menu lateral'}
             className={cn(
               'group relative flex rounded-3xl transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
-              collapsed
+              navCollapsed
                 ? 'flex-col items-center gap-3 text-center'
                 : 'items-center gap-4 px-2 text-left',
             )}
@@ -77,7 +112,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                 decoding="async"
               />
             </div>
-            {!collapsed ? (
+            {!navCollapsed ? (
               <div>
                 <h1 className="text-xl font-black tracking-tighter text-on-surface">
                   Operação
@@ -92,12 +127,12 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
 
         <nav
           className={cn(
-            'flex-1 overflow-y-auto no-scrollbar transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-            collapsed ? 'space-y-4 pr-0' : 'space-y-8 pr-2',
+            'min-h-0 flex-1 overflow-y-auto no-scrollbar transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+            navCollapsed ? 'space-y-4 pr-0' : 'space-y-8 pr-2',
           )}
         >
           <div>
-            {!collapsed ? (
+            {!navCollapsed ? (
               <p className="px-4 mb-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
                 Navegação
               </p>
@@ -107,10 +142,17 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                 <li key={item.to}>
                   <Link
                     to={item.to}
-                    title={collapsed ? item.label : undefined}
+                    title={navCollapsed ? item.label : undefined}
+                    onClick={() => onNavigate()}
+                    onMouseEnter={() => {
+                      /** Só KPIs leves — prefetch do catálogo inteiro competia com GET da lista de splitters no BFF. */
+                      if (item.to === '/intelligence') {
+                        void prefetchNetworkStats(queryClient)
+                      }
+                    }}
                     className={cn(
-                      'flex rounded-2xl transition-all duration-300 font-bold text-sm group',
-                      collapsed
+                      'flex min-h-[44px] rounded-2xl transition-all duration-300 font-bold text-sm group',
+                      navCollapsed
                         ? 'justify-center px-0 py-4'
                         : 'items-center gap-4 px-4 py-4',
                       isActive(item.to)
@@ -131,13 +173,13 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                             : 'text-primary group-hover:text-primary',
                       )}
                     />
-                    {!collapsed ? item.label : null}
+                    {!navCollapsed ? item.label : null}
                   </Link>
                 </li>
               ))}
             </ul>
 
-            {!collapsed ? (
+            {!navCollapsed ? (
               <div className="mt-4 px-2">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
                   Links externos
@@ -146,7 +188,8 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                   href={env.hubOrigin}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-primary/15 hover:bg-surface-container-low hover:text-on-surface"
+                  onClick={() => onNavigate()}
+                  className="flex min-h-[44px] items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-primary/15 hover:bg-surface-container-low hover:text-on-surface"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-primary">
                     <ExternalLink size={18} aria-hidden />
@@ -175,6 +218,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Hub Sebratel"
+                  onClick={() => onNavigate()}
                   className="flex justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-primary/15 hover:bg-surface-container-low hover:text-on-surface"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-primary">

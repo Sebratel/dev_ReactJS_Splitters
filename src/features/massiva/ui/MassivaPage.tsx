@@ -1,4 +1,6 @@
 ﻿import { useMemo, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMassivaLocalPreview } from '@/features/massiva/hooks/useMassivaLocalPreview'
 import { useMassivaOpenReadiness } from '@/features/massiva/hooks/useMassivaOpenReadiness'
 import { useMassivaOpenMutation } from '@/features/massiva/hooks/useMassivaOpenMutation'
@@ -10,6 +12,7 @@ import {
   type MassivaStepItem,
 } from '@/features/massiva/ui/MassivaStepper'
 import { RightPanel } from '@/features/massiva/ui/RightPanel'
+import { MassivaTicketsSection } from '@/features/massiva/ui/MassivaTicketsSection'
 import { StepAbertura } from '@/features/massiva/ui/StepAbertura'
 import { StepRota } from '@/features/massiva/ui/StepRota'
 import { StepSplitters } from '@/features/massiva/ui/StepSplitters'
@@ -38,6 +41,7 @@ type MassivaPageProps = {
 }
 
 export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
+  const location = useLocation()
   const [currentStep, setCurrentStep] = useState<MassivaStepId>('rota')
   const enableImpactComputation =
     currentStep === 'validacao' || currentStep === 'abertura'
@@ -151,6 +155,41 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
     return map
   }, [localPreview.openingPreparation, readiness])
 
+  const didApplyPrefillRef = useRef(false)
+  useEffect(() => {
+    if (didApplyPrefillRef.current) return
+    const raw = (location.state as { massivaPrefill?: { splitterCode?: string; splitterLabel?: string } } | null)?.massivaPrefill
+    const splitterCode = String(raw?.splitterCode ?? '').trim()
+    if (splitterCode === '') {
+      didApplyPrefillRef.current = true
+      return
+    }
+    if (localPreview.isRoutesCatalogPending) return
+    const candidates = localPreview.findRoutesBySplitterCode(splitterCode, 1)
+    if (candidates.length === 0) {
+      didApplyPrefillRef.current = true
+      return
+    }
+    const first = candidates[0]
+    localPreview.setConnections([{
+      apId: first.apCode,
+      apLabel: first.apLabel,
+      slot: first.slot,
+      porta: first.port,
+      splitters: [{
+        id: splitterCode,
+        label: String(raw?.splitterLabel ?? '').trim() || splitterCode,
+      }],
+    }])
+    setCurrentStep('splitters')
+    didApplyPrefillRef.current = true
+  }, [
+    location.state,
+    localPreview.findRoutesBySplitterCode,
+    localPreview.isRoutesCatalogPending,
+    localPreview.setConnections,
+  ])
+
   const activeStep = (() => {
     const applyMultiplePairsAtRoute = (
       routeIndex: number,
@@ -262,47 +301,64 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   })()
 
   return (
-    <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 min-[1700px]:grid-cols-[minmax(0,7fr)_minmax(380px,3fr)]">
-      <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
-        <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
-          <MassivaStepper
-            currentStep={currentStep}
-            steps={steps}
-            onStepChange={setCurrentStep}
+    <div className="space-y-4 lg:space-y-5 xl:space-y-6">
+      <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 min-[1700px]:grid-cols-[minmax(0,7fr)_minmax(380px,3fr)]">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
+          <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
+            <MassivaStepper
+              currentStep={currentStep}
+              steps={steps}
+              onStepChange={setCurrentStep}
+            />
+            {(localPreview.isConnectionsLoading || localPreview.isApplyingFilters) ? (
+              <div
+                className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+                {localPreview.isConnectionsLoading
+                  ? (enableImpactComputation
+                    ? 'Carregando conexões e clientes afetados...'
+                    : 'Carregando catálogo de rotas/splitters...')
+                  : 'Aplicando filtros da rota e atualizando clientes...'}
+              </div>
+            ) : null}
+            <div className="min-h-[360px] sm:min-h-[420px]">{activeStep}</div>
+          </div>
+
+          <BottomActionBar
+            summary={summary}
+            disabledReason={openPermissionReason ?? explainMassivaPostBlocked(readiness)}
+            canSubmit={canOpenMassiva && openMutation.canSubmitOpen}
+            isPending={openMutation.isPending}
+            isSuccess={openMutation.isSuccess}
+            isError={openMutation.isError}
+            error={openMutation.error}
+            successPayload={openMutation.data}
+            apTitleByCode={apTitleByCode}
+            onSubmit={canOpenMassiva ? openMutation.submitOpen : () => {}}
+            onDismiss={openMutation.dismissMutation}
           />
-          {(localPreview.isConnectionsLoading || localPreview.isApplyingFilters) ? (
-            <div
-              className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
-              role="status"
-              aria-live="polite"
-            >
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-500" />
-              {localPreview.isConnectionsLoading
-                ? (enableImpactComputation
-                  ? 'Carregando conexões e clientes afetados...'
-                  : 'Carregando catálogo de rotas/splitters...')
-                : 'Aplicando filtros da rota e atualizando clientes...'}
-            </div>
-          ) : null}
-          <div className="min-h-[360px] sm:min-h-[420px]">{activeStep}</div>
+        </section>
+
+        <RightPanel showProtocolsTab={false} />
+      </div>
+
+      <section className="rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
+        <div className="border-b border-neutral-200/80 px-4 py-3 sm:px-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">
+            Monitoramento de impacto
+          </p>
+          <h2 className="mt-1 text-base font-semibold text-neutral-900 sm:text-lg">
+            Protocolos de massiva
+          </h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Acompanhamento completo com indicadores, série de afetados por período e lista paginada para operação.
+          </p>
         </div>
-
-        <BottomActionBar
-          summary={summary}
-          disabledReason={openPermissionReason ?? explainMassivaPostBlocked(readiness)}
-          canSubmit={canOpenMassiva && openMutation.canSubmitOpen}
-          isPending={openMutation.isPending}
-          isSuccess={openMutation.isSuccess}
-          isError={openMutation.isError}
-          error={openMutation.error}
-          successPayload={openMutation.data}
-          apTitleByCode={apTitleByCode}
-          onSubmit={canOpenMassiva ? openMutation.submitOpen : () => {}}
-          onDismiss={openMutation.dismissMutation}
-        />
+        <MassivaTicketsSection />
       </section>
-
-      <RightPanel />
     </div>
   )
 }

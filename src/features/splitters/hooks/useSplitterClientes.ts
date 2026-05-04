@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchSplitterConnectionsBundleFromLocalDb } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { SPLITTERS_CONNECTIONS_STALE_TIME_MS } from '@/features/splitters/model/constants'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
+import { env } from '@/shared/config/env'
 
 /**
  * Clientes ligados a um splitter, sincronizados com o banco de dados.
@@ -14,6 +15,8 @@ export function useSplitterClientes(splitterCode: string | undefined) {
     queryKey: [...splittersKeys.connections(), code],
     queryFn: () => fetchSplitterConnectionsBundleFromLocalDb(code),
     staleTime: SPLITTERS_CONNECTIONS_STALE_TIME_MS,
+    refetchInterval: env.splitterDetailRefreshMs,
+    refetchIntervalInBackground: false,
     enabled: code.length > 0,
   })
 }
