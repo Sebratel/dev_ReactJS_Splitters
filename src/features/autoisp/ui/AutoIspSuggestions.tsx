@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAutoIspEvents } from '@/features/autoisp/hooks/useAutoIspEvents'
 import { useAutoIspCorrelation } from '@/features/autoisp/hooks/useAutoIspCorrelation'
 import { resolveRouteFromEventStandalone } from '@/features/autoisp/lib/correlation'
@@ -32,6 +33,8 @@ function resourceSummary(event: AutoIspEvent): string {
   const unique = [...new Set(bits)]
   return unique.slice(0, 4).join(' · ') + (unique.length > 4 ? '…' : '')
 }
+
+const AUTO_ISP_EVENTS_PAGE_SIZE = 6
 
 function sortEventsForDisplay(events: AutoIspEvent[]): AutoIspEvent[] {
   return [...events].sort((a, b) => {
@@ -87,6 +90,19 @@ export function AutoIspSuggestions({
   const effectiveRoute = (event: AutoIspEvent): ResolvedAutoIspRoute | null =>
     routeByEventId.get(event.id) ?? resolveRouteFromEventStandalone(event)
 
+  const list = useMemo(() => sortEventsForDisplay(events ?? []), [events])
+  const totalPages = Math.max(1, Math.ceil(list.length / AUTO_ISP_EVENTS_PAGE_SIZE))
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages))
+  }, [totalPages])
+
+  const paginatedList = useMemo(() => {
+    const start = (page - 1) * AUTO_ISP_EVENTS_PAGE_SIZE
+    return list.slice(start, start + AUTO_ISP_EVENTS_PAGE_SIZE)
+  }, [list, page])
+
   if (!configured) {
     return (
       <p className="text-xs text-neutral-600">
@@ -126,7 +142,6 @@ export function AutoIspSuggestions({
     )
   }
 
-  const list = sortEventsForDisplay(events ?? [])
   if (list.length === 0 && isFetched) {
     return (
       <p className="text-xs text-neutral-600">
@@ -180,11 +195,11 @@ export function AutoIspSuggestions({
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 overflow-x-hidden sm:grid-cols-2">
-        {list.map((event, idx) => {
+        {paginatedList.map((event) => {
             const route = effectiveRoute(event)
             return (
               <div
-                key={`${event.id}-${idx}`}
+                key={`autoisp-event-${event.id}`}
                 className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-neutral-200/85 bg-white p-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.03] transition-all hover:border-amber-300/60 hover:shadow-[0_8px_24px_-8px_rgba(245,158,11,0.2)]"
               >
                 <div
@@ -254,6 +269,41 @@ export function AutoIspSuggestions({
             )
           })}
       </div>
+
+      {list.length > AUTO_ISP_EVENTS_PAGE_SIZE ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200/70 pt-3">
+          <p className="text-[11px] text-neutral-500">
+            <span className="font-semibold text-neutral-700">
+              {(page - 1) * AUTO_ISP_EVENTS_PAGE_SIZE + 1}–
+              {Math.min(page * AUTO_ISP_EVENTS_PAGE_SIZE, list.length)}
+            </span>{' '}
+            de <span className="font-semibold text-neutral-700">{list.length}</span> eventos
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
+              Anterior
+            </button>
+            <span className="min-w-[4.5rem] text-center text-[11px] font-semibold tabular-nums text-neutral-600">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-40"
+            >
+              Próxima
+              <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

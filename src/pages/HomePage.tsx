@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { StatCard } from '@/shared/ui/cards/StatCard'
 import { Network, Users, ArrowUpRight, Zap, Server, RadioTower } from 'lucide-react'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 import { DashboardConnectionMonitor } from '@/features/dashboard/ui/DashboardConnectionMonitor'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
 import { cn } from '@/shared/lib/utils'
 
@@ -33,7 +35,8 @@ function statusBadgeClasses(status: MassivaStatus): string {
 
 export function HomePage() {
   const { data: networkStats, isLoading: isLoadingStats } = useNetworkStats()
-  const { view: massivaView } = useMassivaTickets()
+  /** Dashboard é visível a todos: massivas aqui não dependem de `canViewMassiva` (a rota /massivas continua restrita). */
+  const { view: massivaView } = useMassivaTickets({ enabled: true })
 
   const massivaKpisPending =
     massivaView.status === 'loading' ||
@@ -45,6 +48,7 @@ export function HomePage() {
   const totalAffectedInOpenMassivas = tickets
     .filter((t) => t.status === 'aberta')
     .reduce((acc, t) => acc + t.affectedClients, 0)
+
   const recentMassivas = tickets.filter((t) => t.status === 'aberta').slice(0, 3)
 
   const equipmentOccupancy = networkStats?.equipmentOccupancy ?? {
@@ -63,48 +67,65 @@ export function HomePage() {
   const massivaTrendsReady =
     !massivaKpisPending && networkStats?.trends != null ? networkStats.trends : null
 
-  const stats = [
-    {
-      label: 'Portas ocupadas',
-      value: isLoadingStats ? '---' : (networkStats?.onlineClients || 0).toLocaleString('pt-BR'),
-      icon: Users,
-      className: 'border-l-[3px] border-l-stone-600/50',
-      trend: trendVsLastCapture(pgTrends?.occupiedPortsPct),
-    },
-    {
-      label: 'Massivas abertas',
-      value: massivaKpisPending ? '---' : openMassivasCount.toLocaleString('pt-BR'),
-      icon: Zap,
-      className: 'border-l-[3px] border-l-amber-800/45',
-      trend: trendVsLastCapture(massivaTrendsReady?.massivaOpenPct),
-    },
-    {
-      label: 'SPLITTER',
-      value: isLoadingStats ? '---' : networkStats?.activeSplitters.toLocaleString('pt-BR') || '0',
-      icon: Network,
-      className: 'border-l-[3px] border-l-rose-900/35',
-      trend: trendVsLastCapture(pgTrends?.activeSplittersPct),
-    },
-    {
-      label: 'OLTs',
-      value: isLoadingStats ? '---' : (networkStats?.oltCount ?? 0).toLocaleString('pt-BR'),
-      icon: RadioTower,
-      className: 'border-l-[3px] border-l-slate-700/50',
-      trend: trendVsLastCapture(pgTrends?.oltCountPct),
-    },
-    {
-      label: 'Clientes afetados (abertas)',
-      value: massivaKpisPending
-        ? '---'
-        : totalAffectedInOpenMassivas.toLocaleString('pt-BR'),
-      icon: Server,
-      className: 'border-l-[3px] border-l-orange-950/40',
-      trend: trendVsLastCapture(massivaTrendsReady?.massivaAffectedOpenPct),
-    },
-  ]
+  const stats = useMemo(() => {
+    const base = [
+      {
+        label: 'Portas ocupadas',
+        value: isLoadingStats ? '---' : (networkStats?.onlineClients || 0).toLocaleString('pt-BR'),
+        icon: Users,
+        className: 'border-l-[3px] border-l-stone-600/50',
+        trend: trendVsLastCapture(pgTrends?.occupiedPortsPct),
+      },
+      {
+        label: 'SPLITTER',
+        value: isLoadingStats ? '---' : networkStats?.activeSplitters.toLocaleString('pt-BR') || '0',
+        icon: Network,
+        className: 'border-l-[3px] border-l-rose-900/35',
+        trend: trendVsLastCapture(pgTrends?.activeSplittersPct),
+      },
+      {
+        label: 'OLTs',
+        value: isLoadingStats ? '---' : (networkStats?.oltCount ?? 0).toLocaleString('pt-BR'),
+        icon: RadioTower,
+        className: 'border-l-[3px] border-l-slate-700/50',
+        trend: trendVsLastCapture(pgTrends?.oltCountPct),
+      },
+    ] as const
+
+    return [
+      base[0],
+      {
+        label: 'Massivas abertas',
+        value: massivaKpisPending ? '---' : openMassivasCount.toLocaleString('pt-BR'),
+        icon: Zap,
+        className: 'border-l-[3px] border-l-amber-800/45',
+        trend: trendVsLastCapture(massivaTrendsReady?.massivaOpenPct),
+      },
+      base[1],
+      base[2],
+      {
+        label: 'Clientes afetados (abertas)',
+        value: massivaKpisPending
+          ? '---'
+          : totalAffectedInOpenMassivas.toLocaleString('pt-BR'),
+        icon: Server,
+        className: 'border-l-[3px] border-l-orange-950/40',
+        trend: trendVsLastCapture(massivaTrendsReady?.massivaAffectedOpenPct),
+      },
+    ]
+  }, [
+    isLoadingStats,
+    networkStats,
+    massivaKpisPending,
+    openMassivasCount,
+    totalAffectedInOpenMassivas,
+    pgTrends,
+    massivaTrendsReady,
+  ])
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <>
+    <div className="mx-auto max-w-[1600px] min-w-0 space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Hero — contexto estratégico + KPI integrado */}
       <section
         className="relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-gradient-to-br from-neutral-50 via-white to-amber-50/[0.35] shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
@@ -225,100 +246,100 @@ export function HomePage() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
         <div className="min-w-0 space-y-0 lg:col-span-8">
           <div className="rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            <header className="flex flex-col gap-4 border-b border-neutral-100 p-5 md:flex-row md:items-start md:justify-between md:p-6">
-              <div className="min-w-0 space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                  Monitoramento
-                </p>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold tracking-tight text-neutral-950 md:text-xl">
-                      Ocorrências de rede
-                    </h2>
-                    <p className="mt-1 max-w-xl text-[13px] leading-snug text-neutral-600">
-                      Status em tempo real das falhas massivas ativos.
-                    </p>
+              <header className="flex flex-col gap-4 border-b border-neutral-100 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                    Monitoramento
+                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold tracking-tight text-neutral-950 md:text-xl">
+                        Ocorrências de rede
+                      </h2>
+                      <p className="mt-1 max-w-xl text-[13px] leading-snug text-neutral-600">
+                        Status em tempo real das falhas massivas ativos.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/90 bg-neutral-50 text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-white hover:text-neutral-950"
-                aria-label="Expandir ou abrir ocorrências"
-              >
-                <ArrowUpRight size={18} strokeWidth={1.75} />
-              </button>
-            </header>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/90 bg-neutral-50 text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-white hover:text-neutral-950"
+                  aria-label="Expandir ou abrir ocorrências"
+                >
+                  <ArrowUpRight size={18} strokeWidth={1.75} />
+                </button>
+              </header>
 
-            <div className="divide-y divide-neutral-100 p-2 md:p-3">
-              {recentMassivas.length > 0 ? (
-                recentMassivas.map((ticket) => (
-                  <article
-                    key={`${ticket.protocol}-${ticket.assignmentId ?? 'x'}`}
-                    className="group rounded-xl px-3 py-3 transition-colors hover:bg-neutral-50/80 md:px-4 md:py-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                      <div className="flex min-w-0 gap-3.5 sm:gap-4">
-                        <div
-                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500/90 ring-4 ring-amber-500/15"
-                          aria-hidden
-                        />
-                        <div className="min-w-0 space-y-2">
-                          <p className="text-[15px] font-semibold leading-snug text-neutral-950">
-                            {ticket.title}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-600">
-                            <span className="font-mono tabular-nums text-neutral-700">
-                              <span className="font-sans font-medium text-neutral-500">Protocolo </span>
-                              {ticket.protocol > 0 ? ticket.protocol : '—'}
-                            </span>
-                            <span className="hidden text-neutral-300 sm:inline" aria-hidden>
-                              ·
-                            </span>
-                            <span>
-                              <span className="font-medium text-neutral-500">Clientes </span>
-                              <span className="font-semibold tabular-nums text-neutral-800">
-                                {ticket.affectedClients}
+              <div className="divide-y divide-neutral-100 p-2 md:p-3">
+                {recentMassivas.length > 0 ? (
+                  recentMassivas.map((ticket) => (
+                    <article
+                      key={`${ticket.protocol}-${ticket.assignmentId ?? 'x'}`}
+                      className="group rounded-xl px-3 py-3 transition-colors hover:bg-neutral-50/80 md:px-4 md:py-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div className="flex min-w-0 gap-3.5 sm:gap-4">
+                          <div
+                            className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500/90 ring-4 ring-amber-500/15"
+                            aria-hidden
+                          />
+                          <div className="min-w-0 space-y-2">
+                            <p className="text-[15px] font-semibold leading-snug text-neutral-950">
+                              {ticket.title}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-600">
+                              <span className="font-mono tabular-nums text-neutral-700">
+                                <span className="font-sans font-medium text-neutral-500">Protocolo </span>
+                                {ticket.protocol > 0 ? ticket.protocol : '—'}
                               </span>
-                            </span>
+                              <span className="hidden text-neutral-300 sm:inline" aria-hidden>
+                                ·
+                              </span>
+                              <span>
+                                <span className="font-medium text-neutral-500">Clientes </span>
+                                <span className="font-semibold tabular-nums text-neutral-800">
+                                  {ticket.affectedClients}
+                                </span>
+                              </span>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end sm:pl-2">
+                          <span
+                            className={cn(
+                              'inline-flex rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
+                              statusBadgeClasses(ticket.status),
+                            )}
+                          >
+                            {ticket.status.toUpperCase()}
+                          </span>
+                          <time
+                            className="text-[10px] font-medium tabular-nums text-neutral-500"
+                            dateTime={
+                              ticket.openedAt != null ? ticket.openedAt.toISOString() : undefined
+                            }
+                          >
+                            {formatTicketTimestamp(ticket.openedAt)}
+                          </time>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end sm:pl-2">
-                        <span
-                          className={cn(
-                            'inline-flex rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
-                            statusBadgeClasses(ticket.status),
-                          )}
-                        >
-                          {ticket.status.toUpperCase()}
-                        </span>
-                        <time
-                          className="text-[10px] font-medium tabular-nums text-neutral-500"
-                          dateTime={
-                            ticket.openedAt != null ? ticket.openedAt.toISOString() : undefined
-                          }
-                        >
-                          {formatTicketTimestamp(ticket.openedAt)}
-                        </time>
-                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 ring-1 ring-neutral-200/80">
+                      <Zap className="h-6 w-6 text-neutral-400" strokeWidth={1.5} aria-hidden />
                     </div>
-                  </article>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 ring-1 ring-neutral-200/80">
-                    <Zap className="h-6 w-6 text-neutral-400" strokeWidth={1.5} aria-hidden />
+                    <p className="mt-4 text-sm font-semibold text-neutral-800">Nenhuma falha crítica</p>
+                    <p className="mt-1 max-w-xs text-[12px] leading-relaxed text-neutral-500">
+                      Não há ocorrências em destaque no momento. A lista atualizará quando novos eventos
+                      forem registrados.
+                    </p>
                   </div>
-                  <p className="mt-4 text-sm font-semibold text-neutral-800">Nenhuma falha crítica</p>
-                  <p className="mt-1 max-w-xs text-[12px] leading-relaxed text-neutral-500">
-                    Não há ocorrências em destaque no momento. A lista atualizará quando novos eventos
-                    forem registrados.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
         </div>
 
         <div className="min-w-0 lg:col-span-4">
@@ -326,5 +347,7 @@ export function HomePage() {
         </div>
       </div>
     </div>
+    <DashboardAccessRequestSection />
+    </>
   )
 }
