@@ -46,7 +46,8 @@ function toneDot(tone: RowTone): string {
 
 export function DashboardConnectionMonitor() {
   const statsQ = useNetworkStats()
-  const { listConnectivity, refetch: refetchMassivas } = useMassivaTickets()
+  /** Painel do dashboard: todos os utilizadores autenticados veem estado da API massiva. */
+  const { listConnectivity, refetch: refetchMassivas } = useMassivaTickets({ enabled: true })
 
   const statsTone: RowTone = statsQ.isPending
     ? 'warn'
