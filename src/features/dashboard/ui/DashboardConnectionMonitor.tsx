@@ -1,7 +1,7 @@
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { cn } from '@/shared/lib/utils'
-import { RefreshCw } from 'lucide-react'
+import { Activity, RefreshCw } from 'lucide-react'
 
 /** Paridade com `useNetworkStats` (refetchInterval). */
 const STATS_REFETCH_MS = 30_000
@@ -34,19 +34,18 @@ type RowTone = 'ok' | 'warn' | 'err' | 'idle'
 function toneDot(tone: RowTone): string {
   switch (tone) {
     case 'ok':
-      return 'bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.22)]'
+      return 'bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.25)]'
     case 'warn':
-      return 'bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]'
+      return 'bg-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.28)]'
     case 'err':
-      return 'bg-red-600 shadow-[0_0_0_3px_rgba(220,38,38,0.22)]'
+      return 'bg-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.28)]'
     default:
-      return 'bg-slate-300 shadow-[0_0_0_3px_rgba(148,163,184,0.35)]'
+      return 'bg-stone-300 shadow-[0_0_0_4px_rgba(168,162,158,0.35)]'
   }
 }
 
 export function DashboardConnectionMonitor() {
   const statsQ = useNetworkStats()
-  /** Painel do dashboard: todos os utilizadores autenticados veem estado da API massiva. */
   const { listConnectivity, refetch: refetchMassivas } = useMassivaTickets({ enabled: true })
 
   const statsTone: RowTone = statsQ.isPending
@@ -73,52 +72,54 @@ export function DashboardConnectionMonitor() {
   const busy = statsQ.isFetching || listConnectivity.isFetching
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-b from-slate-50/95 to-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.03]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-slate-200/80 to-transparent" />
+    <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 bg-gradient-to-b from-white via-stone-50/40 to-amber-50/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 to-transparent" />
 
-      <div className="relative p-5 md:p-6">
+      <div className="relative p-4 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Monitoramento
-            </p>
-            <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900">
-              Dados e conexão
-            </h3>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 to-stone-100/80 text-amber-900 shadow-inner ring-1 ring-amber-200/40">
+              <Activity className="h-[1.05rem] w-[1.05rem]" strokeWidth={2} aria-hidden />
+            </span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 sm:text-[11px]">
+                Integrações
+              </p>
+              <h3 className="text-lg font-semibold tracking-tight text-stone-900">
+                Saúde das APIs
+              </h3>
+            </div>
           </div>
           <button
             type="button"
             onClick={onRefreshAll}
             disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200/90 bg-white/90 px-4 py-2 text-[12px] font-semibold text-stone-800 shadow-sm transition-[transform,box-shadow,background] hover:bg-white hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} aria-hidden />
-            Atualizar agora
+            <RefreshCw className={cn('h-4 w-4', busy && 'animate-spin')} aria-hidden />
+            Atualizar
           </button>
         </div>
 
         <ul className="mt-4 space-y-2.5">
-          <li className="rounded-xl border border-slate-200/80 bg-white/90 px-3.5 py-3 shadow-sm">
+          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
-                className={cn(
-                  'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                  toneDot(statsTone),
-                )}
+                className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(statsTone))}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900">Dados Splitters</p>
-                <dl className="mt-2 space-y-1 text-[11px] text-slate-600">
+                <p className="text-[14px] font-semibold text-stone-900">Dados Splitters</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-slate-800">
+                    <dt className="text-stone-500">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
                       {formatUpdatedAt(statsQ.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Atualização a cada</dt>
-                    <dd className="shrink-0 font-medium text-slate-800">
+                    <dt className="text-stone-500">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-stone-800">
                       {formatRefetchEvery(STATS_REFETCH_MS)}
                     </dd>
                   </div>
@@ -127,29 +128,26 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-xl border border-slate-200/80 bg-white/90 px-3.5 py-3 shadow-sm">
+          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
-                className={cn(
-                  'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                  toneDot(massivaTone),
-                )}
+                className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(massivaTone))}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900">Dados Massiva</p>
-                <dl className="mt-2 space-y-1 text-[11px] text-slate-600">
+                <p className="text-[14px] font-semibold text-stone-900">Dados Massiva</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-slate-800">
+                    <dt className="text-stone-500">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
                       {!listConnectivity.configured
                         ? '—'
                         : formatUpdatedAt(listConnectivity.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">Atualização a cada</dt>
-                    <dd className="shrink-0 font-medium text-slate-800">
+                    <dt className="text-stone-500">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-stone-800">
                       {!listConnectivity.configured
                         ? '—'
                         : formatRefetchEvery(MASSIVA_REFETCH_MS)}
