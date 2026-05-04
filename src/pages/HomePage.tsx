@@ -214,13 +214,13 @@ export function HomePage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_100%_0%,rgba(255,176,0,0.07),transparent_52%)]" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
 
-        <div className="relative grid gap-5 p-5 md:p-6 lg:grid-cols-2 lg:items-stretch lg:gap-6 xl:gap-8">
-          <div className="flex min-w-0 flex-col justify-center lg:pr-1">
+        <div className="relative grid gap-4 p-4 sm:gap-5 sm:p-5 md:p-6 lg:grid-cols-2 lg:items-stretch lg:gap-6 xl:gap-8">
+          <div className="flex min-w-0 flex-col justify-center gap-1 lg:pr-1">
             <motion.span
               initial={reduceMotion ? false : { opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="mb-4 inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary shadow-sm ring-1 ring-primary/10 backdrop-blur-md"
+              className="mb-3 inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/[0.08] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary shadow-sm ring-1 ring-primary/10 backdrop-blur-md sm:mb-4 sm:px-3.5"
             >
               Centro operacional
             </motion.span>
@@ -229,14 +229,14 @@ export function HomePage() {
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.45, delay: reduceMotion ? 0 : 0.06 }}
-              className="relative flex w-full max-w-3xl flex-col gap-4 sm:flex-row sm:items-center sm:gap-3"
+              className="relative grid w-fit max-w-3xl grid-cols-[auto_auto] items-center gap-x-2 gap-y-1 sm:gap-x-2.5 sm:gap-y-2 lg:gap-x-2"
             >
               <h1
                 id="dashboard-hero-heading"
-                className="min-w-0 flex-1 text-balance text-[clamp(1.2rem,4.2vw,3rem)] font-semibold leading-[1.12] tracking-tight text-on-surface"
+                className="relative z-[1] min-w-0 text-[clamp(1rem,4.2vw,1.85rem)] font-semibold leading-[1.12] tracking-tight text-on-surface max-[380px]:overflow-x-auto max-[380px]:[scrollbar-width:none] max-[380px]:[&::-webkit-scrollbar]:hidden sm:text-[clamp(1.2rem,4.2vw,3rem)]"
               >
                 <motion.span
-                  className="inline-block"
+                  className="inline-block whitespace-nowrap"
                   initial={reduceMotion ? false : { opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.42, delay: reduceMotion ? 0 : 0.1, ease: [0.22, 1, 0.36, 1] }}
@@ -245,7 +245,7 @@ export function HomePage() {
                 </motion.span>
                 <br aria-hidden />
                 <motion.span
-                  className="relative inline-block font-semibold text-primary"
+                  className="relative inline-block whitespace-nowrap font-semibold text-primary"
                   initial={reduceMotion ? false : { opacity: 0, filter: 'blur(6px)' }}
                   animate={{ opacity: 1, filter: 'blur(0px)' }}
                   transition={{ duration: 0.5, delay: reduceMotion ? 0 : 0.2 }}
@@ -277,15 +277,15 @@ export function HomePage() {
                   damping: 22,
                   delay: reduceMotion ? 0 : 0.04,
                 }}
-                className="shrink-0 sm:-translate-x-55 sm:ml-auto sm:-translate-y-0.1"
+                className="shrink-0 self-center -translate-x-1"
                 aria-label="ISA — assistente do centro operacional"
               >
-                <span className="relative flex h-[10rem] w-[8.25rem] shrink-0 items-end justify-center overflow-hidden sm:h-[11rem] sm:w-[9rem]">
+                <span className="relative flex h-[7.25rem] w-[6rem] shrink-0 items-end justify-center overflow-hidden min-[400px]:h-[7.75rem] min-[400px]:w-[6.35rem] sm:h-[10rem] sm:w-[8rem] lg:h-[9.25rem] lg:w-[7.75rem] xl:h-[11rem] xl:w-[9rem]">
                   {showIsaHeroPhoto ? (
                     <>
                       {!isaHeroPhotoReady ? (
                         <Sparkles
-                          className="relative z-[1] h-9 w-9 shrink-0 text-primary/60 sm:h-10 sm:w-10"
+                          className="relative z-[1] h-7 w-7 shrink-0 text-primary/60 sm:h-9 sm:w-9 md:h-10 md:w-10"
                           strokeWidth={2}
                           aria-hidden
                         />
@@ -310,7 +310,7 @@ export function HomePage() {
                     </>
                   ) : (
                     <Sparkles
-                      className="relative z-[1] h-9 w-9 shrink-0 text-primary sm:h-10 sm:w-10"
+                      className="relative z-[1] h-7 w-7 shrink-0 text-primary sm:h-9 sm:w-9 md:h-10 md:w-10"
                       strokeWidth={2}
                       aria-hidden
                     />
@@ -320,11 +320,11 @@ export function HomePage() {
             </motion.div>
 
             {refreshShort ? (
-              <p className="mt-5 text-[12px] font-medium tabular-nums text-on-surface-variant">{refreshShort}</p>
+              <p className="mt-3 text-[11px] font-medium tabular-nums text-on-surface-variant sm:mt-5 sm:text-[12px]">{refreshShort}</p>
             ) : null}
           </div>
 
-          <aside className="flex min-h-0 min-w-0 w-full flex-col justify-between gap-4 rounded-2xl border border-white/60 bg-white/55 p-4 shadow-inner shadow-stone-900/[0.03] ring-1 ring-stone-200/50 backdrop-blur-md sm:p-5 lg:max-w-[35rem] lg:justify-self-end">
+          <aside className="flex min-h-0 min-w-0 w-full flex-col justify-between gap-3 rounded-2xl border border-white/60 bg-white/55 p-3.5 shadow-inner shadow-stone-900/[0.03] ring-1 ring-stone-200/50 backdrop-blur-md sm:gap-4 sm:p-5 lg:max-w-[35rem] lg:justify-self-end">
             {networkCapacityPercent != null ? (
               <div>
                 <div className="flex items-end justify-between gap-2">
