@@ -51,9 +51,17 @@ function formatDateLabel(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
 }
 
-function previewOccupancyPercent(stats: NetworkStats): number {
-  const total = stats.activeSplitters
-  return total > 0 ? Number(((stats.onlineClients / total) * 100).toFixed(2)) : 0
+/** Ocupação da rede = portas ocupadas ÷ soma da capacidade (portas) no catálogo. */
+function previewNetworkCapacityPercent(stats: NetworkStats): number | null {
+  const cap = stats.totalPortCapacity
+  if (cap <= 0) return null
+  return Number(((stats.onlineClients / cap) * 100).toFixed(2))
+}
+
+function networkCapacityBarClass(percent: number): string {
+  if (percent >= 95) return 'bg-rose-500'
+  if (percent >= 70) return 'bg-amber-500'
+  return 'bg-emerald-500'
 }
 
 function recurrenceShiftIcon(shift: string): { Icon: LucideIcon; label: string } {
@@ -1020,9 +1028,12 @@ export function NetworkIntelligencePage() {
           <p className="mt-1.5 text-xs font-medium leading-relaxed text-amber-900/85">
             Indicadores gerais da rede já disponíveis:{' '}
             <span className="font-bold tabular-nums">
-              {previewOccupancyPercent(networkStatsPreview).toFixed(1)}%
+              {(() => {
+                const pct = previewNetworkCapacityPercent(networkStatsPreview)
+                return pct == null ? '—' : `${pct.toFixed(1)}%`
+              })()}
             </span>{' '}
-            ocupação ·{' '}
+            ocupação (portas) ·{' '}
             <span className="font-semibold tabular-nums">
               {networkStatsPreview.activeSplitters.toLocaleString('pt-BR')}
             </span>{' '}
@@ -1059,13 +1070,59 @@ export function NetworkIntelligencePage() {
               Saturação no período
             </p>
             <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
-              {(kpis.overallOccupancyPercent ?? 0).toFixed(1)}%
-              <span className="ml-1.5 text-sm font-semibold text-slate-500">ocupação geral (rede)</span>
+              {kpis.totalPortCapacity > 0 ? (
+                <>
+                  {(kpis.overallOccupancyPercent ?? 0).toFixed(1)}%
+                  <span className="ml-1.5 text-sm font-semibold text-slate-500">ocupação geral (rede)</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg font-bold text-slate-600">—</span>
+                  <span className="ml-1.5 text-sm font-semibold text-slate-500">ocupação geral (rede)</span>
+                </>
+              )}
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-600">
-              Razão entre portas ocupadas e splitters ativos no snapshot da rede (clientes online ÷ equipamentos), não a
-              média aritmética dos percentuais por splitter abaixo.
-            </p>
+            {kpis.totalPortCapacity > 0 ? (
+              <>
+                <div
+                  className="mt-3 h-3 w-full overflow-hidden rounded-full bg-slate-200/90 ring-1 ring-slate-200/80"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.min(100, kpis.overallOccupancyPercent ?? 0)}
+                  aria-label="Ocupação da rede em relação à capacidade total de portas"
+                >
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-[width] duration-500 ease-out',
+                      networkCapacityBarClass(kpis.overallOccupancyPercent ?? 0),
+                    )}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, kpis.overallOccupancyPercent ?? 0))}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-1.5 text-xs tabular-nums text-slate-600">
+                  <span className="font-semibold text-slate-800">
+                    {kpis.occupiedPorts.toLocaleString('pt-BR')}
+                  </span>{' '}
+                  de{' '}
+                  <span className="font-semibold text-slate-800">
+                    {kpis.totalPortCapacity.toLocaleString('pt-BR')}
+                  </span>{' '}
+                  portas (capacidade somada no catálogo)
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                  Percentual = portas ocupadas ÷ portas totais no snapshot (soma da capacidade dos splitters), não a média
+                  aritmética dos percentuais por equipamento abaixo.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                Ocupação por capacidade total de portas ficará disponível após o backend publicar a soma da capacidade do
+                catálogo junto às demais estatísticas.
+              </p>
+            )}
             <p className="mt-0.5 text-xs text-slate-500">
               {trends.length} splitter{trends.length === 1 ? '' : 's'} com histórico de tendência capturado neste
               intervalo

@@ -387,6 +387,7 @@ function buildNetworkStatsSql() {
       SELECT
         eq.catalog_equipment,
         eq.occupied_ports,
+        eq.total_port_capacity,
         eq.equipment_occupancy_green,
         eq.equipment_occupancy_yellow,
         eq.equipment_occupancy_red,
@@ -395,6 +396,7 @@ function buildNetworkStatsSql() {
         SELECT
           COUNT(*)::bigint AS catalog_equipment,
           COALESCE(SUM(sub.busy_count), 0)::bigint AS occupied_ports,
+          COALESCE(SUM(sub.out_ports), 0)::bigint AS total_port_capacity,
           COUNT(*) FILTER (WHERE sub.occupancy_band = 'green')::bigint AS equipment_occupancy_green,
           COUNT(*) FILTER (WHERE sub.occupancy_band = 'yellow')::bigint AS equipment_occupancy_yellow,
           COUNT(*) FILTER (WHERE sub.occupancy_band = 'red')::bigint AS equipment_occupancy_red
@@ -1972,6 +1974,7 @@ app.get('/api/stats', async (req, res) => {
       data: {
         catalog_equipment: row.catalog_equipment,
         occupied_ports: row.occupied_ports,
+        total_port_capacity: n(row.total_port_capacity),
         equipment_occupancy_green: n(row.equipment_occupancy_green),
         equipment_occupancy_yellow: n(row.equipment_occupancy_yellow),
         equipment_occupancy_red: n(row.equipment_occupancy_red),

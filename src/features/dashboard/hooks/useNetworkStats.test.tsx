@@ -10,6 +10,7 @@ vi.mock('@/shared/api/fetchNetworkStats', () => ({
     Promise.resolve({
       activeSplitters: 1,
       onlineClients: 2,
+      totalPortCapacity: 8,
       oltCount: 3,
       equipmentOccupancy: { green: 0, yellow: 0, red: 0 },
       trends: null,

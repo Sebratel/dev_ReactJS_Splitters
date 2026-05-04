@@ -50,6 +50,8 @@ export type IntelligenceMassivaRow = {
 export type IntelligenceKpis = {
   totalEquipments: number
   occupiedPorts: number
+  /** Soma de portas (capacidade) no catálogo — denominador da ocupação geral. */
+  totalPortCapacity: number
   overallOccupancyPercent: number
   oltCount: number
 }
@@ -533,10 +535,16 @@ function makeMockDataset(): IntelligenceDataset {
     })
   }
 
+  const totalPortCapacity = 17342 * 16
+  const occupiedPorts = Math.round(totalPortCapacity * 0.569)
   const kpis: IntelligenceKpis = {
     totalEquipments: 17342,
-    occupiedPorts: 9864,
-    overallOccupancyPercent: 56.9,
+    occupiedPorts,
+    totalPortCapacity,
+    overallOccupancyPercent:
+      totalPortCapacity > 0
+        ? Number(((occupiedPorts / totalPortCapacity) * 100).toFixed(2))
+        : 0,
     oltCount: 214,
   }
 
@@ -550,6 +558,7 @@ const SPLITTERS_CATALOG_STALE_MS = 30 * 60_000
 const EMPTY_NETWORK_STATS: NetworkStats = {
   activeSplitters: 0,
   onlineClients: 0,
+  totalPortCapacity: 0,
   oltCount: 0,
   equipmentOccupancy: { green: 0, yellow: 0, red: 0 },
   trends: null,
@@ -626,8 +635,11 @@ async function fetchLiveDataset(
 
   const totalEquipments = networkStats.activeSplitters
   const occupiedPorts = networkStats.onlineClients
+  const totalPortCapacity = networkStats.totalPortCapacity
   const overallOccupancyPercent =
-    totalEquipments > 0 ? Number(((occupiedPorts / totalEquipments) * 100).toFixed(2)) : 0
+    totalPortCapacity > 0
+      ? Number(((occupiedPorts / totalPortCapacity) * 100).toFixed(2))
+      : 0
 
   return {
     trends,
@@ -635,6 +647,7 @@ async function fetchLiveDataset(
     kpis: {
       totalEquipments,
       occupiedPorts,
+      totalPortCapacity,
       overallOccupancyPercent,
       oltCount: networkStats.oltCount,
     },

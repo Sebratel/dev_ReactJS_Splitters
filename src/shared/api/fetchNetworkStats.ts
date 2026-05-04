@@ -26,6 +26,8 @@ export type NetworkStatsTrends = {
 export type NetworkStats = {
   activeSplitters: number
   onlineClients: number
+  /** Soma das capacidades declaradas (portas) dos splitters do catálogo — base para % ocupação vs rede. */
+  totalPortCapacity: number
   /** OLTs ativos com código (paridade critérios GET /api/olts). */
   oltCount: number
   equipmentOccupancy: EquipmentOccupancyBands
@@ -60,6 +62,7 @@ export async function fetchNetworkStats(): Promise<NetworkStats> {
   return {
     activeSplitters: n(d.catalog_equipment ?? d.active_splitters),
     onlineClients: n(d.occupied_ports ?? d.online_clients),
+    totalPortCapacity: n(d.total_port_capacity ?? d.totalPortCapacity),
     oltCount: n(d.olt_count ?? d.oltCount),
     equipmentOccupancy: {
       green: n(d.equipment_occupancy_green ?? d.equipmentOccupancyGreen),
