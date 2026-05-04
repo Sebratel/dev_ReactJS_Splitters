@@ -26,7 +26,7 @@ function timestampToDate(value: unknown): Date | null {
   return null
 }
 
-function parsePermissions(value: unknown): SplittersPermissionSet {
+export function parsePermissions(value: unknown): SplittersPermissionSet {
   const raw = (value ?? {}) as Partial<SplittersPermissionSet>
   return {
     canViewSplitters: raw.canViewSplitters ?? defaultSplittersPermissions.canViewSplitters,

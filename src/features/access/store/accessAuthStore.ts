@@ -6,8 +6,18 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
+import {
+  beginGoogleLoginRedirect,
+  clearSilentRefreshFailure,
+  shouldBackoffSilentRefresh,
+} from '@/features/session/lib/googleIdentity'
+import {
+  isGoogleIdTokenExpired,
+  isSessionTokenAlignedWithGatewayGoogleAudience,
+} from '@/features/session/lib/googleToken'
+import { useSessionStore } from '@/features/session/store/sessionStore'
 import { firebaseAuth } from '@/shared/config/firebase'
-import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
+import { env, isFirebaseAuthConfigured, isGoogleIdentityConfigured } from '@/shared/config/env'
 import {
   ensureSplittersUserProfile,
   getSplittersUserProfile,
@@ -60,6 +70,33 @@ function isAllowedFirebaseEmail(email: string | null | undefined): boolean {
   return allowed.length === 0
 }
 
+/**
+ * O gateway (BFF via proxy) valida JWT no formato **Google ID token** (`aud` = Web client),
+ * não o ID token emitido por `getIdToken()` do Firebase. Sem token válido em memória,
+ * dispara OAuth implícito `prompt=none` para repor o Bearer antes das chamadas ao BFF.
+ */
+function beginSilentGoogleBffTokenRefreshIfNeeded(): void {
+  if (!isFirebaseAuthConfigured()) return
+
+  const { sessionToken } = useSessionStore.getState()
+  const st = typeof sessionToken === 'string' ? sessionToken.trim() : ''
+  const aligned =
+    st !== '' &&
+    isSessionTokenAlignedWithGatewayGoogleAudience(st, env.googleClientId)
+  if (aligned && !isGoogleIdTokenExpired(st)) {
+    return
+  }
+  if (!isGoogleIdentityConfigured()) return
+  if (shouldBackoffSilentRefresh()) return
+
+  try {
+    clearSilentRefreshFailure()
+    beginGoogleLoginRedirect('silent')
+  } catch {
+    // Client ID inválido ou ambiente sem `window`
+  }
+}
+
 export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
   status: isFirebaseAuthConfigured() ? 'loading' : 'unauthenticated',
   initialized: false,
@@ -92,6 +129,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           if (firebaseAuth) {
             await signOut(firebaseAuth)
           }
+          useSessionStore.getState().clearSession()
           set({
             initialized: true,
             status: 'unauthenticated',
@@ -107,6 +145,10 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           email: firebaseUser.email ?? '',
           displayName: displayNameFromFirebaseUser(firebaseUser),
         })
+
+        if (profile.isActive) {
+          beginSilentGoogleBffTokenRefreshIfNeeded()
+        }
 
         set({
           initialized: true,
@@ -135,7 +177,32 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
     set({ status: 'loading', error: null })
 
     try {
-      await signInWithPopup(firebaseAuth, googleProvider)
+      const result = await signInWithPopup(firebaseAuth, googleProvider)
+      const cred = GoogleAuthProvider.credentialFromResult(result)
+      const fromOAuth =
+        typeof cred?.idToken === 'string' && cred.idToken.trim() !== ''
+          ? cred.idToken.trim()
+          : ''
+      if (fromOAuth !== '') {
+        if (isSessionTokenAlignedWithGatewayGoogleAudience(fromOAuth, env.googleClientId)) {
+          await useSessionStore.getState().acceptSessionToken(fromOAuth)
+        } else if (isGoogleIdentityConfigured() && !shouldBackoffSilentRefresh()) {
+          clearSilentRefreshFailure()
+          beginGoogleLoginRedirect('silent')
+          return
+        } else {
+          // Fallback: mantém sessão com o id_token do popup (pode dar 401 no gateway se aud ≠ .env).
+          await useSessionStore.getState().acceptSessionToken(fromOAuth)
+        }
+      } else if (isGoogleIdentityConfigured() && !shouldBackoffSilentRefresh()) {
+        clearSilentRefreshFailure()
+        beginGoogleLoginRedirect('silent')
+        return
+      } else {
+        throw new Error(
+          'Nao foi possivel obter o token Google para o gateway. Confirme VITE_GOOGLE_CLIENT_ID e tente de novo.',
+        )
+      }
       set({ error: null })
     } catch (error) {
       set({
@@ -149,6 +216,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
   signOutUser: async () => {
     if (!firebaseAuth) return
     await signOut(firebaseAuth)
+    useSessionStore.getState().clearSession()
     set({ status: 'unauthenticated', user: null, profile: null, error: null })
   },
 
