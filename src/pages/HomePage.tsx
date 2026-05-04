@@ -1,12 +1,32 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { motion, useReducedMotion } from 'framer-motion'
 import { StatCard } from '@/shared/ui/cards/StatCard'
-import { Network, Users, ArrowUpRight, Zap, Server, RadioTower } from 'lucide-react'
+import {
+  Network,
+  Users,
+  ArrowUpRight,
+  Zap,
+  Server,
+  RadioTower,
+  ChevronDown,
+  Sparkles,
+} from 'lucide-react'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 import { DashboardConnectionMonitor } from '@/features/dashboard/ui/DashboardConnectionMonitor'
+import { DashboardQuickLinks } from '@/features/dashboard/ui/DashboardQuickLinks'
+import {
+  buildDashboardStatusLine,
+  formatRefreshChipShort,
+  interpretTrendDelta,
+} from '@/features/dashboard/lib/dashboardNarrative'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
 import { cn } from '@/shared/lib/utils'
+import { resolveIsaHeroImageSrc } from '@/shared/lib/accessRequestFabImage'
+import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
 
 function formatTicketTimestamp(openedAt: Date | null): string {
   if (openedAt == null) return 'detectado agora'
@@ -34,7 +54,12 @@ function statusBadgeClasses(status: MassivaStatus): string {
 }
 
 export function HomePage() {
-  const { data: networkStats, isLoading: isLoadingStats } = useNetworkStats()
+  const reduceMotion = useReducedMotion()
+  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
+  const accessUid = useAccessAuthStore((s) => s.user?.uid)
+  const showAccessFold = !isAdmin && Boolean(accessUid)
+
+  const { data: networkStats, isLoading: isLoadingStats, dataUpdatedAt } = useNetworkStats()
   /** Dashboard é visível a todos: massivas aqui não dependem de `canViewMassiva` (a rota /massivas continua restrita). */
   const { view: massivaView } = useMassivaTickets({ enabled: true })
 
@@ -67,42 +92,52 @@ export function HomePage() {
   const massivaTrendsReady =
     !massivaKpisPending && networkStats?.trends != null ? networkStats.trends : null
 
-  const stats = useMemo(() => {
-    const base = [
-      {
-        label: 'Portas ocupadas',
-        value: isLoadingStats ? '---' : (networkStats?.onlineClients || 0).toLocaleString('pt-BR'),
-        icon: Users,
-        className: 'border-l-[3px] border-l-stone-600/50',
-        trend: trendVsLastCapture(pgTrends?.occupiedPortsPct),
-      },
-      {
-        label: 'SPLITTER',
-        value: isLoadingStats ? '---' : networkStats?.activeSplitters.toLocaleString('pt-BR') || '0',
-        icon: Network,
-        className: 'border-l-[3px] border-l-rose-900/35',
-        trend: trendVsLastCapture(pgTrends?.activeSplittersPct),
-      },
-      {
-        label: 'OLTs',
-        value: isLoadingStats ? '---' : (networkStats?.oltCount ?? 0).toLocaleString('pt-BR'),
-        icon: RadioTower,
-        className: 'border-l-[3px] border-l-slate-700/50',
-        trend: trendVsLastCapture(pgTrends?.oltCountPct),
-      },
-    ] as const
+  const networkCapacityPercent = useMemo(() => {
+    const cap = networkStats?.totalPortCapacity ?? 0
+    const occ = networkStats?.onlineClients ?? 0
+    if (cap <= 0 || isLoadingStats) return null
+    return Number(((occ / cap) * 100).toFixed(2))
+  }, [networkStats?.onlineClients, networkStats?.totalPortCapacity, isLoadingStats])
 
-    return [
-      base[0],
+  const statusSummaryLine = useMemo(
+    () =>
+      buildDashboardStatusLine({
+        isLoadingStats,
+        massivaKpisPending,
+        openMassivas: openMassivasCount,
+        affectedClients: totalAffectedInOpenMassivas,
+        networkCapacityPercent,
+      }),
+    [
+      isLoadingStats,
+      massivaKpisPending,
+      openMassivasCount,
+      totalAffectedInOpenMassivas,
+      networkCapacityPercent,
+    ],
+  )
+
+  const refreshShort = formatRefreshChipShort(dataUpdatedAt)
+
+  const isaFabImageSrc = useMemo(() => resolveIsaHeroImageSrc(), [])
+  const [isaHeroImgBroken, setIsaHeroImgBroken] = useState(false)
+  const showIsaHeroPhoto = Boolean(isaFabImageSrc && !isaHeroImgBroken)
+  const {
+    fabImageDecoded: isaHeroPhotoReady,
+    onFabPhotoLoad: onIsaHeroPhotoLoad,
+    onFabPhotoError: onIsaHeroPhotoError,
+  } = useFabPhotoDecodedGate(showIsaHeroPhoto, isaFabImageSrc)
+
+  const { incidentStats, networkStatsCards } = useMemo(() => {
+    const incident = [
       {
         label: 'Massivas abertas',
         value: massivaKpisPending ? '---' : openMassivasCount.toLocaleString('pt-BR'),
         icon: Zap,
         className: 'border-l-[3px] border-l-amber-800/45',
         trend: trendVsLastCapture(massivaTrendsReady?.massivaOpenPct),
+        description: interpretTrendDelta('massivaOpen', massivaTrendsReady?.massivaOpenPct),
       },
-      base[1],
-      base[2],
       {
         label: 'Clientes afetados (abertas)',
         value: massivaKpisPending
@@ -111,8 +146,41 @@ export function HomePage() {
         icon: Server,
         className: 'border-l-[3px] border-l-orange-950/40',
         trend: trendVsLastCapture(massivaTrendsReady?.massivaAffectedOpenPct),
+        description: interpretTrendDelta(
+          'massivaAffected',
+          massivaTrendsReady?.massivaAffectedOpenPct,
+        ),
       },
-    ]
+    ] as const
+
+    const network = [
+      {
+        label: 'Portas ocupadas',
+        value: isLoadingStats ? '---' : (networkStats?.onlineClients || 0).toLocaleString('pt-BR'),
+        icon: Users,
+        className: 'border-l-[3px] border-l-stone-600/50',
+        trend: trendVsLastCapture(pgTrends?.occupiedPortsPct),
+        description: interpretTrendDelta('occupiedPorts', pgTrends?.occupiedPortsPct),
+      },
+      {
+        label: 'Splitters no catálogo',
+        value: isLoadingStats ? '---' : networkStats?.activeSplitters.toLocaleString('pt-BR') || '0',
+        icon: Network,
+        className: 'border-l-[3px] border-l-rose-900/35',
+        trend: trendVsLastCapture(pgTrends?.activeSplittersPct),
+        description: interpretTrendDelta('activeSplitters', pgTrends?.activeSplittersPct),
+      },
+      {
+        label: 'OLTs',
+        value: isLoadingStats ? '---' : (networkStats?.oltCount ?? 0).toLocaleString('pt-BR'),
+        icon: RadioTower,
+        className: 'border-l-[3px] border-l-slate-700/50',
+        trend: trendVsLastCapture(pgTrends?.oltCountPct),
+        description: interpretTrendDelta('oltCount', pgTrends?.oltCountPct),
+      },
+    ] as const
+
+    return { incidentStats: incident, networkStatsCards: network }
   }, [
     isLoadingStats,
     networkStats,
@@ -123,172 +191,350 @@ export function HomePage() {
     massivaTrendsReady,
   ])
 
+  const fadeUp = reduceMotion
+    ? { initial: false as const }
+    : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } }
+
   return (
     <>
-    <div className="mx-auto max-w-[1600px] min-w-0 space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Hero — contexto estratégico + KPI integrado */}
-      <section
-        className="relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-gradient-to-br from-neutral-50 via-white to-amber-50/[0.35] shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+    <div className="mx-auto max-w-[1600px] min-w-0 space-y-4 md:space-y-5 rounded-[28px] bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(255,176,0,0.06),transparent_52%)] px-1 pb-1 pt-0.5 sm:px-2">
+      <motion.section
+        className="relative overflow-hidden rounded-3xl border border-stone-200/70 bg-gradient-to-br from-white via-surface-container-lowest to-primary/[0.04] shadow-[0_8px_40px_-16px_rgba(15,23,42,0.12)] ring-1 ring-white/60"
         aria-labelledby="dashboard-hero-heading"
+        aria-label={statusSummaryLine}
+        {...fadeUp}
+        transition={{ duration: 0.35 }}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_100%_0%,rgba(120,53,15,0.055),transparent_55%)]" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-neutral-200/80 to-transparent" />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='0.8' fill='%23a8a29e' fill-opacity='0.22'/%3E%3C/svg%3E")`,
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_100%_0%,rgba(255,176,0,0.07),transparent_52%)]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
 
-        <div className="relative grid gap-6 p-5 md:p-7 lg:grid-cols-[1fr_min(22rem,38%)] lg:items-stretch lg:gap-8 xl:gap-10">
-          <div className="flex min-w-0 flex-col justify-center lg:py-1">
-            <span className="mb-3 inline-flex w-fit items-center rounded-lg border border-amber-900/10 bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-950/80 shadow-sm ring-1 ring-neutral-950/[0.04] backdrop-blur-sm">
-              Centro operacional de splitters
-            </span>
-            <h1
-              id="dashboard-hero-heading"
-              className="max-w-3xl text-balance text-[1.65rem] font-semibold leading-[1.15] tracking-tight text-neutral-950 md:text-3xl lg:text-[1.85rem] xl:text-4xl xl:leading-[1.12]"
+        <div className="relative grid gap-5 p-5 md:p-6 lg:grid-cols-2 lg:items-stretch lg:gap-6 xl:gap-8">
+          <div className="flex min-w-0 flex-col justify-center lg:pr-1">
+            <motion.span
+              initial={reduceMotion ? false : { opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-4 inline-flex w-fit items-center rounded-full border border-primary/25 bg-primary/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-primary shadow-sm ring-1 ring-primary/10 backdrop-blur-md"
             >
-              Operação de rede com foco em{' '}
-              <span className="font-semibold text-primary not-italic">agilidade</span>, contexto e
-              respostas rápidas.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-600 md:text-[0.9375rem]">
-              Use o menu lateral para abrir massivas, filtrar por OLTs, status e ruas. Sincronização
-              em tempo real com o banco de dados operacional.
-            </p>
+              Centro operacional
+            </motion.span>
+
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.45, delay: reduceMotion ? 0 : 0.06 }}
+              className="relative flex w-full max-w-3xl flex-col gap-4 sm:flex-row sm:items-center sm:gap-3"
+            >
+              <h1
+                id="dashboard-hero-heading"
+                className="min-w-0 flex-1 text-balance text-[clamp(1.2rem,4.2vw,3rem)] font-semibold leading-[1.12] tracking-tight text-on-surface"
+              >
+                <motion.span
+                  className="inline-block"
+                  initial={reduceMotion ? false : { opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.42, delay: reduceMotion ? 0 : 0.1, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  Rede e massivas
+                </motion.span>
+                <br aria-hidden />
+                <motion.span
+                  className="relative inline-block font-semibold text-primary"
+                  initial={reduceMotion ? false : { opacity: 0, filter: 'blur(6px)' }}
+                  animate={{ opacity: 1, filter: 'blur(0px)' }}
+                  transition={{ duration: 0.5, delay: reduceMotion ? 0 : 0.2 }}
+                >
+                  em tempo real
+                  {!reduceMotion ? (
+                    <motion.span
+                      aria-hidden
+                      className="absolute -bottom-1 left-0 h-[3px] w-full origin-left rounded-full bg-gradient-to-r from-primary via-primary-container to-primary/30"
+                      initial={{ scaleX: 0, opacity: 0.6 }}
+                      animate={{ scaleX: 1, opacity: 1 }}
+                      transition={{ duration: 0.55, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full bg-gradient-to-r from-primary via-primary-container to-primary/30"
+                    />
+                  )}
+                </motion.span>
+              </h1>
+
+              <motion.div
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 320,
+                  damping: 22,
+                  delay: reduceMotion ? 0 : 0.04,
+                }}
+                className="shrink-0 sm:-translate-x-55 sm:ml-auto sm:-translate-y-0.1"
+                aria-label="ISA — assistente do centro operacional"
+              >
+                <span className="relative flex h-[10rem] w-[8.25rem] shrink-0 items-end justify-center overflow-hidden sm:h-[11rem] sm:w-[9rem]">
+                  {showIsaHeroPhoto ? (
+                    <>
+                      {!isaHeroPhotoReady ? (
+                        <Sparkles
+                          className="relative z-[1] h-9 w-9 shrink-0 text-primary/60 sm:h-10 sm:w-10"
+                          strokeWidth={2}
+                          aria-hidden
+                        />
+                      ) : null}
+                      <img
+                        src={isaFabImageSrc}
+                        alt=""
+                        aria-hidden
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority="high"
+                        className={cn(
+                          'absolute inset-0 size-full object-contain object-bottom transition-opacity duration-200',
+                          isaHeroPhotoReady ? 'opacity-100' : 'opacity-0',
+                        )}
+                        onLoad={onIsaHeroPhotoLoad}
+                        onError={() => {
+                          setIsaHeroImgBroken(true)
+                          onIsaHeroPhotoError()
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <Sparkles
+                      className="relative z-[1] h-9 w-9 shrink-0 text-primary sm:h-10 sm:w-10"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  )}
+                </span>
+              </motion.div>
+            </motion.div>
+
+            {refreshShort ? (
+              <p className="mt-5 text-[12px] font-medium tabular-nums text-on-surface-variant">{refreshShort}</p>
+            ) : null}
           </div>
 
-          <aside className="flex min-h-0 flex-col justify-between gap-4 rounded-xl border border-neutral-200/90 bg-white/85 p-5 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-950/[0.03] backdrop-blur-md lg:p-6">
-            <div className="min-w-0 flex-1 text-left">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
-                Visão atual
+          <aside className="flex min-h-0 min-w-0 w-full flex-col justify-between gap-4 rounded-2xl border border-white/60 bg-white/55 p-4 shadow-inner shadow-stone-900/[0.03] ring-1 ring-stone-200/50 backdrop-blur-md sm:p-5 lg:max-w-[35rem] lg:justify-self-end">
+            {networkCapacityPercent != null ? (
+              <div>
+                <div className="flex items-end justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500 sm:text-[11px]">
+                    Capacidade da rede
+                  </p>
+                  <span className="text-3xl font-bold tabular-nums tracking-tight text-stone-900 sm:text-[2rem]">
+                    {networkCapacityPercent.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    })}
+                    <span className="text-lg font-semibold text-stone-500">%</span>
+                  </span>
+                </div>
+                <div className="mt-2.5 h-3.5 overflow-hidden rounded-full bg-stone-200/90 p-px ring-1 ring-stone-300/40 sm:h-4">
+                  <motion.div
+                    className={cn(
+                      'h-full rounded-full bg-gradient-to-r shadow-sm',
+                      networkCapacityPercent >= 85
+                        ? 'from-rose-500 via-orange-400 to-amber-400'
+                        : networkCapacityPercent >= 70
+                          ? 'from-amber-400 to-amber-500'
+                          : 'from-sky-500 to-cyan-400',
+                    )}
+                    initial={false}
+                    animate={{ width: `${Math.min(100, Math.max(0, networkCapacityPercent))}%` }}
+                    transition={{ type: 'spring', stiffness: 120, damping: 22 }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] leading-relaxed text-stone-500">
+                Percentagem de ocupação global aparece quando o servidor envia capacidade total de portas.
               </p>
-              <p className="mt-1 text-[11px] font-medium leading-snug text-neutral-600">
-                Splitters por ocupação — mesma regra dos status{' '}
-                <span className="whitespace-nowrap">verde · amarelo · vermelho</span> da lista.
-              </p>
-              <dl className="mt-4 space-y-0">
-                <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5 first:pt-0">
-                  <dt className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-neutral-800">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.22)]"
-                      aria-hidden
-                    />
-                    <span className="truncate">
-                      Verde <span className="font-normal text-neutral-500">(até 70%)</span>
-                    </span>
-                  </dt>
-                  <dd className="shrink-0 text-sm font-semibold tabular-nums text-neutral-950">
-                    {isLoadingStats ? '—' : equipmentOccupancy.green.toLocaleString('pt-BR')}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 border-b border-neutral-100 py-2.5">
-                  <dt className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-neutral-800">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.25)]"
-                      aria-hidden
-                    />
-                    <span className="truncate">
-                      Amarelo <span className="font-normal text-neutral-500">(71% a 99%)</span>
-                    </span>
-                  </dt>
-                  <dd className="shrink-0 text-sm font-semibold tabular-nums text-neutral-950">
-                    {isLoadingStats ? '—' : equipmentOccupancy.yellow.toLocaleString('pt-BR')}
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-2.5 last:pb-0">
-                  <dt className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-neutral-800">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full bg-red-600 shadow-[0_0_0_3px_rgba(220,38,38,0.22)]"
-                      aria-hidden
-                    />
-                    <span className="truncate">
-                      Vermelho{' '}
-                      <span className="font-normal text-neutral-500">(100% ou excedente)</span>
-                    </span>
-                  </dt>
-                  <dd className="shrink-0 text-sm font-semibold tabular-nums text-neutral-950">
-                    {isLoadingStats ? '—' : equipmentOccupancy.red.toLocaleString('pt-BR')}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-lg border border-neutral-200/90 bg-neutral-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-600">
-                Sem filtros
-              </span>
-              <span className="rounded-lg border border-neutral-200/90 bg-neutral-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-600">
-                Busca livre
-              </span>
+            )}
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500 sm:text-[11px]">
+                  Equip. por faixa
+                </p>
+                <span className="text-[11px] text-stone-400">mesmas cores da lista</span>
+              </div>
+              {(() => {
+                const g = equipmentOccupancy.green
+                const y = equipmentOccupancy.yellow
+                const r = equipmentOccupancy.red
+                const sum = g + y + r
+                const pct = (n: number) => (sum > 0 ? (n / sum) * 100 : 0)
+                return (
+                  <div className="space-y-2">
+                    <div className="flex h-3.5 overflow-hidden rounded-full ring-1 ring-stone-200/80 sm:h-4">
+                      <motion.div
+                        className="bg-emerald-500"
+                        initial={false}
+                        animate={{ width: `${pct(g)}%` }}
+                        transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                        title={`Verde ${g.toLocaleString('pt-BR')}`}
+                      />
+                      <motion.div
+                        className="bg-amber-400"
+                        initial={false}
+                        animate={{ width: `${pct(y)}%` }}
+                        transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                        title={`Amarelo ${y.toLocaleString('pt-BR')}`}
+                      />
+                      <motion.div
+                        className="bg-rose-500"
+                        initial={false}
+                        animate={{ width: `${pct(r)}%` }}
+                        transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+                        title={`Vermelho ${r.toLocaleString('pt-BR')}`}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <motion.div
+                        className="rounded-xl bg-emerald-500/[0.08] px-2 py-2 ring-1 ring-emerald-300/30 sm:py-2.5"
+                        whileHover={reduceMotion ? undefined : { y: -2 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+                      >
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-800">≤70%</p>
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-emerald-950">
+                          {isLoadingStats ? '—' : g.toLocaleString('pt-BR')}
+                        </p>
+                      </motion.div>
+                      <motion.div
+                        className="rounded-xl bg-amber-500/[0.1] px-2 py-2 ring-1 ring-amber-300/35 sm:py-2.5"
+                        whileHover={reduceMotion ? undefined : { y: -2 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+                      >
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-amber-900">71–99%</p>
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-amber-950">
+                          {isLoadingStats ? '—' : y.toLocaleString('pt-BR')}
+                        </p>
+                      </motion.div>
+                      <motion.div
+                        className="rounded-xl bg-rose-500/[0.1] px-2 py-2 ring-1 ring-rose-300/35 sm:py-2.5"
+                        whileHover={reduceMotion ? undefined : { y: -2 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+                      >
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-rose-900">100%+</p>
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-rose-950">
+                          {isLoadingStats ? '—' : r.toLocaleString('pt-BR')}
+                        </p>
+                      </motion.div>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </aside>
         </div>
-      </section>
+      </motion.section>
 
-      {/* Indicadores */}
       <section className="space-y-3" aria-labelledby="dashboard-kpis-heading">
-        <div className="flex flex-col gap-0.5 px-0.5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-              Indicadores operacionais
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 sm:text-[11px]">
+              Indicadores
             </p>
             <h2
               id="dashboard-kpis-heading"
-              className="text-sm font-semibold tracking-tight text-neutral-900"
+              className="mt-1 text-lg font-semibold tracking-tight text-stone-900"
             >
-              Panorama em tempo real
+              Incidentes · rede · inventário
             </h2>
+            <p className="mt-1 max-w-xl text-[11px] leading-snug text-stone-500 sm:text-[12px]">
+              Setas = snapshot diário. Hover nos cartões para tendência.
+            </p>
           </div>
+          <DashboardQuickLinks />
         </div>
-        <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 xl:gap-4">
-          {stats.map((stat, idx) => (
-            <StatCard key={`${stat.label}-${idx}`} {...stat} />
-          ))}
+
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-stretch">
+          <div className="grid grid-cols-2 gap-3 xl:min-w-0 xl:flex-[2]">
+            {incidentStats.map((stat, idx) => (
+              <motion.div
+                key={`incident-${stat.label}-${idx}`}
+                {...fadeUp}
+                transition={{ duration: 0.28, delay: reduceMotion ? 0 : idx * 0.04 }}
+                className="min-w-0"
+              >
+                <StatCard compact surface="elevated" {...stat} />
+              </motion.div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:min-w-0 xl:flex-[3] xl:border-l xl:border-stone-200/90 xl:pl-4">
+            {networkStatsCards.map((stat, idx) => (
+              <motion.div
+                key={`network-${stat.label}-${idx}`}
+                {...fadeUp}
+                transition={{ duration: 0.28, delay: reduceMotion ? 0 : 0.08 + idx * 0.04 }}
+                className="min-w-0"
+              >
+                <StatCard compact surface="elevated" {...stat} />
+              </motion.div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Conteúdo principal: ocorrências + módulos laterais */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-        <div className="min-w-0 space-y-0 lg:col-span-8">
-          <div className="rounded-2xl border border-neutral-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-              <header className="flex flex-col gap-4 border-b border-neutral-100 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+      <motion.div
+        className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-5"
+        {...fadeUp}
+        transition={{ duration: 0.35, delay: reduceMotion ? 0 : 0.06 }}
+      >
+        <div className="min-w-0 lg:col-span-8">
+          <div className="overflow-hidden rounded-3xl border border-stone-200/70 bg-white/90 shadow-[0_12px_48px_-24px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-sm">
+              <header className="flex flex-col gap-2 border-b border-stone-100/90 bg-gradient-to-r from-stone-50/80 to-white p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
                 <div className="min-w-0 space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                    Monitoramento
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 sm:text-[11px]">
+                    Fila operacional
                   </p>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-lg font-semibold tracking-tight text-neutral-950 md:text-xl">
-                        Ocorrências de rede
-                      </h2>
-                      <p className="mt-1 max-w-xl text-[13px] leading-snug text-neutral-600">
-                        Status em tempo real das falhas massivas ativos.
-                      </p>
-                    </div>
-                  </div>
+                  <h2 className="text-lg font-semibold tracking-tight text-stone-900 md:text-xl">
+                    Massivas abertas
+                  </h2>
+                  <p className="max-w-xl text-[12px] leading-snug text-stone-500 sm:text-[13px]">
+                    Estado das APIs no painel à direita.
+                  </p>
                 </div>
-                <button
-                  type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200/90 bg-neutral-50 text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-white hover:text-neutral-950"
-                  aria-label="Expandir ou abrir ocorrências"
+                <Link
+                  to="/massiva"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-200/90 bg-white text-stone-700 shadow-sm transition-[transform,colors,box-shadow] hover:scale-105 hover:border-amber-300/60 hover:bg-amber-50/50 hover:text-stone-950 hover:shadow-md"
+                  aria-label="Abrir módulo de massivas"
                 >
                   <ArrowUpRight size={18} strokeWidth={1.75} />
-                </button>
+                </Link>
               </header>
 
-              <div className="divide-y divide-neutral-100 p-2 md:p-3">
+              <div className="divide-y divide-stone-100/90 p-1.5 md:p-2">
                 {recentMassivas.length > 0 ? (
-                  recentMassivas.map((ticket) => (
-                    <article
+                  recentMassivas.map((ticket, ti) => (
+                    <motion.article
                       key={`${ticket.protocol}-${ticket.assignmentId ?? 'x'}`}
-                      className="group rounded-xl px-3 py-3 transition-colors hover:bg-neutral-50/80 md:px-4 md:py-4"
+                      initial={reduceMotion ? false : { opacity: 0, x: -6 }}
+                      animate={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+                      transition={{ duration: 0.22, delay: reduceMotion ? 0 : ti * 0.05 }}
+                      className="group rounded-2xl px-3 py-3 transition-[background] hover:bg-amber-50/40 md:px-4"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                        <div className="flex min-w-0 gap-3.5 sm:gap-4">
+                      <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div className="flex min-w-0 gap-3 sm:gap-3.5">
                           <div
-                            className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500/90 ring-4 ring-amber-500/15"
+                            className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-[0_0_0_4px_rgba(251,191,36,0.2)]"
                             aria-hidden
                           />
                           <div className="min-w-0 space-y-2">
-                            <p className="text-[15px] font-semibold leading-snug text-neutral-950">
+                            <p className="text-[15px] font-semibold leading-snug text-stone-900 sm:text-base">
                               {ticket.title}
                             </p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-600">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-stone-600">
                               <span className="font-mono tabular-nums text-neutral-700">
                                 <span className="font-sans font-medium text-neutral-500">Protocolo </span>
                                 {ticket.protocol > 0 ? ticket.protocol : '—'}
@@ -308,14 +554,14 @@ export function HomePage() {
                         <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end sm:pl-2">
                           <span
                             className={cn(
-                              'inline-flex rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide',
+                              'inline-flex rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide',
                               statusBadgeClasses(ticket.status),
                             )}
                           >
                             {ticket.status.toUpperCase()}
                           </span>
                           <time
-                            className="text-[10px] font-medium tabular-nums text-neutral-500"
+                            className="text-[11px] font-medium tabular-nums text-stone-500"
                             dateTime={
                               ticket.openedAt != null ? ticket.openedAt.toISOString() : undefined
                             }
@@ -324,17 +570,20 @@ export function HomePage() {
                           </time>
                         </div>
                       </div>
-                    </article>
+                    </motion.article>
                   ))
                 ) : (
-                  <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 ring-1 ring-neutral-200/80">
-                      <Zap className="h-6 w-6 text-neutral-400" strokeWidth={1.5} aria-hidden />
-                    </div>
-                    <p className="mt-4 text-sm font-semibold text-neutral-800">Nenhuma falha crítica</p>
-                    <p className="mt-1 max-w-xs text-[12px] leading-relaxed text-neutral-500">
-                      Não há ocorrências em destaque no momento. A lista atualizará quando novos eventos
-                      forem registrados.
+                  <div className="flex flex-col items-center justify-center px-4 py-9 text-center">
+                    <motion.div
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 ring-1 ring-neutral-200/80"
+                      animate={reduceMotion ? undefined : { scale: [1, 1.04, 1] }}
+                      transition={{ duration: 2.2, repeat: reduceMotion ? 0 : Infinity, repeatDelay: 4 }}
+                    >
+                      <Zap className="h-5 w-5 text-neutral-400" strokeWidth={1.5} aria-hidden />
+                    </motion.div>
+                    <p className="mt-3 text-[15px] font-semibold text-stone-800">Nenhuma falha crítica</p>
+                    <p className="mt-1 max-w-xs text-[12px] leading-relaxed text-stone-500">
+                      Lista atualiza automaticamente.
                     </p>
                   </div>
                 )}
@@ -343,11 +592,30 @@ export function HomePage() {
         </div>
 
         <div className="min-w-0 lg:col-span-4">
-          <DashboardConnectionMonitor />
+          <motion.div
+            className="lg:sticky lg:top-4"
+            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, delay: 0.08 }}
+          >
+            <DashboardConnectionMonitor />
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
+
     </div>
-    <DashboardAccessRequestSection />
+
+    {showAccessFold ? (
+      <details className="group mx-auto mt-5 max-w-[1600px] min-w-0 rounded-2xl border border-stone-200/60 bg-stone-50/30 px-4 py-3 ring-1 ring-white/50">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500 [&::-webkit-details-marker]:hidden">
+          <span>Pedidos de acesso</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-stone-400 transition-transform duration-200 group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="pt-3">
+          <DashboardAccessRequestSection />
+        </div>
+      </details>
+    ) : null}
     </>
   )
 }

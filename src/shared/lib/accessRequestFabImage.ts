@@ -16,6 +16,15 @@ export function resolveAccessRequestFabImageSrc(): string {
   return DEFAULT_ACCESS_REQUEST_FAB_IMAGE_PATH
 }
 
+/** PNG em `public/` quando não há `VITE_ISA_HERO_IMAGE`. */
+export const DEFAULT_ISA_HERO_IMAGE_PATH = '/isa-hero.png'
+
+export function resolveIsaHeroImageSrc(): string {
+  const fromEnv = normalizeAccessRequestFabUrl(env.isaHeroImage)
+  if (fromEnv !== '') return fromEnv
+  return DEFAULT_ISA_HERO_IMAGE_PATH
+}
+
 const PRELOAD_LINK_ID = 'preload-access-request-fab-image'
 
 /**
@@ -29,6 +38,22 @@ export function preloadAccessRequestFabImage(): void {
   if (document.getElementById(PRELOAD_LINK_ID)) return
   const link = document.createElement('link')
   link.id = PRELOAD_LINK_ID
+  link.rel = 'preload'
+  link.as = 'image'
+  link.href = src
+  document.head.appendChild(link)
+}
+
+const PRELOAD_ISA_HERO_ID = 'preload-isa-hero-image'
+
+/** Pré-carrega o retrato ISA do hero (primeira paint mais rápida). */
+export function preloadIsaHeroImage(): void {
+  if (typeof document === 'undefined') return
+  const src = resolveIsaHeroImageSrc()
+  if (src === '') return
+  if (document.getElementById(PRELOAD_ISA_HERO_ID)) return
+  const link = document.createElement('link')
+  link.id = PRELOAD_ISA_HERO_ID
   link.rel = 'preload'
   link.as = 'image'
   link.href = src

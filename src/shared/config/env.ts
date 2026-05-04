@@ -204,6 +204,10 @@ export const env = {
    * ou `https://...`). Se vazio, usa ícone padrão ou imagem guardada no navegador (ver componente).
    */
   accessRequestFabImage: str(import.meta.env.VITE_ACCESS_REQUEST_FAB_IMAGE, ''),
+  /**
+   * Retrato ISA no hero da home (`public/` ou URL absoluta). Se vazio, usa `/isa-hero.png`.
+   */
+  isaHeroImage: str(import.meta.env.VITE_ISA_HERO_IMAGE, ''),
 } as const
 
 
