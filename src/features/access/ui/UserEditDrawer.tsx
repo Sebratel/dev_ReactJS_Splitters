@@ -8,6 +8,7 @@ import {
   applySplittersRolePreset,
   type SplittersRoleId,
 } from '@/features/access/lib/splittersUserRoles'
+import { SplittersUserAvatar } from '@/features/access/ui/SplittersUserAvatar'
 import { cn } from '@/shared/lib/utils'
 
 type UserEditDrawerProps = {
@@ -119,12 +120,15 @@ export function UserEditDrawer({
       />
       <aside className="relative flex h-full w-full max-w-md flex-col border-l border-neutral-200 bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-lg">
         <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-5 py-4">
-          <div className="min-w-0">
-            <p id="user-edit-title" className="text-lg font-semibold tracking-tight text-neutral-900">
-              Editar usuário
-            </p>
-            <p className="mt-1 truncate text-sm text-neutral-600">{user.displayName || 'Sem nome'}</p>
-            <p className="truncate text-xs text-neutral-500">{user.email}</p>
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <SplittersUserAvatar user={user} size="md" className="mt-0.5" />
+            <div className="min-w-0">
+              <p id="user-edit-title" className="text-lg font-semibold tracking-tight text-neutral-900">
+                Editar usuário
+              </p>
+              <p className="mt-1 truncate text-sm text-neutral-600">{user.displayName || 'Sem nome'}</p>
+              <p className="truncate text-xs text-neutral-500">{user.email}</p>
+            </div>
           </div>
           <button
             type="button"

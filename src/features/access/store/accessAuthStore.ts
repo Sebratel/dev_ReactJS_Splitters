@@ -144,6 +144,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           uid: firebaseUser.uid,
           email: firebaseUser.email ?? '',
           displayName: displayNameFromFirebaseUser(firebaseUser),
+          photoURL: firebaseUser.photoURL ?? null,
         })
 
         if (profile.isActive) {

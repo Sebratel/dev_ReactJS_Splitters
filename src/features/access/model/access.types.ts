@@ -10,6 +10,8 @@ export type SplittersUserProfile = {
   uid: string
   email: string
   displayName: string
+  /** URL da foto de perfil (ex.: Google); preenchido no login quando disponível. */
+  photoURL: string | null
   isActive: boolean
   permissions: SplittersPermissionSet
   createdAt: Date | null
