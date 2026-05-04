@@ -6,6 +6,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import { buildSplittersFilterContext } from './splittersFilterContext.js';
+import {
+  buildSplitterOperationalScore,
+  compareRiskEntries,
+} from './splittersOperationalScore.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -188,23 +193,11 @@ async function fetchCurrentSplitterSnapshotRows() {
       COALESCE(NULLIF(TRIM(base."PONTO DE ACESSO CODE"), ''), TRIM(base."PONTO DE ACESSO")) AS "accessPointCode",
       base."ATIVO[SPLT.SECUNDARIO]" AS "active",
       COALESCE(base."CAPACIDADE[SPLT.SECUNDARIO]"::int, 0) AS "outPorts",
-      (
-        SELECT COUNT(*)::int
-        FROM authentication_splitter_ports asp_sub
-        WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-          AND asp_sub.busy IS TRUE
-          AND asp_sub.deleted IS FALSE
-      ) AS "busyCount",
+      COALESCE(base."BUSY_COUNT"::int, 0) AS "busyCount",
       CASE
         WHEN COALESCE(base."CAPACIDADE[SPLT.SECUNDARIO]"::int, 0) > 0
         THEN ROUND((
-          (
-            SELECT COUNT(*)::int
-            FROM authentication_splitter_ports asp_sub
-            WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-              AND asp_sub.busy IS TRUE
-              AND asp_sub.deleted IS FALSE
-          )::numeric * 100.0
+          COALESCE(base."BUSY_COUNT"::numeric, 0) * 100.0
         ) / NULLIF(base."CAPACIDADE[SPLT.SECUNDARIO]"::int, 0), 2)
         ELSE 0
       END AS "usagePercent",
@@ -270,6 +263,32 @@ secondary_splitters AS (
             ELSE NULL
         END AS nome_condominio
     FROM authentication_splitters ss
+),
+splitter_corporate AS (
+    SELECT
+        ssp_elem.authentication_splitter_id AS splitter_id,
+        BOOL_OR(
+            LOWER(TRIM(COALESCE(ins_c.title, ''))) IN (
+                'contrato corporativo',
+                'contrato corporativo pme'
+            )
+        ) AS has_corporate
+    FROM authentication_splitter_ports ssp_elem
+    INNER JOIN authentication_contracts auth_cc ON auth_cc.id = ssp_elem.authentication_contract_id
+    INNER JOIN contracts ctr_c ON ctr_c.id = auth_cc.contract_id
+    INNER JOIN people cl_c ON cl_c.id = ctr_c.client_id
+    LEFT JOIN insignias ins_c ON ins_c.id = cl_c.insignia_id
+    WHERE ssp_elem.deleted IS FALSE
+    GROUP BY ssp_elem.authentication_splitter_id
+),
+splitter_busy AS (
+    SELECT
+        authentication_splitter_id AS splitter_id,
+        COUNT(*)::int AS busy_count
+    FROM authentication_splitter_ports
+    WHERE deleted IS FALSE
+      AND busy IS TRUE
+    GROUP BY authentication_splitter_id
 )
 SELECT
     ps.id                             AS "ID[SPLT.PRIMARIO]",
@@ -329,13 +348,19 @@ SELECT
     ss.type                           AS "TIPO EQUIPAMENTO[SPLT.SECUNDARIO]",
     ssp.busy                          AS "OCUPADO:[SPLT.SECUNDARIO]",
     ss.tipo_local                     AS "TIPO LOCAL",
-    ss.nome_condominio                AS "NOME CONDOMÍNIO"
+    ss.nome_condominio                AS "NOME CONDOMÍNIO",
+    COALESCE(scorp.has_corporate, FALSE) AS "TEM_CORPORATIVO_SPLITTER",
+    COALESCE(sbusy.busy_count, 0) AS "BUSY_COUNT"
 FROM primary_splitters ps
 LEFT JOIN authentication_splitter_ports psp
     ON psp.authentication_splitter_id = ps.id
    AND psp.deleted = FALSE
 LEFT JOIN secondary_splitters ss
     ON ss.id = psp.children_authentication_splitter_id
+LEFT JOIN splitter_corporate scorp
+    ON scorp.splitter_id = ss.id
+LEFT JOIN splitter_busy sbusy
+    ON sbusy.splitter_id = ss.id
 LEFT JOIN authentication_splitter_ports ssp
     ON ssp.authentication_splitter_id = ss.id
 LEFT JOIN authentication_contracts auth_contract
@@ -388,13 +413,7 @@ function buildNetworkStatsSql() {
             SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
               base."ID[SPLT.SECUNDARIO]",
               COALESCE(base."CAPACIDADE[SPLT.SECUNDARIO]"::int, 0) AS out_ports,
-              (
-                SELECT COUNT(*)::int
-                FROM authentication_splitter_ports asp_sub
-                WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-                  AND asp_sub.busy IS TRUE
-                  AND asp_sub.deleted IS FALSE
-              ) AS busy_count
+              COALESCE(base."BUSY_COUNT"::int, 0) AS busy_count
             FROM (${SPLITTERS_BASE_QUERY}) base
             ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
           ) equip
@@ -665,224 +684,59 @@ app.get('/api/hub/session', async (req, res) => {
   }
 });
 
-app.get('/api/splitters', async (req, res) => {
+/**
+ * Executa funções async com limite de concorrência (evita fila sequencial longa no PG/MySQL).
+ */
+async function runWithConcurrency(taskFns, concurrency) {
+  if (taskFns.length === 0) return [];
+  const results = new Array(taskFns.length);
+  let index = 0;
+  async function worker() {
+    while (true) {
+      const i = index++;
+      if (i >= taskFns.length) break;
+      results[i] = await taskFns[i]();
+    }
+  }
+  const n = Math.min(Math.max(1, concurrency), taskFns.length);
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return results;
+}
+
+app.get('/api/splitters/operational-priority', async (req, res) => {
   try {
-    const page = parseInt(req.query.page || '1');
-    const limit = parseInt(req.query.limit || '20');
-    const search = req.query.search || '';
-    const oltCodes = req.query.olts ? req.query.olts.split(',') : [];
-    const statuses = req.query.statuses ? req.query.statuses.split(',') : [];
-    const streetSelections = req.query.streets ? req.query.streets.split(',') : [];
-    const citySelections = req.query.cities ? req.query.cities.split(',') : [];
-    const condominiumSelections = req.query.condominiums
-      ? req.query.condominiums.split(',')
-      : [];
-    const withOpenMassivaRaw = String(req.query.withOpenMassiva || '').trim();
-    const withMaintenanceRaw = String(req.query.withMaintenance || '').trim();
-    const corporateClientsRaw = String(req.query.corporateClients || '')
-      .trim()
-      .toLowerCase();
-    const openMassivaSplitterCodes = req.query.openMassivaSplitterCodes
-      ? req.query.openMassivaSplitterCodes.split(',')
-      : [];
-    const maintenanceSplitterCodes = req.query.maintenanceSplitterCodes
-      ? req.query.maintenanceSplitterCodes.split(',')
-      : [];
-    const primarySplitters = req.query.primarySplitters
-      ? req.query.primarySplitters.split(',')
-      : [];
-    
-    const offset = (page - 1) * limit;
-    const values = [];
-    let currentParam = 1;
-    
-    let whereClauses = [];
-    
-    if (search) {
-      whereClauses.push(`(
-        base."SPLT.SECUNDARIO" ILIKE $${currentParam}
-        OR base."CÓDIGO[SPLT.SECUNDARIO]" ILIKE $${currentParam}
-        OR base."NOME CLIENTE" ILIKE $${currentParam}
-        OR base."USUÁRIO[CLIENTE]" ILIKE $${currentParam}
-        OR base."CODIGO_INTEGRACAO" ILIKE $${currentParam}
-      )`);
-      values.push(`%${search}%`);
-      currentParam++;
-    }
-    
-    const normalizedOltCodes = oltCodes
-      .map((code) => String(code || '').trim())
-      .filter((code) => code !== '');
-    if (normalizedOltCodes.length > 0) {
-      whereClauses.push(
-        `COALESCE(NULLIF(TRIM(base."PONTO DE ACESSO CODE"), ''), TRIM(base."PONTO DE ACESSO")) = ANY($${currentParam})`,
-      );
-      values.push(normalizedOltCodes);
-      currentParam++;
-    }
+    const PAGE_SIZE =
+      Number.parseInt(process.env.OPERATIONAL_PRIORITY_PAGE_SIZE || '2500', 10) || 2500;
+    const PAGE_CONCURRENCY =
+      Number.parseInt(process.env.OPERATIONAL_PRIORITY_PAGE_CONCURRENCY || '6', 10) || 6;
+    const MASSIVA_CHUNK =
+      Number.parseInt(process.env.OPERATIONAL_PRIORITY_MASSIVA_CHUNK || '800', 10) || 800;
+    const MASSIVA_CONCURRENCY =
+      Number.parseInt(process.env.OPERATIONAL_PRIORITY_MASSIVA_CONCURRENCY || '4', 10) || 4;
 
-    const normalizedPrimarySplitters = primarySplitters
-      .map((title) => String(title || '').trim())
-      .filter((title) => title !== '');
+    const ctx = buildSplittersFilterContext(req, SPLITTERS_BASE_QUERY);
+    const { whereSql, values, statusSql, currentParam } = ctx;
 
-    if (normalizedPrimarySplitters.length > 0) {
-      whereClauses.push(`TRIM(base."SPLT.PRIMARIO") = ANY($${currentParam})`);
-      values.push(normalizedPrimarySplitters);
-      currentParam++;
-    }
-
-    const normalizedStreetSelections = streetSelections
-      .map((street) => String(street || '').trim())
-      .filter((street) => street !== '');
-    if (normalizedStreetSelections.length > 0) {
-      const orParts = normalizedStreetSelections.map(
-        (_, idx) => `base."RUA[SPLT.SECUNDARIO]" ILIKE $${currentParam + idx}`,
-      );
-      whereClauses.push(`(${orParts.join(' OR ')})`);
-      for (const street of normalizedStreetSelections) {
-        values.push(`%${street}%`);
-      }
-      currentParam += normalizedStreetSelections.length;
-    }
-
-    const normalizedCitySelections = citySelections
-      .map((city) => String(city || '').trim())
-      .filter((city) => city !== '');
-    if (normalizedCitySelections.length > 0) {
-      whereClauses.push(`TRIM(base."CIDADE[SPLT.SECUNDARIO]") = ANY($${currentParam})`);
-      values.push(normalizedCitySelections);
-      currentParam++;
-    }
-
-    const normalizedCondominiumSelections = condominiumSelections
-      .map((name) => String(name || '').trim())
-      .filter((name) => name !== '');
-    if (normalizedCondominiumSelections.length > 0) {
-      whereClauses.push(`TRIM(base."NOME CONDOMÍNIO") = ANY($${currentParam})`);
-      values.push(normalizedCondominiumSelections);
-      currentParam++;
-    }
-
-    const normalizedOpenMassivaSplitterCodes = openMassivaSplitterCodes
-      .map((code) => String(code || '').trim())
-      .filter((code) => code !== '');
-    const withOpenMassiva = withOpenMassivaRaw === '1'
-      ? true
-      : withOpenMassivaRaw === '0'
-        ? false
-        : null;
-    if (withOpenMassiva !== null) {
-      if (normalizedOpenMassivaSplitterCodes.length === 0) {
-        if (withOpenMassiva) {
-          whereClauses.push('1 = 0');
-        }
-      } else {
-        whereClauses.push(
-          withOpenMassiva
-            ? `base."CÓDIGO[SPLT.SECUNDARIO]" = ANY($${currentParam})`
-            : `base."CÓDIGO[SPLT.SECUNDARIO]" <> ALL($${currentParam})`,
-        );
-        values.push(normalizedOpenMassivaSplitterCodes);
-        currentParam++;
-      }
-    }
-
-    const normalizedMaintenanceSplitterCodes = maintenanceSplitterCodes
-      .map((code) => String(code || '').trim())
-      .filter((code) => code !== '');
-    const withMaintenance = withMaintenanceRaw === '1'
-      ? true
-      : withMaintenanceRaw === '0'
-        ? false
-        : null;
-    if (withMaintenance !== null) {
-      if (normalizedMaintenanceSplitterCodes.length === 0) {
-        if (withMaintenance) {
-          whereClauses.push('1 = 0');
-        }
-      } else {
-        whereClauses.push(
-          withMaintenance
-            ? `base."CÓDIGO[SPLT.SECUNDARIO]" = ANY($${currentParam})`
-            : `base."CÓDIGO[SPLT.SECUNDARIO]" <> ALL($${currentParam})`,
-        );
-        values.push(normalizedMaintenanceSplitterCodes);
-        currentParam++;
-      }
-    }
-
-    if (corporateClientsRaw === 'with' || corporateClientsRaw === 'with-corporate') {
-      whereClauses.push('base."CORPORATIVO" IS TRUE');
-    } else if (
-      corporateClientsRaw === 'without' ||
-      corporateClientsRaw === 'without-corporate'
-    ) {
-      whereClauses.push(`NOT EXISTS (
-        SELECT 1
-        FROM (${SPLITTERS_BASE_QUERY}) corp_base
-        WHERE corp_base."ID[SPLT.SECUNDARIO]" = base."ID[SPLT.SECUNDARIO]"
-          AND corp_base."CORPORATIVO" IS TRUE
-      )`);
-    }
-
-    const normalizedStatuses = statuses
-      .map((status) => String(status || '').trim().toLowerCase())
-      .filter((status) => ['normal', 'alerta', 'critico', 'excedente'].includes(status));
-
-    let statusSql = '';
-    if (normalizedStatuses.length > 0) {
-      statusSql = `
-        WHERE (
-          CASE
-            WHEN detailed."CAPACIDADE[SPLT.SECUNDARIO]" IS NULL
-              OR detailed."CAPACIDADE[SPLT.SECUNDARIO]" <= 0 THEN 'normal'
-            WHEN detailed."BUSY_COUNT" > detailed."CAPACIDADE[SPLT.SECUNDARIO]" THEN 'excedente'
-            WHEN detailed."BUSY_COUNT" = detailed."CAPACIDADE[SPLT.SECUNDARIO]" THEN 'critico'
-            WHEN (detailed."BUSY_COUNT"::double precision / NULLIF(detailed."CAPACIDADE[SPLT.SECUNDARIO]", 0)) > 0.7 THEN 'alerta'
-            ELSE 'normal'
-          END
-        ) = ANY($${currentParam})
-      `;
-      values.push(normalizedStatuses);
-      currentParam++;
-    }
-
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM (
         SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
-            base.*,
-            (
-              SELECT COUNT(*)
-              FROM authentication_splitter_ports asp_sub
-              WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-                AND asp_sub.busy IS TRUE
-                AND asp_sub.deleted IS FALSE
-            ) AS "BUSY_COUNT"
+            base.*
         FROM (${SPLITTERS_BASE_QUERY}) base
         ${whereSql}
         ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
       ) detailed
       ${statusSql}
     `;
-    
-    const countResult = await pool.query(countQuery, values);
-    const totalCount = parseInt(countResult.rows[0].total);
 
-    const query = `
+    const countResult = await pool.query(countQuery, values);
+    const totalCount = parseInt(countResult.rows[0].total, 10);
+
+    const dataQuery = `
       SELECT *
       FROM (
         SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
-            base.*,
-            (
-              SELECT COUNT(*)
-              FROM authentication_splitter_ports asp_sub
-              WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-                AND asp_sub.busy IS TRUE
-                AND asp_sub.deleted IS FALSE
-            ) AS "BUSY_COUNT"
+            base.*
         FROM (${SPLITTERS_BASE_QUERY}) base
         ${whereSql}
         ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
@@ -891,9 +745,139 @@ app.get('/api/splitters', async (req, res) => {
       ORDER BY detailed."ID[SPLT.SECUNDARIO]" ASC
       LIMIT $${currentParam} OFFSET $${currentParam + 1}
     `;
-    
-    const result = await pool.query(query, [...values, limit, offset]);
-    
+
+    const maxPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+    const pageTasks = [];
+    for (let pageNum = 1; pageNum <= maxPage; pageNum++) {
+      const offset = (pageNum - 1) * PAGE_SIZE;
+      pageTasks.push(() =>
+        pool.query(dataQuery, [...values, PAGE_SIZE, offset]),
+      );
+    }
+    const pageResults = await runWithConcurrency(pageTasks, PAGE_CONCURRENCY);
+    const allRows = pageResults.flatMap((r) => r.rows);
+
+    const codes = [
+      ...new Set(
+        allRows
+          .map((r) => String(r['CÓDIGO[SPLT.SECUNDARIO]'] ?? '').trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    const massivaByCode = new Map();
+    const massivaTasks = [];
+    for (let i = 0; i < codes.length; i += MASSIVA_CHUNK) {
+      const slice = codes.slice(i, i + MASSIVA_CHUNK);
+      massivaTasks.push(() => massivaHistoryStore.getSplitterStats(slice));
+    }
+    const massivaChunkResults = await runWithConcurrency(
+      massivaTasks,
+      MASSIVA_CONCURRENCY,
+    );
+    for (const batchMap of massivaChunkResults) {
+      for (const [k, v] of batchMap.entries()) {
+        massivaByCode.set(k, v);
+      }
+    }
+
+    const emptyMassiva = {
+      totalTickets: 0,
+      openTickets: 0,
+      closedTickets: 0,
+      affectedClientsTotal: 0,
+      latestOpenedAt: null,
+    };
+
+    const scored = allRows.map((row) => {
+      const code = String(row['CÓDIGO[SPLT.SECUNDARIO]'] ?? '').trim();
+      const outPorts = Number(row['CAPACIDADE[SPLT.SECUNDARIO]'] ?? 0) || 0;
+      const busyCount = Number(row['BUSY_COUNT'] ?? 0) || 0;
+      const splitter = {
+        code,
+        title: String(row['SPLT.SECUNDARIO'] ?? ''),
+        busyCount,
+        outPorts,
+      };
+      const massivaStats = massivaByCode.get(code) ?? emptyMassiva;
+      const operationalScore = buildSplitterOperationalScore(splitter, massivaStats);
+      return { splitter, massivaStats, operationalScore };
+    });
+
+    scored.sort(compareRiskEntries);
+    /** Top 5 por pontuação no universo filtrado (inclui «Estável»), para a fila aparecer mesmo sem massivas no MySQL. */
+    const top = scored.slice(0, 5);
+
+    const data = top.map((s) => ({
+      splitter: {
+        code: s.splitter.code,
+        title: s.splitter.title,
+        busyCount: s.splitter.busyCount,
+        outPorts: s.splitter.outPorts,
+      },
+      massivaStats: s.massivaStats,
+      operationalScore: s.operationalScore,
+    }));
+
+    res.json({
+      success: true,
+      totalCount,
+      scannedCount: allRows.length,
+      truncated: allRows.length < totalCount,
+      massivaSource: massivaHistoryStore.configured ? 'mysql-history' : 'none',
+      data,
+    });
+  } catch (error) {
+    console.error('Erro na fila operacional:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao calcular prioridade operacional.',
+      error: error.message,
+    });
+  }
+});
+
+app.get('/api/splitters', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page || '1');
+    const limit = parseInt(req.query.limit || '20');
+    const offset = (page - 1) * limit;
+    const ctx = buildSplittersFilterContext(req, SPLITTERS_BASE_QUERY);
+    const { whereSql, values, statusSql, currentParam } = ctx;
+
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM (
+        SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
+            base.*
+        FROM (${SPLITTERS_BASE_QUERY}) base
+        ${whereSql}
+        ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
+      ) detailed
+      ${statusSql}
+    `;
+
+    const dataQuery = `
+      SELECT *
+      FROM (
+        SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
+            base.*
+        FROM (${SPLITTERS_BASE_QUERY}) base
+        ${whereSql}
+        ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
+      ) detailed
+      ${statusSql}
+      ORDER BY detailed."ID[SPLT.SECUNDARIO]" ASC
+      LIMIT $${currentParam} OFFSET $${currentParam + 1}
+    `;
+
+    const dataParams = [...values, limit, offset];
+    const [countResult, result] = await Promise.all([
+      pool.query(countQuery, values),
+      pool.query(dataQuery, dataParams),
+    ]);
+    const totalCount = parseInt(countResult.rows[0].total, 10);
+
     res.json({
       success: true,
       count: result.rowCount,
@@ -1452,6 +1436,81 @@ app.post('/api/splitters/snapshots/capture', async (_req, res) => {
   }
 });
 
+/**
+ * Painel da rede: um GET por lote — mesmas fontes que `/api/splitters/trends` +
+ * `/api/massiva/history/splitter-stats`, mas metade das idas à rede no cliente.
+ */
+app.get('/api/splitters/intelligence-batch', async (req, res) => {
+  try {
+    const splitterCodes = String(req.query.codes ?? '')
+      .split(',')
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value !== '');
+
+    if (!massivaHistoryStore.configured) {
+      const emptyTrend = {
+        label: 'Estavel',
+        currentUsagePercent: 0,
+        delta7d: 0,
+        delta30d: 0,
+        capturedAt: null,
+      };
+      const emptyMassiva = {
+        totalTickets: 0,
+        openTickets: 0,
+        closedTickets: 0,
+        affectedClientsTotal: 0,
+        latestOpenedAt: null,
+      };
+      return res.json({
+        success: true,
+        trends: splitterCodes.map((splitterCode) => ({ splitterCode, ...emptyTrend })),
+        massiva: splitterCodes.map((splitterCode) => ({ splitterCode, ...emptyMassiva })),
+      });
+    }
+
+    const [trendsMap, statsMap] = await Promise.all([
+      massivaHistoryStore.getSplitterTrends(splitterCodes),
+      massivaHistoryStore.getSplitterStats(splitterCodes),
+    ]);
+
+    const trends = splitterCodes.map((code) => ({
+      splitterCode: code,
+      ...(trendsMap.get(code) ?? {
+        label: 'Estavel',
+        currentUsagePercent: 0,
+        delta7d: 0,
+        delta30d: 0,
+        capturedAt: null,
+      }),
+    }));
+
+    const massiva = splitterCodes.map((code) => ({
+      splitterCode: code,
+      ...(statsMap.get(code) ?? {
+        totalTickets: 0,
+        openTickets: 0,
+        closedTickets: 0,
+        affectedClientsTotal: 0,
+        latestOpenedAt: null,
+      }),
+    }));
+
+    res.json({
+      success: true,
+      trends,
+      massiva,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar lote de inteligência dos splitters:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar lote de inteligência dos splitters.',
+      error: error.message,
+    });
+  }
+});
+
 app.get('/api/splitters/trends', async (req, res) => {
   try {
     if (!massivaHistoryStore.configured) {
@@ -1812,14 +1871,7 @@ app.get(['/api/splitters-by-code/:code', '/api/splitters-by-code'], async (req, 
 
     const query = `
       SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
-          base.*,
-          (
-            SELECT COUNT(*)
-            FROM authentication_splitter_ports asp_sub
-            WHERE asp_sub.authentication_splitter_id = base."ID[SPLT.SECUNDARIO]"
-              AND asp_sub.busy IS TRUE
-              AND asp_sub.deleted IS FALSE
-          ) AS "BUSY_COUNT"
+          base.*
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE base."CÓDIGO[SPLT.SECUNDARIO]" = $1
       ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
