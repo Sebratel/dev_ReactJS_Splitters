@@ -3,6 +3,24 @@ import { env } from '@/shared/config/env'
 /** PNG em `public/` quando não há `VITE_ACCESS_REQUEST_FAB_IMAGE`. */
 export const DEFAULT_ACCESS_REQUEST_FAB_IMAGE_PATH = '/access-request-fab.png'
 
+/** URL absoluta (`https:` / `data:` / protocol-relative `//`). */
+function isAbsoluteOrSpecialUrl(s: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(s) || s.startsWith('//') || s.startsWith('data:')
+}
+
+/**
+ * Prefixa caminhos relativos ao `import.meta.env.BASE_URL` (deploy com subpath, ex. `/app/`).
+ */
+export function withVitePublicBase(assetPath: string): string {
+  const trimmed = assetPath.trim()
+  if (trimmed === '' || isAbsoluteOrSpecialUrl(trimmed)) return trimmed
+  const base = import.meta.env.BASE_URL ?? '/'
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  if (base === '/') return path
+  const b = base.endsWith('/') ? base.slice(0, -1) : base
+  return `${b}${path}`
+}
+
 export function normalizeAccessRequestFabUrl(raw: string): string {
   const t = raw.trim()
   if (t === '') return ''
@@ -12,8 +30,8 @@ export function normalizeAccessRequestFabUrl(raw: string): string {
 
 export function resolveAccessRequestFabImageSrc(): string {
   const fromEnv = normalizeAccessRequestFabUrl(env.accessRequestFabImage)
-  if (fromEnv !== '') return fromEnv
-  return DEFAULT_ACCESS_REQUEST_FAB_IMAGE_PATH
+  if (fromEnv !== '') return isAbsoluteOrSpecialUrl(fromEnv) ? fromEnv : withVitePublicBase(fromEnv)
+  return withVitePublicBase(DEFAULT_ACCESS_REQUEST_FAB_IMAGE_PATH)
 }
 
 /** PNG em `public/` quando não há `VITE_ISA_HERO_IMAGE`. */
@@ -21,8 +39,8 @@ export const DEFAULT_ISA_HERO_IMAGE_PATH = '/isa-hero.png'
 
 export function resolveIsaHeroImageSrc(): string {
   const fromEnv = normalizeAccessRequestFabUrl(env.isaHeroImage)
-  if (fromEnv !== '') return fromEnv
-  return DEFAULT_ISA_HERO_IMAGE_PATH
+  const raw = fromEnv !== '' ? fromEnv : DEFAULT_ISA_HERO_IMAGE_PATH
+  return isAbsoluteOrSpecialUrl(raw) ? raw : withVitePublicBase(raw)
 }
 
 const PRELOAD_LINK_ID = 'preload-access-request-fab-image'
