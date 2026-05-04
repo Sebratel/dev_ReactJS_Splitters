@@ -186,6 +186,33 @@ function readCorporateFromRecord(rec: Record<string, unknown>): boolean | null {
   return null
 }
 
+/** Colunas estilo SQL no mesmo objeto (sem sinal nos aliases JSON comuns). */
+function readCorporateFlagFromSqlStyleRow(rec: Record<string, unknown>): boolean | null {
+  for (const key of CORPORATE_CLIENT_FLAG_ROW_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(rec, key)) continue
+    const v = rec[key]
+    if (v === undefined || v === null) continue
+    return interpretCorporateScalar(v)
+  }
+  return null
+}
+
+/**
+ * `true` / `false` quando o payload tem sinal explícito; `null` quando não é possível classificar
+ * (ex.: lista de impactados sem flags) — útil para totais residencial/corporativo sem assumir PF.
+ */
+export function readCorporateFlagExplicit(raw: unknown): boolean | null {
+  if (!isJsonObject(raw)) return null
+  const json = safeMap(raw)
+  const client = safeMap(json.client)
+  return (
+    readCorporateFromRecord(json) ??
+    readCorporateFromRecord(client) ??
+    readCorporateFlagFromSqlStyleRow(json) ??
+    readCorporateFlagFromSqlStyleRow(client)
+  )
+}
+
 export function pickIsCorporateFromRow(row: Record<string, unknown>): boolean {
   for (const key of CORPORATE_CLIENT_FLAG_ROW_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(row, key)) continue
@@ -197,7 +224,13 @@ export function pickIsCorporateFromRow(row: Record<string, unknown>): boolean {
 }
 
 function mergeCorporateFromApi(json: Record<string, unknown>, client: Record<string, unknown>): boolean {
-  return readCorporateFromRecord(json) ?? readCorporateFromRecord(client) ?? false
+  return (
+    readCorporateFromRecord(json) ??
+    readCorporateFromRecord(client) ??
+    readCorporateFlagFromSqlStyleRow(json) ??
+    readCorporateFlagFromSqlStyleRow(client) ??
+    false
+  )
 }
 
 export function parseSplitterClienteFromApi(raw: unknown): SplitterCliente {

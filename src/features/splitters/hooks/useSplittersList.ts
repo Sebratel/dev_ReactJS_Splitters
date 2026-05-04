@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
 import { SPLITTERS_LIST_STALE_TIME_MS } from '@/features/splitters/model/constants'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
@@ -62,5 +62,6 @@ export function useSplittersList(
       maintenanceSplitterCodes,
     }),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
+    placeholderData: keepPreviousData,
   })
 }

@@ -1,11 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Activity, AlertTriangle, Filter, Search, X } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { useReducedMotion } from 'framer-motion'
+import { Filter, Network, Search, X } from 'lucide-react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
+import { useSplittersOperationalPriorityQueue } from '@/features/splitters/hooks/useSplittersOperationalPriorityQueue'
 import { useSplittersList } from '@/features/splitters/hooks/useSplittersList'
 import { useAccessPointsForFilters } from '@/features/splitters/hooks/useAccessPointsForFilters'
 import { useOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesFromLocalDb'
@@ -18,13 +20,18 @@ import {
   fetchMaintenanceBySplitter,
 } from '@/features/intelligence/api/fetchMaintenanceBySplitter'
 import type { Splitter } from '@/features/splitters/model/splitter'
-import { OperationalScoreHealthDots } from '@/features/splitters/ui/OperationalScoreHealthDots'
-import { scoreToneClassName } from '@/features/splitters/ui/operationalScoreVisual'
 import { SplittersList } from '@/features/splitters/ui/SplittersList'
+import { SplittersOperationalPriorityFab } from '@/features/splitters/ui/SplittersOperationalPriorityFab'
 import { SplittersFiltersDrawer } from '@/features/splitters/ui/SplittersFiltersDrawer'
 import { useSplittersFiltersStore } from '@/features/splitters/store/useSplittersFiltersStore'
 import { countActiveSplittersFilters } from '@/features/splitters/model/splittersListFilters'
 import { SPLITTER_STATUS_LABEL } from '@/features/splitters/model/splitterStatus'
+import {
+  compareByRisk,
+  occupancyPercent,
+} from '@/features/splitters/lib/splitterOperationalPriorityCompare'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
 import type { SplitterMassivaStats, SplitterOperationalScore } from '@/features/splitters/model/splitterOperationalInsights'
 
@@ -46,29 +53,8 @@ type SplitterListEntry = {
   trendLabel: string
 }
 
-function occupancyPercent(splitter: { busyCount: number; outPorts: number }): number {
-  if (splitter.outPorts <= 0) return 0
-  return (splitter.busyCount / splitter.outPorts) * 100
-}
-
-function compareByRisk(a: SplitterListEntry, b: SplitterListEntry): number {
-  if (b.operationalScore.score !== a.operationalScore.score) {
-    return b.operationalScore.score - a.operationalScore.score
-  }
-  if (b.massivaStats.openTickets !== a.massivaStats.openTickets) {
-    return b.massivaStats.openTickets - a.massivaStats.openTickets
-  }
-  if (b.massivaStats.affectedClientsTotal !== a.massivaStats.affectedClientsTotal) {
-    return b.massivaStats.affectedClientsTotal - a.massivaStats.affectedClientsTotal
-  }
-  const occDelta = occupancyPercent(b.splitter) - occupancyPercent(a.splitter)
-  if (Math.abs(occDelta) > 0.001) return occDelta
-  return String(a.splitter.code ?? '').localeCompare(String(b.splitter.code ?? ''), 'pt-BR')
-}
-
 export function SplittersPage() {
   const reduceMotion = useReducedMotion()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [sortMode, setSortMode] = useState<SplittersSortMode>('risk-desc')
@@ -87,7 +73,8 @@ export function SplittersPage() {
     clearAll,
   } = useSplittersFiltersStore()
   const { data: accessPoints } = useAccessPointsForFilters()
-  const { view: massivaView } = useMassivaTickets()
+  const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
+  const { view: massivaView } = useMassivaTickets({ enabled: canViewMassiva })
   const openMassivaSplitterCodesQuery = useOpenMassivaSplitterCodesFromLocalDb()
 
   const oltLabelByCode = useMemo(() => {
@@ -308,11 +295,26 @@ export function SplittersPage() {
       state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
   })
 
+  const splittersTotalCount = splittersQuery.data?.totalCount ?? 0
+  /** Não depender só de `isSuccess`: ao voltar da rota do splitter a lista pode refetch com dados em placeholder. */
+  const splittersListReadyForPriorityFab =
+    splittersTotalCount > 0 && Boolean(splittersQuery.data) && !splittersQuery.isError
+
+  const operationalPriorityQuery = useSplittersOperationalPriorityQueue({
+    totalCount: splittersTotalCount,
+    openMassivaSplitterCodes,
+    maintenanceSplitterCodes:
+      state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
+    maintenanceStatsByCode,
+    listReady: splittersListReadyForPriorityFab,
+  })
+
   const items = useMemo(
     () => splittersQuery.data?.items ?? [],
     [splittersQuery.data?.items],
   )
-  const totalCount = splittersQuery.data?.totalCount ?? 0
+  const totalCount = splittersTotalCount
+
   const localMassivaStatsQuery = useSplitterMassivaStatsFromLocalDb(
     items.map((splitter) => String(splitter.code ?? '')),
   )
@@ -391,13 +393,6 @@ export function SplittersPage() {
     return next
   }, [entries, sortMode])
 
-  const prioritizedEntries = useMemo(() => {
-    const prioritized = orderedEntries.filter(
-      (entry) => entry.operationalScore.tone !== 'ok',
-    )
-    return prioritized.slice(0, 5)
-  }, [orderedEntries])
-
   const orderedItems = useMemo(
     () => orderedEntries.map((entry) => entry.splitter),
     [orderedEntries],
@@ -464,33 +459,27 @@ export function SplittersPage() {
     totalCount > 0
 
   return (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-2xl space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-on-surface-variant/55">
-            Infraestrutura
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight text-on-surface md:text-[2.5rem] md:leading-[1.1]">
-            Splitters
-          </h1>
-          <p className="text-sm leading-relaxed text-on-surface-variant/75">
-            {"Gerenciamento de infraestrutura secund\u00E1ria com carregamento inteligente e grade de visualiza\u00E7\u00E3o r\u00E1pida."}
-          </p>
-        </div>
-
-        {showSummary && (
-          <div className="flex w-full shrink-0 items-center gap-3 rounded-2xl border border-outline-variant bg-white px-5 py-3.5 shadow-sm sm:w-auto">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary/12">
-              <span className="absolute h-2 w-2 rounded-full bg-primary" />
-              <span className="h-2 w-2 rounded-full bg-primary/40 animate-ping" aria-hidden />
+    <ResponsiveWrapper className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <AppPageHeader
+        icon={Network}
+        badge="Infraestrutura"
+        title="Splitters"
+        description="Gerenciamento de infraestrutura secundária com carregamento inteligente e grade de visualização rápida."
+        trailing={
+          showSummary ? (
+            <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-neutral-200/90 bg-white/90 px-4 py-3 shadow-sm sm:w-auto sm:max-w-[min(100%,20rem)]">
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15">
+                <span className="absolute h-2 w-2 rounded-full bg-amber-600" />
+                <span className="h-2 w-2 rounded-full bg-amber-500/40 animate-ping" aria-hidden />
+              </div>
+              <p className="text-sm text-neutral-600">
+                Total de{' '}
+                <span className="font-semibold tabular-nums text-neutral-900">{totalCount}</span> equipamentos
+              </p>
             </div>
-            <p className="text-sm text-on-surface-variant">
-              Total de{' '}
-              <span className="font-semibold tabular-nums text-on-surface">{totalCount}</span> equipamentos
-            </p>
-          </div>
-        )}
-      </header>
+          ) : null
+        }
+      />
 
       <div className="h-px w-full bg-gradient-to-r from-transparent via-outline-variant/50 to-transparent" />
 
@@ -587,77 +576,13 @@ export function SplittersPage() {
 
       <SplittersFiltersDrawer open={filtersOpen} onOpenChange={setFiltersOpen} />
 
-      {!splittersQuery.isPending && !splittersQuery.isError && prioritizedEntries.length > 0 ? (
-        <section className="rounded-2xl border border-rose-200/80 bg-rose-50/55 p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-100 text-rose-700">
-                <AlertTriangle size={17} strokeWidth={2} />
-              </span>
-              <div>
-                <p className="text-sm font-bold tracking-tight text-rose-900">
-                  {"Fila de prioriza\u00E7\u00E3o operacional"}
-                </p>
-                <p className="text-xs text-rose-800/80">
-                  {"Splitters com maior risco para atuar primeiro nesta p\u00E1gina."}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {prioritizedEntries.map((entry, index) => (
-              <motion.div
-                key={String(entry.splitter.code ?? '')}
-                initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={
-                  reduceMotion
-                    ? { duration: 0 }
-                    : { duration: 0.38, ease: [0.22, 1, 0.36, 1], delay: index * 0.07 }
-                }
-              >
-                <Link
-                  to={`/splitters/${encodeURIComponent(entry.splitter.code)}`}
-                  state={{ splittersListHref: location.pathname + location.search }}
-                  className="block rounded-xl border border-rose-200/80 bg-white px-3 py-2 shadow-sm transition-colors hover:border-rose-300 hover:bg-rose-50/40"
-                >
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-                    Prioridade {index + 1}
-                  </p>
-                  <p className="mt-1 truncate text-sm font-semibold text-on-surface">
-                    {entry.splitter.title || entry.splitter.code}
-                  </p>
-                  <p className="font-mono text-[11px] text-on-surface-variant/60">
-                    {entry.splitter.code}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
-                        scoreToneClassName(entry.operationalScore.tone),
-                      )}
-                      title={`Criticidade ${entry.operationalScore.score}`}
-                    >
-                      <Activity size={11} strokeWidth={2.25} className="shrink-0 opacity-90" />
-                      {entry.operationalScore.label}
-                      <OperationalScoreHealthDots
-                        key={`prio-dots-${entry.splitter.code}-${entry.operationalScore.score}`}
-                        score={entry.operationalScore.score}
-                        tone={entry.operationalScore.tone}
-                        className="ml-0.5"
-                      />
-                      <span className="sr-only">{` Score ${entry.operationalScore.score}`}</span>
-                    </span>
-                    <span className="inline-flex items-center rounded-full border border-outline-variant bg-surface-container-low px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
-                      {entry.massivaStats.openTickets} abertas
-                    </span>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <SplittersOperationalPriorityFab
+        enabled={splittersTotalCount > 0 && Boolean(splittersQuery.data) && !splittersQuery.isError}
+        totalCount={totalCount}
+        reduceMotion={reduceMotion}
+        query={operationalPriorityQuery}
+        filtersDrawerOpen={filtersOpen}
+      />
 
       <SplittersList
         items={orderedItems}
@@ -676,7 +601,7 @@ export function SplittersPage() {
         getOperationalScore={getOperationalScore}
         getTrendLabel={getTrendLabel}
       />
-    </div>
+    </ResponsiveWrapper>
   )
 }
 

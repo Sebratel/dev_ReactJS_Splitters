@@ -1,6 +1,7 @@
-﻿import { Link, useLocation, useParams } from 'react-router-dom'
+﻿import { useLocation, useParams } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
 import { useSplitterMassivaStatsFromLocalDb } from '@/features/splitters/hooks/useSplitterMassivaStatsFromLocalDb'
@@ -15,13 +16,15 @@ import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { ChevronLeft, Database } from 'lucide-react'
+import { Database } from 'lucide-react'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 
 export function SplitterDetailScreen() {
   const { code } = useParams<{ code: string }>()
   const location = useLocation()
   const { state, refetch, dataUpdatedAt: splitterUpdatedAt, isFetching: splitterIsFetching } = useSplitterDetail(code)
-  const { view: massivaView } = useMassivaTickets()
+  const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
+  const { view: massivaView } = useMassivaTickets({ enabled: canViewMassiva })
   const localMassivaStatsQuery = useSplitterMassivaStatsFromLocalDb(
     state.status === 'ready' ? [state.splitter.code] : [],
   )
@@ -79,29 +82,21 @@ export function SplitterDetailScreen() {
 
   return (
     <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Link
-            to={backTo}
-            state={location.state}
-            aria-label="Voltar para a listagem de equipamentos"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-outline-variant bg-white text-on-surface shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-          >
-            <ChevronLeft size={22} strokeWidth={2} />
-          </Link>
-          <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-on-surface-variant/55">
-              Equipamento
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-on-surface md:text-[1.75rem] md:leading-tight">
-              Detalhamento
-            </h1>
-            <p className="font-mono text-sm font-medium text-on-surface-variant/60">
-              {code}
-            </p>
-          </div>
-        </div>
-      </header>
+      <AppPageHeader
+        icon={Database}
+        badge="Equipamento"
+        title="Detalhamento do splitter"
+        description={
+          code
+            ? `Código na rede secundária: ${code}. Visualize ocupação, clientes, mapa e massivas vinculadas.`
+            : 'Carregando identificação do equipamento…'
+        }
+        primaryAction={{
+          to: backTo,
+          label: 'Voltar à lista',
+          state: location.state,
+        }}
+      />
 
       {state.status === 'invalid-param' ? (
         <EmptyState
