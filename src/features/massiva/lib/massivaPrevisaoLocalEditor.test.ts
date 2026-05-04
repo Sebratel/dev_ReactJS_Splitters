@@ -23,6 +23,8 @@ const base: MassivaTicket = {
   estimateTimeOfRestoration: 12,
   closedAt: null,
   affectedClients: 0,
+  affectedClientsResidential: null,
+  affectedClientsCorporate: null,
   usedFallback: false,
 }
 

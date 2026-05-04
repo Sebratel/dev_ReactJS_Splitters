@@ -1,3 +1,5 @@
+import type { MassivaAfetadoProtocolEnrichment } from '@/features/massiva/lib/mergeMassivaTicketsAfetados'
+import { readCorporateFlagExplicit } from '@/features/splitters/model/splitterCliente'
 import { isJsonObject } from '@/shared/lib/typeGuards'
 
 function pickInt(value: unknown, fallback: number): number {
@@ -141,16 +143,144 @@ function extractEstimateTimeOfRestoration(value: unknown, depth: number): number
   return null
 }
 
+const USER_CONTAINER_KEYS: readonly string[] = [
+  'impactedUsers',
+  'affectedUsers',
+  'usuarioAfetadoEntities',
+  'usuariosAfetados',
+]
+
+/** Pares [residencial, corporativo] em totais explícitos no JSON. */
+const RES_CORP_SCALAR_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ['affectedClientsResidential', 'affectedClientsCorporate'],
+  ['affected_clients_residential', 'affected_clients_corporate'],
+  ['quantidadeAfetadosResidencial', 'quantidadeAfetadosCorporativo'],
+  ['quantidadeAfetadosResidenciais', 'quantidadeAfetadosCorporativos'],
+  ['qtdAfetadosResidencial', 'qtdAfetadosCorporativo'],
+  ['totalAfetadosResidencial', 'totalAfetadosCorporativo'],
+  ['afetadosResidenciais', 'afetadosCorporativos'],
+  ['residentialAffected', 'corporateAffected'],
+]
+
+function tryScalarResidentialCorporateOnObject(
+  o: Record<string, unknown>,
+): { residential: number; corporate: number } | null {
+  for (const [rk, ck] of RES_CORP_SCALAR_PAIRS) {
+    if (!(rk in o) || !(ck in o)) continue
+    const r = pickInt(o[rk], -1)
+    const c = pickInt(o[ck], -1)
+    if (r >= 0 && c >= 0) return { residential: r, corporate: c }
+  }
+  return null
+}
+
+function extractResidentialCorporateScalars(
+  value: unknown,
+  depth: number,
+): { residential: number; corporate: number } | null {
+  if (depth > 18 || value === null || value === undefined) return null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const got = extractResidentialCorporateScalars(item, depth + 1)
+      if (got !== null) return got
+    }
+    return null
+  }
+  if (!isJsonObject(value)) return null
+  const direct = tryScalarResidentialCorporateOnObject(value)
+  if (direct !== null) return direct
+  for (const v of Object.values(value)) {
+    if (v !== null && typeof v === 'object') {
+      const got = extractResidentialCorporateScalars(v, depth + 1)
+      if (got !== null) return got
+    }
+  }
+  return null
+}
+
+function collectAfetadoUserRecords(value: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const seen = new Set<Record<string, unknown>>()
+  const queue: unknown[] = [value]
+  let guard = 0
+  while (queue.length > 0 && guard++ < 5000) {
+    const cur = queue.shift()
+    if (cur === null || cur === undefined) continue
+    if (Array.isArray(cur)) {
+      for (const item of cur) queue.push(item)
+      continue
+    }
+    if (!isJsonObject(cur)) continue
+    const o = cur
+    for (const key of USER_CONTAINER_KEYS) {
+      if (!(key in o)) continue
+      const v = o[key]
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (isJsonObject(item)) {
+            const rec = item as Record<string, unknown>
+            if (!seen.has(rec)) {
+              seen.add(rec)
+              out.push(rec)
+            }
+          }
+        }
+      } else if (isJsonObject(v) && !Array.isArray(v)) {
+        for (const inner of Object.values(v)) {
+          if (isJsonObject(inner)) {
+            const rec = inner as Record<string, unknown>
+            if (!seen.has(rec)) {
+              seen.add(rec)
+              out.push(rec)
+            }
+          }
+        }
+      }
+    }
+    for (const child of Object.values(o)) {
+      if (child !== null && typeof child === 'object') queue.push(child)
+    }
+  }
+  return out
+}
+
+function residentialCorporateFromUserList(data: unknown): {
+  residential: number
+  corporate: number
+} | null {
+  const users = collectAfetadoUserRecords(data)
+  if (users.length === 0) return null
+  let residential = 0
+  let corporate = 0
+  let unknown = 0
+  for (const u of users) {
+    const flag = readCorporateFlagExplicit(u)
+    if (flag === true) corporate += 1
+    else if (flag === false) residential += 1
+    else unknown += 1
+  }
+  if (unknown > 0) return null
+  return { residential, corporate }
+}
+
 /**
  * Contagem de afetados + ETR (horas) quando o BFF expõe só no GET de protocolo, não na listagem.
  */
-export function parseMassivaAfetadoProtocolEnrichment(data: unknown): {
-  count: number | null
-  estimateTimeOfRestoration: number | null
-} {
+export function parseMassivaAfetadoProtocolEnrichment(
+  data: unknown,
+): MassivaAfetadoProtocolEnrichment {
+  const count = parseMassivaAfetadoProtocolResponse(data)
+  const estimateTimeOfRestoration = extractEstimateTimeOfRestoration(data, 0)
+
+  const scalars = extractResidentialCorporateScalars(data, 0)
+  const fromList = scalars === null ? residentialCorporateFromUserList(data) : null
+  const split = scalars ?? fromList
+
   return {
-    count: parseMassivaAfetadoProtocolResponse(data),
-    estimateTimeOfRestoration: extractEstimateTimeOfRestoration(data, 0),
+    count,
+    estimateTimeOfRestoration,
+    affectedClientsResidential: split !== null ? split.residential : null,
+    affectedClientsCorporate: split !== null ? split.corporate : null,
   }
 }
 

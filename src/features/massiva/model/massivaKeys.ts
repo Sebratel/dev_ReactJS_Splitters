@@ -4,8 +4,12 @@
 export const massivaKeys = {
   all: ['massiva'] as const,
 
-  /** GET listagem no BFF (`fetchMassivas`). */
+  /** GET listagem no BFF (`fetchMassivasListCore`). */
   list: () => [...massivaKeys.all, 'list'] as const,
+
+  /** Enriquecimento `afetados/protocol/{id}` após a listagem (fingerprint = protocolos ordenados). */
+  listAfetados: (protocolsFingerprint: string) =>
+    [...massivaKeys.all, 'list-afetados', protocolsFingerprint] as const,
 
   /** GET histórico local no BFF local (MySQL massiva_history). */
   historyList: (

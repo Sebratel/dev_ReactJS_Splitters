@@ -3,6 +3,9 @@ import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 export type MassivaAfetadoProtocolEnrichment = {
   count: number | null
   estimateTimeOfRestoration: number | null
+  /** Preenchidos quando o JSON discrimina (totais ou lista de impactados com flags explícitas). */
+  affectedClientsResidential: number | null
+  affectedClientsCorporate: number | null
 }
 
 /**
@@ -25,6 +28,10 @@ export function mergeMassivaTicketsAfetados(
     }
     if (e.estimateTimeOfRestoration !== null) {
       next.estimateTimeOfRestoration = e.estimateTimeOfRestoration
+    }
+    if (e.affectedClientsResidential !== null && e.affectedClientsCorporate !== null) {
+      next.affectedClientsResidential = e.affectedClientsResidential
+      next.affectedClientsCorporate = e.affectedClientsCorporate
     }
     return next
   })

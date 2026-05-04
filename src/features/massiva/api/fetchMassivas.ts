@@ -9,10 +9,10 @@ import { bffClient } from '@/shared/api/bffClient'
 import { env } from '@/shared/config/env'
 
 /**
- * GET listagem de massivas no BFF — paridade `MassivaGatewayService.fetchMassivas`.
- * Quando `VITE_MASSIVA_AFETADOS_PATH` está definido, para cada protocolo faz GET `{path}/protocol/{protocol}` e enriquece `affectedClients` na listagem.
+ * Só o GET da listagem no BFF (rápido). O enriquecimento por `VITE_MASSIVA_AFETADOS_PATH` fica
+ * numa query separada em `useMassivaTickets` para não bloquear o primeiro render.
  */
-export async function fetchMassivas(): Promise<MassivaTicket[]> {
+export async function fetchMassivasListCore(): Promise<MassivaTicket[]> {
   const path = env.massivaListPath.trim()
   if (path === '') {
     throw new Error(
@@ -26,7 +26,15 @@ export async function fetchMassivas(): Promise<MassivaTicket[]> {
   })
 
   const rows = extractMassivaListRows(data)
-  let tickets: MassivaTicket[] = rows.map((row) => parseMassivaTicketFromApi(row))
+  return rows.map((row) => parseMassivaTicketFromApi(row))
+}
+
+/**
+ * GET listagem + enriquecimento afetados (uma só Promise) — útil em scripts ou migrações.
+ * Na UI prefira `fetchMassivasListCore` + query de afetados para melhor tempo até primeiro dado.
+ */
+export async function fetchMassivas(): Promise<MassivaTicket[]> {
+  let tickets = await fetchMassivasListCore()
 
   if (env.massivaAfetadosPath.trim() === '') {
     return tickets
