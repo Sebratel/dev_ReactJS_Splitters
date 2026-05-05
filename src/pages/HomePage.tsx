@@ -605,17 +605,7 @@ export function HomePage() {
 
     </div>
 
-    {showAccessFold ? (
-      <details className="group mx-auto mt-5 max-w-[1600px] min-w-0 rounded-2xl border border-stone-200/60 bg-stone-50/30 px-4 py-3 ring-1 ring-white/50">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500 [&::-webkit-details-marker]:hidden">
-          <span>Pedidos de acesso</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-stone-400 transition-transform duration-200 group-open:rotate-180" aria-hidden />
-        </summary>
-        <div className="pt-3">
-          <DashboardAccessRequestSection />
-        </div>
-      </details>
-    ) : null}
+    {showAccessFold ? <DashboardAccessRequestSection /> : null}
     </>
   )
 }
