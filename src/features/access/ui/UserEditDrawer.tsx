@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import type { SplittersPermissionSet, SplittersUserProfile } from '@/features/access/model/access.types'
 import {
   inferSplittersUserRole,
+  SPLITTERS_PRESET_ROLE_IDS,
   SPLITTERS_ROLE_DESCRIPTION,
   SPLITTERS_ROLE_LABEL,
   applySplittersRolePreset,
@@ -166,7 +167,7 @@ export function UserEditDrawer({
                 onChange={(e) => setRoleChoice(e.target.value as SplittersRoleId)}
                 className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium text-neutral-900 shadow-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
               >
-                {(Object.keys(SPLITTERS_ROLE_LABEL) as SplittersRoleId[]).map((id) => (
+                {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                   <option
                     key={id}
                     value={id}

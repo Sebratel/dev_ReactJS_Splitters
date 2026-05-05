@@ -18,6 +18,7 @@ import type {
 import {
   inferSplittersUserRole,
   loginRecency,
+  SPLITTERS_PRESET_ROLE_IDS,
   SPLITTERS_ROLE_LABEL,
   applySplittersRolePreset,
   type SplittersRoleId,
@@ -48,8 +49,9 @@ type SortColumn = 'user' | 'lastLogin' | 'role' | 'status'
 const ROLE_SORT_INDEX: Record<SplittersRoleId, number> = {
   admin: 0,
   operador: 1,
-  leitura: 2,
-  personalizado: 3,
+  operador_massivas: 2,
+  leitura: 3,
+  personalizado: 4,
 }
 
 function compareUsersForSort(
@@ -427,10 +429,12 @@ export function UsersManagementWorkspace({
                 className="max-w-[10rem] bg-transparent text-xs font-bold text-neutral-900 outline-none sm:max-w-none"
               >
                 <option value="all">Todos</option>
-                <option value="admin">Administrador</option>
-                <option value="operador">Operador</option>
-                <option value="leitura">Leitura</option>
-                <option value="personalizado">Personalizado</option>
+                {SPLITTERS_PRESET_ROLE_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {SPLITTERS_ROLE_LABEL[id]}
+                  </option>
+                ))}
+                <option value="personalizado">{SPLITTERS_ROLE_LABEL.personalizado}</option>
               </select>
             </label>
             <button
@@ -482,7 +486,15 @@ export function UsersManagementWorkspace({
               onClick={() => bulkApplyRole('operador')}
               className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
             >
-              Operador
+              {SPLITTERS_ROLE_LABEL.operador}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => bulkApplyRole('operador_massivas')}
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
+            >
+              Operador (massivas)
             </button>
             <button
               type="button"
@@ -583,7 +595,7 @@ export function UsersManagementWorkspace({
                     }}
                     className="mt-1 w-full min-h-[44px] rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-semibold text-neutral-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60"
                   >
-                    {( ['admin', 'operador', 'leitura', 'personalizado'] as const).map((id) => (
+                    {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                       <option key={id} value={id}>
                         {SPLITTERS_ROLE_LABEL[id]}
                       </option>
@@ -752,7 +764,7 @@ export function UsersManagementWorkspace({
                         }}
                         className="max-w-[11rem] rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {( ['admin', 'operador', 'leitura', 'personalizado'] as const).map((id) => (
+                        {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                           <option key={id} value={id}>
                             {SPLITTERS_ROLE_LABEL[id]}
                           </option>

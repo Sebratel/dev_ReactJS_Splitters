@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import type { SplittersAccessRequest } from '@/features/access/model/access.types'
 import { labelForRequestedModule } from '@/features/access/model/accessRequestModules'
-import { SPLITTERS_ROLE_LABEL, type SplittersRoleId } from '@/features/access/lib/splittersUserRoles'
+import {
+  SPLITTERS_PRESET_ROLE_IDS,
+  SPLITTERS_ROLE_LABEL,
+  type SplittersRoleId,
+} from '@/features/access/lib/splittersUserRoles'
 import { cn } from '@/shared/lib/utils'
 
 type ApproveRole = Exclude<SplittersRoleId, 'personalizado'>
@@ -92,8 +96,11 @@ export function AccessRequestsAdminPanel({
       {sorted.length > 0 ? (
         <ul className="mt-4 space-y-3">
           {sorted.map((r) => {
-            const defaultRole: ApproveRole =
-              r.requestedModules.includes('massiva_open') ? 'operador' : 'leitura'
+            const defaultRole: ApproveRole = r.requestedModules.includes('intelligence')
+              ? 'operador'
+              : r.requestedModules.includes('massiva_open')
+                ? 'operador_massivas'
+                : 'leitura'
             const selectedRole = roleById[r.id] ?? defaultRole
             const rejecting = rejectForId === r.id
             return (
@@ -135,9 +142,11 @@ export function AccessRequestsAdminPanel({
                         }
                         className="w-full min-w-[12rem] rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-2 text-xs font-bold text-neutral-900 lg:w-auto"
                       >
-                        <option value="leitura">{SPLITTERS_ROLE_LABEL.leitura}</option>
-                        <option value="operador">{SPLITTERS_ROLE_LABEL.operador}</option>
-                        <option value="admin">{SPLITTERS_ROLE_LABEL.admin}</option>
+                        {SPLITTERS_PRESET_ROLE_IDS.map((id) => (
+                          <option key={id} value={id}>
+                            {SPLITTERS_ROLE_LABEL[id]}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <div className="flex flex-wrap gap-2">

@@ -1,19 +1,36 @@
 import type { SplittersPermissionSet } from '@/features/access/model/access.types'
 
-export type SplittersRoleId = 'admin' | 'operador' | 'leitura' | 'personalizado'
+export type SplittersRoleId =
+  | 'admin'
+  | 'operador'
+  | 'operador_massivas'
+  | 'leitura'
+  | 'personalizado'
 
 export const SPLITTERS_ROLE_LABEL: Record<SplittersRoleId, string> = {
   admin: 'Administrador',
-  operador: 'Operador',
+  operador: 'Analista de rede',
+  operador_massivas: 'Operador (massivas)',
   leitura: 'Leitura',
   personalizado: 'Personalizado',
 }
 
 export const SPLITTERS_ROLE_DESCRIPTION: Record<Exclude<SplittersRoleId, 'personalizado'>, string> = {
   admin: 'Acesso total ao sistema e à gestão de usuários.',
-  operador: 'Operação completa: splitters, massivas (abrir) e inteligência, sem administração.',
+  operador:
+    'Painel da rede (inteligência), splitters e massivas (inclui abrir ocorrências), sem administração.',
+  operador_massivas:
+    'Splitters e massivas (inclui abrir ocorrências), sem painel de inteligência.',
   leitura: 'Visualização de splitters, massivas e inteligência; sem abertura de massiva.',
 }
+
+/** Presets fixos (exceto personalizado), ordem usada em selects administrativos. */
+export const SPLITTERS_PRESET_ROLE_IDS: readonly Exclude<SplittersRoleId, 'personalizado'>[] = [
+  'admin',
+  'operador',
+  'operador_massivas',
+  'leitura',
+]
 
 /** Presets canônicos (comparação bit a bit para inferir “personalizado”). */
 export const SPLITTERS_ROLE_PRESETS: Record<
@@ -32,6 +49,13 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewMassiva: true,
     canOpenMassiva: true,
     canViewIntelligence: true,
+    isAdmin: false,
+  },
+  operador_massivas: {
+    canViewSplitters: true,
+    canViewMassiva: true,
+    canOpenMassiva: true,
+    canViewIntelligence: false,
     isAdmin: false,
   },
   leitura: {
@@ -56,6 +80,7 @@ function permissionsEqual(a: SplittersPermissionSet, b: SplittersPermissionSet):
 export function inferSplittersUserRole(permissions: SplittersPermissionSet): SplittersRoleId {
   if (permissionsEqual(permissions, SPLITTERS_ROLE_PRESETS.admin)) return 'admin'
   if (permissionsEqual(permissions, SPLITTERS_ROLE_PRESETS.operador)) return 'operador'
+  if (permissionsEqual(permissions, SPLITTERS_ROLE_PRESETS.operador_massivas)) return 'operador_massivas'
   if (permissionsEqual(permissions, SPLITTERS_ROLE_PRESETS.leitura)) return 'leitura'
   return 'personalizado'
 }
