@@ -1,5 +1,7 @@
 ﻿# Firestore Access Control (Splitters)
 
+Para **como operar papéis, aprovações e presets na gestão de usuários** (texto voltado a TI / NotebookLM), ver **`docs/gestao-permissoes-usuarios.md`**.
+
 ## Collection
 - `splitters_users/{uid}`
 
