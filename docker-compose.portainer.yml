@@ -1,6 +1,27 @@
 name: nexaview
 
+# Stack completa: backend + frontend + Nginx de borda (proxy público).
+# O browser usa apenas a porta EDGE_HTTP_PORT (80 por defeito). Frontend/backend ficam só na rede Docker.
+# HTTPS: veja docker/nginx-edge/ssl/https.server.example e monte certificados.
+
 services:
+  nginx-edge:
+    image: nginx:stable-alpine
+    container_name: nexaview-nginx-edge-portainer
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+      # - "${EDGE_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx-edge/conf.d:/etc/nginx/conf.d:ro
+      # TLS (opcional): guarde fullchain.pem e privkey.pem e descomente:
+      # - ./docker/nginx-edge/ssl/certs:/etc/nginx/ssl:ro
+    depends_on:
+      frontend:
+        condition: service_started
+    networks:
+      - nexaview-network
+    restart: unless-stopped
+
   backend:
     build:
       context: ./server
@@ -38,8 +59,11 @@ services:
       AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT}
       AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
       AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
-    ports:
-      - "3031:3001"
+    expose:
+      - "3001"
+    # Debug: expor API no host — descomente se precisar sem passar pelo nginx-edge
+    # ports:
+    #   - "3031:3001"
     networks:
       - nexaview-network
     healthcheck:
@@ -84,8 +108,11 @@ services:
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
-    ports:
-      - "5173:80"
+    expose:
+      - "80"
+    # Debug: SPA direto no host — descomente (normalmente só nginx-edge expõe 80)
+    # ports:
+    #   - "5173:80"
     depends_on:
       backend:
         condition: service_healthy

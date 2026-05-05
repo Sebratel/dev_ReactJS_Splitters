@@ -1,0 +1,27 @@
+# Exemplo: HTTPS na borda (copie o bloco para conf.d, renomeie para .conf e ajuste paths).
+# 1. Obtenha certificados (Let's Encrypt no host, ou volume persistente).
+# 2. Monte os ficheiros no container, ex.: - ./docker/nginx-edge/ssl/certs:/etc/nginx/ssl:ro
+# 3. No docker-compose.portainer.yml descomente a porta 443 em nginx-edge.
+#
+# server {
+#     listen 443 ssl;
+#     http2 on;
+#     server_name seu-dominio.com;
+#
+#     ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+#     ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+#
+#     client_max_body_size 50m;
+#
+#     location / {
+#         proxy_http_version 1.1;
+#         proxy_pass http://nexaview_frontend;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto https;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection $connection_upgrade;
+#         proxy_read_timeout 86400;
+#     }
+# }
