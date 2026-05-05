@@ -4,23 +4,23 @@ import {
 } from '@/features/massiva/lib/massivaPrevisaoLocalEditor'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 import {
-  computeProjectedRestorationAt,
   formatMassivaListDateDisplay,
   formatRestorationHoursLabel,
 } from '@/features/massiva/lib/formatMassivaListDate'
 
-function datesEqualWithin(
-  a: Date | null,
-  b: Date | null,
-  toleranceMs: number,
-): boolean {
-  if (a === null || b === null) return false
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false
-  return Math.abs(a.getTime() - b.getTime()) <= toleranceMs
-}
-
 type MassivaPrevisaoReferenceBlockProps = {
   ticket: MassivaTicket
+}
+
+function derivedRestorationHoursLabel(
+  openedAt: Date | null,
+  closeAt: Date | null,
+): string | null {
+  if (openedAt === null || closeAt === null) return null
+  if (Number.isNaN(openedAt.getTime()) || Number.isNaN(closeAt.getTime())) return null
+  const diffMs = closeAt.getTime() - openedAt.getTime()
+  if (!Number.isFinite(diffMs) || diffMs < 0) return null
+  return formatRestorationHoursLabel(diffMs / (60 * 60 * 1000))
 }
 
 export function MassivaPrevisaoReferenceBlock({ ticket }: MassivaPrevisaoReferenceBlockProps) {
@@ -30,20 +30,10 @@ export function MassivaPrevisaoReferenceBlock({ ticket }: MassivaPrevisaoReferen
   const dataLine = hasExpectedClose
     ? formatMassivaListDateDisplay(displayClose)
     : '—'
-  const hoursLine = formatRestorationHoursLabel(ticket.estimateTimeOfRestoration)
-  const projected = computeProjectedRestorationAt(
-    ticket.openedAt,
-    ticket.estimateTimeOfRestoration,
-  )
-  const matchesSla =
-    hasExpectedClose &&
-    displayClose !== null &&
-    projected !== null &&
-    datesEqualWithin(displayClose, projected, 2 * 60 * 1000)
-  const hasValidProjection = projected !== null
+  const hoursLine =
+    derivedRestorationHoursLabel(ticket.openedAt, displayClose) ??
+    formatRestorationHoursLabel(ticket.estimateTimeOfRestoration)
   const mostrarAjustado = isPrevisaoEncerramentoAjustadaExplicata(ticket, {
-    matchesSla,
-    hasValidProjection,
     effectiveCloseAt: displayClose,
   })
 

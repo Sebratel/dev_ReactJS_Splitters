@@ -95,8 +95,13 @@ export async function registerOpenedMassivaHistoryInLocalDb(
 ): Promise<void> {
   const nowBrazil = nowInBrazilIsoLike()
   const expectedCloseBrazil =
-    formatInBrazilIsoLike(context.assignmentFinalDateIsoUtc) ??
-    context.assignmentFinalDateIsoUtc
+    formatInBrazilIsoLike(context.assignmentFinalDateLocal) ??
+    context.assignmentFinalDateLocal
+  const eventIdentifiedBrazil =
+    context.eventIdentifiedAtLocal == null
+      ? null
+      : (formatInBrazilIsoLike(context.eventIdentifiedAtLocal) ??
+        context.eventIdentifiedAtLocal)
   const mapeableTotal = collectMapeableAfetadosClientes(context.basis.collectedClientes).length
   const historyResults = result.results.map((entry) => ({
     ...entry,
@@ -119,6 +124,7 @@ export async function registerOpenedMassivaHistoryInLocalDb(
       results: historyResults,
       affectedClients: mapeableTotal,
       expectedCloseAt: expectedCloseBrazil,
+      eventIdentifiedAt: eventIdentifiedBrazil,
       openedAt: nowBrazil,
       autoClosedWithoutClients: result.autoClosedWithoutClients === true,
       closeDescription: result.autoClosedWithoutClients === true

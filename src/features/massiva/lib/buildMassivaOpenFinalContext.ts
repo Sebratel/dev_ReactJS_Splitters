@@ -10,7 +10,9 @@ export function buildMassivaOpenFinalContext(params: {
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
-  assignmentFinalDateIsoUtc: string
+  assignmentFinalDateLocal: string
+  assignmentBeginningDateLocal: string | null
+  eventIdentifiedAtLocal: string | null
   massivaOpenPath: string
   massivaAfetadosPath: string
   descriptionAutoSyncEnabled: boolean
@@ -29,7 +31,9 @@ export function buildMassivaOpenFinalContext(params: {
     basis: params.basis,
     plan: params.plan,
     assignmentDescription: params.assignmentDescription.trim(),
-    assignmentFinalDateIsoUtc: params.assignmentFinalDateIsoUtc,
+    assignmentFinalDateLocal: params.assignmentFinalDateLocal,
+    assignmentBeginningDateLocal: params.assignmentBeginningDateLocal,
+    eventIdentifiedAtLocal: params.eventIdentifiedAtLocal,
     massivaOpenPath: params.massivaOpenPath.trim().startsWith('/')
       ? params.massivaOpenPath.trim()
       : `/${params.massivaOpenPath.trim()}`,

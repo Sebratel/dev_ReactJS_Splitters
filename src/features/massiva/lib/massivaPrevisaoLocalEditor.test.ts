@@ -60,27 +60,23 @@ describe('isPrevisaoEncerramentoAjustadaExplicata', () => {
     expect(
       isPrevisaoEncerramentoAjustadaExplicata(
         { ...base, previsaoEncerramentoAtualizadaPor: 'X' },
-        { matchesSla: true, hasValidProjection: true, effectiveCloseAt: d },
+        { effectiveCloseAt: d },
       ),
     ).toBe(true)
   })
 
-  it('fim de prazo difere da projeção (abertura+ETR) marca ajuste', () => {
+  it('fim de prazo diferente da projeção por si só não marca ajuste', () => {
     const d = new Date(2026, 3, 25, 3, 5, 0)
     expect(
-      isPrevisaoEncerramentoAjustadaExplicata(base, {
-        matchesSla: false,
-        hasValidProjection: true,
-        effectiveCloseAt: d,
-      }),
-    ).toBe(true)
+      isPrevisaoEncerramentoAjustadaExplicata(base, { effectiveCloseAt: d }),
+    ).toBe(false)
   })
 
   it('não assinalha sem data de fim', () => {
     expect(
       isPrevisaoEncerramentoAjustadaExplicata(
         { ...base, expectedCloseAt: null },
-        { matchesSla: false, hasValidProjection: true, effectiveCloseAt: null },
+        { effectiveCloseAt: null },
       ),
     ).toBe(false)
   })
@@ -97,7 +93,7 @@ describe('isPrevisaoEncerramentoAjustadaExplicata', () => {
           expectedCloseAt: close,
           estimateTimeOfRestoration: etrH,
         },
-        { matchesSla: true, hasValidProjection: true, effectiveCloseAt: close },
+        { effectiveCloseAt: close },
       ),
     ).toBe(false)
   })
@@ -108,11 +104,7 @@ describe('isPrevisaoEncerramentoAjustadaExplicata', () => {
     recordMassivaPrevisaoEncerramentoEdit(1, { closeAt: salvo })
     const effective = resolveExpectedCloseAtForDisplay(base)
     expect(
-      isPrevisaoEncerramentoAjustadaExplicata(base, {
-        matchesSla: false,
-        hasValidProjection: true,
-        effectiveCloseAt: effective,
-      }),
+      isPrevisaoEncerramentoAjustadaExplicata(base, { effectiveCloseAt: effective }),
     ).toBe(true)
   })
 })

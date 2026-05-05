@@ -127,6 +127,7 @@ export function createMassivaHistoryStore(config) {
           affected_clients INT NOT NULL DEFAULT 0,
           status VARCHAR(20) NOT NULL DEFAULT 'aberta',
           opened_at DATETIME NULL,
+          event_identified_at DATETIME NULL,
           expected_close_at DATETIME NULL,
           closed_at DATETIME NULL,
           auto_closed_without_clients TINYINT(1) NOT NULL DEFAULT 0,
@@ -141,6 +142,30 @@ export function createMassivaHistoryStore(config) {
           KEY idx_massiva_history_opened_at (opened_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+
+      // Migração segura para bases já existentes: nova coluna opcional (NULL) sem quebrar dados antigos.
+      const [eventIdentifiedColumnRows] = await dataPool.query(
+        `
+          SELECT COUNT(*) AS total
+          FROM INFORMATION_SCHEMA.COLUMNS
+          WHERE TABLE_SCHEMA = ?
+            AND TABLE_NAME = 'massiva_history'
+            AND COLUMN_NAME = 'event_identified_at'
+        `,
+        [database],
+      );
+      const hasEventIdentifiedColumn = Number(eventIdentifiedColumnRows?.[0]?.total ?? 0) > 0;
+      if (!hasEventIdentifiedColumn) {
+        await dataPool.query(
+          `
+            ALTER TABLE massiva_history
+            ADD COLUMN event_identified_at DATETIME NULL
+            AFTER opened_at
+          `,
+        );
+      }
+
+      // Coluna `source` permanece como legado (nexaview-local) para não alterar integrações existentes.
 
       await dataPool.query(`
         CREATE TABLE IF NOT EXISTS massiva_history_splitters (
@@ -238,6 +263,7 @@ export function createMassivaHistoryStore(config) {
     const operatorEmail = normalizeText(input?.operatorEmail);
     const affectedClients = normalizeNonNegativeInt(input?.affectedClients, 0);
     const expectedCloseAt = normalizeDate(input?.expectedCloseAt);
+    const eventIdentifiedAt = normalizeDate(input?.eventIdentifiedAt);
     const openedAt = normalizeDate(input?.openedAt) ?? new Date();
     const autoClosed = input?.autoClosedWithoutClients === true;
     const status = autoClosed ? 'encerrada' : 'aberta';
@@ -277,6 +303,7 @@ export function createMassivaHistoryStore(config) {
               affected_clients = GREATEST(affected_clients, ?),
               status = ?,
               opened_at = COALESCE(opened_at, ?),
+              event_identified_at = COALESCE(?, event_identified_at),
               expected_close_at = COALESCE(?, expected_close_at),
               closed_at = ?,
               auto_closed_without_clients = ?,
@@ -296,6 +323,7 @@ export function createMassivaHistoryStore(config) {
             affectedClientsForResult,
             status,
             openedAt,
+            eventIdentifiedAt,
             expectedCloseAt,
             closedAt,
             autoClosed ? 1 : 0,
@@ -316,13 +344,14 @@ export function createMassivaHistoryStore(config) {
               affected_clients,
               status,
               opened_at,
+              event_identified_at,
               expected_close_at,
               closed_at,
               auto_closed_without_clients,
               close_description,
               source
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local')
           `,
           [
             protocol,
@@ -333,6 +362,7 @@ export function createMassivaHistoryStore(config) {
             affectedClientsForResult,
             status,
             openedAt,
+            eventIdentifiedAt,
             expectedCloseAt,
             closedAt,
             autoClosed ? 1 : 0,
@@ -759,6 +789,7 @@ export function createMassivaHistoryStore(config) {
           h.affected_clients AS affectedClients,
           h.status AS status,
           h.opened_at AS openedAt,
+          h.event_identified_at AS eventIdentifiedAt,
           h.expected_close_at AS expectedCloseAt,
           h.closed_at AS closedAt,
           h.updated_at AS updatedAt
@@ -780,6 +811,10 @@ export function createMassivaHistoryStore(config) {
       affectedClients: Number(row.affectedClients ?? 0),
       status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
       openedAt: row.openedAt instanceof Date ? row.openedAt : normalizeDate(row.openedAt),
+      eventIdentifiedAt:
+        row.eventIdentifiedAt instanceof Date
+          ? row.eventIdentifiedAt
+          : normalizeDate(row.eventIdentifiedAt),
       expectedCloseAt:
         row.expectedCloseAt instanceof Date ? row.expectedCloseAt : normalizeDate(row.expectedCloseAt),
       closedAt: row.closedAt instanceof Date ? row.closedAt : normalizeDate(row.closedAt),

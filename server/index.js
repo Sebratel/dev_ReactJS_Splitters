@@ -1227,6 +1227,7 @@ app.post('/api/massiva/history/open', async (req, res) => {
       results: normalizeMassivaHistoryResults(req.body?.results),
       affectedClients: req.body?.affectedClients ?? 0,
       expectedCloseAt: req.body?.expectedCloseAt ?? null,
+      eventIdentifiedAt: req.body?.eventIdentifiedAt ?? null,
       openedAt: req.body?.openedAt ?? null,
       autoClosedWithoutClients: req.body?.autoClosedWithoutClients === true,
       closeDescription: String(req.body?.closeDescription ?? '').trim(),

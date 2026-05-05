@@ -35,7 +35,7 @@ export function buildMassivaOpeningPlanDraft(
     pendingBeforePost: [
       'personId',
       'assignmentDescription',
-      'assignmentFinalDateIsoUtc',
+      'assignmentFinalDateLocal',
     ] as const,
     affectedUsersQuantityFlutterParity: basis.flutterStyleAffectedUsersQuantity,
     routeCollectedClientCount: basis.collectedClientes.length,

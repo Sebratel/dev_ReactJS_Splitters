@@ -40,4 +40,36 @@ describe('parseMassivaTicketFromApi (estimateTimeOfRestoration)', () => {
       }).previsaoEncerramentoAtualizadaPor,
     ).toBe('Ana Silva')
   })
+
+  it('prioriza horário de início digitado no template da descrição', () => {
+    const t = parseMassivaTicketFromApi({
+      protocol: 11,
+      beginningDate: '2026-05-05T10:54:00Z',
+      description:
+        '🧾 INFORMACOES OBRIGATORIAS - ABERTURA\n⏱️ Horario que iniciou o evento: 05/05/2026, 10:30',
+    })
+    expect(t.openedAt?.getHours()).toBe(10)
+    expect(t.openedAt?.getMinutes()).toBe(30)
+  })
+
+  it('prioriza prazo de normalização digitado no template da descrição', () => {
+    const t = parseMassivaTicketFromApi({
+      protocol: 12,
+      finalDate: '2026-05-05T23:00:00Z',
+      description:
+        '📅 Prazo inicial de normalização: 05/05/2026, 20:00 - ()',
+    })
+    expect(t.expectedCloseAt?.getHours()).toBe(20)
+    expect(t.expectedCloseAt?.getMinutes()).toBe(0)
+  })
+
+  it('interpreta expectedCloseAt em ISO com Z respeitando UTC', () => {
+    const t = parseMassivaTicketFromApi({
+      protocol: 10,
+      finalDate: '2026-05-05T19:00:00Z',
+    })
+    expect(t.expectedCloseAt?.getTime()).toBe(
+      new Date('2026-05-05T19:00:00Z').getTime(),
+    )
+  })
 })

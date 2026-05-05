@@ -14,8 +14,12 @@ export type MassivaOpenFinalContext = {
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
-  /** `assignment.finalDate` em ISO UTC (paridade `closedAt.toUtc().toIso8601String()`). */
-  assignmentFinalDateIsoUtc: string
+  /** `assignment.finalDate` em `yyyy-MM-dd'T'HH:mm:ss` (LocalDateTime esperado pelo BFF). */
+  assignmentFinalDateLocal: string
+  /** `assignment.beginningDate` em `yyyy-MM-dd'T'HH:mm:ss` quando informado no formulário. */
+  assignmentBeginningDateLocal: string | null
+  /** Horário em que o evento foi identificado (campo operacional do formulário de abertura). */
+  eventIdentifiedAtLocal: string | null
   /** Path configurado para o POST futuro (relativo ao BFF). */
   massivaOpenPath: string
   /** Path do POST de afetados após abertura (relativo ao BFF). */

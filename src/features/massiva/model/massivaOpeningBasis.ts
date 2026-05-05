@@ -51,7 +51,7 @@ export type MassivaOpeningPlanDraft = {
   pendingBeforePost: readonly [
     'personId',
     'assignmentDescription',
-    'assignmentFinalDateIsoUtc',
+    'assignmentFinalDateLocal',
   ]
   affectedUsersQuantityFlutterParity: number
   routeCollectedClientCount: number
