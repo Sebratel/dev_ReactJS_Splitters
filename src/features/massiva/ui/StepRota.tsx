@@ -310,7 +310,9 @@ export function StepRota({
                           : 'border-neutral-200 bg-white text-neutral-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800'
                       }`}
                       disabled={connection.apId.trim() === '' || routeOptions.length === 0}
-                      onClick={() => onApplyMultiplePairsAtRoute(index, routeOptions)}
+                      onClick={() =>
+                        onApplyMultiplePairsAtRoute(index, hasAllPairsSelected ? [] : routeOptions)
+                      }
                       aria-label={`Selecionar todos os slots e portas da rota ${index + 1}`}
                     >
                       <span
