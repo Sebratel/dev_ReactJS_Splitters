@@ -22,7 +22,7 @@ try {
     throw new Error('Credenciais MySQL de histórico de massivas não configuradas.');
   }
   await store.ensureReady();
-  console.log('Tabelas de histórico de massivas garantidas com sucesso.');
+  console.log('Conexão MySQL (histórico de massivas) OK. DDL das tabelas deve existir no banco.');
 } finally {
   await store.end();
 }

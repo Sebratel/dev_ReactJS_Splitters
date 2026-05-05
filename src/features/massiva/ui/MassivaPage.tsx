@@ -195,11 +195,18 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
       routeIndex: number,
       pairs: Array<{ slot: number; port: number }>,
     ) => {
-      if (pairs.length === 0) return
       const current = localPreview.selection.connections
       if (routeIndex < 0 || routeIndex >= current.length) return
 
       const base = current[routeIndex]
+      if (pairs.length === 0) {
+        localPreview.setConnections([
+          ...current.slice(0, routeIndex),
+          { ...base, slot: null, porta: null, selectedPairs: undefined },
+          ...current.slice(routeIndex + 1),
+        ])
+        return
+      }
       const normalizedPairs = [...new Map(
         pairs.map((pair) => [`${pair.slot}|${pair.port}`, { slot: pair.slot, port: pair.port }]),
       ).values()]

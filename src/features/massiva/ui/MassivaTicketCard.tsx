@@ -25,6 +25,7 @@ import {
 import { exportElementToPdf } from '@/features/massiva/lib/exportElementToPdf'
 import {
   formatMassivaListDateDisplay,
+  formatRestorationHoursLabel,
   formatPrevisaoEncerramentoDisplay,
   normalizeDateTimeLocalString,
   parseDateTimeLocalToDate,
@@ -75,6 +76,28 @@ function classifyMassivaRecordKind(ticket: MassivaTicket): MassivaRecordKind {
   if (source.includes('incidente massivo') || source.includes('incidente')) return 'incidente'
   if (source.includes('evento massivo') || source.includes('evento')) return 'evento'
   return 'outro'
+}
+
+function expectedCloseDisplayForCard(ticket: MassivaTicket): string {
+  const closeAt = resolveExpectedCloseAtForDisplay(ticket)
+  const openedAt = ticket.openedAt
+  if (
+    closeAt !== null &&
+    openedAt !== null &&
+    !Number.isNaN(closeAt.getTime()) &&
+    !Number.isNaN(openedAt.getTime())
+  ) {
+    const diffMs = closeAt.getTime() - openedAt.getTime()
+    if (Number.isFinite(diffMs) && diffMs >= 0) {
+      const byRange = formatRestorationHoursLabel(diffMs / (60 * 60 * 1000))
+      if (byRange !== null) return byRange
+    }
+  }
+
+  return formatPrevisaoEncerramentoDisplay(
+    ticket.expectedCloseAt,
+    ticket.estimateTimeOfRestoration,
+  )
 }
 
 function ProtocolOccurrenceContent({ text }: { text: string }) {
@@ -508,10 +531,7 @@ export function MassivaTicketCard({
             ) : (
               <div className="mt-0.5 flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                 <p className="min-w-0 font-medium leading-snug text-neutral-900 sm:flex-1 sm:pr-1">
-                  {formatPrevisaoEncerramentoDisplay(
-                    ticket.expectedCloseAt,
-                    ticket.estimateTimeOfRestoration,
-                  )}
+                  {expectedCloseDisplayForCard(ticket)}
                 </p>
                 {canEditExpectedClose ? (
                   <button

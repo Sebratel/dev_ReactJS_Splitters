@@ -26,10 +26,6 @@ function normalizeDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function escapeIdentifier(value) {
-  return `\`${String(value ?? '').replace(/`/g, '``')}\``;
-}
-
 function uniqueSplitterEntries(entries) {
   const byCode = new Map();
   for (const entry of Array.isArray(entries) ? entries : []) {
@@ -83,17 +79,6 @@ export function createMassivaHistoryStore(config) {
     };
   }
 
-  const adminPool = mysql.createPool({
-    host,
-    port,
-    user,
-    password,
-    waitForConnections: true,
-    connectionLimit: 4,
-    queueLimit: 0,
-    charset: 'utf8mb4',
-  });
-
   const dataPool = mysql.createPool({
     host,
     port,
@@ -108,82 +93,12 @@ export function createMassivaHistoryStore(config) {
 
   let readyPromise = null;
 
+  /** Sem DDL: schema deve existir no MySQL (criação/migração manual no banco). */
   async function ensureReady() {
     if (readyPromise) return readyPromise;
 
     readyPromise = (async () => {
-      await adminPool.query(
-        `CREATE DATABASE IF NOT EXISTS ${escapeIdentifier(database)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-      );
-
-      await dataPool.query(`
-        CREATE TABLE IF NOT EXISTS massiva_history (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          protocol BIGINT NULL,
-          assignment_id BIGINT NULL,
-          access_point_code VARCHAR(120) NOT NULL DEFAULT '',
-          title VARCHAR(255) NOT NULL DEFAULT '',
-          operator_email VARCHAR(180) NOT NULL DEFAULT '',
-          affected_clients INT NOT NULL DEFAULT 0,
-          status VARCHAR(20) NOT NULL DEFAULT 'aberta',
-          opened_at DATETIME NULL,
-          expected_close_at DATETIME NULL,
-          closed_at DATETIME NULL,
-          auto_closed_without_clients TINYINT(1) NOT NULL DEFAULT 0,
-          close_description TEXT NULL,
-          source VARCHAR(40) NOT NULL DEFAULT 'nexaview-local',
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_massiva_history_protocol (protocol),
-          UNIQUE KEY uq_massiva_history_assignment (assignment_id),
-          KEY idx_massiva_history_status (status),
-          KEY idx_massiva_history_opened_at (opened_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `);
-
-      await dataPool.query(`
-        CREATE TABLE IF NOT EXISTS massiva_history_splitters (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          massiva_history_id BIGINT UNSIGNED NOT NULL,
-          splitter_code VARCHAR(120) NOT NULL,
-          splitter_label VARCHAR(255) NOT NULL DEFAULT '',
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_massiva_history_splitter (massiva_history_id, splitter_code),
-          KEY idx_massiva_history_splitter_code (splitter_code),
-          CONSTRAINT fk_massiva_history_splitters_history
-            FOREIGN KEY (massiva_history_id) REFERENCES massiva_history(id)
-            ON DELETE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `);
-
-      await dataPool.query(`
-        CREATE TABLE IF NOT EXISTS splitter_snapshots (
-          id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-          splitter_code VARCHAR(120) NOT NULL,
-          splitter_title VARCHAR(255) NOT NULL DEFAULT '',
-          access_point_code VARCHAR(120) NOT NULL DEFAULT '',
-          captured_day DATE NOT NULL,
-          captured_at DATETIME NOT NULL,
-          active TINYINT(1) NOT NULL DEFAULT 1,
-          out_ports INT NOT NULL DEFAULT 0,
-          busy_count INT NOT NULL DEFAULT 0,
-          usage_percent DECIMAL(7,2) NOT NULL DEFAULT 0.00,
-          city VARCHAR(120) NULL,
-          street VARCHAR(255) NULL,
-          tipo_local VARCHAR(40) NULL,
-          nome_condominio VARCHAR(255) NULL,
-          massiva_open_count INT NOT NULL DEFAULT 0,
-          massiva_total_count INT NOT NULL DEFAULT 0,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-          PRIMARY KEY (id),
-          UNIQUE KEY uq_splitter_snapshot_day (splitter_code, captured_day),
-          KEY idx_splitter_snapshots_code_time (splitter_code, captured_at),
-          KEY idx_splitter_snapshots_captured_at (captured_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `);
+      await dataPool.query('SELECT 1');
     })().catch((error) => {
       readyPromise = null;
       throw error;
@@ -238,6 +153,7 @@ export function createMassivaHistoryStore(config) {
     const operatorEmail = normalizeText(input?.operatorEmail);
     const affectedClients = normalizeNonNegativeInt(input?.affectedClients, 0);
     const expectedCloseAt = normalizeDate(input?.expectedCloseAt);
+    const eventIdentifiedAt = normalizeDate(input?.eventIdentifiedAt);
     const openedAt = normalizeDate(input?.openedAt) ?? new Date();
     const autoClosed = input?.autoClosedWithoutClients === true;
     const status = autoClosed ? 'encerrada' : 'aberta';
@@ -277,6 +193,7 @@ export function createMassivaHistoryStore(config) {
               affected_clients = GREATEST(affected_clients, ?),
               status = ?,
               opened_at = COALESCE(opened_at, ?),
+              event_identified_at = COALESCE(?, event_identified_at),
               expected_close_at = COALESCE(?, expected_close_at),
               closed_at = ?,
               auto_closed_without_clients = ?,
@@ -296,6 +213,7 @@ export function createMassivaHistoryStore(config) {
             affectedClientsForResult,
             status,
             openedAt,
+            eventIdentifiedAt,
             expectedCloseAt,
             closedAt,
             autoClosed ? 1 : 0,
@@ -316,13 +234,14 @@ export function createMassivaHistoryStore(config) {
               affected_clients,
               status,
               opened_at,
+              event_identified_at,
               expected_close_at,
               closed_at,
               auto_closed_without_clients,
               close_description,
               source
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local')
           `,
           [
             protocol,
@@ -333,6 +252,7 @@ export function createMassivaHistoryStore(config) {
             affectedClientsForResult,
             status,
             openedAt,
+            eventIdentifiedAt,
             expectedCloseAt,
             closedAt,
             autoClosed ? 1 : 0,
@@ -759,6 +679,7 @@ export function createMassivaHistoryStore(config) {
           h.affected_clients AS affectedClients,
           h.status AS status,
           h.opened_at AS openedAt,
+          h.event_identified_at AS eventIdentifiedAt,
           h.expected_close_at AS expectedCloseAt,
           h.closed_at AS closedAt,
           h.updated_at AS updatedAt
@@ -780,6 +701,10 @@ export function createMassivaHistoryStore(config) {
       affectedClients: Number(row.affectedClients ?? 0),
       status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
       openedAt: row.openedAt instanceof Date ? row.openedAt : normalizeDate(row.openedAt),
+      eventIdentifiedAt:
+        row.eventIdentifiedAt instanceof Date
+          ? row.eventIdentifiedAt
+          : normalizeDate(row.eventIdentifiedAt),
       expectedCloseAt:
         row.expectedCloseAt instanceof Date ? row.expectedCloseAt : normalizeDate(row.expectedCloseAt),
       closedAt: row.closedAt instanceof Date ? row.closedAt : normalizeDate(row.closedAt),
@@ -788,7 +713,7 @@ export function createMassivaHistoryStore(config) {
   }
 
   async function end() {
-    await Promise.allSettled([adminPool.end(), dataPool.end()]);
+    await dataPool.end();
   }
 
   return {

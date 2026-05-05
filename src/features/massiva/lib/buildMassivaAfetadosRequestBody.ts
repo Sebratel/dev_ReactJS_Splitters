@@ -111,8 +111,8 @@ export function buildMassivaAfetadosRequestBody(
 ): MassivaAfetadosRequestBody {
   const createdIso = nowInBrazilIsoLike()
   const finishDateBrazil =
-    formatInBrazilIsoLike(context.assignmentFinalDateIsoUtc) ??
-    context.assignmentFinalDateIsoUtc
+    formatInBrazilIsoLike(context.assignmentFinalDateLocal) ??
+    context.assignmentFinalDateLocal
   const createdBy = massivaCreatedByFromOperatorEmail(context.operatorEmail)
   const entities = buildUsuarioAfetadoEntities({
     clientes: clientesOverride ?? context.basis.collectedClientes,

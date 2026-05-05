@@ -137,6 +137,8 @@ function parseMassivaDateCandidates(
       ? String(timeCandidate).trim()
       : ''
 
+  // Prioriza a dupla data+hora explícita do payload (normalmente o prazo visível no card),
+  // evitando que um candidato ISO com timezone (ex.: ...Z) sobreponha o valor local exibido.
   if (dateText !== '' && timeText !== '') {
     const combined = parseMassivaDate(`${dateText} ${timeText}`)
     if (combined !== null) return combined
@@ -312,6 +314,34 @@ function buildMassivaDescriptionFromRow(
 }
 
 /**
+ * Extração do template técnico da abertura NexaView:
+ * "Horario que iniciou o evento: 05/05/2026, 10:30"
+ */
+function parseOpenedAtFromDescription(description: string): Date | null {
+  const t = description.trim()
+  if (t === '') return null
+  const m =
+    /Horario que iniciou o evento:\s*(\d{2}\/\d{2}\/\d{4}),\s*(\d{2}:\d{2})/i.exec(t)
+  if (m == null) return null
+  return parseMassivaDate(`${m[1]} ${m[2]}`)
+}
+
+/**
+ * Extração do template técnico da abertura NexaView:
+ * "Prazo inicial de normalização: 05/05/2026, 19:00 - (...)"
+ */
+function parseExpectedCloseFromDescription(description: string): Date | null {
+  const t = description.trim()
+  if (t === '') return null
+  const m =
+    /Prazo inicial de normaliza[cç][aã]o:\s*(\d{2}\/\d{2}\/\d{4}),\s*(\d{2}:\d{2})/i.exec(
+      t,
+    )
+  if (m == null) return null
+  return parseMassivaDate(`${m[1]} ${m[2]}`)
+}
+
+/**
  * Paridade com `MassivaTicket.fromJson` — aliases e merges de `input` / `assignment` / `incidentStatus`.
  */
 export function parseMassivaTicketFromApi(
@@ -436,11 +466,10 @@ export function parseMassivaTicketFromApi(
       merged.createdAt ??
       merged.openingDate,
   )
+  const openedAtFromDescription = parseOpenedAtFromDescription(description)
 
   const expectedCloseAt = parseMassivaDateCandidates(
     [
-      merged.sla,
-      inputAssignment.sla,
       inputAssignment.finalDate,
       inputAssignment.finalData,
       assignment.finalDate,
@@ -453,6 +482,8 @@ export function parseMassivaTicketFromApi(
       merged.expectedClosureDate,
       merged.previsionClosingDate,
       merged.previsionCloseAt,
+      merged.sla,
+      inputAssignment.sla,
     ],
     merged.maintenanceDate ??
       merged.forecastClosingDate ??
@@ -462,6 +493,8 @@ export function parseMassivaTicketFromApi(
       merged.forecastClosingTime ??
       merged.finalTime,
   )
+  const expectedCloseFromDescription =
+    parseExpectedCloseFromDescription(description)
 
   const closedAt = parseMassivaDateCandidates(
     [
@@ -571,8 +604,8 @@ export function parseMassivaTicketFromApi(
     createdBy,
     responsible,
     status,
-    openedAt,
-    expectedCloseAt,
+    openedAt: openedAtFromDescription ?? openedAt,
+    expectedCloseAt: expectedCloseFromDescription ?? expectedCloseAt,
     previsaoEncerramentoAtualizadaPor,
     estimateTimeOfRestoration,
     closedAt,

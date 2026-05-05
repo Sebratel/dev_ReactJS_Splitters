@@ -34,7 +34,7 @@ export function buildMassivaOpenRequestBody(
     assignment: {
       title: request.assignmentTitle,
       description: assignmentDescription,
-      finalDate: context.assignmentFinalDateIsoUtc,
+      finalDate: context.assignmentFinalDateLocal,
       companyPlaceId: d.companyPlaceId,
     },
     affectedUsersQuantity: context.affectedUsersQuantityFlutterParity,

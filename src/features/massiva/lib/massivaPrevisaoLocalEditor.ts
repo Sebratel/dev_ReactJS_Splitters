@@ -118,8 +118,6 @@ export function resolveExpectedCloseAtForDisplay(ticket: MassivaTicket): Date | 
 }
 
 type PrevisaoAjustadaExplicataParams = {
-  matchesSla: boolean
-  hasValidProjection: boolean
   /** `resolveExpectedCloseAtForDisplay(ticket)` (não use só o campo cru do BFF). */
   effectiveCloseAt: Date | null
 }
@@ -145,9 +143,6 @@ export function isPrevisaoEncerramentoAjustadaExplicata(
     return true
   }
   if (localPrevisaoCloseMatchesTicket(ticket)) {
-    return true
-  }
-  if (p.hasValidProjection && !p.matchesSla) {
     return true
   }
   return false

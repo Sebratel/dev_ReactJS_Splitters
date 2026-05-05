@@ -2,7 +2,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchEmployeePersonIdByEmail } from '@/features/massiva/api/fetchEmployeePersonIdByEmail'
 import { buildMassivaOpenFinalContext } from '@/features/massiva/lib/buildMassivaOpenFinalContext'
-import { buildMassivaOpeningTechnicalDescription } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
+import {
+  buildMassivaOpeningTechnicalDescription,
+  combineLocalDateAndTime,
+} from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import {
   getMassivaOpenDraftIssues,
   massivaOpenDraftFinalDateIsoUtc,
@@ -219,6 +222,14 @@ export function useMassivaOpenReadiness(
     }
 
     const { basis, plan } = openingPreparation
+    const assignmentBeginningDateLocal =
+      eventStartDate.trim() !== ''
+        ? combineLocalDateAndTime(eventStartDate, eventStartTime || '00:00')
+        : null
+    const eventIdentifiedAtLocal =
+      eventIdentifiedDate.trim() !== ''
+        ? combineLocalDateAndTime(eventIdentifiedDate, eventIdentifiedTime || '00:00')
+        : null
 
     const context = buildMassivaOpenFinalContext({
       personId,
@@ -226,7 +237,9 @@ export function useMassivaOpenReadiness(
       basis,
       plan,
       assignmentDescription,
-      assignmentFinalDateIsoUtc: finalIso,
+      assignmentFinalDateLocal: finalIso,
+      assignmentBeginningDateLocal,
+      eventIdentifiedAtLocal,
       massivaOpenPath: openPath,
       massivaAfetadosPath: afetadosPath,
       descriptionAutoSyncEnabled: descriptionAutoSync,
