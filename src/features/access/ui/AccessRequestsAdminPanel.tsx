@@ -92,7 +92,9 @@ export function AccessRequestsAdminPanel({
       {sorted.length > 0 ? (
         <ul className="mt-4 space-y-3">
           {sorted.map((r) => {
-            const selectedRole = roleById[r.id] ?? 'leitura'
+            const defaultRole: ApproveRole =
+              r.requestedModules.includes('massiva_open') ? 'operador' : 'leitura'
+            const selectedRole = roleById[r.id] ?? defaultRole
             const rejecting = rejectForId === r.id
             return (
               <li
