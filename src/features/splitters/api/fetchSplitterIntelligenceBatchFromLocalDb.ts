@@ -37,6 +37,8 @@ function toNullableDate(value: unknown): Date | null {
 /** Um GET por lote: tendências + massivas (menos roundtrips que dois endpoints separados). */
 export async function fetchSplitterIntelligenceBatchFromLocalDb(
   splitterCodes: readonly string[],
+  /** Filtra agregados de massiva por `opened_at` no BFF (painel / período). */
+  massivaOpenedRange?: { start: Date; end: Date },
 ): Promise<{ trends: Map<string, SplitterTrend>; massiva: Map<string, SplitterMassivaStats> }> {
   const clean = [...new Set(splitterCodes.map((code) => String(code ?? '').trim()).filter(Boolean))]
   if (clean.length === 0) {
@@ -44,6 +46,10 @@ export async function fetchSplitterIntelligenceBatchFromLocalDb(
   }
 
   const params = new URLSearchParams({ codes: clean.join(',') })
+  if (massivaOpenedRange) {
+    params.set('from', massivaOpenedRange.start.toISOString())
+    params.set('to', massivaOpenedRange.end.toISOString())
+  }
   const response = await fetchWithSessionAuth(
     `${env.localBffUrl}/api/splitters/intelligence-batch?${params}`,
   )

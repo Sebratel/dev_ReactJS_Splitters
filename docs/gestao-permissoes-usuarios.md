@@ -53,7 +53,7 @@ Administradores aplicam um **pacote** de permissões de uma vez. Os presets can�
 | **Administrador** | `admin` | Sim | Sim | Sim | Sim | Sim |
 | **Analista de rede** | `operador` | Sim | Sim | Sim | Sim | Não |
 | **Operador (massivas)** | `operador_massivas` | Sim | Sim | Sim | **Não** | Não |
-| **Leitura** | `leitura` | Sim | Sim | **Não** | Sim | Não |
+| **Leitura** | `leitura` | Sim | **Não** | **Não** | **Não** | Não |
 
 - **Analista de rede** (`operador`): perfil “amplo operacional” com painel da rede (inteligência), mas **sem** gestão de usuários.
 - **Operador (massivas)** (`operador_massivas`): igual ao analista em Splitters + Massivas **com abertura**, mas **sem** rota de Inteligência — usa-se quando o colaborador **não** deve ver mapas/painéis da rede.

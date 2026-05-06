@@ -48,23 +48,25 @@ function clamp(n: number, min: number, max: number): number {
 function heatIntensityFromCell(c: IntelligenceSaturationCell): number {
   const u = clamp(c.usagePercent, 0, 100)
   let base: number
-  if (u >= 95) base = 0.65 + ((u - 95) / 5) * 0.35
-  else if (u >= 70) base = 0.28 + ((u - 70) / 25) * 0.32
-  else base = 0.06 + (u / 70) * 0.18
+  if (u >= 95) base = 0.72 + ((u - 95) / 5) * 0.28
+  else if (u >= 70) base = 0.34 + ((u - 70) / 25) * 0.34
+  else base = 0.14 + (u / 70) * 0.26
 
-  if (c.hasCorporateClients) base = Math.min(1, base + 0.11)
-  if (c.openTickets > 0) base = Math.min(1, base + 0.038 * Math.min(c.openTickets, 6))
+  if (c.hasCorporateClients) base = Math.min(1, base + 0.12)
+  if (c.openTickets > 0) base = Math.min(1, base + 0.045 * Math.min(c.openTickets, 6))
 
   return base
 }
 
+/** Gradient mais cedo para tons quentes — facilita ver concentração sem depender só do zoom. */
 const HEAT_GRADIENT: Record<number, string> = {
-  0.2: '#10b981',
-  0.4: '#84cc16',
-  0.55: '#eab308',
-  0.72: '#f59e0b',
-  0.88: '#f97316',
-  1: '#e11d48',
+  0.12: '#10b981',
+  0.28: '#65a30d',
+  0.42: '#ca8a04',
+  0.58: '#ea580c',
+  0.75: '#ef4444',
+  0.9: '#dc2626',
+  1: '#9f1239',
 }
 
 function SaturationHeatLayer({ latlngs }: { latlngs: [number, number, number][] }) {
@@ -78,11 +80,13 @@ function SaturationHeatLayer({ latlngs }: { latlngs: [number, number, number][] 
       await ensureLeafletHeat(L)
       if (cancelled || latlngs.length === 0) return
       const heat = L.heatLayer(latlngs, {
-        radius: 38,
-        blur: 28,
+        /** Raio maior + blur menor = manchas mais legíveis (menos “névoa” difusa). */
+        radius: 44,
+        blur: 18,
         maxZoom: 17,
-        max: 1.05,
-        minOpacity: 0.12,
+        /** max menor amplifica o contraste das cores para a mesma intensidade numérica. */
+        max: 0.78,
+        minOpacity: 0.38,
         gradient: HEAT_GRADIENT,
       }).addTo(map)
       if (cancelled) {
@@ -118,9 +122,9 @@ const BAND_COLOR: Record<ReturnType<typeof saturationBand>, string> = {
   ok: '#10b981',
 }
 
-/** Halo proporcional a clientes afetados por massivas (âmbito do período) — “pegada” de impacto além do ponto. */
-function haloRadiusPx(affectedClientsTotal: number): number {
-  return Math.round(clamp(7 + Math.sqrt(affectedClientsTotal + 1) * 2.15, 9, 46))
+/** Halo proporcional a quantas massivas distintas envolvem o splitter no período (não há afetados por equipamento no cadastro). */
+function haloRadiusPx(massivasDistinctCount: number): number {
+  return Math.round(clamp(7 + Math.sqrt(massivasDistinctCount + 1) * 3.35, 9, 46))
 }
 
 function saturationMarkerDivIcon(cell: IntelligenceSaturationCell): L.DivIcon {
@@ -199,14 +203,15 @@ function SaturationMapLegend() {
       <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
         <span className="font-bold uppercase tracking-wide text-slate-500">Calor</span>
         <span className="max-w-xl text-[11px] font-normal leading-snug text-slate-600">
-          Verde → âmbar → vermelho: concentração de pressão de uso; mais intenso com PJ ou massivas abertas.
+          Verde → âmbar → vermelho: concentração de pressão regional (uso + reforço por PJ e massivas). Quanto mais
+          saturado o fundo, maior o acúmulo de pontos “quentes” naquela área.
         </span>
       </div>
       <div
         className="h-2.5 max-w-md rounded-full shadow-inner ring-1 ring-slate-200/80"
         style={{
           background:
-            'linear-gradient(90deg, #10b981 0%, #84cc16 18%, #eab308 40%, #f59e0b 58%, #f97316 78%, #e11d48 100%)',
+            'linear-gradient(90deg, #10b981 0%, #65a30d 22%, #ca8a04 44%, #ea580c 62%, #ef4444 80%, #9f1239 100%)',
         }}
         role="img"
         aria-label="Escala do mapa de calor"
@@ -236,7 +241,7 @@ function SaturationMapLegend() {
           Corporativo (anel + selo)
         </span>
         <span className="font-normal text-slate-500">
-          Tamanho maior = índice de atenção mais alto · halo maior = mais clientes afetados (massivas).
+          Tamanho maior = índice de atenção mais alto · halo maior = mais vínculos com massivas distintas no período.
         </span>
       </div>
     </div>
@@ -332,7 +337,11 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
           className="z-0 h-full w-full [&_.leaflet-control-attribution]:text-[10px]"
           scrollWheelZoom
         >
-          <TileLayer attribution={OSM_ATTR} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <TileLayer
+            attribution={OSM_ATTR}
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            opacity={0.92}
+          />
           <SaturationHeatLayer key={heatKey} latlngs={heatLatLngs} />
           <FitBoundsController
             fitPoints={fitPoints}
@@ -343,7 +352,7 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
             const lat = cell.latitude as number
             const lng = cell.longitude as number
             const bandColor = BAND_COLOR[saturationBand(cell.usagePercent)]
-            const haloR = haloRadiusPx(cell.affectedClientsTotal)
+            const haloR = haloRadiusPx(cell.totalTickets)
             const haloStroke = cell.hasCorporateClients ? CORPORATE_BRAND_PURPLE : bandColor
             return (
               <CircleMarker
@@ -417,9 +426,9 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
                       Massivas abertas:{' '}
                       <span className="font-semibold tabular-nums">{cell.openTickets}</span>
                       {' · '}
-                      Afetados (período):{' '}
+                      Massivas no período (distintas):{' '}
                       <span className="font-semibold tabular-nums">
-                        {cell.affectedClientsTotal.toLocaleString('pt-BR')}
+                        {cell.totalTickets.toLocaleString('pt-BR')}
                       </span>
                     </p>
                     <p className="mt-1 text-white/75">
@@ -451,8 +460,8 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
                       {cell.label}
                     </p>
                     <p className="text-xs text-slate-600">
-                      Massivas abertas: {cell.openTickets} · Afetados:{' '}
-                      {cell.affectedClientsTotal.toLocaleString('pt-BR')}
+                      Massivas abertas: {cell.openTickets} · Distintas no período:{' '}
+                      {cell.totalTickets.toLocaleString('pt-BR')}
                     </p>
                     <Link
                       to={`/splitters/${encodeURIComponent(cell.splitterCode)}`}

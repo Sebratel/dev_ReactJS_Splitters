@@ -21,7 +21,7 @@ export const SPLITTERS_ROLE_DESCRIPTION: Record<Exclude<SplittersRoleId, 'person
     'Painel da rede (inteligência), splitters e massivas (inclui abrir ocorrências), sem administração.',
   operador_massivas:
     'Splitters e massivas (inclui abrir ocorrências), sem painel de inteligência.',
-  leitura: 'Visualização de splitters, massivas e inteligência; sem abertura de massiva.',
+  leitura: 'Somente splitters (leitura). Não inclui massivas nem painel de inteligência.',
 }
 
 /** Presets fixos (exceto personalizado), ordem usada em selects administrativos. */
@@ -60,9 +60,9 @@ export const SPLITTERS_ROLE_PRESETS: Record<
   },
   leitura: {
     canViewSplitters: true,
-    canViewMassiva: true,
+    canViewMassiva: false,
     canOpenMassiva: false,
-    canViewIntelligence: true,
+    canViewIntelligence: false,
     isAdmin: false,
   },
 }

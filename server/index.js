@@ -1279,6 +1279,57 @@ app.post('/api/massiva/history/close', async (req, res) => {
   }
 });
 
+/**
+ * Total do período sem repetir afetados por splitter (uma soma por massiva distinta).
+ */
+app.post('/api/massiva/history/period-rollup', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({
+        success: true,
+        data: {
+          distinctMassivaCount: 0,
+          affectedClientsDistinctSum: 0,
+          openMassivasCount: 0,
+          closedMassivasCount: 0,
+        },
+      });
+    }
+
+    const splitterCodes = Array.isArray(req.body?.splitterCodes)
+      ? req.body.splitterCodes
+          .map((value) => String(value ?? '').trim())
+          .filter((value) => value !== '')
+      : [];
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaPeriodRollup(splitterCodes, massivaRange);
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao agregar massivas do período:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao agregar massivas do período.',
+      error: error.message,
+    });
+  }
+});
+
 app.get('/api/massiva/history/splitter-stats', async (req, res) => {
   try {
     if (!massivaHistoryStore.configured) {
@@ -1472,9 +1523,21 @@ app.get('/api/splitters/intelligence-batch', async (req, res) => {
       });
     }
 
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.query.from);
+    const openedAtTo = parseOptionalIsoDate(req.query.to);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
     const [trendsMap, statsMap] = await Promise.all([
       massivaHistoryStore.getSplitterTrends(splitterCodes),
-      massivaHistoryStore.getSplitterStats(splitterCodes),
+      massivaHistoryStore.getSplitterStats(splitterCodes, massivaRange),
     ]);
 
     const trends = splitterCodes.map((code) => ({

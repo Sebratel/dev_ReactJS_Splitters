@@ -4,6 +4,11 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronsUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Gauge,
+  Shield,
+  Users,
   MoreHorizontal,
   Plus,
   Search,
@@ -143,8 +148,230 @@ function LoginDot({ recency }: { recency: ReturnType<typeof loginRecency> }) {
   return <span className={cn('inline-block size-2 shrink-0 rounded-full', cls)} aria-hidden />
 }
 
-const ACTION_MENU_W = 208
 const ACTION_MENU_MIN_H = 120
+const PAGE_SIZE = 10
+
+const NUMBER_FMT = new Intl.NumberFormat('pt-BR')
+
+function getZonedParts(date: Date, timeZone: string): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const year = Number(parts.find((p) => p.type === 'year')?.value ?? NaN)
+  const month = Number(parts.find((p) => p.type === 'month')?.value ?? NaN)
+  const day = Number(parts.find((p) => p.type === 'day')?.value ?? NaN)
+  return { year, month, day }
+}
+
+function zonedKeyYmd(date: Date, timeZone: string): string {
+  const { year, month, day } = getZonedParts(date, timeZone)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function addMonths(year: number, month1Based: number, delta: number): { year: number; month: number } {
+  const idx = (year * 12 + (month1Based - 1)) + delta
+  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 }
+}
+
+function isSameYearMonthInTimeZone(date: Date, other: Date, timeZone: string): boolean {
+  const a = getZonedParts(date, timeZone)
+  const b = getZonedParts(other, timeZone)
+  return a.year === b.year && a.month === b.month
+}
+
+function percentDelta(current: number, previous: number): number | null {
+  if (previous <= 0) return null
+  return ((current - previous) / previous) * 100
+}
+
+function useAnimatedNumber(value: number, opts?: { durationMs?: number; enabled?: boolean }): number {
+  const durationMs = opts?.durationMs ?? 700
+  const enabled = opts?.enabled ?? true
+  const [display, setDisplay] = useState(() => (enabled ? 0 : value))
+
+  useEffect(() => {
+    if (!enabled) {
+      setDisplay(value)
+      return
+    }
+    const from = display
+    const to = value
+    if (from === to) return
+
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs)
+      const eased = 1 - Math.pow(1 - t, 3) // easeOutCubic
+      const next = Math.round(from + (to - from) * eased)
+      setDisplay(next)
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, durationMs, enabled])
+
+  return display
+}
+
+function Sparkline({
+  values,
+  strokeClassName = 'stroke-neutral-400/80',
+}: {
+  values: number[]
+  strokeClassName?: string
+}) {
+  const w = 120
+  const h = 42
+  const pad = 2
+  if (values.length < 2) return null
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = Math.max(1, max - min)
+  const dx = (w - pad * 2) / (values.length - 1)
+
+  let d = ''
+  for (let i = 0; i < values.length; i++) {
+    const x = pad + i * dx
+    const y = pad + (h - pad * 2) * (1 - (values[i] - min) / span)
+    d += i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : ` L ${x.toFixed(2)} ${y.toFixed(2)}`
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="h-10 w-28 opacity-90"
+      aria-hidden
+    >
+      <path
+        d={d}
+        fill="none"
+        className={cn('stroke-[2.25] [vector-effect:non-scaling-stroke]', strokeClassName)}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  sublabel,
+  trendLabel,
+  spark,
+  icon,
+  tint,
+  loading,
+}: {
+  label: string
+  value: number
+  sublabel?: string
+  trendLabel?: string
+  spark?: number[]
+  icon: React.ReactNode
+  tint: 'amber' | 'emerald' | 'violet'
+  loading: boolean
+}) {
+  const animated = useAnimatedNumber(value, { enabled: !loading })
+  const bg =
+    tint === 'emerald'
+      ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/70'
+      : tint === 'violet'
+        ? 'bg-violet-50 text-violet-900 ring-1 ring-violet-200/70'
+        : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200/70'
+
+  const sparkStroke =
+    tint === 'emerald'
+      ? 'stroke-emerald-400/80'
+      : tint === 'violet'
+        ? 'stroke-violet-400/80'
+        : 'stroke-amber-400/90'
+
+  const trendTone =
+    trendLabel?.trim().startsWith('-')
+      ? 'bg-rose-50 text-rose-700 ring-rose-200/70'
+      : 'bg-emerald-50 text-emerald-700 ring-emerald-200/70'
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-sm transition will-change-transform motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md">
+      <div className="pointer-events-none absolute inset-0 opacity-0 transition group-hover:opacity-100">
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/80 via-white to-white" />
+      </div>
+
+      <div className="relative flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-neutral-500">
+              {label}
+            </p>
+            {trendLabel ? (
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ring-1',
+                  trendTone,
+                )}
+              >
+                {trendLabel}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex items-baseline gap-2">
+            {loading ? (
+              <div className="h-9 w-24 animate-pulse rounded-lg bg-neutral-100" />
+            ) : (
+              <p className="text-[34px] font-black leading-none tracking-tight text-neutral-900">
+                {NUMBER_FMT.format(animated)}
+              </p>
+            )}
+          </div>
+
+          {sublabel ? (
+            <p className="mt-1 text-xs font-semibold text-neutral-600">{sublabel}</p>
+          ) : (
+            <p className="mt-1 text-xs text-neutral-400">&nbsp;</p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div
+            className={cn(
+              'flex size-10 items-center justify-center rounded-xl',
+              bg,
+              'shadow-sm',
+            )}
+          >
+            {icon}
+          </div>
+
+          <div className="rounded-lg bg-neutral-50/60 px-2 py-1 ring-1 ring-neutral-200/60">
+            {!loading && spark && spark.length >= 2 ? (
+              <Sparkline values={spark} strokeClassName={sparkStroke} />
+            ) : (
+              <div className="h-10 w-28" />
+            )}
+          </div>
+        </div>
+      </div>
+      <div
+        className="pointer-events-none absolute -right-10 -top-10 size-28 rounded-full opacity-40 blur-2xl"
+        style={{
+          background:
+            tint === 'emerald'
+              ? 'radial-gradient(circle, rgba(16,185,129,0.35), rgba(16,185,129,0))'
+              : tint === 'violet'
+                ? 'radial-gradient(circle, rgba(139,92,246,0.35), rgba(139,92,246,0))'
+                : 'radial-gradient(circle, rgba(245,158,11,0.35), rgba(245,158,11,0))',
+        }}
+      />
+    </div>
+  )
+}
 
 function getVisualViewportBox(): {
   top: number
@@ -230,6 +457,7 @@ export function UsersManagementWorkspace({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [roleFilter, setRoleFilter] = useState<SplittersRoleId | 'all'>('all')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState<SplittersUserProfile | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -246,6 +474,86 @@ export function UsersManagementWorkspace({
     column: 'user',
     dir: 'asc',
   })
+
+  const stats = useMemo(() => {
+    const tz = 'America/Sao_Paulo'
+    const now = new Date()
+    const nowParts = getZonedParts(now, tz)
+    const prevMonth = addMonths(nowParts.year, nowParts.month, -1)
+    const todayKey = zonedKeyYmd(now, tz)
+
+    const total = users.length
+    const active = users.reduce((acc, u) => acc + (u.isActive ? 1 : 0), 0)
+
+    const createdThisMonth = users.reduce((acc, u) => {
+      const d = u.createdAt
+      if (!d) return acc
+      return acc + (isSameYearMonthInTimeZone(d, now, tz) ? 1 : 0)
+    }, 0)
+
+    const createdPrevMonth = users.reduce((acc, u) => {
+      const d = u.createdAt
+      if (!d) return acc
+      const p = getZonedParts(d, tz)
+      return acc + (p.year === prevMonth.year && p.month === prevMonth.month ? 1 : 0)
+    }, 0)
+
+    const createdToday = users.reduce((acc, u) => {
+      const d = u.createdAt
+      if (!d) return acc
+      return acc + (zonedKeyYmd(d, tz) === todayKey ? 1 : 0)
+    }, 0)
+
+    const monthDelta = percentDelta(createdThisMonth, createdPrevMonth)
+    const monthDeltaLabel =
+      monthDelta == null
+        ? null
+        : `${monthDelta >= 0 ? '+' : ''}${Math.round(monthDelta)}% vs mês anterior`
+
+    // Sparkline: últimos 14 dias (timezone)
+    const sparkDays = 14
+    const dayKeys: string[] = []
+    const dayCounts = new Map<string, number>()
+    for (let i = sparkDays - 1; i >= 0; i--) {
+      const dt = new Date(now)
+      dt.setDate(dt.getDate() - i)
+      const key = zonedKeyYmd(dt, tz)
+      dayKeys.push(key)
+      dayCounts.set(key, 0)
+    }
+    for (const u of users) {
+      const d = u.createdAt
+      if (!d) continue
+      const k = zonedKeyYmd(d, tz)
+      if (dayCounts.has(k)) dayCounts.set(k, (dayCounts.get(k) ?? 0) + 1)
+    }
+    const createdSpark = dayKeys.map((k) => dayCounts.get(k) ?? 0)
+
+    const totalSpark = (() => {
+      // cumulativo (apenas para dar tendência visual)
+      const out: number[] = []
+      let sum = 0
+      for (const v of createdSpark) {
+        sum += v
+        out.push(sum)
+      }
+      return out
+    })()
+
+    const activeSpark = Array.from({ length: sparkDays }, () => active)
+
+    return {
+      total,
+      active,
+      createdThisMonth,
+      createdPrevMonth,
+      createdToday,
+      monthDeltaLabel,
+      totalSpark,
+      activeSpark,
+      createdSpark,
+    }
+  }, [users])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -268,6 +576,23 @@ export function UsersManagementWorkspace({
     return next
   }, [filtered, sort.column, sort.dir])
 
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
+
+  useEffect(() => {
+    // Ao mudar filtros/ordenação/busca (ou a base), volta para a primeira página.
+    setPage(1)
+  }, [search, statusFilter, roleFilter, sort.column, sort.dir, users.length])
+
+  useEffect(() => {
+    // Garante página válida quando a lista encolhe (ex.: após filtros).
+    setPage((prev) => Math.min(Math.max(1, prev), totalPages))
+  }, [totalPages])
+
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return sortedRows.slice(start, start + PAGE_SIZE)
+  }, [sortedRows, page])
+
   const toggleSort = (column: SortColumn) => {
     setSort((prev) =>
       prev.column === column
@@ -289,11 +614,18 @@ export function UsersManagementWorkspace({
   }
 
   const toggleSelectAllVisible = () => {
-    if (selected.size === sortedRows.length && sortedRows.length > 0) {
-      setSelected(new Set())
-      return
-    }
-    setSelected(new Set(sortedRows.map((u) => u.uid)))
+    const visibleIds = pagedRows.map((u) => u.uid)
+    if (visibleIds.length === 0) return
+    const allVisibleSelected = visibleIds.every((id) => selected.has(id))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        for (const id of visibleIds) next.delete(id)
+      } else {
+        for (const id of visibleIds) next.add(id)
+      }
+      return next
+    })
   }
 
   const clearSelection = () => setSelected(new Set())
@@ -328,6 +660,13 @@ export function UsersManagementWorkspace({
     setDrawerOpen(true)
     setActionMenu(null)
   }
+
+  const paginationLabel = useMemo(() => {
+    if (sortedRows.length === 0) return '0'
+    const start = (page - 1) * PAGE_SIZE + 1
+    const end = Math.min(page * PAGE_SIZE, sortedRows.length)
+    return `${start}–${end} de ${sortedRows.length}`
+  }, [sortedRows.length, page])
 
   useLayoutEffect(() => {
     if (actionMenu === null || actionMenu.placed !== undefined) return
@@ -377,6 +716,39 @@ export function UsersManagementWorkspace({
           </button>
         </div>
       ) : null}
+
+      {/* Summary cards (calculado na base completa) */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          label="Total de usuários"
+          value={stats.total}
+          sublabel="Inclui inativos"
+          trendLabel={stats.monthDeltaLabel ?? undefined}
+          spark={stats.totalSpark}
+          icon={<Users className="size-5" aria-hidden />}
+          tint="amber"
+          loading={isInitialLoading}
+        />
+        <StatCard
+          label="Ativos"
+          value={stats.active}
+          sublabel="Baseado em isActive"
+          spark={stats.activeSpark}
+          icon={<Shield className="size-5" aria-hidden />}
+          tint="emerald"
+          loading={isInitialLoading}
+        />
+        <StatCard
+          label="Novos este mês"
+          value={stats.createdThisMonth}
+          sublabel={`+ ${NUMBER_FMT.format(stats.createdToday)} novos hoje`}
+          trendLabel={stats.monthDeltaLabel ?? undefined}
+          spark={stats.createdSpark}
+          icon={<Gauge className="size-5" aria-hidden />}
+          tint="violet"
+          loading={isInitialLoading}
+        />
+      </div>
 
       {accessRequests ? (
         <AccessRequestsAdminPanel
@@ -445,6 +817,34 @@ export function UsersManagementWorkspace({
             >
               <UserPlus className="size-4 shrink-0" aria-hidden />
               <span className="hidden sm:inline">Adicionar usuário</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Pagination */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
+          <span className="font-semibold">{paginationLabel}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              Anterior
+            </button>
+            <span className="min-w-[5.5rem] text-center font-bold text-neutral-800">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Próxima
+              <ChevronRight className="size-4" aria-hidden />
             </button>
           </div>
         </div>
@@ -534,7 +934,7 @@ export function UsersManagementWorkspace({
             </div>
           ))
         ) : (
-          sortedRows.map((u) => {
+          pagedRows.map((u) => {
             const role = inferSplittersUserRole(u.permissions)
             const rec = loginRecency(u.lastLoginAt)
             const isSelf = u.uid === currentUid
@@ -643,7 +1043,9 @@ export function UsersManagementWorkspace({
                   <input
                     type="checkbox"
                     className="size-4 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
-                    checked={sortedRows.length > 0 && selected.size === sortedRows.length}
+                    checked={
+                      pagedRows.length > 0 && pagedRows.every((u) => selected.has(u.uid))
+                    }
                     onChange={toggleSelectAllVisible}
                     aria-label="Selecionar todos visíveis"
                   />
@@ -695,7 +1097,7 @@ export function UsersManagementWorkspace({
                   </td>
                 </tr>
               ) : null}
-              {sortedRows.map((u) => {
+              {pagedRows.map((u) => {
                 const role = inferSplittersUserRole(u.permissions)
                 const rec = loginRecency(u.lastLoginAt)
                 const isSelf = u.uid === currentUid

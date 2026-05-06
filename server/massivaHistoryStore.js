@@ -60,6 +60,14 @@ export function createMassivaHistoryStore(config) {
       async getSplitterStats() {
         return new Map();
       },
+      async getMassivaPeriodRollup() {
+        return {
+          distinctMassivaCount: 0,
+          affectedClientsDistinctSum: 0,
+          openMassivasCount: 0,
+          closedMassivasCount: 0,
+        };
+      },
       async getOpenSplitterCodes() {
         return [];
       },
@@ -300,7 +308,14 @@ export function createMassivaHistoryStore(config) {
     };
   }
 
-  async function getSplitterStats(splitterCodes) {
+  /**
+   * Estatísticas de massivas por splitter.
+   * `totalTickets` = quantidade de ocorrências (massivas) distintas vinculadas ao splitter no período.
+   * `affectedClientsTotal` fica em 0: o cadastro guarda afetados por ocorrência, não por equipamento —
+   * use `getMassivaPeriodRollup` para o total de clientes (uma vez por massiva).
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range] — filtro opcional por abertura da massiva.
+   */
+  async function getSplitterStats(splitterCodes, range) {
     await ensureReady();
 
     const normalizedCodes = [...new Set(
@@ -312,6 +327,25 @@ export function createMassivaHistoryStore(config) {
     if (normalizedCodes.length === 0) return new Map();
 
     const placeholders = normalizedCodes.map(() => '?').join(', ');
+    const openedAtFrom = range?.openedAtFrom instanceof Date && !Number.isNaN(range.openedAtFrom.getTime())
+      ? range.openedAtFrom
+      : null;
+    const openedAtTo = range?.openedAtTo instanceof Date && !Number.isNaN(range.openedAtTo.getTime())
+      ? range.openedAtTo
+      : null;
+
+    const whereExtra = [];
+    const extraParams = [];
+    if (openedAtFrom !== null) {
+      whereExtra.push('h.opened_at >= ?');
+      extraParams.push(openedAtFrom);
+    }
+    if (openedAtTo !== null) {
+      whereExtra.push('h.opened_at <= ?');
+      extraParams.push(openedAtTo);
+    }
+    const rangeSql = whereExtra.length > 0 ? ` AND ${whereExtra.join(' AND ')}` : '';
+
     const [rows] = await dataPool.query(
       `
         SELECT
@@ -319,15 +353,15 @@ export function createMassivaHistoryStore(config) {
           COUNT(DISTINCT h.id) AS totalTickets,
           SUM(CASE WHEN h.status = 'aberta' THEN 1 ELSE 0 END) AS openTickets,
           SUM(CASE WHEN h.status = 'encerrada' THEN 1 ELSE 0 END) AS closedTickets,
-          COALESCE(SUM(h.affected_clients), 0) AS affectedClientsTotal,
+          0 AS affectedClientsTotal,
           MAX(h.opened_at) AS latestOpenedAt
         FROM massiva_history_splitters hs
         INNER JOIN massiva_history h
           ON h.id = hs.massiva_history_id
-        WHERE hs.splitter_code IN (${placeholders})
+        WHERE hs.splitter_code IN (${placeholders})${rangeSql}
         GROUP BY hs.splitter_code
       `,
-      normalizedCodes,
+      [...normalizedCodes, ...extraParams],
     );
 
     const byCode = new Map();
@@ -336,7 +370,7 @@ export function createMassivaHistoryStore(config) {
         totalTickets: Number(row.totalTickets ?? 0),
         openTickets: Number(row.openTickets ?? 0),
         closedTickets: Number(row.closedTickets ?? 0),
-        affectedClientsTotal: Number(row.affectedClientsTotal ?? 0),
+        affectedClientsTotal: Math.round(Number(row.affectedClientsTotal ?? 0)),
         latestOpenedAt:
           row.latestOpenedAt instanceof Date
             ? row.latestOpenedAt.toISOString()
@@ -347,6 +381,75 @@ export function createMassivaHistoryStore(config) {
     }
 
     return byCode;
+  }
+
+  /**
+   * Uma linha por massiva distinta ligada a algum splitter da lista: soma `affected_clients` sem repetir por equipamento.
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
+   */
+  async function getMassivaPeriodRollup(splitterCodes, range) {
+    await ensureReady();
+
+    const normalizedCodes = [...new Set(
+      (Array.isArray(splitterCodes) ? splitterCodes : [])
+        .map((code) => normalizeText(code))
+        .filter((code) => code !== ''),
+    )];
+
+    if (normalizedCodes.length === 0) {
+      return {
+        distinctMassivaCount: 0,
+        affectedClientsDistinctSum: 0,
+        openMassivasCount: 0,
+        closedMassivasCount: 0,
+      };
+    }
+
+    const placeholders = normalizedCodes.map(() => '?').join(', ');
+    const openedAtFrom = range?.openedAtFrom instanceof Date && !Number.isNaN(range.openedAtFrom.getTime())
+      ? range.openedAtFrom
+      : null;
+    const openedAtTo = range?.openedAtTo instanceof Date && !Number.isNaN(range.openedAtTo.getTime())
+      ? range.openedAtTo
+      : null;
+
+    const whereExtra = [];
+    const extraParams = [];
+    if (openedAtFrom !== null) {
+      whereExtra.push('h.opened_at >= ?');
+      extraParams.push(openedAtFrom);
+    }
+    if (openedAtTo !== null) {
+      whereExtra.push('h.opened_at <= ?');
+      extraParams.push(openedAtTo);
+    }
+    const rangeSql = whereExtra.length > 0 ? ` AND ${whereExtra.join(' AND ')}` : '';
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          COUNT(*) AS distinctMassivaCount,
+          COALESCE(SUM(h.affected_clients), 0) AS affectedClientsDistinctSum,
+          SUM(CASE WHEN h.status = 'aberta' THEN 1 ELSE 0 END) AS openMassivasCount,
+          SUM(CASE WHEN h.status = 'encerrada' THEN 1 ELSE 0 END) AS closedMassivasCount
+        FROM massiva_history h
+        INNER JOIN (
+          SELECT DISTINCT massiva_history_id
+          FROM massiva_history_splitters
+          WHERE splitter_code IN (${placeholders})
+        ) hs ON hs.massiva_history_id = h.id
+        WHERE 1 = 1${rangeSql}
+      `,
+      [...normalizedCodes, ...extraParams],
+    );
+
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : {};
+    return {
+      distinctMassivaCount: Number(row.distinctMassivaCount ?? 0),
+      affectedClientsDistinctSum: Math.round(Number(row.affectedClientsDistinctSum ?? 0)),
+      openMassivasCount: Number(row.openMassivasCount ?? 0),
+      closedMassivasCount: Number(row.closedMassivasCount ?? 0),
+    };
   }
 
   async function getOpenSplitterCodes() {
@@ -722,6 +825,7 @@ export function createMassivaHistoryStore(config) {
     registerOpenBatch,
     registerClose,
     getSplitterStats,
+    getMassivaPeriodRollup,
     getOpenSplitterCodes,
     upsertSplitterSnapshots,
     getSplitterTrends,
