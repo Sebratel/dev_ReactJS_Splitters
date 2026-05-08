@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -226,6 +226,100 @@ const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: str
   { id: 'manutencao', label: 'Manutenções ERP' },
 ]
 
+const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
+
+function readNetworkIntelligenceUiState(): {
+  preset: IntelligenceDateRangePreset
+  customStart: string
+  customEnd: string
+  activeWindow: IntelligenceWindow
+  riskBandFilter: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo'
+  ageFilter: AgeFilter
+  splitterSearch: string
+  geoTab: 'condominios' | 'ruas'
+  selectedMatrixKey:
+    | 'altoImpactoAltaUrgencia'
+    | 'altoImpactoBaixaUrgencia'
+    | 'baixoImpactoAltaUrgencia'
+    | 'baixoImpactoBaixaUrgencia'
+    | null
+  mapCorporateOnly: boolean
+} {
+  if (typeof window === 'undefined') {
+    return {
+      preset: '30d',
+      customStart: '',
+      customEnd: '',
+      activeWindow: 'visao-geral',
+      riskBandFilter: 'all',
+      ageFilter: 'all',
+      splitterSearch: '',
+      geoTab: 'condominios',
+      selectedMatrixKey: null,
+      mapCorporateOnly: false,
+    }
+  }
+  try {
+    const raw = window.sessionStorage.getItem(NETWORK_INTELLIGENCE_UI_STATE_KEY)
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<ReturnType<typeof readNetworkIntelligenceUiState>>
+    return {
+      preset:
+        parsed.preset === '7d' || parsed.preset === '30d' || parsed.preset === '90d' || parsed.preset === 'custom'
+          ? parsed.preset
+          : '30d',
+      customStart: typeof parsed.customStart === 'string' ? parsed.customStart : '',
+      customEnd: typeof parsed.customEnd === 'string' ? parsed.customEnd : '',
+      activeWindow:
+        parsed.activeWindow === 'visao-geral' ||
+        parsed.activeWindow === 'risco' ||
+        parsed.activeWindow === 'operacao' ||
+        parsed.activeWindow === 'geografico' ||
+        parsed.activeWindow === 'ciclo-vida' ||
+        parsed.activeWindow === 'manutencao'
+          ? parsed.activeWindow
+          : 'visao-geral',
+      riskBandFilter:
+        parsed.riskBandFilter === 'critico' ||
+        parsed.riskBandFilter === 'alto' ||
+        parsed.riskBandFilter === 'moderado' ||
+        parsed.riskBandFilter === 'baixo'
+          ? parsed.riskBandFilter
+          : 'all',
+      ageFilter:
+        parsed.ageFilter === '0-1' ||
+        parsed.ageFilter === '1-3' ||
+        parsed.ageFilter === '3-5' ||
+        parsed.ageFilter === '5+'
+          ? parsed.ageFilter
+          : 'all',
+      splitterSearch: typeof parsed.splitterSearch === 'string' ? parsed.splitterSearch : '',
+      geoTab: parsed.geoTab === 'ruas' ? 'ruas' : 'condominios',
+      selectedMatrixKey:
+        parsed.selectedMatrixKey === 'altoImpactoAltaUrgencia' ||
+        parsed.selectedMatrixKey === 'altoImpactoBaixaUrgencia' ||
+        parsed.selectedMatrixKey === 'baixoImpactoAltaUrgencia' ||
+        parsed.selectedMatrixKey === 'baixoImpactoBaixaUrgencia'
+          ? parsed.selectedMatrixKey
+          : null,
+      mapCorporateOnly: parsed.mapCorporateOnly === true,
+    }
+  } catch {
+    return {
+      preset: '30d',
+      customStart: '',
+      customEnd: '',
+      activeWindow: 'visao-geral',
+      riskBandFilter: 'all',
+      ageFilter: 'all',
+      splitterSearch: '',
+      geoTab: 'condominios',
+      selectedMatrixKey: null,
+      mapCorporateOnly: false,
+    }
+  }
+}
+
 const TAB_INTRO: Record<IntelligenceWindow, string> = {
   'visao-geral':
     'Panorama da rede no período: ocupação global, como os splitters estão classificados por tendência, massivas e indicadores para decisão rápida.',
@@ -396,18 +490,75 @@ function corporateRegionalInsightDirective(args: {
 }
 
 export function NetworkIntelligencePage() {
-  const [preset, setPreset] = useState<IntelligenceDateRangePreset>('30d')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
-  const [activeWindow, setActiveWindow] = useState<IntelligenceWindow>('visao-geral')
-  const [riskBandFilter, setRiskBandFilter] = useState<'all' | 'critico' | 'alto' | 'moderado' | 'baixo'>('all')
-  const [ageFilter, setAgeFilter] = useState<AgeFilter>('all')
-  const [splitterSearch, setSplitterSearch] = useState('')
-  const [geoTab, setGeoTab] = useState<'condominios' | 'ruas'>('condominios')
-  const [selectedMatrixKey, setSelectedMatrixKey] = useState<
-    'altoImpactoAltaUrgencia' | 'altoImpactoBaixaUrgencia' | 'baixoImpactoAltaUrgencia' | 'baixoImpactoBaixaUrgencia' | null
-  >(null)
-  const [mapCorporateOnly, setMapCorporateOnly] = useState(false)
+  const [uiState, setUiState] = useState(readNetworkIntelligenceUiState)
+  const {
+    preset,
+    customStart,
+    customEnd,
+    activeWindow,
+    riskBandFilter,
+    ageFilter,
+    splitterSearch,
+    geoTab,
+    selectedMatrixKey,
+    mapCorporateOnly,
+  } = uiState
+  const setPreset = (value: IntelligenceDateRangePreset) =>
+    setUiState((prev) => ({ ...prev, preset: value }))
+  const setCustomStart = (value: string) =>
+    setUiState((prev) => ({ ...prev, customStart: value }))
+  const setCustomEnd = (value: string) =>
+    setUiState((prev) => ({ ...prev, customEnd: value }))
+  const setActiveWindow = (value: IntelligenceWindow) =>
+    setUiState((prev) => ({ ...prev, activeWindow: value }))
+  const setRiskBandFilter = (value: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo') =>
+    setUiState((prev) => ({ ...prev, riskBandFilter: value }))
+  const setAgeFilter = (value: AgeFilter) =>
+    setUiState((prev) => ({ ...prev, ageFilter: value }))
+  const setSplitterSearch = (value: string) =>
+    setUiState((prev) => ({ ...prev, splitterSearch: value }))
+  const setGeoTab = (value: 'condominios' | 'ruas') =>
+    setUiState((prev) => ({ ...prev, geoTab: value }))
+  const setSelectedMatrixKey = (
+    value:
+      | 'altoImpactoAltaUrgencia'
+      | 'altoImpactoBaixaUrgencia'
+      | 'baixoImpactoAltaUrgencia'
+      | 'baixoImpactoBaixaUrgencia'
+      | null
+      | ((
+          prev:
+            | 'altoImpactoAltaUrgencia'
+            | 'altoImpactoBaixaUrgencia'
+            | 'baixoImpactoAltaUrgencia'
+            | 'baixoImpactoBaixaUrgencia'
+            | null,
+        ) =>
+          | 'altoImpactoAltaUrgencia'
+          | 'altoImpactoBaixaUrgencia'
+          | 'baixoImpactoAltaUrgencia'
+          | 'baixoImpactoBaixaUrgencia'
+          | null),
+  ) =>
+    setUiState((prev) => ({
+      ...prev,
+      selectedMatrixKey:
+        typeof value === 'function' ? value(prev.selectedMatrixKey) : value,
+    }))
+  const setMapCorporateOnly = (value: boolean | ((prev: boolean) => boolean)) =>
+    setUiState((prev) => ({
+      ...prev,
+      mapCorporateOnly:
+        typeof value === 'function' ? value(prev.mapCorporateOnly) : value,
+    }))
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      NETWORK_INTELLIGENCE_UI_STATE_KEY,
+      JSON.stringify(uiState),
+    )
+  }, [uiState])
 
   const customStartDate = customStart ? new Date(`${customStart}T00:00:00`) : null
   const customEndDate = customEnd ? new Date(`${customEnd}T23:59:59`) : null
@@ -419,7 +570,6 @@ export function NetworkIntelligencePage() {
     source,
     kpis,
     trends,
-    massivaStats,
     areaPoints,
     barPoints,
     recurrenceCells,
@@ -890,12 +1040,23 @@ export function NetworkIntelligencePage() {
         title="Painel da rede"
         description="Cruza ocupação de portas, tendência por splitter, massivas e, nas outras abas, risco, geografia e manutenções. Escolha o período abaixo e use busca e filtros para focar OLT, faixa de risco ou idade; os números respondem sempre à mesma janela."
         trailing={
-          showBackgroundRefresh ? (
-            <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-amber-200/80 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-sm">
-              <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-700" aria-hidden />
-              <span className="text-[10px] font-bold normal-case text-neutral-600">Atualizando dados…</span>
-            </span>
-          ) : null
+          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+            {showBackgroundRefresh ? (
+              <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-amber-200/80 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-sm">
+                <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-700" aria-hidden />
+                <span className="text-[10px] font-bold normal-case text-neutral-600">Atualizando dados...</span>
+              </span>
+            ) : (
+              <span />
+            )}
+            <div className="relative hidden h-[8.5rem] w-[17rem] self-center overflow-hidden xl:block">
+              <div
+                aria-hidden
+                className="absolute right-[-5%] top-[-8%] h-[120%] w-[110%] bg-contain bg-right bg-no-repeat opacity-100 saturate-105"
+                style={{ backgroundImage: "url('/isa-network-header.png')" }}
+              />
+            </div>
+          </div>
         }
       />
 

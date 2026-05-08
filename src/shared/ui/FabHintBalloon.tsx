@@ -45,6 +45,7 @@ type FabHintBalloonProps = {
    * `0` desativa. Com movimento reduzido do sistema, é ignorado.
    */
   typingSimulationMs?: number
+  placement?: 'top-right' | 'top-left' | 'right'
   className?: string
   children: ReactNode
 }
@@ -62,6 +63,7 @@ export function FabHintBalloon({
   suppress = false,
   reduceMotion: reduceMotionProp,
   typingSimulationMs = DEFAULT_TYPING_SIMULATION_MS,
+  placement = 'top-right',
   className,
   children,
 }: FabHintBalloonProps) {
@@ -146,6 +148,27 @@ export function FabHintBalloon({
     !suppress &&
     (pinned || (!reduced && !postIntro) || peekFlash)
 
+  const balloonPositionClassName =
+    placement === 'right'
+      ? 'left-full top-1/2 z-[2] ml-3 -translate-y-1/2'
+      : placement === 'top-left'
+        ? 'bottom-full left-2 z-[2] mb-2.5'
+        : 'bottom-full right-2 z-[2] mb-2.5'
+
+  const tailClassName =
+    placement === 'right'
+      ? 'absolute right-full top-1/2 -mr-px -translate-y-1/2 border-y-[8px] border-y-transparent border-r-[9px] border-r-neutral-50'
+      : placement === 'top-left'
+        ? 'absolute left-7 top-full -mt-px -translate-x-1/2 border-x-[8px] border-x-transparent border-t-[9px] border-t-neutral-50'
+        : 'absolute left-[calc(100%-1.75rem)] top-full -mt-px -translate-x-1/2 border-x-[8px] border-x-transparent border-t-[9px] border-t-neutral-50'
+
+  const tailBorderClassName =
+    placement === 'right'
+      ? 'absolute right-full top-1/2 -translate-y-1/2 border-y-[9px] border-y-transparent border-r-[10px] border-r-neutral-200'
+      : placement === 'top-left'
+        ? 'absolute left-7 top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200'
+        : 'absolute left-[calc(100%-1.75rem)] top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200'
+
   return (
     <div
       className={cn('relative inline-flex flex-col items-end', className)}
@@ -155,7 +178,10 @@ export function FabHintBalloon({
       <motion.div
         role="tooltip"
         aria-hidden={!visible}
-        className="pointer-events-none absolute bottom-full right-2 z-[2] mb-2.5 w-max max-w-[min(19rem,calc(100vw-2rem))]"
+        className={cn(
+          'pointer-events-none absolute w-max max-w-[min(19rem,calc(100vw-2rem))]',
+          balloonPositionClassName,
+        )}
         initial={reduced ? false : { opacity: 0, y: 14, scale: 0.92 }}
         animate={
           reduced
@@ -196,14 +222,8 @@ export function FabHintBalloon({
               <IsaTypingDots className="py-0.5" />
             )}
           </div>
-          <span
-            className="absolute left-[calc(100%-1.75rem)] top-full -mt-px -translate-x-1/2 border-x-[8px] border-x-transparent border-t-[9px] border-t-neutral-50"
-            aria-hidden
-          />
-          <span
-            className="absolute left-[calc(100%-1.75rem)] top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200"
-            aria-hidden
-          />
+          <span className={tailClassName} aria-hidden />
+          <span className={tailBorderClassName} aria-hidden />
         </div>
       </motion.div>
 

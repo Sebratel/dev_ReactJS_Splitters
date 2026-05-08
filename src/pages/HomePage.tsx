@@ -9,7 +9,6 @@ import {
   Zap,
   Server,
   RadioTower,
-  ChevronDown,
   Sparkles,
 } from 'lucide-react'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'

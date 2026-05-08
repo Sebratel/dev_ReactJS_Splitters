@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
 import { Filter, Network, Search, X } from 'lucide-react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
@@ -8,6 +8,7 @@ import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
 import { useSplittersOperationalPriorityQueue } from '@/features/splitters/hooks/useSplittersOperationalPriorityQueue'
+import { useSplittersNetworkReliefQueue } from '@/features/splitters/hooks/useSplittersNetworkReliefQueue'
 import { useSplittersList } from '@/features/splitters/hooks/useSplittersList'
 import { useAccessPointsForFilters } from '@/features/splitters/hooks/useAccessPointsForFilters'
 import { useOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesFromLocalDb'
@@ -53,11 +54,44 @@ type SplitterListEntry = {
   trendLabel: string
 }
 
+const SPLITTERS_PAGE_UI_STATE_KEY = 'nexaview.splitters.page-ui.v1'
+
+function readSplittersPageUiState(): {
+  filtersOpen: boolean
+  sortMode: SplittersSortMode
+} {
+  if (typeof window === 'undefined') {
+    return { filtersOpen: false, sortMode: 'risk-desc' }
+  }
+  try {
+    const raw = window.sessionStorage.getItem(SPLITTERS_PAGE_UI_STATE_KEY)
+    if (!raw) return { filtersOpen: false, sortMode: 'risk-desc' }
+    const parsed = JSON.parse(raw) as { filtersOpen?: unknown; sortMode?: unknown }
+    const sortMode = typeof parsed.sortMode === 'string'
+      ? parsed.sortMode as SplittersSortMode
+      : 'risk-desc'
+    const filtersOpen = parsed.filtersOpen === true
+    return { filtersOpen, sortMode }
+  } catch {
+    return { filtersOpen: false, sortMode: 'risk-desc' }
+  }
+}
+
 export function SplittersPage() {
+  const outletContext = useOutletContext<{
+    sidebarCollapsed?: boolean
+    mobileNavOpen?: boolean
+  } | undefined>()
+  const sidebarCollapsed = outletContext?.sidebarCollapsed ?? false
+  const mobileNavOpen = outletContext?.mobileNavOpen ?? false
   const reduceMotion = useReducedMotion()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [sortMode, setSortMode] = useState<SplittersSortMode>('risk-desc')
+  const [pageUiState, setPageUiState] = useState(readSplittersPageUiState)
+  const { filtersOpen, sortMode } = pageUiState
+  const setFiltersOpen = (value: boolean) =>
+    setPageUiState((prev) => ({ ...prev, filtersOpen: value }))
+  const setSortMode = (value: SplittersSortMode) =>
+    setPageUiState((prev) => ({ ...prev, sortMode: value }))
   const {
     state,
     setSearchQuery,
@@ -213,6 +247,14 @@ export function SplittersPage() {
 
   const activeFilterCount = countActiveSplittersFilters(state)
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      SPLITTERS_PAGE_UI_STATE_KEY,
+      JSON.stringify(pageUiState),
+    )
+  }, [pageUiState])
+
   // Lê a página da URL (?page=3); padrão 1 se ausente ou inválido
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
 
@@ -307,6 +349,10 @@ export function SplittersPage() {
       state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
     maintenanceStatsByCode,
     listReady: splittersListReadyForPriorityFab,
+  })
+
+  const networkReliefQueueQuery = useSplittersNetworkReliefQueue({
+    enabled: splittersListReadyForPriorityFab,
   })
 
   const items = useMemo(
@@ -580,8 +626,11 @@ export function SplittersPage() {
         enabled={splittersTotalCount > 0 && Boolean(splittersQuery.data) && !splittersQuery.isError}
         totalCount={totalCount}
         reduceMotion={reduceMotion}
-        query={operationalPriorityQuery}
+        operationalQuery={operationalPriorityQuery}
+        reliefQueueQuery={networkReliefQueueQuery}
         filtersDrawerOpen={filtersOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        mobileNavOpen={mobileNavOpen}
       />
 
       <SplittersList

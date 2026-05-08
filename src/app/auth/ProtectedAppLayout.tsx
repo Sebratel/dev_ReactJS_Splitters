@@ -1,10 +1,15 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useOutletContext } from 'react-router-dom'
 import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
 
 export function ProtectedAppLayout() {
+  const layoutContext = useOutletContext<{
+    sidebarCollapsed?: boolean
+    mobileNavOpen?: boolean
+  } | undefined>()
+
   return (
     <ProtectedRoute>
-      <Outlet />
+      <Outlet context={layoutContext} />
     </ProtectedRoute>
   )
 }

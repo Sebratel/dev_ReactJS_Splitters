@@ -314,9 +314,8 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
       <div>
         <SaturationMapLegend />
         <p className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/80 px-4 py-6 text-center text-sm text-amber-950">
-          Há {cells.length} splitter(es) no período, mas nenhum tem latitude/longitude válidas no cadastro.
-          Confira <span className="font-mono text-xs">LATITUDE[SPLT.SECUNDARIO]</span> e{' '}
-          <span className="font-mono text-xs">LONGITUDE[SPLT.SECUNDARIO]</span> no BFF.
+          Há {cells.length} splitter(es) no período, mas nenhum tem coordenadas válidas (caixa de rede ou cadastro
+          do splitter) na consulta base.
         </p>
       </div>
     )

@@ -94,7 +94,7 @@ export function RootLayout() {
               />
             </div>
           )}
-          <Outlet />
+          <Outlet context={{ sidebarCollapsed, mobileNavOpen }} />
         </main>
       </div>
     </div>

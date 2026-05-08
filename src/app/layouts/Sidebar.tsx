@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   AlertTriangle,
   BarChart2,
-  ExternalLink,
   Users,
   LogOut,
   X,
@@ -13,7 +12,7 @@ import {
 import operacaoSebratelMark from '@/assets/operacao-sebratel-mark.svg'
 import { cn } from '@/shared/lib/utils'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
-import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
+import { isFirebaseAuthConfigured } from '@/shared/config/env'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { prefetchNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
@@ -179,70 +178,51 @@ export function Sidebar({
               ))}
             </ul>
 
-            {!navCollapsed ? (
+            {!navCollapsed && isFirebaseAuthConfigured() ? (
               <div className="mt-4 px-2">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
-                  Links externos
-                </p>
-                <a
-                  href={env.hubOrigin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => onNavigate()}
-                  className="flex min-h-[44px] items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-primary/15 hover:bg-surface-container-low hover:text-on-surface"
+                <button
+                  type="button"
+                  onClick={() => {
+                    void signOutUser()
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-primary">
-                    <ExternalLink size={18} aria-hidden />
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                    <LogOut size={18} aria-hidden />
                   </span>
-                  Hub Sebratel
-                </a>
-                {isFirebaseAuthConfigured() ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void signOutUser()
-                    }}
-                    className="mt-2 flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
-                      <LogOut size={18} aria-hidden />
-                    </span>
-                    Sair
-                  </button>
-                ) : null}
+                  Sair
+                </button>
               </div>
-            ) : (
-              <div className="mt-4">
-                <a
-                  href={env.hubOrigin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Hub Sebratel"
-                  onClick={() => onNavigate()}
-                  className="flex justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-primary/15 hover:bg-surface-container-low hover:text-on-surface"
+            ) : null}
+
+            {navCollapsed && isFirebaseAuthConfigured() ? (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void signOutUser()
+                  }}
+                  title="Sair"
+                  className="flex w-full justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-container-low text-primary">
-                    <ExternalLink size={18} aria-hidden />
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                    <LogOut size={18} aria-hidden />
                   </span>
-                </a>
-                {isFirebaseAuthConfigured() ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void signOutUser()
-                    }}
-                    title="Sair"
-                    className="mt-2 flex w-full justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
-                      <LogOut size={18} aria-hidden />
-                    </span>
-                  </button>
-                ) : null}
+                </button>
               </div>
-            )}
+            ) : null}
           </div>
         </nav>
+
+        {!navCollapsed ? (
+          <div className="mt-4 shrink-0 px-2">
+            <div
+              id="splitters-sidebar-fab-dock"
+              className="mt-3 flex min-h-[6.5rem] items-end justify-center"
+              aria-hidden
+            />
+          </div>
+        ) : null}
       </div>
     </aside>
   )
