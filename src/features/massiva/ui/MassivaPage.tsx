@@ -40,9 +40,45 @@ type MassivaPageProps = {
   canOpenMassiva?: boolean
 }
 
+const MASSIVA_PAGE_UI_STATE_KEY = 'nexaview.massiva.page-ui.v1'
+
+function readMassivaPageUiState(): { currentStep: MassivaStepId } {
+  if (typeof window === 'undefined') {
+    return { currentStep: 'rota' }
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(MASSIVA_PAGE_UI_STATE_KEY)
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<{ currentStep: MassivaStepId }>
+    return {
+      currentStep:
+        parsed.currentStep === 'rota' ||
+        parsed.currentStep === 'splitters' ||
+        parsed.currentStep === 'validacao' ||
+        parsed.currentStep === 'abertura'
+          ? parsed.currentStep
+          : 'rota',
+    }
+  } catch {
+    return { currentStep: 'rota' }
+  }
+}
+
 export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   const location = useLocation()
-  const [currentStep, setCurrentStep] = useState<MassivaStepId>('rota')
+  const [pageUiState, setPageUiState] = useState(readMassivaPageUiState)
+  const { currentStep } = pageUiState
+  const setCurrentStep = (
+    value: MassivaStepId | ((previous: MassivaStepId) => MassivaStepId),
+  ) =>
+    setPageUiState((previous) => ({
+      ...previous,
+      currentStep:
+        typeof value === 'function'
+          ? value(previous.currentStep)
+          : value,
+    }))
   const enableImpactComputation =
     currentStep === 'validacao' || currentStep === 'abertura'
   const localPreview = useMassivaLocalPreview({ enableImpactComputation })
@@ -156,6 +192,14 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   }, [localPreview.openingPreparation, readiness])
 
   const didApplyPrefillRef = useRef(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      MASSIVA_PAGE_UI_STATE_KEY,
+      JSON.stringify(pageUiState),
+    )
+  }, [pageUiState])
+
   useEffect(() => {
     if (didApplyPrefillRef.current) return
     const raw = (location.state as { massivaPrefill?: { splitterCode?: string; splitterLabel?: string } } | null)?.massivaPrefill

@@ -1,10 +1,29 @@
-﻿import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BotMessageSquare, ClipboardList } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
 import { MassivaAutoIspSupportSection } from '@/features/massiva/ui/MassivaAutoIspSupportSection'
 import { MassivaTicketsSection } from '@/features/massiva/ui/MassivaTicketsSection'
+import { cn } from '@/shared/lib/utils'
 
 type RightPanelTab = 'autoisp' | 'protocolos'
+
+const MASSIVA_RIGHT_PANEL_UI_STATE_KEY = 'nexaview.massiva.right-panel.ui.v1'
+
+function readRightPanelUiState(): { tab: RightPanelTab } {
+  if (typeof window === 'undefined') {
+    return { tab: 'autoisp' }
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(MASSIVA_RIGHT_PANEL_UI_STATE_KEY)
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<{ tab: RightPanelTab }>
+    return {
+      tab: parsed.tab === 'protocolos' ? 'protocolos' : 'autoisp',
+    }
+  } catch {
+    return { tab: 'autoisp' }
+  }
+}
 
 export function AutoISPPanel() {
   return <MassivaAutoIspSupportSection />
@@ -19,8 +38,17 @@ type RightPanelProps = {
 }
 
 export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
-  const [tab, setTab] = useState<RightPanelTab>('autoisp')
+  const [uiState, setUiState] = useState(readRightPanelUiState)
+  const { tab } = uiState
   const activeTab: RightPanelTab = showProtocolsTab ? tab : 'autoisp'
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      MASSIVA_RIGHT_PANEL_UI_STATE_KEY,
+      JSON.stringify(uiState),
+    )
+  }, [uiState])
 
   return (
     <aside className="flex min-h-0 min-w-0 flex-col rounded-xl bg-neutral-50/80 px-3 py-3 ring-1 ring-neutral-200/70 sm:px-4 sm:py-4">
@@ -34,7 +62,7 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
           </h2>
           <p className="mt-1 text-sm text-neutral-500">
             {activeTab === 'autoisp'
-              ? 'Sugestões de eventos e preenchimento assistido.'
+              ? 'Sugestoes de eventos e preenchimento assistido.'
               : 'Consulta e encerramento de protocolos existentes.'}
           </p>
         </div>
@@ -48,7 +76,7 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
               type="button"
               role="tab"
               aria-selected={tab === 'autoisp'}
-              onClick={() => setTab('autoisp')}
+              onClick={() => setUiState({ tab: 'autoisp' })}
               className={cn(
                 'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
                 tab === 'autoisp'
@@ -63,7 +91,7 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
               type="button"
               role="tab"
               aria-selected={tab === 'protocolos'}
-              onClick={() => setTab('protocolos')}
+              onClick={() => setUiState({ tab: 'protocolos' })}
               className={cn(
                 'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
                 tab === 'protocolos'

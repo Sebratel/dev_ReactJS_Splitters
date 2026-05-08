@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 /**
  * Rascunho de abertura: campos do formulário + descrição técnica (template ou editada).
@@ -89,26 +90,47 @@ const createInitialState = () => ({
   affectedUsersQuantityAutoIspOverride: null,
 })
 
-export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>((set) => ({
-  ...createInitialState(),
-  setAssignmentDescription: (assignmentDescription) =>
-    set({ assignmentDescription }),
-  setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
-  setAssignmentForecastDate: (assignmentForecastDate) =>
-    set({ assignmentForecastDate }),
-  setAssignmentForecastTime: (assignmentForecastTime) =>
-    set({ assignmentForecastTime }),
-  setEventStartDate: (eventStartDate) => set({ eventStartDate }),
-  setEventStartTime: (eventStartTime) => set({ eventStartTime }),
-  setEventIdentifiedDate: (eventIdentifiedDate) =>
-    set({ eventIdentifiedDate }),
-  setEventIdentifiedTime: (eventIdentifiedTime) =>
-    set({ eventIdentifiedTime }),
-  setInitialReport: (initialReport) => set({ initialReport }),
-  setFieldTechnicianRequesting: (fieldTechnicianRequesting) =>
-    set({ fieldTechnicianRequesting }),
-  setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
-    set({ affectedUsersQuantityAutoIspOverride }),
-  enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
-  reset: () => set(buildInitialDraft()),
-}))
+export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
+  persist(
+    (set) => ({
+      ...createInitialState(),
+      setAssignmentDescription: (assignmentDescription) =>
+        set({ assignmentDescription }),
+      setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
+      setAssignmentForecastDate: (assignmentForecastDate) =>
+        set({ assignmentForecastDate }),
+      setAssignmentForecastTime: (assignmentForecastTime) =>
+        set({ assignmentForecastTime }),
+      setEventStartDate: (eventStartDate) => set({ eventStartDate }),
+      setEventStartTime: (eventStartTime) => set({ eventStartTime }),
+      setEventIdentifiedDate: (eventIdentifiedDate) =>
+        set({ eventIdentifiedDate }),
+      setEventIdentifiedTime: (eventIdentifiedTime) =>
+        set({ eventIdentifiedTime }),
+      setInitialReport: (initialReport) => set({ initialReport }),
+      setFieldTechnicianRequesting: (fieldTechnicianRequesting) =>
+        set({ fieldTechnicianRequesting }),
+      setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
+        set({ affectedUsersQuantityAutoIspOverride }),
+      enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
+      reset: () => set(buildInitialDraft()),
+    }),
+    {
+      name: 'nexaview.massiva.open-draft.v1',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        assignmentDescription: state.assignmentDescription,
+        descriptionAutoSync: state.descriptionAutoSync,
+        assignmentForecastDate: state.assignmentForecastDate,
+        assignmentForecastTime: state.assignmentForecastTime,
+        eventStartDate: state.eventStartDate,
+        eventStartTime: state.eventStartTime,
+        eventIdentifiedDate: state.eventIdentifiedDate,
+        eventIdentifiedTime: state.eventIdentifiedTime,
+        initialReport: state.initialReport,
+        fieldTechnicianRequesting: state.fieldTechnicianRequesting,
+        affectedUsersQuantityAutoIspOverride: state.affectedUsersQuantityAutoIspOverride,
+      }),
+    },
+  ),
+)

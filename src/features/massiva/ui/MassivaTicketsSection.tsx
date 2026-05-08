@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bar,
@@ -32,6 +32,7 @@ import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 
 /** Texto de encerramento não pode ser vazio; mínimo curto para não bloquear descrições objetivas. */
 const CLOSE_DESCRIPTION_MIN_LEN = 3
+const MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX = 'nexaview.massiva.tickets.ui'
 
 function ticketKey(t: MassivaTicket, index: number): string {
   return `${t.protocol}-${t.assignmentId ?? 'x'}-${index}`
@@ -125,10 +126,63 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
 }
 
 export type MassivaTicketsSectionLayout = 'default' | 'embedded'
-
 type MassivaTicketsSectionProps = {
-  /** `embedded`: sem borda dupla; cabeçalho da lista fica no painel pai; rolagem vertical = página (só overflow-x na tabela se necessário). */
+  /** embedded: sem borda dupla; cabecalho da lista fica no painel pai; rolagem vertical = pagina (so overflow-x na tabela se necessario). */
   layout?: MassivaTicketsSectionLayout
+}
+function massivaTicketsUiStateKey(layout: MassivaTicketsSectionLayout): string {
+  return `${MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX}.${layout}.v1`
+}
+function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
+  query: string
+  scope: MassivaListScope
+  periodPreset: PeriodPreset
+  impactRange: ImpactRange
+  recordTypeFilter: MassivaRecordTypeFilter
+  visibleCount: number
+} {
+  const initialState = {
+    query: '',
+    scope: 'abertas' as MassivaListScope,
+    periodPreset: '30d' as PeriodPreset,
+    impactRange: 'all' as ImpactRange,
+    recordTypeFilter: 'all' as MassivaRecordTypeFilter,
+    visibleCount: MASSIVA_PAGE_SIZE,
+  }
+  if (typeof window === 'undefined') return initialState
+  try {
+    const raw = window.sessionStorage.getItem(massivaTicketsUiStateKey(layout))
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<typeof initialState>
+    return {
+      query: typeof parsed.query === 'string' ? parsed.query : initialState.query,
+      scope:
+        parsed.scope === 'encerradas' || parsed.scope === 'todas'
+          ? parsed.scope
+          : initialState.scope,
+      periodPreset:
+        parsed.periodPreset === '7d' || parsed.periodPreset === '90d'
+          ? parsed.periodPreset
+          : initialState.periodPreset,
+      impactRange:
+        parsed.impactRange === 'none' ||
+        parsed.impactRange === 'low' ||
+        parsed.impactRange === 'medium' ||
+        parsed.impactRange === 'high'
+          ? parsed.impactRange
+          : initialState.impactRange,
+      recordTypeFilter:
+        parsed.recordTypeFilter === 'incidente' || parsed.recordTypeFilter === 'evento'
+          ? parsed.recordTypeFilter
+          : initialState.recordTypeFilter,
+      visibleCount:
+        typeof parsed.visibleCount === 'number' && parsed.visibleCount >= MASSIVA_PAGE_SIZE
+          ? Math.trunc(parsed.visibleCount)
+          : initialState.visibleCount,
+    }
+  } catch {
+    return initialState
+  }
 }
 
 export function MassivaTicketsSection({
@@ -137,12 +191,16 @@ export function MassivaTicketsSection({
   const embedded = layout === 'embedded'
   const { view, refetch, isRefreshing } = useMassivaTickets()
   const queryClient = useQueryClient()
-  const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<MassivaListScope>('abertas')
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('30d')
-  const [impactRange, setImpactRange] = useState<ImpactRange>('all')
-  const [recordTypeFilter, setRecordTypeFilter] = useState<MassivaRecordTypeFilter>('all')
-  const [visibleCount, setVisibleCount] = useState(MASSIVA_PAGE_SIZE)
+  const [uiState, setUiState] = useState(() => readMassivaTicketsUiState(layout))
+  const {
+    query,
+    scope,
+    periodPreset,
+    impactRange,
+    recordTypeFilter,
+    visibleCount,
+  } = uiState
+  const didRestoreVisibleCountRef = useRef(false)
   const [csvCopied, setCsvCopied] = useState(false)
   const [closingProtocol, setClosingProtocol] = useState<number | null>(null)
   const [closeDescription, setCloseDescription] = useState('')
@@ -344,7 +402,19 @@ export function MassivaTicketsSection({
   }, [typeScopedTicketsInWindow, chartTotalAffected, chartSeries])
 
   useEffect(() => {
-    setVisibleCount(MASSIVA_PAGE_SIZE)
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      massivaTicketsUiStateKey(layout),
+      JSON.stringify(uiState),
+    )
+  }, [layout, uiState])
+
+  useEffect(() => {
+    if (!didRestoreVisibleCountRef.current) {
+      didRestoreVisibleCountRef.current = true
+      return
+    }
+    setUiState((prev) => ({ ...prev, visibleCount: MASSIVA_PAGE_SIZE }))
   }, [scope, periodPreset, query, impactRange, recordTypeFilter])
 
   const visibleTickets = useMemo(
@@ -445,7 +515,7 @@ export function MassivaTicketsSection({
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setScope(opt.id)}
+                onClick={() => setUiState((prev) => ({ ...prev, scope: opt.id }))}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
                   scope === opt.id
                     ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
@@ -458,7 +528,7 @@ export function MassivaTicketsSection({
           </div>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, query: e.target.value }))}
             placeholder="Pesquisar…"
             className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
@@ -471,7 +541,7 @@ export function MassivaTicketsSection({
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setPeriodPreset(opt.id)}
+                onClick={() => setUiState((prev) => ({ ...prev, periodPreset: opt.id }))}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
                   periodPreset === opt.id
                     ? 'bg-neutral-900 text-white'
@@ -484,7 +554,7 @@ export function MassivaTicketsSection({
           </div>
           <select
             value={impactRange}
-            onChange={(e) => setImpactRange(e.target.value as ImpactRange)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, impactRange: e.target.value as ImpactRange }))}
             className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Impacto: todos</option>
@@ -495,7 +565,7 @@ export function MassivaTicketsSection({
           </select>
           <select
             value={recordTypeFilter}
-            onChange={(e) => setRecordTypeFilter(e.target.value as MassivaRecordTypeFilter)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, recordTypeFilter: e.target.value as MassivaRecordTypeFilter }))}
             className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Tipo: todos</option>
@@ -647,7 +717,7 @@ export function MassivaTicketsSection({
               <div className="mt-4 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => prev + MASSIVA_PAGE_SIZE)}
+                  onClick={() => setUiState((prev) => ({ ...prev, visibleCount: prev.visibleCount + MASSIVA_PAGE_SIZE }))}
                   className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
                 >
                   Carregar mais ({visibleTickets.length}/{filteredTickets.length})
@@ -745,3 +815,5 @@ export function MassivaTicketsSection({
     </section>
   )
 }
+
+

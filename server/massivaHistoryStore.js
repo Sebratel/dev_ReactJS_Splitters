@@ -77,8 +77,20 @@ export function createMassivaHistoryStore(config) {
       async getSplitterTrends() {
         return new Map();
       },
+      async getRecentSplitterSnapshots() {
+        return [];
+      },
+      async getRecentHistoryBySplitter() {
+        return [];
+      },
       async getOpenMassivaDashboardKpis() {
         return { openMassivas: 0, affectedClientsOpen: 0 };
+      },
+      async replaceNetworkReliefSnapshot() {
+        return { configured: false, snapshotRunId: null, entryCount: 0 };
+      },
+      async getLatestNetworkReliefSnapshotPage() {
+        return null;
       },
       async getHistoryList() {
         return [];
@@ -730,6 +742,101 @@ export function createMassivaHistoryStore(config) {
     return trends;
   }
 
+
+  async function getRecentSplitterSnapshots(splitterCode, limit = 6) {
+    await ensureReady();
+
+    const normalizedCode = normalizeText(splitterCode);
+    if (normalizedCode === '') return [];
+
+    const cappedLimit = Math.min(24, Math.max(1, normalizePositiveInt(limit) ?? 6));
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          splitter_code AS splitterCode,
+          splitter_title AS splitterTitle,
+          access_point_code AS accessPointCode,
+          captured_day AS capturedDay,
+          captured_at AS capturedAt,
+          active AS active,
+          out_ports AS outPorts,
+          busy_count AS busyCount,
+          usage_percent AS usagePercent,
+          massiva_open_count AS massivaOpenCount,
+          massiva_total_count AS massivaTotalCount
+        FROM splitter_snapshots
+        WHERE splitter_code = ?
+        ORDER BY captured_at DESC
+        LIMIT ?
+      `,
+      [normalizedCode, cappedLimit],
+    );
+
+    return rows.map((row) => ({
+      splitterCode: normalizeText(row.splitterCode),
+      splitterTitle: normalizeText(row.splitterTitle),
+      accessPointCode: normalizeText(row.accessPointCode),
+      capturedDay: normalizeText(row.capturedDay),
+      capturedAt:
+        row.capturedAt instanceof Date
+          ? row.capturedAt.toISOString()
+          : normalizeDate(row.capturedAt)?.toISOString() ?? null,
+      active: Number(row.active ?? 0) === 1,
+      outPorts: Number(row.outPorts ?? 0),
+      busyCount: Number(row.busyCount ?? 0),
+      usagePercent: Number(row.usagePercent ?? 0),
+      massivaOpenCount: Number(row.massivaOpenCount ?? 0),
+      massivaTotalCount: Number(row.massivaTotalCount ?? 0),
+    }));
+  }
+
+  async function getRecentHistoryBySplitter(splitterCode, limit = 5) {
+    await ensureReady();
+
+    const normalizedCode = normalizeText(splitterCode);
+    if (normalizedCode === '') return [];
+
+    const cappedLimit = Math.min(20, Math.max(1, normalizePositiveInt(limit) ?? 5));
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          h.id AS id,
+          h.protocol AS protocol,
+          h.assignment_id AS assignmentId,
+          h.access_point_code AS accessPointCode,
+          h.title AS title,
+          h.affected_clients AS affectedClients,
+          h.status AS status,
+          h.opened_at AS openedAt,
+          h.closed_at AS closedAt
+        FROM massiva_history h
+        INNER JOIN massiva_history_splitters hs
+          ON hs.massiva_history_id = h.id
+        WHERE hs.splitter_code = ?
+        ORDER BY h.opened_at DESC, h.id DESC
+        LIMIT ?
+      `,
+      [normalizedCode, cappedLimit],
+    );
+
+    return rows.map((row) => ({
+      id: Number(row.id ?? 0),
+      protocol: row.protocol == null ? null : Number(row.protocol),
+      assignmentId: row.assignmentId == null ? null : Number(row.assignmentId),
+      accessPointCode: normalizeText(row.accessPointCode),
+      title: normalizeText(row.title),
+      affectedClients: Number(row.affectedClients ?? 0),
+      status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
+      openedAt:
+        row.openedAt instanceof Date
+          ? row.openedAt.toISOString()
+          : normalizeDate(row.openedAt)?.toISOString() ?? null,
+      closedAt:
+        row.closedAt instanceof Date
+          ? row.closedAt.toISOString()
+          : normalizeDate(row.closedAt)?.toISOString() ?? null,
+    }));
+  }
   /** Agregado de massivas abertas (mesma fonte do snapshot diário do dashboard). */
   async function getOpenMassivaDashboardKpis() {
     await ensureReady();
@@ -742,6 +849,229 @@ export function createMassivaHistoryStore(config) {
     return {
       openMassivas: row ? Number(row.open_count ?? 0) : 0,
       affectedClientsOpen: row ? Number(row.affected_sum ?? 0) : 0,
+    };
+  }
+
+  async function replaceNetworkReliefSnapshot(input = {}) {
+    await ensureReady();
+
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
+    const scannedCount = normalizeNonNegativeInt(input?.scannedCount, 0);
+    const cleanEntries = (Array.isArray(input?.entries) ? input.entries : [])
+      .map((entry, index) => {
+        const splitterCode = normalizeText(entry?.splitter?.code);
+        if (splitterCode === '') return null;
+
+        return {
+          position: index + 1,
+          splitterCode,
+          splitterTitle: normalizeText(entry?.splitter?.title) || splitterCode,
+          outPorts: normalizeNonNegativeInt(entry?.splitter?.outPorts, 0),
+          busyCount: normalizeNonNegativeInt(entry?.splitter?.busyCount, 0),
+          straightNeighborsSampled: normalizeNonNegativeInt(entry?.straightNeighborsSampled, 0),
+          neighborStraightRadiusScanned: normalizeNonNegativeInt(
+            entry?.neighborStraightRadiusScanned,
+            straightRadiusMeters,
+          ),
+          maxRouteMeters: normalizeNonNegativeInt(entry?.maxRouteMeters, maxRouteMeters),
+          ruleType:
+            normalizeText(entry?.ruleType).toUpperCase() === 'CONDOMINIUM'
+              ? 'CONDOMINIUM'
+              : 'STREET',
+        };
+      })
+      .filter(Boolean);
+
+    const connection = await dataPool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [runResult] = await connection.query(
+        `
+          INSERT INTO splitter_network_relief_snapshot_runs (
+            status,
+            straight_radius_meters,
+            max_route_meters,
+            scanned_count,
+            entry_count,
+            started_at,
+            finished_at,
+            error_message
+          )
+          VALUES ('running', ?, ?, 0, 0, NOW(), NULL, NULL)
+        `,
+        [straightRadiusMeters, maxRouteMeters],
+      );
+
+      const snapshotRunId = Number(runResult?.insertId ?? 0);
+
+      if (cleanEntries.length > 0) {
+        const values = cleanEntries.map((entry) => [
+          snapshotRunId,
+          entry.position,
+          entry.splitterCode,
+          entry.splitterTitle,
+          entry.outPorts,
+          entry.busyCount,
+          entry.straightNeighborsSampled,
+          entry.neighborStraightRadiusScanned,
+          entry.maxRouteMeters,
+          entry.ruleType,
+        ]);
+
+        await connection.query(
+          `
+            INSERT INTO splitter_network_relief_snapshot_entries (
+              snapshot_run_id,
+              position,
+              splitter_code,
+              splitter_title,
+              out_ports,
+              busy_count,
+              straight_neighbors_sampled,
+              neighbor_straight_radius_scanned,
+              max_route_meters,
+              rule_type
+            )
+            VALUES ?
+          `,
+          [values],
+        );
+      }
+
+      await connection.query(
+        `
+          UPDATE splitter_network_relief_snapshot_runs
+          SET
+            status = 'completed',
+            scanned_count = ?,
+            entry_count = ?,
+            finished_at = NOW(),
+            error_message = NULL
+          WHERE id = ?
+        `,
+        [scannedCount, cleanEntries.length, snapshotRunId],
+      );
+
+      await connection.query(
+        `
+          DELETE old_runs
+          FROM splitter_network_relief_snapshot_runs old_runs
+          INNER JOIN splitter_network_relief_snapshot_runs completed
+            ON completed.id = old_runs.id
+          LEFT JOIN (
+            SELECT id
+            FROM (
+              SELECT id
+              FROM splitter_network_relief_snapshot_runs
+              WHERE status = 'completed'
+                AND straight_radius_meters = ?
+                AND max_route_meters = ?
+              ORDER BY finished_at DESC, id DESC
+              LIMIT 12
+            ) keep_rows
+          ) keep
+            ON keep.id = old_runs.id
+          WHERE completed.status = 'completed'
+            AND completed.straight_radius_meters = ?
+            AND completed.max_route_meters = ?
+            AND keep.id IS NULL
+        `,
+        [straightRadiusMeters, maxRouteMeters, straightRadiusMeters, maxRouteMeters],
+      );
+
+      await connection.commit();
+      return {
+        configured: true,
+        snapshotRunId,
+        entryCount: cleanEntries.length,
+        scannedCount,
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async function getLatestNetworkReliefSnapshotPage(input = {}) {
+    await ensureReady();
+
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
+    const limit = Math.min(200, Math.max(1, normalizeNonNegativeInt(input?.limit, 20)));
+    const cursor = Math.max(0, normalizeNonNegativeInt(input?.cursor, 0));
+
+    const [runRows] = await dataPool.query(
+      `
+        SELECT
+          id,
+          straight_radius_meters AS straightRadiusMeters,
+          max_route_meters AS maxRouteMeters,
+          scanned_count AS scannedCount,
+          entry_count AS entryCount,
+          finished_at AS finishedAt
+        FROM splitter_network_relief_snapshot_runs
+        WHERE status = 'completed'
+          AND straight_radius_meters = ?
+          AND max_route_meters = ?
+        ORDER BY finished_at DESC, id DESC
+        LIMIT 1
+      `,
+      [straightRadiusMeters, maxRouteMeters],
+    );
+
+    const run = Array.isArray(runRows) && runRows.length > 0 ? runRows[0] : null;
+    if (!run) return null;
+
+    const snapshotRunId = Number(run.id ?? 0);
+    const totalEntries = Number(run.entryCount ?? 0);
+
+    const [entryRows] = await dataPool.query(
+      `
+        SELECT
+          splitter_code AS splitterCode,
+          splitter_title AS splitterTitle,
+          out_ports AS outPorts,
+          busy_count AS busyCount,
+          straight_neighbors_sampled AS straightNeighborsSampled,
+          neighbor_straight_radius_scanned AS neighborStraightRadiusScanned,
+          max_route_meters AS maxRouteMeters,
+          rule_type AS ruleType
+        FROM splitter_network_relief_snapshot_entries
+        WHERE snapshot_run_id = ?
+        ORDER BY position ASC
+        LIMIT ?
+        OFFSET ?
+      `,
+      [snapshotRunId, limit, cursor],
+    );
+
+    return {
+      snapshotRunId,
+      generatedAt:
+        run.finishedAt instanceof Date
+          ? run.finishedAt.toISOString()
+          : normalizeDate(run.finishedAt)?.toISOString() ?? null,
+      scannedCount: Number(run.scannedCount ?? 0),
+      totalEntries,
+      entries: entryRows.map((row) => ({
+        splitter: {
+          code: normalizeText(row.splitterCode),
+          title: normalizeText(row.splitterTitle),
+          outPorts: Number(row.outPorts ?? 0),
+          busyCount: Number(row.busyCount ?? 0),
+        },
+        neighborStraightRadiusScanned: Number(row.neighborStraightRadiusScanned ?? straightRadiusMeters),
+        maxRouteMeters: Number(row.maxRouteMeters ?? maxRouteMeters),
+        straightNeighborsSampled: Number(row.straightNeighborsSampled ?? 0),
+        ruleType:
+          normalizeText(row.ruleType).toUpperCase() === 'CONDOMINIUM'
+            ? 'CONDOMINIUM'
+            : 'STREET',
+      })),
     };
   }
 
@@ -829,8 +1159,13 @@ export function createMassivaHistoryStore(config) {
     getOpenSplitterCodes,
     upsertSplitterSnapshots,
     getSplitterTrends,
+    getRecentSplitterSnapshots,
+    getRecentHistoryBySplitter,
     getOpenMassivaDashboardKpis,
+    replaceNetworkReliefSnapshot,
+    getLatestNetworkReliefSnapshotPage,
     getHistoryList,
     end,
   };
 }
+

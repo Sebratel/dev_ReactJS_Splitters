@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type {
   MassivaLocalPreviewRouteSelection,
   MassivaRouteConnectionSelection,
@@ -78,9 +79,10 @@ const initial: MassivaLocalPreviewRouteSelection = {
   connections: [createEmptyConnection()],
 }
 
-export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionState>(
-  (set) => ({
-    ...initial,
+export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionState>()(
+  persist(
+    (set) => ({
+      ...initial,
 
     addConnection: () =>
       set((state) => ({
@@ -174,6 +176,14 @@ export const useMassivaPreviewSelectionStore = create<MassivaPreviewSelectionSta
       })
     },
 
-    clearRoute: () => set(initial),
-  }),
+      clearRoute: () => set(initial),
+    }),
+    {
+      name: 'nexaview.massiva.preview-selection.v1',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({
+        connections: state.connections,
+      }),
+    },
+  ),
 )
