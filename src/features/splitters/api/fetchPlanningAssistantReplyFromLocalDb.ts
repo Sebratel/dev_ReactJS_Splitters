@@ -1,0 +1,190 @@
+import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
+import { env } from '@/shared/config/env'
+
+export type PlanningAssistantStructuredAnswer = {
+  conclusao: string
+  fatores: string[]
+  lacunas: string[]
+  recomendacao: string
+}
+
+export type PlanningAssistantReply = {
+  structuredAnswer: PlanningAssistantStructuredAnswer
+  model: string
+  contextPreview?: {
+    splitterCode?: string | null
+    splitterTitle?: string | null
+    found?: boolean
+  }
+}
+
+function toCleanString(value: unknown): string {
+  return String(value ?? '').trim()
+}
+
+function combinedUtf8MojibakePenalty(text: string): number {
+  const s = text.normalize('NFC')
+  const c3 = (s.match(/\u00c3/g) || []).length
+  const c2Tail = (s.match(/\u00c2[\u00a1-\u00bf]/g) || []).length
+  return c3 + c2Tail
+}
+
+function looksLikeLayeredUtf8Mojibake(text: string): boolean {
+  const s = text.normalize('NFC')
+  return /\u00c3/.test(s) || /\u00c2[\u00a1-\u00bf]/.test(s)
+}
+
+function stripLeadingEmojiGraphic(text: string): { prefix: string; rest: string } {
+  try {
+    const m = text.match(
+      /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D|\p{Extended_Pictographic})*\s*)+/u,
+    )
+    return m ? { prefix: m[0], rest: text.slice(m[0].length) } : { prefix: '', rest: text }
+  } catch {
+    return { prefix: '', rest: text }
+  }
+}
+
+/**
+ * Compatível com o reparo do servidor: várias camadas UTF-8/Latin-1 (sem usar Buffer no browser).
+ */
+function repairUtf8MojibakeLayers(text: string): string {
+  if (text === '' || !looksLikeLayeredUtf8Mojibake(text)) return text
+
+  const { prefix, rest } = stripLeadingEmojiGraphic(text)
+  if (!looksLikeLayeredUtf8Mojibake(rest)) return text
+
+  let cur = rest
+  let prevPenalty = combinedUtf8MojibakePenalty(cur)
+
+  for (let i = 0; i < 24; i += 1) {
+    let next: string
+    try {
+      const bytes = Uint8Array.from(cur, (ch) => ch.charCodeAt(0) & 0xff)
+      next = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    } catch {
+      break
+    }
+    if (!next || next === cur) break
+    if (next.includes('\uFFFD')) break
+
+    const nextPenalty = combinedUtf8MojibakePenalty(next)
+    if (nextPenalty > prevPenalty) break
+
+    cur = next
+    prevPenalty = nextPenalty
+    if (nextPenalty === 0) break
+  }
+
+  return prefix + cur
+}
+
+function mojibakeScore(text: string): number {
+  const matches = text.match(/[ÃÂâð]/g)
+  return matches ? matches.length : 0
+}
+
+function replacementCharCount(text: string): number {
+  const matches = text.match(/\uFFFD/g)
+  return matches ? matches.length : 0
+}
+
+function tryDecodeLatin1AsUtf8(text: string): string | null {
+  try {
+    const bytes = Uint8Array.from(text, (ch) => ch.charCodeAt(0) & 0xff)
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+export function normalizeIsaText(value: unknown): string {
+  let current = repairUtf8MojibakeLayers(toCleanString(value))
+  if (current === '') return current
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (!/[ÃÂâð]/.test(current)) break
+
+    const repaired = tryDecodeLatin1AsUtf8(current)?.trim()
+    if (!repaired || repaired === current) break
+    if (replacementCharCount(repaired) > 0) break
+    if (mojibakeScore(repaired) > mojibakeScore(current)) break
+
+    current = repaired
+  }
+
+  return current
+    .replaceAll('Ã¢â‚¬Â¢', '\u2022')
+    .replaceAll('Ã¢â‚¬â€œ', '\u2013')
+    .replaceAll('Ã¢â‚¬â€', '\u2014')
+    .replaceAll('Ã¢â‚¬Å“', '\u201c')
+    .replaceAll('Ã¢â‚¬Â', '\u201d')
+    .replaceAll('Ã¢â‚¬Ëœ', '\u2018')
+    .replaceAll('Ã¢â‚¬â„¢', '\u2019')
+    .replaceAll('Ã¢â‚¬Â¦', '\u2026')
+    .replaceAll('Ã¢Å“â€¦', '\u2705')
+    .replaceAll('Ã¢Å¡Â Ã¯Â¸Â', '\u26a0\ufe0f')
+    .replaceAll('Ã°Å¸â€Å½', '\ud83d\udd0e')
+    .normalize('NFC')
+}
+
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => normalizeIsaText(item))
+    .filter((item) => item !== '')
+}
+
+export async function fetchPlanningAssistantReplyFromLocalDb(input: {
+  message: string
+  splitterCode?: string
+  straightRadiusMeters?: number
+  maxRouteMeters?: number
+}): Promise<PlanningAssistantReply> {
+  const response = await fetchWithSessionAuth(
+    `${env.localBffUrl}/api/isa/planning-assistant/chat`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: input.message,
+        splitterCode: input.splitterCode?.trim() || undefined,
+        straightRadiusMeters: input.straightRadiusMeters,
+        maxRouteMeters: input.maxRouteMeters,
+      }),
+    },
+  )
+
+  const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.success) {
+    throw new Error(
+      String(payload?.message || `Erro ao consultar assistente ISA: ${response.status}`),
+    )
+  }
+
+  return {
+    structuredAnswer: {
+      conclusao: normalizeIsaText(payload.structuredAnswer?.conclusao),
+      fatores: toStringList(payload.structuredAnswer?.fatores),
+      lacunas: toStringList(payload.structuredAnswer?.lacunas),
+      recomendacao: normalizeIsaText(payload.structuredAnswer?.recomendacao),
+    },
+    model: String(payload.model ?? '').trim(),
+    contextPreview:
+      payload.contextPreview && typeof payload.contextPreview === 'object'
+        ? {
+            splitterCode:
+              payload.contextPreview.splitterCode == null
+                ? null
+                : String(payload.contextPreview.splitterCode),
+            splitterTitle:
+              payload.contextPreview.splitterTitle == null
+                ? null
+                : String(payload.contextPreview.splitterTitle),
+            found: Boolean(payload.contextPreview.found),
+          }
+        : undefined,
+  }
+}

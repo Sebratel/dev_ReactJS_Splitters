@@ -167,7 +167,7 @@ export async function fetchSplittersFromLocalDb({
       longitude: toStringValue(row['LONGITUDE[SPLT.SECUNDARIO]']),
       street: toNullableString(row['RUA[SPLT.SECUNDARIO]']),
       networkBoxCode: null,
-      networkBoxTitle: null,
+      networkBoxTitle: toNullableString(row['CAIXA_DE_REDE']),
       networkBoxType: null,
       oltCode: toStringValue(row['CONCENTRADOR_CODE']),
       oltIntegrationCode: toStringValue(row['CONCENTRADOR_CODE']),

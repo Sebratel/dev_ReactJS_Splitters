@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchSplitterNeighborsFromLocalDb } from '@/features/splitters/api/fetchSplitterNeighborsFromLocalDb'
+import { fetchSplitterNeighborsRoutedFromLocalDb } from '@/features/splitters/api/fetchSplitterNeighborsRoutedFromLocalDb'
 import { occupancyBandForUsage } from '@/features/splitters/lib/splitterNeighborOccupancyBand'
 import { parseSplitterLatLng } from '@/features/splitters/lib/parseSplitterCoordinates'
 import { SPLITTERS_LIST_STALE_TIME_MS } from '@/features/splitters/model/constants'
@@ -45,14 +45,14 @@ export function useSplitterMapData(args: {
   const hasCenter = center !== null
 
   const neighborsQuery = useQuery({
-    queryKey: splittersKeys.mapNeighbors(
+    queryKey: splittersKeys.mapNeighborsRouted(
       args.splitterCode,
       SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
     ),
     queryFn: () =>
-      fetchSplitterNeighborsFromLocalDb({
+      fetchSplitterNeighborsRoutedFromLocalDb({
         code: args.splitterCode,
-        radiusMeters: SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
+        straightRadiusMeters: SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
       }),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
     enabled: hasCenter,
@@ -74,7 +74,15 @@ export function useSplitterMapData(args: {
     return { state: { type: 'error', error: neighborsQuery.error }, refetch }
   }
 
-  const neighbors = (neighborsQuery.data ?? []).map((neighbor) => ({
+  const rawNeighbors = neighborsQuery.data?.neighbors ?? []
+  const routingUnavailable = Boolean(neighborsQuery.data?.routingUnavailable)
+  const isCondominium = Boolean(neighborsQuery.data?.isCondominium)
+  const condominiumReliefAvailable = Boolean(
+    neighborsQuery.data?.condominiumReliefAvailable,
+  )
+  const currentStreet = neighborsQuery.data?.originStreet ?? null
+
+  const neighbors = rawNeighbors.map((neighbor) => ({
     ...neighbor,
     occupancyBand: occupancyBandForUsage(
       neighbor.busyCount,
@@ -86,9 +94,13 @@ export function useSplitterMapData(args: {
     center,
     currentSplitterCode: args.splitterCode.trim(),
     currentSplitterTitle: args.splitterTitle.trim(),
+    currentStreet,
     neighbors,
     oltPoint: resolveOltPoint(args.olt),
     clientPoints: args.clientPoints,
+    routingUnavailable,
+    isCondominium,
+    condominiumReliefAvailable,
   }
 
   return { state: { type: 'success', payload }, refetch }

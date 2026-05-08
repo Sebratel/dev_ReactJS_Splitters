@@ -149,22 +149,52 @@ function FitBoundsController({
   return null
 }
 
+/** Leaflet mede o container na montagem; após abrir modal ou mudar layout chamar invalidateSize. */
+function InvalidateSizeOnMountAndResize() {
+  const map = useMap()
+  useEffect(() => {
+    const run = () => {
+      map.invalidateSize()
+    }
+    run()
+    const t1 = window.setTimeout(run, 120)
+    const t2 = window.setTimeout(run, 450)
+    window.addEventListener('resize', run)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      window.removeEventListener('resize', run)
+    }
+  }, [map])
+  return null
+}
+
 type SplitterMapLeafletProps = {
   payload: SplitterMapSuccessPayload
+  /** Quando false, oculta marcadores de assinantes (splitters, OLT e raio permanecem). Default: true. */
+  showClientMarkers?: boolean
+  /** Classes do container do mapa (altura/largura/borda). */
+  mapClassName?: string
 }
 
 /**
- * Mapa OSM (Leaflet): splitter atual, raio 200 m, vizinhos, OLT e linha quando há coordenadas da OLT.
+ * Mapa OSM (Leaflet): splitter atual, raio 200 m (linha reta), vizinhos com distância roteada (OSRM foot) quando disponível.
  */
-export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
+export function SplitterMapLeaflet({
+  payload,
+  showClientMarkers = true,
+  mapClassName = 'z-0 h-full min-h-[200px] w-full rounded-2xl',
+}: SplitterMapLeafletProps) {
   const location = useLocation()
   const {
     center,
     currentSplitterCode,
     currentSplitterTitle,
+    currentStreet,
     neighbors,
     oltPoint,
     clientPoints,
+    routingUnavailable,
   } = payload
   const c: [number, number] = [center.lat, center.lng]
   const oltPos = useMemo<[number, number] | null>(() => {
@@ -181,19 +211,17 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
     if (oltPos !== null) {
       pts.push(oltPos)
     }
-    for (const cl of clientPoints) {
-      pts.push([cl.lat, cl.lng])
+    if (showClientMarkers) {
+      for (const cl of clientPoints) {
+        pts.push([cl.lat, cl.lng])
+      }
     }
     return pts
-  }, [center.lat, center.lng, neighbors, oltPos, clientPoints])
+  }, [center.lat, center.lng, neighbors, oltPos, clientPoints, showClientMarkers])
 
   return (
-    <MapContainer
-      center={c}
-      zoom={16}
-      className="z-0 h-full min-h-[200px] w-full rounded-2xl"
-      scrollWheelZoom
-    >
+    <MapContainer center={c} zoom={16} className={mapClassName} scrollWheelZoom>
+      <InvalidateSizeOnMountAndResize />
       <FitBoundsController fitPoints={fitPoints} fallbackCenter={c} fallbackZoom={16} />
       <TileLayer attribution={OSM_ATTR} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <Circle
@@ -240,6 +268,19 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
             })()}
           </span>
         </Tooltip>
+        <Popup>
+          <div className="min-w-[220px] text-sm">
+            <p className="font-semibold text-neutral-900">
+              {currentSplitterTitle.trim() || currentSplitterCode.trim() || 'Equipamento atual'}
+            </p>
+            {currentSplitterCode.trim() !== '' && currentSplitterTitle.trim() !== currentSplitterCode.trim() ? (
+              <p className="font-mono text-neutral-500">{currentSplitterCode}</p>
+            ) : null}
+            <p className="mt-2 text-xs text-neutral-600">
+              Rua: <span className="font-semibold text-neutral-800">{currentStreet?.trim() || 'Não informada'}</span>
+            </p>
+          </div>
+        </Popup>
       </Marker>
       {oltPos !== null && oltPoint !== null ? (
         <Marker position={oltPos} icon={oltIcon}>
@@ -276,47 +317,49 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
           </Tooltip>
         </Marker>
       ) : null}
-      {clientPoints.map((cl) => {
-        const title = clientDisplayName(cl)
-        const corporate = cl.isCorporate === true
-        const markerIcon = corporate ? clientIconCorporate : clientIcon
-        return (
-          <Marker key={`client-${cl.authenticationId}`} position={[cl.lat, cl.lng]} icon={markerIcon}>
-            <Tooltip
-              direction="top"
-              offset={[0, -12]}
-              opacity={1}
-              sticky
-              className={corporate ? TOOLTIP_CLIENT_CORPORATE : TOOLTIP_CLIENT}
-            >
-              <span className="inline-block whitespace-nowrap">{title}</span>
-            </Tooltip>
-            <Popup>
-              <div className="min-w-[220px] text-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                  {corporate ? 'Cliente corporativo' : 'Cliente'}
-                </p>
-                <p className="mt-0.5 text-base font-semibold leading-snug text-neutral-900">{title}</p>
-                {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
-                  <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
-                ) : null}
-                <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
-                <Link
-                  className={
-                    corporate
-                      ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 underline'
-                      : 'mt-2 inline-flex text-sm font-semibold text-amber-800 underline'
-                  }
-                  to={`/clientes/${cl.authenticationId}`}
-                  state={location.state}
+      {showClientMarkers
+        ? clientPoints.map((cl) => {
+            const title = clientDisplayName(cl)
+            const corporate = cl.isCorporate === true
+            const markerIcon = corporate ? clientIconCorporate : clientIcon
+            return (
+              <Marker key={`client-${cl.authenticationId}`} position={[cl.lat, cl.lng]} icon={markerIcon}>
+                <Tooltip
+                  direction="top"
+                  offset={[0, -12]}
+                  opacity={1}
+                  sticky
+                  className={corporate ? TOOLTIP_CLIENT_CORPORATE : TOOLTIP_CLIENT}
                 >
-                  Abrir cliente
-                </Link>
-              </div>
-            </Popup>
-          </Marker>
-        )
-      })}
+                  <span className="inline-block whitespace-nowrap">{title}</span>
+                </Tooltip>
+                <Popup>
+                  <div className="min-w-[220px] text-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                      {corporate ? 'Cliente corporativo' : 'Cliente'}
+                    </p>
+                    <p className="mt-0.5 text-base font-semibold leading-snug text-neutral-900">{title}</p>
+                    {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
+                      <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
+                    ) : null}
+                    <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
+                    <Link
+                      className={
+                        corporate
+                          ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 underline'
+                          : 'mt-2 inline-flex text-sm font-semibold text-amber-800 underline'
+                      }
+                      to={`/clientes/${cl.authenticationId}`}
+                      state={location.state}
+                    >
+                      Abrir cliente
+                    </Link>
+                  </div>
+                </Popup>
+              </Marker>
+            )
+          })
+        : null}
       {neighbors.map((n) => (
         <Marker
           key={n.code}
@@ -366,6 +409,17 @@ export function SplitterMapLeaflet({ payload }: SplitterMapLeafletProps) {
               <p className="mt-2 text-xs text-neutral-600">
                 {n.busyCount} porta(s) ocupada(s) de {n.outPorts}
               </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                Rua: <span className="font-semibold text-neutral-800">{n.street?.trim() || 'Não informada'}</span>
+              </p>
+              {n.straightMeters !== undefined ? (
+                <p className="mt-1 text-[11px] text-neutral-600">
+                  Linha reta: ~{n.straightMeters.toLocaleString('pt-BR')} m
+                  {routingUnavailable || n.routeMeters == null
+                    ? ' · rota pedestre indisponível'
+                    : ` · rota pedestre (OSRM): ~${n.routeMeters.toLocaleString('pt-BR')} m`}
+                </p>
+              ) : null}
               <Link
                 className="mt-3 inline-flex items-center text-sm font-semibold text-emerald-700 underline"
                 to={`/splitters/${encodeURIComponent(n.code)}`}

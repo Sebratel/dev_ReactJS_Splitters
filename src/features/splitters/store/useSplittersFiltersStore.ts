@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import {
   initialSplittersListFilters,
   type SplittersListFilterState,
@@ -47,8 +48,10 @@ function sortTitles(titles: string[]): string[] {
   return [...titles].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 }
 
-export const useSplittersFiltersStore = create<SplittersFiltersStore>((set) => ({
-  state: initialSplittersListFilters,
+export const useSplittersFiltersStore = create<SplittersFiltersStore>()(
+  persist(
+    (set) => ({
+      state: initialSplittersListFilters,
 
   setSearchQuery: (value) =>
     set((s) => ({ state: { ...s.state, searchQuery: value } })),
@@ -137,5 +140,12 @@ export const useSplittersFiltersStore = create<SplittersFiltersStore>((set) => (
   setStreetSelections: (streets) =>
     set((s) => ({ state: { ...s.state, streetSelections: sortStreets(streets) } })),
 
-  clearAll: () => set({ state: initialSplittersListFilters }),
-}))
+      clearAll: () => set({ state: initialSplittersListFilters }),
+    }),
+    {
+      name: 'nexaview.splitters.filters.v1',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (store) => ({ state: store.state }),
+    },
+  ),
+)
