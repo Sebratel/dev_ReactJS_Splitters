@@ -453,13 +453,101 @@ export function UsersManagementWorkspace({
   onSaveUser,
   accessRequests,
 }: UsersManagementWorkspaceProps) {
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
-  const [roleFilter, setRoleFilter] = useState<SplittersRoleId | 'all'>('all')
+  const USERS_MANAGEMENT_UI_STATE_KEY = 'nexaview.users-management.ui.v1'
+  const readUiState = (): {
+    search: string
+    statusFilter: 'all' | 'active' | 'inactive'
+    roleFilter: SplittersRoleId | 'all'
+    page: number
+    drawerOpen: boolean
+    sort: { column: SortColumn; dir: 'asc' | 'desc' }
+  } => {
+    if (typeof window === 'undefined') {
+      return {
+        search: '',
+        statusFilter: 'all',
+        roleFilter: 'all',
+        page: 1,
+        drawerOpen: false,
+        sort: { column: 'user', dir: 'asc' },
+      }
+    }
+    try {
+      const raw = window.sessionStorage.getItem(USERS_MANAGEMENT_UI_STATE_KEY)
+      if (!raw) throw new Error('empty')
+      const parsed = JSON.parse(raw) as {
+        search?: unknown
+        statusFilter?: unknown
+        roleFilter?: unknown
+        page?: unknown
+        drawerOpen?: unknown
+        sort?: { column?: unknown; dir?: unknown }
+      }
+      const sortColumn =
+        parsed.sort?.column === 'user' ||
+        parsed.sort?.column === 'lastLogin' ||
+        parsed.sort?.column === 'role' ||
+        parsed.sort?.column === 'status'
+          ? parsed.sort.column
+          : 'user'
+      const sortDir = parsed.sort?.dir === 'desc' ? 'desc' : 'asc'
+      return {
+        search: typeof parsed.search === 'string' ? parsed.search : '',
+        statusFilter:
+          parsed.statusFilter === 'active' || parsed.statusFilter === 'inactive'
+            ? parsed.statusFilter
+            : 'all',
+        roleFilter:
+          parsed.roleFilter === 'admin' ||
+          parsed.roleFilter === 'operador' ||
+          parsed.roleFilter === 'operador_massivas' ||
+          parsed.roleFilter === 'leitura' ||
+          parsed.roleFilter === 'personalizado'
+            ? parsed.roleFilter
+            : 'all',
+        page:
+          typeof parsed.page === 'number' && Number.isFinite(parsed.page) && parsed.page > 0
+            ? Math.trunc(parsed.page)
+            : 1,
+        drawerOpen: parsed.drawerOpen === true,
+        sort: { column: sortColumn, dir: sortDir },
+      }
+    } catch {
+      return {
+        search: '',
+        statusFilter: 'all',
+        roleFilter: 'all',
+        page: 1,
+        drawerOpen: false,
+        sort: { column: 'user', dir: 'asc' },
+      }
+    }
+  }
+  const [uiState, setUiState] = useState(readUiState)
+  const { search, statusFilter, roleFilter, page, drawerOpen, sort } = uiState
+  const setSearch = (value: string) => setUiState((prev) => ({ ...prev, search: value }))
+  const setStatusFilter = (value: 'all' | 'active' | 'inactive') =>
+    setUiState((prev) => ({ ...prev, statusFilter: value }))
+  const setRoleFilter = (value: SplittersRoleId | 'all') =>
+    setUiState((prev) => ({ ...prev, roleFilter: value }))
+  const setPage = (value: number | ((prev: number) => number)) =>
+    setUiState((prev) => ({
+      ...prev,
+      page: typeof value === 'function' ? value(prev.page) : value,
+    }))
+  const setDrawerOpen = (value: boolean) =>
+    setUiState((prev) => ({ ...prev, drawerOpen: value }))
+  const setSort = (
+    value:
+      | { column: SortColumn; dir: 'asc' | 'desc' }
+      | ((prev: { column: SortColumn; dir: 'asc' | 'desc' }) => { column: SortColumn; dir: 'asc' | 'desc' }),
+  ) =>
+    setUiState((prev) => ({
+      ...prev,
+      sort: typeof value === 'function' ? value(prev.sort) : value,
+    }))
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState<SplittersUserProfile | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [actionMenu, setActionMenu] = useState<
     null | {
@@ -470,10 +558,14 @@ export function UsersManagementWorkspace({
   >(null)
   const actionMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [sort, setSort] = useState<{ column: SortColumn; dir: 'asc' | 'desc' }>({
-    column: 'user',
-    dir: 'asc',
-  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      USERS_MANAGEMENT_UI_STATE_KEY,
+      JSON.stringify(uiState),
+    )
+  }, [uiState])
 
   const stats = useMemo(() => {
     const tz = 'America/Sao_Paulo'

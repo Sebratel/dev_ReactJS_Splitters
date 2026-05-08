@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { SplittersPermissionSet, SplittersUserProfile } from '@/features/access/model/access.types'
 import {
@@ -223,6 +223,13 @@ export function UserEditDrawer({
               disabled={pending}
               onCheckedChange={(v) => patchPermissions({ canViewIntelligence: v })}
             />
+            <SwitchRow
+              title="Usar assistente ISA"
+              description="Libera o modo conversacional da ISA para análises complexas do time de planejamento."
+              checked={permissions.canUsePlanningAssistant}
+              disabled={pending}
+              onCheckedChange={(v) => patchPermissions({ canUsePlanningAssistant: v })}
+            />
           </section>
 
           <section className="mt-6 space-y-3">
@@ -251,10 +258,12 @@ export function UserEditDrawer({
             onClick={handleSave}
             className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-600 disabled:opacity-50"
           >
-            {pending ? 'Salvando…' : 'Salvar alterações'}
+            {pending ? 'Salvando...' : 'Salvar alterações'}
           </button>
         </div>
       </aside>
     </div>
   )
 }
+
+
