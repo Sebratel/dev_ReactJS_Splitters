@@ -1,9 +1,16 @@
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import { env } from '@/shared/config/env'
 
+export type IsaGravidade = 'baixa' | 'media' | 'alta' | 'critica' | ''
+
 export type PlanningAssistantStructuredAnswer = {
   conclusao: string
+  /** Um de: baixa | media | alta | critica; vazio se o modelo não informar. */
+  gravidade: IsaGravidade
   fatores: string[]
+  evidencias: string[]
+  inferencias: string[]
+  riscos: string[]
   lacunas: string[]
   recomendacao: string
 }
@@ -20,6 +27,18 @@ export type PlanningAssistantReply = {
 
 function toCleanString(value: unknown): string {
   return String(value ?? '').trim()
+}
+
+export function normalizeIsaGravidade(raw: unknown): IsaGravidade {
+  const s = toCleanString(raw)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (/crit/.test(s)) return 'critica'
+  if (/alt/.test(s)) return 'alta'
+  if (/medi/.test(s)) return 'media'
+  if (/baix/.test(s)) return 'baixa'
+  return ''
 }
 
 function combinedUtf8MojibakePenalty(text: string): number {
@@ -164,12 +183,18 @@ export async function fetchPlanningAssistantReplyFromLocalDb(input: {
     )
   }
 
+  const structured = payload.structuredAnswer ?? {}
+
   return {
     structuredAnswer: {
-      conclusao: normalizeIsaText(payload.structuredAnswer?.conclusao),
-      fatores: toStringList(payload.structuredAnswer?.fatores),
-      lacunas: toStringList(payload.structuredAnswer?.lacunas),
-      recomendacao: normalizeIsaText(payload.structuredAnswer?.recomendacao),
+      conclusao: normalizeIsaText(structured.conclusao),
+      gravidade: normalizeIsaGravidade(structured.gravidade),
+      fatores: toStringList(structured.fatores),
+      evidencias: toStringList(structured.evidencias),
+      inferencias: toStringList(structured.inferencias),
+      riscos: toStringList(structured.riscos),
+      lacunas: toStringList(structured.lacunas),
+      recomendacao: normalizeIsaText(structured.recomendacao),
     },
     model: String(payload.model ?? '').trim(),
     contextPreview:

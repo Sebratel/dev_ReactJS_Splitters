@@ -41,6 +41,19 @@ function toCleanString(value) {
   return String(value ?? '').trim();
 }
 
+/** Valores esperados no JSON da ISA: baixa | media | alta | critica */
+function normalizeGravidade(raw) {
+  const s = toCleanString(raw)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (/crit/.test(s)) return 'critica';
+  if (/alt/.test(s)) return 'alta';
+  if (/medi/.test(s) || /^media$/.test(s)) return 'media';
+  if (/baix/.test(s)) return 'baixa';
+  return '';
+}
+
 /** Penalidade para saber se ainda parece UTF-8 sobre Latin-1 (Ã… ou Â + byte acentuado). */
 function combinedUtf8MojibakePenalty(text) {
   const s = String(text).normalize('NFC');
@@ -105,11 +118,18 @@ function repairUtf8Mojibake(text) {
 
 function repairStructuredPlanningAnswer(structured) {
   const fatores = toStringList(structured?.fatores).map((item) => repairUtf8Mojibake(item));
+  const evidencias = toStringList(structured?.evidencias).map((item) => repairUtf8Mojibake(item));
+  const inferencias = toStringList(structured?.inferencias).map((item) => repairUtf8Mojibake(item));
+  const riscos = toStringList(structured?.riscos).map((item) => repairUtf8Mojibake(item));
   const lacunas = toStringList(structured?.lacunas).map((item) => repairUtf8Mojibake(item));
 
   return {
     conclusao: repairUtf8Mojibake(toCleanString(structured?.conclusao)),
+    gravidade: normalizeGravidade(repairUtf8Mojibake(toCleanString(structured?.gravidade))),
     fatores,
+    evidencias,
+    inferencias,
+    riscos,
     lacunas,
     recomendacao: repairUtf8Mojibake(toCleanString(structured?.recomendacao)),
   };
@@ -131,11 +151,9 @@ function normalizeBulletLine(line) {
 function pushSectionLine(target, key, line) {
   const cleaned = normalizeBulletLine(line);
   if (cleaned === '') return;
-  if (key === 'fatores' || key === 'lacunas') {
-    target[key].push(cleaned);
-    return;
-  }
-  target[key].push(cleaned);
+  const bucket = target[key];
+  if (!Array.isArray(bucket)) return;
+  bucket.push(cleaned);
 }
 
 function parseStructuredTextFallback(text) {
@@ -146,7 +164,11 @@ function parseStructuredTextFallback(text) {
 
   const sections = {
     conclusao: [],
+    gravidade: [],
     fatores: [],
+    evidencias: [],
+    inferencias: [],
+    riscos: [],
     lacunas: [],
     recomendacao: [],
   };
@@ -164,14 +186,38 @@ function parseStructuredTextFallback(text) {
       if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
       continue;
     }
+    if (/gravida/.test(normalized)) {
+      currentKey = 'gravidade';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
     if (/fatores?/.test(normalized)) {
       currentKey = 'fatores';
       const trailing = line.replace(/^.*?:\s*/, '');
       if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
       continue;
     }
-    if (/lacunas?|riscos?/.test(normalized)) {
+    if (/eviden/.test(normalized)) {
+      currentKey = 'evidencias';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/infer/.test(normalized)) {
+      currentKey = 'inferencias';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/lacunas?/.test(normalized)) {
       currentKey = 'lacunas';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/riscos?/.test(normalized)) {
+      currentKey = 'riscos';
       const trailing = line.replace(/^.*?:\s*/, '');
       if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
       continue;
@@ -188,9 +234,15 @@ function parseStructuredTextFallback(text) {
     }
   }
 
+  const gravidadeRaw = sections.gravidade.join(' ').trim();
+
   return {
     conclusao: sections.conclusao.join(' ').trim(),
+    gravidade: gravidadeRaw ? normalizeGravidade(gravidadeRaw) : '',
     fatores: sections.fatores,
+    evidencias: sections.evidencias,
+    inferencias: sections.inferencias,
+    riscos: sections.riscos,
     lacunas: sections.lacunas,
     recomendacao: sections.recomendacao.join(' ').trim(),
   };
@@ -229,10 +281,14 @@ function buildLooseStructuredAnswer(rawText) {
   return {
     conclusao:
       conclusao || 'A ISA recebeu a pergunta, mas a resposta veio sem um resumo inicial claro.',
+    gravidade: '',
     fatores:
       fatores.length > 0
         ? fatores
         : ['O modelo respondeu de forma livre, sem detalhar fatores em blocos separados.'],
+    evidencias: [],
+    inferencias: [],
+    riscos: [],
     lacunas: [],
     recomendacao:
       'Revise o caso com os dados atuais e, se necessário, refine a pergunta para obter uma análise mais específica.',
@@ -256,7 +312,11 @@ function hasGenericFallbackRecommendation(recomendacao) {
 
 function normalizeStructuredAnswer(parsed) {
   const conclusao = toCleanString(parsed?.conclusao);
+  const gravidade = normalizeGravidade(parsed?.gravidade);
   const fatores = toStringList(parsed?.fatores);
+  const evidencias = toStringList(parsed?.evidencias);
+  const inferencias = toStringList(parsed?.inferencias);
+  const riscos = toStringList(parsed?.riscos);
   const lacunas = toStringList(parsed?.lacunas);
   const recomendacao = toCleanString(parsed?.recomendacao);
 
@@ -264,10 +324,14 @@ function normalizeStructuredAnswer(parsed) {
     conclusao:
       conclusao ||
       'A ISA respondeu, mas não trouxe uma conclusão objetiva no formato esperado.',
+    gravidade,
     fatores:
       fatores.length > 0
         ? fatores
         : ['Não foram destacados fatores separados na resposta recebida.'],
+    evidencias,
+    inferencias,
+    riscos,
     lacunas,
     recomendacao:
       recomendacao ||
@@ -288,7 +352,11 @@ function parseGeminiStructuredAnswer(rawText) {
   const sectionParsed = parseStructuredTextFallback(rawText);
   const hasSectionContent =
     sectionParsed.conclusao ||
+    sectionParsed.gravidade ||
     sectionParsed.fatores.length > 0 ||
+    sectionParsed.evidencias.length > 0 ||
+    sectionParsed.inferencias.length > 0 ||
+    sectionParsed.riscos.length > 0 ||
     sectionParsed.lacunas.length > 0 ||
     sectionParsed.recomendacao;
 
@@ -427,7 +495,11 @@ function enrichStructuredAnswer(structured, context) {
     conclusao: weakConclusion
       ? buildDeterministicConclusion(context)
       : structured.conclusao,
+    gravidade: normalizeGravidade(structured?.gravidade),
     fatores: genericFactors ? buildDeterministicFactors(context) : structured.fatores,
+    evidencias: Array.isArray(structured?.evidencias) ? structured.evidencias : [],
+    inferencias: Array.isArray(structured?.inferencias) ? structured.inferencias : [],
+    riscos: Array.isArray(structured?.riscos) ? structured.riscos : [],
     lacunas: hasLacunas ? structured.lacunas : buildDeterministicLacunas(context),
     recomendacao: genericRecommendation
       ? buildDeterministicRecommendation(context)
@@ -581,25 +653,84 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
   const compactContext = buildCompactPlanningContext(context);
   const contextJson = JSON.stringify(compactContext, null, 2);
   const basePrompt = [
-    'Você é a ISA, assistente técnico do time de planejamento de redes da Sebratel.',
-    'Seu papel é apoiar análise complexa de rede com base apenas no contexto fornecido pelo sistema.',
-    'Fale em português do Brasil, com tom claro, amigável e profissional.',
-    'Prefira linguagem que um usuário final consiga entender sem perder precisão técnica.',
-    'Pode usar um toque leve de humor e no máximo 1 ou 2 emojis sutis quando isso melhorar a leitura, sem perder o tom profissional.',
-    'Regras obrigatórias:',
-    '- Não invente dados ausentes.',
-    '- Não execute ações; apenas análise e recomende.',
-    '- Se faltar informação, diga explicitamente.',
-    '- Priorize objetividade técnica e linguagem operacional.',
-    '- Diferencie fato do sistema de inferência sua.',
-    '- Considere as regras atuais de alívio já aplicadas no contexto recebido.',
-    '- Evite expor nomes de campos internos, nomes de variáveis, chaves JSON ou termos crus em inglês.',
-    '- Quando um termo técnico for inevitável, explique em linguagem simples logo na mesma frase.',
-    '- Troque expressões como busyCount, hasReliefWithinRoute, currentUsagePercent, trendSummary e score por descrições naturais em português.',
-    '- Não responda como documentação técnica ou log de sistema; responda como assistente de análise para pessoas.',
-    '- Sempre que a pergunta permitir, cubra explicitamente: ocupação do splitter, tendência recente, eventos ou massivas recentes, manutenção ou ausência dela, e alívio de rede.',
-    '- Se algum desses pontos não existir no contexto, diga claramente que o sistema não trouxe esse dado.',
-    '- Em "fatores", entregue frases completas e específicas; não deixe esse bloco vazio ou genérico.',
+    'Você é a ISA, assistente técnica inteligente do Time de Planejamento de Redes da Sebratel.',
+    '',
+    'Sua função é apoiar análises técnicas e operacionais da rede FTTH com base:',
+    '- nos dados fornecidos pelos sistemas,',
+    '- nos históricos operacionais,',
+    '- nas análises anteriores,',
+    '- e nas interações realizadas pelo time técnico.',
+    '',
+    'Seu objetivo é auxiliar continuamente na melhoria da qualidade, estabilidade, capacidade e governança da rede.',
+    '',
+    'Você atua principalmente em análises relacionadas a:',
+    '- ocupação de portas,',
+    '- splitters,',
+    '- CTOs,',
+    '- OLTs,',
+    '- saturação,',
+    '- rompimentos,',
+    '- reservas,',
+    '- inconsistências cadastrais,',
+    '- capacidade,',
+    '- balanceamento,',
+    '- rotas,',
+    '- expansão da rede,',
+    '- e riscos operacionais.',
+    '',
+    'Considere que:',
+    '- os dados do sistema são a principal fonte de verdade operacional;',
+    '- as interações do time técnico complementam e refinam as análises;',
+    '- padrões recorrentes devem ser considerados para melhoria contínua da rede.',
+    '',
+    'Você NÃO executa ações.',
+    'Você NÃO altera configurações.',
+    'Você NÃO inventa informações ausentes.',
+    '',
+    'Seu papel é:',
+    '- identificar riscos,',
+    '- apontar inconsistências,',
+    '- sugerir possíveis causas,',
+    '- recomendar ações práticas,',
+    '- e apoiar decisões operacionais.',
+    '',
+    'Diretrizes obrigatórias:',
+    '- Diferencie fatos de inferências.',
+    '- Nunca trate hipótese como certeza.',
+    '- Se faltar informação, informe explicitamente.',
+    '- Priorize impacto operacional e continuidade da rede.',
+    '- Considere regras de alívio e balanceamento já aplicadas no contexto recebido.',
+    '- Troque nomes de campos internos do JSON de contexto (ex.: busyCount, trendSummary, score, hasReliefWithinRoute) por descrições naturais em português nas suas frases.',
+    '',
+    'Diretrizes para análises de CTOs:',
+    '- Considere sempre latitude e longitude fornecidas pelo sistema.',
+    '- Avalie atendimento preferencialmente pelas vias públicas em linha reta.',
+    '- Não considere trajetos sobre telhados, áreas internas de terrenos, fundos de residências ou caminhos sem acesso viário direto.',
+    '- Priorize CTOs com atendimento possível pela mesma rua ou por cruzamentos diretos entre ruas próximas.',
+    '- Não considere apenas distância em linha aérea.',
+    '- Avalie viabilidade operacional considerando trajeto urbano, facilidade de lançamento da rede, capacidade disponível e risco de saturação.',
+    '- Em casos de múltiplas CTOs próximas, priorize:',
+    '  1. menor trajeto viário;',
+    '  2. menor impacto operacional;',
+    '  3. melhor capacidade disponível;',
+    '  4. menor risco de saturação futura.',
+    '- Quando houver limitação de análise geográfica, informe explicitamente nas lacunas.',
+    '',
+    'Diretrizes de linguagem:',
+    '- Responda sempre em português do Brasil.',
+    '- Use linguagem clara, objetiva, profissional e operacional.',
+    '- Evite nomes técnicos internos, variáveis, chaves JSON e termos crus em inglês.',
+    '- Explique termos técnicos de forma simples quando necessário.',
+    '- Nunca responda como log, documentação ou saída de sistema.',
+    '- Seja direto e evite respostas longas ou repetitivas.',
+    '- Prefira frases curtas e análises resumidas.',
+    '',
+    'Prioridade da análise:',
+    '1. Identificar risco imediato.',
+    '2. Detectar possível causa.',
+    '3. Avaliar impacto operacional.',
+    '4. Sugerir ação prática.',
+    '5. Informar limitações da análise.',
   ];
 
   const formatPrompt =
@@ -608,23 +739,47 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
           '',
           'Responda em texto simples, sem markdown e sem JSON, usando exatamente estes blocos nesta ordem:',
           'Conclusao:',
+          'Gravidade: (uma linha: baixa, media, alta ou critica)',
           'Fatores:',
+          'Evidencias:',
+          'Inferencias:',
+          'Riscos:',
           'Lacunas:',
-          'Recomendação:',
+          'Recomendacao:',
           '',
-          'Em cada bloco, escreva frases completas e objetivas.',
+          'Em cada bloco de lista, use linhas curtas com marcadores (- ou *).',
         ]
       : [
           '',
-          'Você deve responder SOMENTE em JSON válido, sem markdown e sem texto antes ou depois.',
-          'Use exatamente este formato:',
+          'Você deve responder SOMENTE em JSON válido.',
+          'Nunca utilize markdown.',
+          'Nunca escreva texto fora do JSON.',
+          '',
+          'Use exatamente esta estrutura:',
           '{',
-          '  "conclusao": "texto curto, claro e objetivo",',
-          '  "fatores": ["frase clara em português", "frase clara em português"],',
-          '  "lacunas": ["lacuna explicada em linguagem simples", "lacuna explicada em linguagem simples"],',
-          '  "recomendacao": "ação prática recomendada em linguagem acessível"',
+          '  "conclusao": "Resumo técnico curto e objetivo.",',
+          '  "gravidade": "baixa | media | alta | critica",',
+          '  "fatores": [',
+          '    "Fator relevante.",',
+          '    "Outro fator relevante."',
+          '  ],',
+          '  "evidencias": [',
+          '    "Fato confirmado.",',
+          '    "Outro fato confirmado."',
+          '  ],',
+          '  "inferencias": [',
+          '    "Hipótese baseada nos indícios."',
+          '  ],',
+          '  "riscos": [',
+          '    "Possível impacto operacional."',
+          '  ],',
+          '  "lacunas": [',
+          '    "Informação ausente importante."',
+          '  ],',
+          '  "recomendacao": "Ação prática recomendada."',
           '}',
           '',
+          'Preencha cada array com frases completas em português do Brasil; use arrays vazios [] apenas quando não houver conteúdo adequado.',
         ];
 
   return [
@@ -669,7 +824,7 @@ async function requestGeminiAnswer({ apiKey, model, question, context, responseM
     generationConfig: {
       temperature: 0.15,
       topP: 0.9,
-      maxOutputTokens: 1200,
+      maxOutputTokens: 1800,
       ...(responseMode === 'json' ? { responseMimeType: 'application/json' } : {}),
     },
   };

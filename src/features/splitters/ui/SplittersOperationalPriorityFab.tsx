@@ -10,6 +10,7 @@ import { Activity, Bot, Download, GitBranch, KeyRound, Loader2, ListOrdered, Spa
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import {
   fetchPlanningAssistantReplyFromLocalDb,
+  normalizeIsaGravidade,
   normalizeIsaText,
   type PlanningAssistantReply,
 } from '@/features/splitters/api/fetchPlanningAssistantReplyFromLocalDb'
@@ -49,6 +50,21 @@ function downloadCsv(filename: string, content: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
+}
+
+function isaGravidadeBadgeClass(gravidade: string): string {
+  switch (gravidade) {
+    case 'critica':
+      return 'border-rose-400/90 bg-rose-50 text-rose-950'
+    case 'alta':
+      return 'border-orange-300 bg-orange-50 text-orange-950'
+    case 'media':
+      return 'border-amber-300 bg-amber-50 text-amber-950'
+    case 'baixa':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-950'
+    default:
+      return 'border-neutral-200 bg-neutral-50 text-neutral-700'
+  }
 }
 
 function AssistantSection(props: {
@@ -378,7 +394,17 @@ export function SplittersOperationalPriorityFab({
       ? null
       : {
           conclusao: normalizeIsaText(assistantReply.structuredAnswer?.conclusao),
+          gravidade: normalizeIsaGravidade(assistantReply.structuredAnswer?.gravidade),
           fatores: (assistantReply.structuredAnswer?.fatores ?? []).map((item) =>
+            normalizeIsaText(item),
+          ),
+          evidencias: (assistantReply.structuredAnswer?.evidencias ?? []).map((item) =>
+            normalizeIsaText(item),
+          ),
+          inferencias: (assistantReply.structuredAnswer?.inferencias ?? []).map((item) =>
+            normalizeIsaText(item),
+          ),
+          riscos: (assistantReply.structuredAnswer?.riscos ?? []).map((item) =>
             normalizeIsaText(item),
           ),
           lacunas: (assistantReply.structuredAnswer?.lacunas ?? []).map((item) =>
@@ -895,9 +921,19 @@ export function SplittersOperationalPriorityFab({
                         Contexto: {assistantReply.contextPreview.splitterCode}
                       </span>
                     ) : null}
+                    {assistantDisplayStructured.gravidade ? (
+                      <span
+                        className={cn(
+                          'rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide',
+                          isaGravidadeBadgeClass(assistantDisplayStructured.gravidade),
+                        )}
+                      >
+                        Gravidade: {assistantDisplayStructured.gravidade}
+                      </span>
+                    ) : null}
                   </div>
                   <AssistantSection
-                    title="Conclusao"
+                    title="Conclusão"
                     content={assistantDisplayStructured.conclusao}
                     tone="info"
                   />
@@ -905,12 +941,12 @@ export function SplittersOperationalPriorityFab({
                     title="Fatores considerados"
                     items={assistantDisplayStructured.fatores}
                   />
+                  <AssistantSection title="Evidências" items={assistantDisplayStructured.evidencias} />
+                  <AssistantSection title="Inferências" items={assistantDisplayStructured.inferencias} />
+                  <AssistantSection title="Riscos" items={assistantDisplayStructured.riscos} />
+                  <AssistantSection title="Lacunas" items={assistantDisplayStructured.lacunas} />
                   <AssistantSection
-                    title="Lacunas ou riscos"
-                    items={assistantDisplayStructured.lacunas}
-                  />
-                  <AssistantSection
-                    title="Recomendacao pratica"
+                    title="Recomendação prática"
                     content={assistantDisplayStructured.recomendacao}
                   />
                 </div>
