@@ -122,7 +122,7 @@ docker logs -f nexaview-frontend
 
 ### Verificar saúde
 ```bash
-# App (porta no host: APP_HTTP_PORT, predefinido 3177 em docker-compose.portainer.yml)
+# App (porta no host: FRONTEND_PORT, predefinido 3177 em docker-compose.portainer.yml)
 curl -sI http://seu-servidor:3177/
 
 # Backend (rede Docker; ou descomente `ports` no compose para testar no host)
