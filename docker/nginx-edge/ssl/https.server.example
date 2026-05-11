@@ -1,7 +1,7 @@
 # Exemplo: HTTPS na borda (copie o bloco para conf.d, renomeie para .conf e ajuste paths).
 # 1. Obtenha certificados (Let's Encrypt no host, ou volume persistente).
 # 2. Monte os ficheiros no container, ex.: - ./docker/nginx-edge/ssl/certs:/etc/nginx/ssl:ro
-# 3. No docker-compose.portainer.yml descomente a porta 443 em nginx-edge.
+# 3. Se usar um serviço nginx-edge à parte (não está no compose atual), descomente a porta 443 nesse serviço.
 #
 # server {
 #     listen 443 ssl;

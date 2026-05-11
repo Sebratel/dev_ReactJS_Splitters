@@ -1,6 +1,7 @@
 # Variáveis: ficheiro .env.local na máquina (docker compose --env-file .env.docker)
 # ou o painel "Environment" do Portainer (mesmos nomes; alimenta build args do frontend).
 # Não é preciso ficheiro .env.docker no repositório.
+# Porta pública do SPA: FRONTEND_PORT (predefinido 3177) — ver docker-compose.portainer.yml.
 
 name: nexaview
 
@@ -26,6 +27,9 @@ services:
       HUB_BASE_URL: ${HUB_BASE_URL}
       GEOGRID_BASE_URL: ${GEOGRID_BASE_URL}
       GEOGRID_API_KEY: ${GEOGRID_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     networks:

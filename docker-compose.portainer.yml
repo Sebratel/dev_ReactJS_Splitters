@@ -1,7 +1,8 @@
 name: nexaview
 
-# Stack completa: backend + frontend sem Nginx de borda.
-# O browser acessa direto pelo frontend em 3177 e o backend em 3001.
+# Stack: backend + frontend sem Nginx de borda no compose.
+# O browser acede ao frontend em FRONTEND_PORT (predefinido 3177) e opcionalmente ao backend em BACKEND_PORT.
+# Dentro da imagem do frontend o Nginx serve o SPA na porta 3177. HTTPS na borda: Traefik, Cloudflare ou LB à parte.
 
 services:
   backend:
@@ -39,8 +40,12 @@ services:
       # AutoISP
       AUTOISP_EVENTS_ENDPOINT: ${AUTOISP_EVENTS_ENDPOINT}
       AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT}
-      AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
-      AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
+      AUTOISP_USERNAME: ${AUTOISP_USERNAME}
+      AUTOISP_PASSWORD: ${AUTOISP_PASSWORD}
+      # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
     ports:
       - "${BACKEND_PORT:-3001}:3001"
     expose:
@@ -91,7 +96,6 @@ services:
       LOCAL_MASSIVA_ENABLED: "true"
     expose:
       - "3177"
-    # Debug: SPA direto no host — descomente para expor no host na porta 3177
     ports:
       - "${FRONTEND_PORT:-3177}:3177"
     depends_on:
