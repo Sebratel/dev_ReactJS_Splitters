@@ -11,10 +11,13 @@ import {
   fetchOsrmFootDistanceRowMeters,
   hasIntraCondominiumFreePortSibling,
   isCondominiumSplitterTitle,
+  normalizeStreetForRelief,
   queryFullOccupancySplitterCandidates,
   querySplitterNeighborsWithOrigin,
   splitterIdentifierMatchSql,
 } from './splitterNeighborRouting.js';
+import { fetchRoadFromReverseGeocode, isReverseGeocodeDisabled } from './reverseGeocode.js';
+import { enrichNeighborStreetsForMap } from './geocodeNeighborStreets.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import {
   buildSplitterOperationalScore,
@@ -324,8 +327,16 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
   const { origin, neighbors, originStreet, originIsCondominium } =
     await querySplitterNeighborsWithOrigin(pool, normalizedCode, straightRadiusMeters);
 
+  let effectiveOriginStreet = originStreet;
+  if (origin && (effectiveOriginStreet == null || String(effectiveOriginStreet).trim() === '')) {
+    const road = await fetchRoadFromReverseGeocode(origin.lat, origin.lng);
+    if (road && road.trim() !== '') {
+      effectiveOriginStreet = normalizeStreetForRelief(road);
+    }
+  }
+
   context.origin = origin;
-  context.originStreet = originStreet;
+  context.originStreet = effectiveOriginStreet;
   context.originIsCondominium = originIsCondominium;
 
   if (origin && Array.isArray(neighbors) && neighbors.length > 0) {
@@ -346,9 +357,9 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
     context.neighborsSample = sampled.map((neighbor, index) => {
       const neighborStreet = normalizeAssistantText(neighbor.street);
       const sameStreet =
-        originStreet &&
+        effectiveOriginStreet &&
         neighborStreet &&
-        String(originStreet).trim().toLowerCase() === neighborStreet.trim().toLowerCase();
+        String(effectiveOriginStreet).trim().toLowerCase() === neighborStreet.trim().toLowerCase();
       return {
         code: normalizeAssistantText(neighbor.code),
         title: normalizeAssistantText(neighbor.title),
@@ -561,7 +572,10 @@ SELECT
       )
     ) AS "CORPORATIVO",
     ss.out_ports                      AS "CAPACIDADE[SPLT.SECUNDARIO]",
-    ss.street                         AS "RUA[SPLT.SECUNDARIO]",
+    COALESCE(
+      NULLIF(TRIM(ss.street::text), ''),
+      NULLIF(TRIM(nba.street::text), '')
+    )                                 AS "RUA[SPLT.SECUNDARIO]",
     ss."number"                       AS "NÚMERO[SPLT.SECUNDARIO]",
     ss.neighborhood                   AS "BAIRRO[SPLT.SECUNDARIO]",
     ss.city                           AS "CIDADE[SPLT.SECUNDARIO]",
@@ -2174,6 +2188,23 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       hasIntraCondominiumFreePortSibling(pool, code),
     ]);
 
+    let effectiveOriginStreet = originStreet;
+    /** Via humana (Nominatim) quando cadastro não tem rua — só para exibição no mapa. */
+    let originStreetRaw = null;
+    let didReverseGeocodeForOrigin = false;
+    if (
+      !isReverseGeocodeDisabled() &&
+      origin &&
+      (effectiveOriginStreet == null || String(effectiveOriginStreet).trim() === '')
+    ) {
+      didReverseGeocodeForOrigin = true;
+      const road = await fetchRoadFromReverseGeocode(origin.lat, origin.lng);
+      if (road && road.trim() !== '') {
+        originStreetRaw = road.trim();
+        effectiveOriginStreet = normalizeStreetForRelief(road);
+      }
+    }
+
     if (!origin) {
       return res.json({
         success: true,
@@ -2182,7 +2213,8 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
         routingUnavailable: false,
         isCondominium: originIsCondominium,
         condominiumReliefAvailable,
-        originStreet,
+        originStreet: effectiveOriginStreet,
+        originStreetRaw,
         origin: null,
         neighbors: [],
       });
@@ -2215,6 +2247,18 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       isCondominium: isCondominiumSplitterTitle(n.title),
     }));
 
+    try {
+      await enrichNeighborStreetsForMap(data, {
+        routingUnavailable,
+        pauseAfterOriginMs: didReverseGeocodeForOrigin ? 1200 : 0,
+      });
+    } catch (err) {
+      logger.warn('neighbors_routed_enrich_neighbor_streets_failed', {
+        code,
+        error: String(err?.message ?? err),
+      });
+    }
+
     res.json({
       success: true,
       straightRadiusMeters: straightRadius,
@@ -2222,7 +2266,8 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       routingUnavailable,
       isCondominium: originIsCondominium,
       condominiumReliefAvailable,
-      originStreet,
+      originStreet: effectiveOriginStreet,
+      originStreetRaw,
       origin,
       neighbors: data,
     });

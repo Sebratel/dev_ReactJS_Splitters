@@ -171,6 +171,11 @@ function InvalidateSizeOnMountAndResize() {
 
 type SplitterMapLeafletProps = {
   payload: SplitterMapSuccessPayload
+  /**
+   * Texto da rua no popup do splitter atual (lista/detalhe), quando o BFF devolve `originStreet` vazio
+   * mas `splitter.street` da SPLITTERS_BASE_QUERY está preenchido.
+   */
+  currentStreetDisplay?: string | null
   /** Quando false, oculta marcadores de assinantes (splitters, OLT e raio permanecem). Default: true. */
   showClientMarkers?: boolean
   /** Classes do container do mapa (altura/largura/borda). */
@@ -182,6 +187,7 @@ type SplitterMapLeafletProps = {
  */
 export function SplitterMapLeaflet({
   payload,
+  currentStreetDisplay,
   showClientMarkers = true,
   mapClassName = 'z-0 h-full min-h-[200px] w-full rounded-2xl',
 }: SplitterMapLeafletProps) {
@@ -196,6 +202,7 @@ export function SplitterMapLeaflet({
     clientPoints,
     routingUnavailable,
   } = payload
+  const streetLineForCurrentMarker = (currentStreetDisplay ?? currentStreet)?.trim() || 'Não informada'
   const c: [number, number] = [center.lat, center.lng]
   const oltPos = useMemo<[number, number] | null>(() => {
     const oltLat = oltPoint?.lat ?? null
@@ -277,7 +284,7 @@ export function SplitterMapLeaflet({
               <p className="font-mono text-neutral-500">{currentSplitterCode}</p>
             ) : null}
             <p className="mt-2 text-xs text-neutral-600">
-              Rua: <span className="font-semibold text-neutral-800">{currentStreet?.trim() || 'Não informada'}</span>
+              Rua: <span className="font-semibold text-neutral-800">{streetLineForCurrentMarker}</span>
             </p>
           </div>
         </Popup>

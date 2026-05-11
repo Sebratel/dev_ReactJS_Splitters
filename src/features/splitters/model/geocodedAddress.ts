@@ -28,8 +28,33 @@ export function parseGeocodedAddressFromReverseJson(
   const address = json.address
   if (!isJsonObject(address)) return null
 
+  const roadCandidates = [
+    address.road,
+    address.pedestrian,
+    address.residential,
+    address.path,
+    address.footway,
+    address.neighbourhood,
+    address.suburb,
+    address.quarter,
+    address.hamlet,
+    address.village,
+  ]
+  let street: string | null = null
+  for (const c of roadCandidates) {
+    const s = pickOptionalString(c)
+    if (s !== null) {
+      street = s
+      break
+    }
+  }
+  if (street === null && typeof json.display_name === 'string') {
+    const first = json.display_name.split(',')[0]?.trim()
+    street = first === '' ? null : first
+  }
+
   return {
-    street: pickOptionalString(address.road ?? address.pedestrian),
+    street,
     neighborhood: pickOptionalString(
       address.suburb ?? address.neighbourhood,
     ),

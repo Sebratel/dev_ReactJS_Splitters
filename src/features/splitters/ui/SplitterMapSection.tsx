@@ -1,10 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useQuery } from '@tanstack/react-query'
+import { resolveGeocodedAddressForSplitter } from '@/features/splitters/api/reverseGeocode'
 import { useSplitterClientes } from '@/features/splitters/hooks/useSplitterClientes'
+import { useNeighborStreetsReverseGeocode } from '@/features/splitters/hooks/useNeighborStreetsReverseGeocode'
 import { useSplitterMapData } from '@/features/splitters/hooks/useSplitterMapData'
 import { useSplitterOlt } from '@/features/splitters/hooks/useSplitterOlt'
 import type { Splitter } from '@/features/splitters/model/splitter'
-import type { SplitterMapClientPoint } from '@/features/splitters/model/splitterMap'
+import type { SplitterMapClientPoint, SplitterMapSuccessPayload } from '@/features/splitters/model/splitterMap'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -112,6 +115,57 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
     clientPoints,
   })
 
+  const needsClientReverseStreet =
+    mapState.type === 'success' &&
+    !splitter.street?.trim() &&
+    !mapState.payload.originStreetRaw?.trim() &&
+    !mapState.payload.currentStreet?.trim()
+
+  const reverseStreetLat = mapState.type === 'success' ? mapState.payload.center.lat : 0
+  const reverseStreetLng = mapState.type === 'success' ? mapState.payload.center.lng : 0
+
+  const clientReverseStreetQuery = useQuery({
+    queryKey: ['splitter-map-reverse-street', splitter.code, reverseStreetLat, reverseStreetLng] as const,
+    queryFn: () =>
+      resolveGeocodedAddressForSplitter({
+        splitterCode: splitter.code,
+        lat: reverseStreetLat,
+        lng: reverseStreetLng,
+      }),
+    enabled:
+      needsClientReverseStreet &&
+      Number.isFinite(reverseStreetLat) &&
+      Number.isFinite(reverseStreetLng),
+    staleTime: 7 * 24 * 60 * 60 * 1000,
+  })
+
+  const splitterMapSuccessPayload =
+    mapState.type === 'success' ? mapState.payload : null
+
+  const neighborStreetsQuery = useNeighborStreetsReverseGeocode({
+    enabled: splitterMapSuccessPayload !== null,
+    neighbors: splitterMapSuccessPayload?.neighbors ?? [],
+    routingUnavailable: Boolean(splitterMapSuccessPayload?.routingUnavailable),
+  })
+
+  const leafletMergedPayload = useMemo((): SplitterMapSuccessPayload | null => {
+    const p = splitterMapSuccessPayload
+    if (!p) return null
+    const m = neighborStreetsQuery.data
+    if (!m || m.size === 0) return p
+    return {
+      ...p,
+      neighbors: p.neighbors.map((n) => {
+        const fromClient = m.get(n.code)?.trim()
+        const merged = n.street?.trim() || fromClient
+        return {
+          ...n,
+          street: merged || (n.street ?? null),
+        }
+      }),
+    }
+  }, [splitterMapSuccessPayload, neighborStreetsQuery.data])
+
   const oltCodeTrim = (oltCode ?? '').trim()
   const showOltMissing =
     oltCodeTrim.length > 0 && oltState.type === 'not-found'
@@ -153,15 +207,23 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
   }
 
   const { payload } = mapState
+  const mapLeafletPayload = leafletMergedPayload ?? payload
   const neighborCount = payload.neighbors.length
   const clientOnMapCount = payload.clientPoints.length
   const routingUnavailable = Boolean(payload.routingUnavailable)
   const currentIsCondominium = Boolean(payload.isCondominium)
   const condominiumReliefAvailable = Boolean(payload.condominiumReliefAvailable)
-  const currentStreet = normalizeStreetForRelief(payload.currentStreet ?? splitter.street)
+  /** Mesma prioridade do texto do mapa — alívio “mesma rua” precisa disso quando cadastro/BFF não têm rua. */
+  const mapCurrentStreetDisplay =
+    splitter.street?.trim() ||
+    payload.originStreetRaw?.trim() ||
+    clientReverseStreetQuery.data?.street?.trim() ||
+    payload.currentStreet?.trim() ||
+    null
+  const currentStreet = normalizeStreetForRelief(mapCurrentStreetDisplay)
   const splitterFullOccupancy =
     splitter.outPorts > 0 && splitter.busyCount >= splitter.outPorts
-  const hasReliefNeighborWithinRoute = payload.neighbors.some((neighbor) => {
+  const hasReliefNeighborWithinRoute = mapLeafletPayload.neighbors.some((neighbor) => {
     if (currentIsCondominium) return false
     if (neighbor.isCondominium) return false
     if (neighbor.outPorts <= 0 || neighbor.busyCount >= neighbor.outPorts) return false
@@ -365,7 +427,8 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
               }
             >
               <SplitterMapLeaflet
-                payload={payload}
+                payload={mapLeafletPayload}
+                currentStreetDisplay={mapCurrentStreetDisplay}
                 showClientMarkers={showClientsOnMap}
               />
             </Suspense>
@@ -436,7 +499,8 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
                       }
                     >
                       <SplitterMapLeaflet
-                        payload={payload}
+                        payload={mapLeafletPayload}
+                        currentStreetDisplay={mapCurrentStreetDisplay}
                         showClientMarkers={showClientsOnMap}
                         mapClassName="absolute inset-0 z-0 h-full w-full rounded-xl"
                       />

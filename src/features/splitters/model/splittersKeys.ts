@@ -46,9 +46,9 @@ export const splittersKeys = {
   mapNeighbors: (code: string, radiusMeters: number) =>
     [...splittersKeys.all, 'map-neighbors', code, radiusMeters] as const,
 
-  /** Vizinhos + distância roteada (OSRM foot) para o mesmo raio em linha reta. */
+  /** Vizinhos + distância roteada (OSRM foot) para o mesmo raio em linha reta. `v1` invalida cache após geocode de ruas nos vizinhos. */
   mapNeighborsRouted: (code: string, straightRadiusMeters: number) =>
-    [...splittersKeys.all, 'map-neighbors-routed', code, straightRadiusMeters] as const,
+    [...splittersKeys.all, 'map-neighbors-routed', 'v1', code, straightRadiusMeters] as const,
 
   /** Fila de planejamento: splitters lotados sem alívio roteado a pé até maxRoute m. */
   networkReliefQueue: () => [...splittersKeys.all, 'network-relief-queue'] as const,

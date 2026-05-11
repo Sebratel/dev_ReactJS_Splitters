@@ -57,6 +57,10 @@ export type SplitterMapSuccessPayload = {
   currentSplitterCode: string
   currentSplitterTitle: string
   currentStreet?: string | null
+  /**
+   * Nome da via vindo de reverse geocode (BFF) quando cadastro/caixa não têm rua — preferir para exibição.
+   */
+  originStreetRaw?: string | null
   neighbors: SplitterMapNeighbor[]
   oltPoint: SplitterMapOltPoint | null
   clientPoints: SplitterMapClientPoint[]

@@ -13,6 +13,9 @@ import {
 } from '@/features/splitters/model/splitterMap'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 
+/** Geocode de ruas no BFF — stale mais curto que a lista global (5 min). */
+const SPLITTER_MAP_NEIGHBORS_STALE_TIME_MS = Math.min(SPLITTERS_LIST_STALE_TIME_MS, 90 * 1000)
+
 export type SplitterMapDataState =
   | { type: 'no-coordinates' }
   | { type: 'loading' }
@@ -54,7 +57,7 @@ export function useSplitterMapData(args: {
         code: args.splitterCode,
         straightRadiusMeters: SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
       }),
-    staleTime: SPLITTERS_LIST_STALE_TIME_MS,
+    staleTime: SPLITTER_MAP_NEIGHBORS_STALE_TIME_MS,
     enabled: hasCenter,
   })
 
@@ -81,6 +84,7 @@ export function useSplitterMapData(args: {
     neighborsQuery.data?.condominiumReliefAvailable,
   )
   const currentStreet = neighborsQuery.data?.originStreet ?? null
+  const originStreetRaw = neighborsQuery.data?.originStreetRaw ?? null
 
   const neighbors = rawNeighbors.map((neighbor) => ({
     ...neighbor,
@@ -95,6 +99,7 @@ export function useSplitterMapData(args: {
     currentSplitterCode: args.splitterCode.trim(),
     currentSplitterTitle: args.splitterTitle.trim(),
     currentStreet,
+    originStreetRaw,
     neighbors,
     oltPoint: resolveOltPoint(args.olt),
     clientPoints: args.clientPoints,

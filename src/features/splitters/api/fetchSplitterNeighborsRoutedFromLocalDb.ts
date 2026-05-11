@@ -39,6 +39,7 @@ export async function fetchSplitterNeighborsRoutedFromLocalDb(args: {
   isCondominium: boolean
   condominiumReliefAvailable: boolean
   originStreet: string | null
+  originStreetRaw: string | null
 }> {
   const url = new URL(`${env.localBffUrl}/api/splitters/neighbors-routed`)
   url.searchParams.set('code', args.code)
@@ -58,6 +59,7 @@ export async function fetchSplitterNeighborsRoutedFromLocalDb(args: {
   const isCondominium = Boolean(result.isCondominium)
   const condominiumReliefAvailable = Boolean(result.condominiumReliefAvailable)
   const originStreet = pickString(result.originStreet).trim() || null
+  const originStreetRaw = pickString(result.originStreetRaw).trim() || null
 
   const mapped: Array<Omit<SplitterMapNeighbor, 'occupancyBand'> | null> = (
     result.neighbors as NeighborApiRow[]
@@ -93,5 +95,5 @@ export async function fetchSplitterNeighborsRoutedFromLocalDb(args: {
     (item): item is Omit<SplitterMapNeighbor, 'occupancyBand'> => item !== null,
   )
 
-  return { neighbors, routingUnavailable, isCondominium, condominiumReliefAvailable, originStreet }
+  return { neighbors, routingUnavailable, isCondominium, condominiumReliefAvailable, originStreet, originStreetRaw }
 }
