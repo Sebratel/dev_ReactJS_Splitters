@@ -2,11 +2,11 @@
 
 ## Como usar
 
-1. **Faça upload do `docker-compose.portainer.yml`** no Portainer (stack a partir do Git mantém `docker/nginx-edge/` montado no serviço `nginx-edge`)
+1. **Faça upload do `docker-compose.portainer.yml`** no Portainer
 2. **Deploy o stack**
-3. **Acesse pela borda Nginx:** `http://seu-servidor` (porta **80**, ou `EDGE_HTTP_PORT` se definir na stack)
-   - Frontend e backend não expõem portas no host por defeito; o proxy encaminha para o container `frontend`
-   - **Debug:** descomente `ports` em `backend` e/ou `frontend` no compose para aceder direto (ex. `:5173`, `:3031`)
+3. **Acesse o frontend direto:** `http://seu-servidor:3177` (ou use `FRONTEND_PORT` para outro valor)
+   - Frontend e backend expõem portas no host para acesso direto (`3177` e `3001` por padrão)
+   - **Debug:** ajuste `FRONTEND_PORT` e `BACKEND_PORT` no compose para expor outras portas
 
 ## O que está incluído
 

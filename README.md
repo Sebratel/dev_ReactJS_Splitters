@@ -22,7 +22,7 @@ Em local, crie **`.env.docker`** (não comitar) com o mesmo conteúdo; o `npm ru
 ## Portainer
 
 - O repositório no Git **não** deve (e não precisa) conter `.env.docker`. O `Dockerfile.frontend` **não** faz `COPY` desse ficheiro. Se ainda vires o erro `"/.env.docker": not found`, o stack está a construir **código antigo**: faz *Pull and redeploy* apontado ao **último commit** da branch (ou cola o `Dockerfile.frontend` / `docker-compose.yml` atuais do GitHub).
-- Se aparecer *Bind for 0.0.0.0:3177 failed: port is already allocated*, a porta **3177** do host está ocupada. No stack, define **`FRONTEND_PORT=3177`** (ou outra livre); o mapeamento predefinido no compose passa a ser **3177→3177** no container. Para expor em **80**, para o serviço que a usa ou usa um *reverse proxy*.
+- Se aparecer *Bind for 0.0.0.0:3177 failed: port is already allocated*, a porta **3177** do host está ocupada. No stack, define **`FRONTEND_PORT=3177`** (ou outra livre); o mapeamento predefinido no compose passa a ser **3177→3177** no container. Para comunicar com o backend direto, use também **`BACKEND_PORT=3001`** e defina `VITE_LOCAL_BFF_URL=http://localhost:3001` no stack.
 - No stack, abra **Environment variables** e defina as chaves da secção *Docker* de [`.env.example`](.env.example) (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.). O compose passa-as como *build args* para o frontend.
 - Pode usar **Load variables from .env file** e colar o conteúdo de um `.env` completo (equivalente ao que usaria em `docker compose --env-file`).
 - `npm run deploy:portainer` é alias de `npm run deploy:docker`.

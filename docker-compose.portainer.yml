@@ -1,27 +1,9 @@
 name: nexaview
 
-# Stack completa: backend + frontend + Nginx de borda (proxy público).
-# O browser usa apenas a porta EDGE_HTTP_PORT (80 por defeito). Frontend/backend ficam só na rede Docker.
-# HTTPS: veja docker/nginx-edge/ssl/https.server.example e monte certificados.
+# Stack completa: backend + frontend sem Nginx de borda.
+# O browser acessa direto pelo frontend em 3177 e o backend em 3001.
 
 services:
-  nginx-edge:
-    image: nginx:stable-alpine
-    container_name: nexaview-nginx-edge-portainer
-    ports:
-      - "${EDGE_HTTP_PORT:-80}:80"
-      # - "${EDGE_HTTPS_PORT:-443}:443"
-    volumes:
-      - ./docker/nginx-edge/conf.d:/etc/nginx/conf.d:ro
-      # TLS (opcional): guarde fullchain.pem e privkey.pem e descomente:
-      # - ./docker/nginx-edge/ssl/certs:/etc/nginx/ssl:ro
-    depends_on:
-      frontend:
-        condition: service_started
-    networks:
-      - nexaview-network
-    restart: unless-stopped
-
   backend:
     build:
       context: ./server
@@ -59,11 +41,10 @@ services:
       AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT}
       AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
       AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
     expose:
       - "3001"
-    # Debug: expor API no host — descomente se precisar sem passar pelo nginx-edge
-    # ports:
-    #   - "3031:3001"
     networks:
       - nexaview-network
     healthcheck:
