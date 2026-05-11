@@ -109,10 +109,10 @@ services:
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
     expose:
-      - "80"
-    # Debug: SPA direto no host — descomente (normalmente só nginx-edge expõe 80)
-    # ports:
-    #   - "5173:80"
+      - "3177"
+    # Debug: SPA direto no host — descomente para expor no host na porta 3177
+    ports:
+      - "${FRONTEND_PORT:-3177}:3177"
     depends_on:
       backend:
         condition: service_healthy

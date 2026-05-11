@@ -12,7 +12,7 @@
 
 - ✅ **nginx-edge** (reverse proxy público, configs em `docker/nginx-edge/conf.d/`)
 - ✅ Backend Node.js (rede interna, porta 3001)
-- ✅ Frontend React/Vite (Nginx interno na porta 80 do container)
+- ✅ Frontend React/Vite (servidor Node interno na porta 3177 do container)
 - ✅ Conexão MySQL remoto (10.0.11.171)
 - ✅ APIs externas configuradas
 - ✅ Health checks automáticos

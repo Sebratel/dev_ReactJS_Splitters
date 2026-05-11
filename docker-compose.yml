@@ -83,7 +83,7 @@ services:
         VITE_ACCESS_ALLOWED_EMAIL_DOMAIN: ${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN:-}
     container_name: nexaview-frontend
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "${FRONTEND_PORT:-3177}:3177"
     depends_on:
       backend:
         condition: service_healthy
