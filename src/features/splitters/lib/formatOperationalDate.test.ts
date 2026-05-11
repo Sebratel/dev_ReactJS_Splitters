@@ -16,13 +16,13 @@ describe('formatOperationalRelativeDate', () => {
       'Hoje',
     )
     expect(formatOperationalRelativeDate(new Date('2026-06-13T12:00:00.000Z'))).toBe(
-      'Ha 2 dias',
+      'Há 2 dias',
     )
     expect(formatOperationalRelativeDate(new Date('2026-05-15T12:00:00.000Z'))).toBe(
-      'Ha 1 mes',
+      'Há 1 mês',
     )
     expect(formatOperationalRelativeDate(new Date('2025-06-15T12:00:00.000Z'))).toBe(
-      'Ha 1 ano',
+      'Há 1 ano',
     )
   })
 })

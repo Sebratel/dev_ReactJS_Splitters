@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/shared/config/env', () => ({
-  env: { localBffUrl: 'http://bff.test' },
+  env: { localBffUrl: 'http://bff.test', hubOrigin: 'https://hub.test' },
+  isLocalDevHostname: () => true,
 }))
 
 import { fetchNetworkStats } from '@/shared/api/fetchNetworkStats'
@@ -40,7 +41,7 @@ describe('fetchNetworkStats', () => {
       equipmentOccupancy: { green: 1, yellow: 2, red: 4 },
       trends: null,
     })
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith('http://bff.test/api/stats')
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe('http://bff.test/api/stats')
   })
 
   it('normaliza valores não numéricos para 0', async () => {
