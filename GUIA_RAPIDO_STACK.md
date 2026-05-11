@@ -77,7 +77,7 @@ VITE_GEOGRID_API_KEY=sua-chave
 AUTOISP_PASSWORD=sua-senha
 VITE_GOOGLE_CLIENT_ID=seu-client-id
 
-# URLs (stack com nginx-edge: VITE_LOCAL_BFF_URL vazio = mesmo host público)
+# URLs (stack Portainer: VITE_LOCAL_BFF_URL vazio = mesmo host e porta, ex. :3177)
 VITE_LOCAL_BFF_URL=
 VITE_GOOGLE_REDIRECT_URI=https://seu-dominio.com/callback
 ```

@@ -99,7 +99,7 @@ EOF
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
 | `FRONTEND_IMAGE` | `node:22-alpine` | Imagem Docker do frontend |
-| `VITE_LOCAL_BFF_URL` | (vazio) | Com `nginx-edge` na stack, vazio = mesmo host (`/api` via Nginx do frontend) |
+| `VITE_LOCAL_BFF_URL` | (vazio) | Mesmo host e porta do browser (`/api` via Nginx dentro do container frontend) |
 | `VITE_GOOGLE_CLIENT_ID` | (vazio) | Google OAuth Client ID |
 | `VITE_GOOGLE_REDIRECT_URI` | (vazio) | Google OAuth Redirect URI |
 
@@ -122,8 +122,8 @@ docker logs -f nexaview-frontend
 
 ### Verificar saúde
 ```bash
-# App (Nginx de borda — porta 80 ou EDGE_HTTP_PORT)
-curl -sI http://seu-servidor/
+# App (porta no host: APP_HTTP_PORT, predefinido 3177 em docker-compose.portainer.yml)
+curl -sI http://seu-servidor:3177/
 
 # Backend (rede Docker; ou descomente `ports` no compose para testar no host)
 docker exec react-backend-portainer wget -qO- http://127.0.0.1:3001/api/health
