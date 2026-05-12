@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 
 import logger from './logger.js';
+import { ISA_PLANNING_TEAM_INSTRUCTIONS } from './isaPlanningTeamInstructions.js';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
@@ -17,14 +18,26 @@ export function isPlanningAssistantConfigured() {
   return apiKey !== '';
 }
 
-function flattenGeminiText(payload) {
+function flattenGeminiCandidate(payload) {
   const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
   const first = candidates[0];
   const parts = Array.isArray(first?.content?.parts) ? first.content.parts : [];
-  return parts
+  const rawText = parts
     .map((part) => (typeof part?.text === 'string' ? part.text : ''))
     .join('')
     .trim();
+  const finishReason = toCleanString(first?.finishReason);
+  return { rawText, finishReason };
+}
+
+/** Gemini pode devolver finishReason MAX_TOKENS mesmo com JSON parseável por cima de string cortada. */
+function geminiFinishIndicatesOutputTruncated(finishReason) {
+  const fr = toCleanString(finishReason).toUpperCase();
+  if (!fr) return false;
+  if (fr.includes('MAX') && fr.includes('TOKEN')) return true;
+  if (fr.includes('MAX') && fr.includes('OUTPUT')) return true;
+  if (fr.includes('LENGTH')) return true;
+  return false;
 }
 
 function extractJsonObject(text) {
@@ -52,6 +65,117 @@ function normalizeGravidade(raw) {
   if (/medi/.test(s) || /^media$/.test(s)) return 'media';
   if (/baix/.test(s)) return 'baixa';
   return '';
+}
+
+/** Valores esperados: baixa | media | alta */
+function normalizeCapilaridadeIsa(raw) {
+  const s = toCleanString(raw)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (/alt/.test(s)) return 'alta';
+  if (/medi/.test(s) || /^media$/.test(s)) return 'media';
+  if (/baix/.test(s)) return 'baixa';
+  return '';
+}
+
+const ISA_CLASSIFICACAO_GEO_SET = new Set([
+  'ESQUINA',
+  'ESQUINA_DIAGONAL',
+  'MEIO_DE_QUADRA',
+  'BIFURCACAO',
+  'ROTATORIA',
+  'CRUZAMENTO_COMPLEXO',
+  'PONTA_DE_RUA',
+  'VIA_PRINCIPAL',
+  'VIA_SECUNDARIA',
+]);
+
+function normalizeClassificacaoGeografica(raw) {
+  const s = toCleanString(raw)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Z_]/g, '');
+  if (ISA_CLASSIFICACAO_GEO_SET.has(s)) return s;
+  if (s.includes('ESQUINA') && s.includes('DIAGONAL')) return 'ESQUINA_DIAGONAL';
+  if (/MEIO/.test(s) && /QUADRA/.test(s)) return 'MEIO_DE_QUADRA';
+  if (/BIFURC/.test(s)) return 'BIFURCACAO';
+  if (/ROTATOR/.test(s)) return 'ROTATORIA';
+  if (/CRUZAMENTO/.test(s) && /COMPLEX/.test(s)) return 'CRUZAMENTO_COMPLEXO';
+  if (/PONTA/.test(s) && /RUA/.test(s)) return 'PONTA_DE_RUA';
+  if (/VIA_PRINCIPAL|PRINCIPAL/.test(s)) return 'VIA_PRINCIPAL';
+  if (/VIA_SECUNDARIA|SECUNDARIA/.test(s)) return 'VIA_SECUNDARIA';
+  if (s === 'ESQUINA') return 'ESQUINA';
+  return '';
+}
+
+/** Soma ponderada aproximada (seção SCORE OPERACIONAL); null se não calculável. */
+function normalizeScoreOperacional(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.round(raw);
+  const s = toCleanString(raw);
+  if (s === '' || /^null$/i.test(s) || /^n\/a$/i.test(s)) return null;
+  const m = s.match(/-?\d+/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+const ISA_DECISAO_OPERACIONAL_SET = new Set([
+  'EXPANSAO',
+  'REMANEJO',
+  'ALIVIO',
+  'NOVA_CTO',
+  'REBALANCEAMENTO',
+  'SEM_VIABILIDADE',
+]);
+
+/** Resposta da ISA: uma das decisões finais obrigatórias (string). */
+function normalizeDecisaoOperacional(raw) {
+  let s = toCleanString(raw)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\|\s*/g, '|');
+  const head = s.split('|')[0] ?? s;
+  const token = head.replace(/[^A-Z_]/g, '');
+  if (ISA_DECISAO_OPERACIONAL_SET.has(token)) return token;
+  if (/^EXPAND|^EXPANS/.test(token)) return 'EXPANSAO';
+  if (/ALIV/.test(token)) return 'ALIVIO';
+  if (/REMANE/.test(token)) return 'REMANEJO';
+  if (/NOVACTO|NOVA_CTO|NOVACT/.test(token)) return 'NOVA_CTO';
+  if (/REBAL/.test(token)) return 'REBALANCEAMENTO';
+  if (/SEMVIABIL|SEM_VIABIL/.test(token)) return 'SEM_VIABILIDADE';
+  return '';
+}
+
+function normalizeClassificacaoGeoVizinha(raw) {
+  const std = normalizeClassificacaoGeografica(raw);
+  if (std) return std;
+  const u = toCleanString(raw).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/\bOUTROS?\b/.test(u)) return 'OUTROS';
+  return repairUtf8Mojibake(toCleanString(raw));
+}
+
+function normalizeCtrosVizinhasAnalisadas(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const cto = repairUtf8Mojibake(toCleanString(item.cto));
+    if (!cto) continue;
+    out.push({
+      cto,
+      distancia_operacional: repairUtf8Mojibake(toCleanString(item.distancia_operacional)),
+      ocupacao: repairUtf8Mojibake(toCleanString(item.ocupacao)),
+      capacidade_livre: repairUtf8Mojibake(toCleanString(item.capacidade_livre)),
+      classificacao_geografica: normalizeClassificacaoGeoVizinha(item.classificacao_geografica),
+      viabilidade: normalizeCapilaridadeIsa(repairUtf8Mojibake(toCleanString(item.viabilidade))),
+    });
+  }
+  return out;
 }
 
 /** Penalidade para saber se ainda parece UTF-8 sobre Latin-1 (Ã… ou Â + byte acentuado). */
@@ -116,22 +240,102 @@ function repairUtf8Mojibake(text) {
   return prefix + cur;
 }
 
-function repairStructuredPlanningAnswer(structured) {
-  const fatores = toStringList(structured?.fatores).map((item) => repairUtf8Mojibake(item));
-  const evidencias = toStringList(structured?.evidencias).map((item) => repairUtf8Mojibake(item));
-  const inferencias = toStringList(structured?.inferencias).map((item) => repairUtf8Mojibake(item));
-  const riscos = toStringList(structured?.riscos).map((item) => repairUtf8Mojibake(item));
-  const lacunas = toStringList(structured?.lacunas).map((item) => repairUtf8Mojibake(item));
+/**
+ * Remove IDs numéricos internos do cadastro (ex.: 10445) das strings exibidas ao analista.
+ * Mantém códigos operacionais (SLE-C-...), contagens curtas e percentuais.
+ */
+function stripInternalSplitterNumericIds(text, context) {
+  let s = String(text ?? '').trim();
+  if (!s) return s;
+  const splitter = context?.splitter;
+  if (splitter?.found && splitter?.id != null) {
+    const id = Math.trunc(Number(splitter.id));
+    if (Number.isFinite(id) && id > 0) {
+      s = s.replace(new RegExp(`\\b${id}\\b`, 'g'), '');
+    }
+  }
+  s = s.replace(/\bCTO\s+\d{4,}\b/gi, 'CTO');
+  s = s.replace(/\bsplitter\s+\d{4,}\b/gi, 'splitter');
+  s = s.replace(/\(\s*\d{4,}\s*\)/g, '');
+  s = s.replace(/\b\d{4,}\s*\(\s*(?=SLE-)/gi, '(');
+  s = s.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').replace(/\(\s*\(/g, '(').trim();
+  return s;
+}
+
+function repairStructuredPlanningAnswer(structured, context = null) {
+  const strip = (raw) => {
+    const r = repairUtf8Mojibake(toCleanString(raw));
+    return context ? stripInternalSplitterNumericIds(r, context) : r;
+  };
+  const stripList = (arr) =>
+    toStringList(arr).map((item) => {
+      const r = repairUtf8Mojibake(item);
+      return context ? stripInternalSplitterNumericIds(r, context) : r;
+    });
+
+  const fatores = stripList(structured?.fatores);
+  const evidencias = stripList(structured?.evidencias);
+  const inferencias = stripList(structured?.inferencias);
+  const riscos = stripList(structured?.riscos);
+  const lacunas = stripList(structured?.lacunas);
+  const ruasIdentificadas = stripList(structured?.ruas_identificadas);
+  const atendimentoPrioritario = stripList(structured?.atendimento_prioritario);
 
   return {
-    conclusao: repairUtf8Mojibake(toCleanString(structured?.conclusao)),
+    conclusao: strip(structured?.conclusao),
     gravidade: normalizeGravidade(repairUtf8Mojibake(toCleanString(structured?.gravidade))),
+    classificacao_geografica: normalizeClassificacaoGeografica(
+      repairUtf8Mojibake(toCleanString(structured?.classificacao_geografica)),
+    ),
+    confianca: repairUtf8Mojibake(toCleanString(structured?.confianca)),
+    capilaridade: normalizeCapilaridadeIsa(repairUtf8Mojibake(toCleanString(structured?.capilaridade))),
+    distancia_operacional: strip(structured?.distancia_operacional),
+    distancia_cruzamento: strip(structured?.distancia_cruzamento),
+    angulo_vias: strip(structured?.angulo_vias),
+    decisao_operacional: normalizeDecisaoOperacional(structured?.decisao_operacional),
+    viabilidade_remanejo: normalizeCapilaridadeIsa(
+      repairUtf8Mojibake(toCleanString(structured?.viabilidade_remanejo)),
+    ),
+    viabilidade_expansao: normalizeCapilaridadeIsa(
+      repairUtf8Mojibake(toCleanString(structured?.viabilidade_expansao)),
+    ),
+    justificativa_decisao: strip(structured?.justificativa_decisao),
+    acao_prioritaria: strip(structured?.acao_prioritaria),
+    ruas_identificadas: ruasIdentificadas,
+    atendimento_prioritario: atendimentoPrioritario,
+    score_operacional: normalizeScoreOperacional(structured?.score_operacional),
+    justificativa_score: strip(structured?.justificativa_score),
+    ctos_vizinhas_analisadas: normalizeCtrosVizinhasAnalisadas(structured?.ctos_vizinhas_analisadas).map(
+      (row) => ({
+        ...row,
+        cto: strip(row.cto),
+        distancia_operacional: strip(row.distancia_operacional),
+        ocupacao: strip(row.ocupacao),
+        capacidade_livre: strip(row.capacidade_livre),
+        classificacao_geografica: normalizeClassificacaoGeoVizinha(
+          context
+            ? stripInternalSplitterNumericIds(
+                repairUtf8Mojibake(toCleanString(row.classificacao_geografica)),
+                context,
+              )
+            : repairUtf8Mojibake(toCleanString(row.classificacao_geografica)),
+        ),
+        viabilidade: normalizeCapilaridadeIsa(
+          context
+            ? stripInternalSplitterNumericIds(
+                repairUtf8Mojibake(toCleanString(row.viabilidade)),
+                context,
+              )
+            : repairUtf8Mojibake(toCleanString(row.viabilidade)),
+        ),
+      }),
+    ),
     fatores,
     evidencias,
     inferencias,
     riscos,
     lacunas,
-    recomendacao: repairUtf8Mojibake(toCleanString(structured?.recomendacao)),
+    recomendacao: strip(structured?.recomendacao),
   };
 }
 
@@ -165,6 +369,21 @@ function parseStructuredTextFallback(text) {
   const sections = {
     conclusao: [],
     gravidade: [],
+    classificacao_geografica: [],
+    confianca: [],
+    capilaridade: [],
+    distancia_operacional: [],
+    distancia_cruzamento: [],
+    angulo_vias: [],
+    decisao_operacional: [],
+    viabilidade_remanejo: [],
+    viabilidade_expansao: [],
+    justificativa_decisao: [],
+    acao_prioritaria: [],
+    score_operacional: [],
+    justificativa_score: [],
+    ruas_identificadas: [],
+    atendimento_prioritario: [],
     fatores: [],
     evidencias: [],
     inferencias: [],
@@ -188,6 +407,99 @@ function parseStructuredTextFallback(text) {
     }
     if (/gravida/.test(normalized)) {
       currentKey = 'gravidade';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/classifica/.test(normalized) && /geogra/.test(normalized)) {
+      currentKey = 'classificacao_geografica';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/confian/.test(normalized)) {
+      currentKey = 'confianca';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/capilarida/.test(normalized)) {
+      currentKey = 'capilaridade';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/distancia.*operacional/.test(normalized) || /distância.*operacional/.test(line.toLowerCase())) {
+      currentKey = 'distancia_operacional';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/distancia.*cruzamento/.test(normalized) || /distância.*cruzamento/.test(line.toLowerCase())) {
+      currentKey = 'distancia_cruzamento';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/angulo.*vias/.test(normalized) || /ângulo.*vias/.test(line.toLowerCase())) {
+      currentKey = 'angulo_vias';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/decis[aã]o.*operacional/.test(normalized)) {
+      currentKey = 'decisao_operacional';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/viabilidade.*remanej/.test(normalized)) {
+      currentKey = 'viabilidade_remanejo';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/viabilidade.*expans/.test(normalized)) {
+      currentKey = 'viabilidade_expansao';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/justificativa.*decis/.test(normalized)) {
+      currentKey = 'justificativa_decisao';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/a[cç][aã]o.*priorit/.test(normalized)) {
+      currentKey = 'acao_prioritaria';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/justificativa/.test(normalized) && /score/.test(normalized)) {
+      currentKey = 'justificativa_score';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (
+      (/score/.test(normalized) && /operacional/.test(normalized)) ||
+      /^score_operacional/i.test(line.trim())
+    ) {
+      currentKey = 'score_operacional';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/ruas.*identificadas/.test(normalized)) {
+      currentKey = 'ruas_identificadas';
+      const trailing = line.replace(/^.*?:\s*/, '');
+      if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
+      continue;
+    }
+    if (/atendimento.*priorit/.test(normalized)) {
+      currentKey = 'atendimento_prioritario';
       const trailing = line.replace(/^.*?:\s*/, '');
       if (trailing !== line) pushSectionLine(sections, currentKey, trailing);
       continue;
@@ -239,6 +551,24 @@ function parseStructuredTextFallback(text) {
   return {
     conclusao: sections.conclusao.join(' ').trim(),
     gravidade: gravidadeRaw ? normalizeGravidade(gravidadeRaw) : '',
+    classificacao_geografica: normalizeClassificacaoGeografica(
+      sections.classificacao_geografica.join(' ').trim(),
+    ),
+    confianca: sections.confianca.join(' ').trim(),
+    capilaridade: normalizeCapilaridadeIsa(sections.capilaridade.join(' ').trim()),
+    distancia_operacional: sections.distancia_operacional.join(' ').trim(),
+    distancia_cruzamento: sections.distancia_cruzamento.join(' ').trim(),
+    angulo_vias: sections.angulo_vias.join(' ').trim(),
+    decisao_operacional: normalizeDecisaoOperacional(sections.decisao_operacional.join(' ').trim()),
+    viabilidade_remanejo: normalizeCapilaridadeIsa(sections.viabilidade_remanejo.join(' ').trim()),
+    viabilidade_expansao: normalizeCapilaridadeIsa(sections.viabilidade_expansao.join(' ').trim()),
+    justificativa_decisao: sections.justificativa_decisao.join(' ').trim(),
+    acao_prioritaria: sections.acao_prioritaria.join(' ').trim(),
+    score_operacional: normalizeScoreOperacional(sections.score_operacional.join(' ').trim()),
+    justificativa_score: sections.justificativa_score.join(' ').trim(),
+    ruas_identificadas: sections.ruas_identificadas,
+    atendimento_prioritario: sections.atendimento_prioritario,
+    ctos_vizinhas_analisadas: [],
     fatores: sections.fatores,
     evidencias: sections.evidencias,
     inferencias: sections.inferencias,
@@ -282,6 +612,22 @@ function buildLooseStructuredAnswer(rawText) {
     conclusao:
       conclusao || 'A ISA recebeu a pergunta, mas a resposta veio sem um resumo inicial claro.',
     gravidade: '',
+    classificacao_geografica: '',
+    confianca: '',
+    capilaridade: '',
+    distancia_operacional: '',
+    distancia_cruzamento: '',
+    angulo_vias: '',
+    decisao_operacional: '',
+    viabilidade_remanejo: '',
+    viabilidade_expansao: '',
+    justificativa_decisao: '',
+    acao_prioritaria: '',
+    ruas_identificadas: [],
+    atendimento_prioritario: [],
+    ctos_vizinhas_analisadas: [],
+    score_operacional: null,
+    justificativa_score: '',
     fatores:
       fatores.length > 0
         ? fatores
@@ -313,18 +659,50 @@ function hasGenericFallbackRecommendation(recomendacao) {
 function normalizeStructuredAnswer(parsed) {
   const conclusao = toCleanString(parsed?.conclusao);
   const gravidade = normalizeGravidade(parsed?.gravidade);
+  const classificacao_geografica = normalizeClassificacaoGeografica(parsed?.classificacao_geografica);
+  const confianca = toCleanString(parsed?.confianca);
+  const capilaridade = normalizeCapilaridadeIsa(parsed?.capilaridade);
+  const distancia_operacional = toCleanString(parsed?.distancia_operacional);
+  const distancia_cruzamento = toCleanString(parsed?.distancia_cruzamento);
+  const angulo_vias = toCleanString(parsed?.angulo_vias);
+  const ruas_identificadas = toStringList(parsed?.ruas_identificadas);
+  const atendimento_prioritario = toStringList(parsed?.atendimento_prioritario);
+  const score_operacional = normalizeScoreOperacional(parsed?.score_operacional);
+  const justificativa_score = toCleanString(parsed?.justificativa_score);
   const fatores = toStringList(parsed?.fatores);
   const evidencias = toStringList(parsed?.evidencias);
   const inferencias = toStringList(parsed?.inferencias);
   const riscos = toStringList(parsed?.riscos);
   const lacunas = toStringList(parsed?.lacunas);
   const recomendacao = toCleanString(parsed?.recomendacao);
+  const decisao_operacional = normalizeDecisaoOperacional(parsed?.decisao_operacional);
+  const viabilidade_remanejo = normalizeCapilaridadeIsa(parsed?.viabilidade_remanejo);
+  const viabilidade_expansao = normalizeCapilaridadeIsa(parsed?.viabilidade_expansao);
+  const justificativa_decisao = toCleanString(parsed?.justificativa_decisao);
+  const acao_prioritaria = toCleanString(parsed?.acao_prioritaria);
+  const ctos_vizinhas_analisadas = normalizeCtrosVizinhasAnalisadas(parsed?.ctos_vizinhas_analisadas);
 
   return {
     conclusao:
       conclusao ||
       'A ISA respondeu, mas não trouxe uma conclusão objetiva no formato esperado.',
     gravidade,
+    classificacao_geografica,
+    confianca,
+    capilaridade,
+    distancia_operacional,
+    distancia_cruzamento,
+    angulo_vias,
+    decisao_operacional,
+    viabilidade_remanejo,
+    viabilidade_expansao,
+    justificativa_decisao,
+    acao_prioritaria,
+    ruas_identificadas,
+    atendimento_prioritario,
+    score_operacional,
+    justificativa_score,
+    ctos_vizinhas_analisadas,
     fatores:
       fatores.length > 0
         ? fatores
@@ -353,6 +731,19 @@ function parseGeminiStructuredAnswer(rawText) {
   const hasSectionContent =
     sectionParsed.conclusao ||
     sectionParsed.gravidade ||
+    sectionParsed.classificacao_geografica ||
+    sectionParsed.confianca ||
+    sectionParsed.capilaridade ||
+    sectionParsed.distancia_operacional ||
+    sectionParsed.distancia_cruzamento ||
+    sectionParsed.angulo_vias ||
+    toCleanString(sectionParsed?.decisao_operacional) !== '' ||
+    toCleanString(sectionParsed?.justificativa_decisao) !== '' ||
+    toCleanString(sectionParsed?.acao_prioritaria) !== '' ||
+    sectionParsed.score_operacional != null ||
+    toCleanString(sectionParsed?.justificativa_score) !== '' ||
+    sectionParsed.ruas_identificadas.length > 0 ||
+    sectionParsed.atendimento_prioritario.length > 0 ||
     sectionParsed.fatores.length > 0 ||
     sectionParsed.evidencias.length > 0 ||
     sectionParsed.inferencias.length > 0 ||
@@ -380,10 +771,13 @@ function buildDeterministicConclusion(context) {
   const busyCount = Number(splitter?.busyCount ?? 0);
   const usagePercent = outPorts > 0 ? Math.round((busyCount / outPorts) * 100) : 0;
   const relief = context?.reliefEvaluation;
+  const reliefTarget = describeReliefTargetForUser(context);
 
   const locationText = [street, city].filter(Boolean).join(' em ');
   const reliefText = relief?.hasReliefWithinRoute
-    ? 'Foi identificado alívio de rede dentro da regra atual, o que abre uma alternativa técnica antes de pensar em expansão.'
+    ? reliefTarget
+      ? `Foi identificado alívio de rede em direção a ${reliefTarget}, o que abre alternativa operacional antes da expansão física.`
+      : 'Foi identificado alívio de rede dentro da regra atual, o que abre uma alternativa técnica antes de pensar em expansão.'
     : 'Não foi identificado alívio de rede dentro da regra atual, então este caso merece mais atenção do planejamento.';
 
   return `${title}${locationText ? `, localizado em ${locationText},` : ''} está com ${usagePercent}% de ocupação (${busyCount} de ${outPorts} portas ocupadas). ${reliefText}`;
@@ -407,11 +801,23 @@ function buildDeterministicFactors(context) {
   }
 
   if (relief) {
-    factors.push(
-      relief.hasReliefWithinRoute
-        ? `A análise encontrou possibilidade de alívio de rede dentro do limite atual de ${Number(context?.reliefRule?.maxRouteMeters ?? 0)} metros por rota.`
-        : `A análise não encontrou outro splitter com capacidade livre dentro da regra atual de alívio de rede.`,
-    );
+    const maxRoute = Number(context?.reliefRule?.maxRouteMeters ?? 0);
+    if (relief.hasReliefWithinRoute) {
+      const who = describeReliefTargetForUser(context);
+      if (who) {
+        factors.push(
+          `A análise encontrou possibilidade de alívio de rede em direção a ${who}, respeitando o limite atual de ${maxRoute} metros por rota (regra do sistema).`,
+        );
+      } else {
+        factors.push(
+          `A análise encontrou possibilidade de alívio de rede dentro do limite atual de ${maxRoute} metros por rota; o candidato não foi identificado automaticamente nesta resposta — use vizinhosAmostra e metricas_decisao_sistema no contexto.`,
+        );
+      }
+    } else {
+      factors.push(
+        `A análise não encontrou outro splitter com capacidade livre dentro da regra atual de alívio de rede.`,
+      );
+    }
   }
 
   if (trend) {
@@ -476,6 +882,10 @@ function buildDeterministicRecommendation(context) {
   }
 
   if (outPorts > 0 && busyCount >= outPorts && relief?.hasReliefWithinRoute) {
+    const who = describeReliefTargetForUser(context);
+    if (who) {
+      return `💡 Avalie primeiro o remanejamento para o alívio em direção a ${who} antes de considerar expansão física.`;
+    }
     return '💡 Avalie primeiro o remanejamento para o alívio de rede encontrado antes de considerar expansão física.';
   }
 
@@ -496,6 +906,24 @@ function enrichStructuredAnswer(structured, context) {
       ? buildDeterministicConclusion(context)
       : structured.conclusao,
     gravidade: normalizeGravidade(structured?.gravidade),
+    classificacao_geografica: normalizeClassificacaoGeografica(structured?.classificacao_geografica),
+    confianca: toCleanString(structured?.confianca),
+    capilaridade: normalizeCapilaridadeIsa(structured?.capilaridade),
+    distancia_operacional: toCleanString(structured?.distancia_operacional),
+    distancia_cruzamento: toCleanString(structured?.distancia_cruzamento),
+    angulo_vias: toCleanString(structured?.angulo_vias),
+    decisao_operacional: normalizeDecisaoOperacional(structured?.decisao_operacional),
+    viabilidade_remanejo: normalizeCapilaridadeIsa(structured?.viabilidade_remanejo),
+    viabilidade_expansao: normalizeCapilaridadeIsa(structured?.viabilidade_expansao),
+    justificativa_decisao: toCleanString(structured?.justificativa_decisao),
+    acao_prioritaria: toCleanString(structured?.acao_prioritaria),
+    ruas_identificadas: Array.isArray(structured?.ruas_identificadas) ? structured.ruas_identificadas : [],
+    atendimento_prioritario: Array.isArray(structured?.atendimento_prioritario)
+      ? structured.atendimento_prioritario
+      : [],
+    score_operacional: normalizeScoreOperacional(structured?.score_operacional),
+    justificativa_score: toCleanString(structured?.justificativa_score),
+    ctos_vizinhas_analisadas: normalizeCtrosVizinhasAnalisadas(structured?.ctos_vizinhas_analisadas),
     fatores: genericFactors ? buildDeterministicFactors(context) : structured.fatores,
     evidencias: Array.isArray(structured?.evidencias) ? structured.evidencias : [],
     inferencias: Array.isArray(structured?.inferencias) ? structured.inferencias : [],
@@ -538,6 +966,134 @@ function summarizeRecentHistory(history) {
     abertura: formatIsoDate(entry?.openedAt),
     encerramento: formatIsoDate(entry?.closedAt),
   }));
+}
+
+/**
+ * Indicadores deterministicos para a ISA raciocinar sobre remanejamento vs expansao,
+ * sem novo I/O (usa apenas neighborsSample + relief ja calculados no contexto).
+ */
+function buildOperationalDecisionContext(context) {
+  const splitter = context?.splitter ?? null;
+  const relief = context?.reliefEvaluation ?? null;
+  const neighbors = Array.isArray(context?.neighborsSample) ? context.neighborsSample : [];
+
+  if (!splitter?.found) {
+    return {
+      equipamentoReferenciaLotado: false,
+      alivioPelasRegrasDoSistema: false,
+      alivioPorCondominio: false,
+      osrmOkParaAvaliarVizinhos: false,
+      quantidadeVizinhosNaAmostra: 0,
+      vizinhosComPortaLivreNaAmostra: 0,
+      somaPortasLivresVizinhosNaAmostra: 0,
+      melhorCandidatoRemanejamento: null,
+      candidatosRemanejamentoOrdenados: [],
+      nota: 'Splitter nao encontrado no contexto; demais campos nao aplicaveis.',
+    };
+  }
+
+  const outPorts = Number(splitter.outPorts ?? 0);
+  const busy = Number(splitter.busyCount ?? 0);
+  const equipamentoReferenciaLotado = outPorts > 0 && busy >= outPorts;
+
+  const candidatos = neighbors
+    .filter((n) => !Boolean(n?.isCondominium))
+    .map((n) => {
+      const op = Number(n?.outPorts ?? 0);
+      const bc = Number(n?.busyCount ?? 0);
+      const livres = Math.max(0, op - bc);
+      const rm =
+        n?.routeMeters == null || !Number.isFinite(Number(n.routeMeters))
+          ? null
+          : Math.round(Number(n.routeMeters));
+      const linha = Number(n?.straightMeters ?? 0);
+      return {
+        codigo: toCleanString(n?.code),
+        titulo: toCleanString(n?.title),
+        rua: toCleanString(n?.street),
+        portasLivres: livres,
+        portasTotais: op,
+        portasOcupadas: bc,
+        distanciaRotaMetros: rm,
+        distanciaLinhaRetaMetros: Number.isFinite(linha) && linha > 0 ? Math.round(linha) : null,
+        mesmaRua: Boolean(n?.sameStreet),
+      };
+    })
+    .filter((n) => n.portasLivres > 0 && n.codigo !== '');
+
+  candidatos.sort((a, b) => {
+    if (a.mesmaRua !== b.mesmaRua) return a.mesmaRua ? -1 : 1;
+    const ra = a.distanciaRotaMetros;
+    const rb = b.distanciaRotaMetros;
+    if (ra != null && rb != null && ra !== rb) return ra - rb;
+    if (ra == null && rb != null) return 1;
+    if (ra != null && rb == null) return -1;
+    const la = a.distanciaLinhaRetaMetros ?? 1e9;
+    const lb = b.distanciaLinhaRetaMetros ?? 1e9;
+    return la - lb;
+  });
+
+  const ordenados = candidatos.slice(0, 5).map((row) => {
+    const { distanciaLinhaRetaMetros, ...pub } = row;
+    return {
+      ...pub,
+      ...(distanciaLinhaRetaMetros != null ? { distanciaLinhaRetaMetros } : {}),
+    };
+  });
+
+  const somaLivres = candidatos.reduce((acc, n) => acc + n.portasLivres, 0);
+
+  return {
+    equipamentoReferenciaLotado: equipamentoReferenciaLotado,
+    alivioPelasRegrasDoSistema: Boolean(relief?.hasReliefWithinRoute),
+    alivioPorCondominio: Boolean(relief?.condominiumRelief),
+    osrmOkParaAvaliarVizinhos: Boolean(relief?.routingOk),
+    quantidadeVizinhosNaAmostra: neighbors.length,
+    vizinhosComPortaLivreNaAmostra: candidatos.length,
+    somaPortasLivresVizinhosNaAmostra: somaLivres,
+    melhorCandidatoRemanejamento: ordenados[0] ?? null,
+    candidatosRemanejamentoOrdenados: ordenados,
+    nota:
+      'Calculado no servidor a partir da amostra de vizinhos (ate 8) e das mesmas rotas OSRM usadas em alivio; nao inclui Homes Passed, largura de via nem clientes fora da amostra.',
+  };
+}
+
+/**
+ * Identificação legível do splitter que o servidor usou como alívio por rota (OSRM),
+ * ou fallback pela amostra de vizinhos; string vazia se não aplicável.
+ */
+function describeReliefTargetForUser(context) {
+  const relief = context?.reliefEvaluation ?? null;
+  if (!relief?.hasReliefWithinRoute) return '';
+
+  if (relief.condominiumRelief) {
+    return 'outro equipamento no mesmo condomínio com porta livre (regra intra-condomínio)';
+  }
+
+  const code = toCleanString(relief.reliefNeighborCode);
+  const title = toCleanString(relief.reliefNeighborTitle);
+  const rm = relief.reliefNeighborRouteMeters;
+  if (code || title) {
+    const main = title && code ? `${title} (${code})` : title || code;
+    const routePart =
+      rm != null && Number.isFinite(Number(rm))
+        ? ` — rota a pé estimada em cerca de ${Math.round(Number(rm))} m`
+        : '';
+    return `${main}${routePart}`;
+  }
+
+  const metrics = buildOperationalDecisionContext(context);
+  const best = metrics?.melhorCandidatoRemanejamento;
+  if (best?.codigo) {
+    const label = toCleanString(best.titulo) ? `${toCleanString(best.titulo)} (${best.codigo})` : best.codigo;
+    const rm2 = best.distanciaRotaMetros;
+    const route2 =
+      rm2 != null && Number.isFinite(Number(rm2)) ? ` — rota cerca de ${Math.round(Number(rm2))} m` : '';
+    const sm = best.mesmaRua ? 'mesma rua no cadastro' : 'outra rua no cadastro';
+    return `${label}${route2} (${sm}; referência: amostra de vizinhos da consulta, não a varredura completa de alívio).`;
+  }
+
+  return '';
 }
 
 function buildCompactPlanningContext(context) {
@@ -588,6 +1144,18 @@ function buildCompactPlanningContext(context) {
           osrmDisponivel: Boolean(relief?.routingOk),
           vizinhosNoRaioReto: Number(relief?.straightNeighborsCount ?? 0),
           alivioPorCondominio: Boolean(relief?.condominiumRelief),
+          vizinhoAlivioPrincipal:
+            toCleanString(relief?.reliefNeighborCode) || toCleanString(relief?.reliefNeighborTitle)
+              ? {
+                  codigo: toCleanString(relief?.reliefNeighborCode),
+                  titulo: toCleanString(relief?.reliefNeighborTitle),
+                  rotaMetros:
+                    relief?.reliefNeighborRouteMeters == null ||
+                    !Number.isFinite(Number(relief.reliefNeighborRouteMeters))
+                      ? null
+                      : Math.round(Number(relief.reliefNeighborRouteMeters)),
+                }
+              : null,
           regra: {
             raioLinhaRetaMetros: Number(context?.reliefRule?.straightRadiusMeters ?? 0),
             limiteMesmoLogradouroMetros: Number(context?.reliefRule?.maxRouteMeters ?? 0),
@@ -638,6 +1206,7 @@ function buildCompactPlanningContext(context) {
       : null,
     vizinhosAmostra: Array.isArray(context?.neighborsSample)
       ? context.neighborsSample.slice(0, 5).map((neighbor) => ({
+          codigo: toCleanString(neighbor?.code),
           titulo: toCleanString(neighbor?.title),
           rua: toCleanString(neighbor?.street),
           portasTotais: Number(neighbor?.outPorts ?? 0),
@@ -646,92 +1215,14 @@ function buildCompactPlanningContext(context) {
           mesmaRua: Boolean(neighbor?.sameStreet),
         }))
       : [],
+    metricas_decisao_sistema: buildOperationalDecisionContext(context),
   };
 }
 
 function buildUserPrompt({ question, context, responseMode = 'json' }) {
   const compactContext = buildCompactPlanningContext(context);
   const contextJson = JSON.stringify(compactContext, null, 2);
-  const basePrompt = [
-    'Você é a ISA, assistente técnica inteligente do Time de Planejamento de Redes da Sebratel.',
-    '',
-    'Sua função é apoiar análises técnicas e operacionais da rede FTTH com base:',
-    '- nos dados fornecidos pelos sistemas,',
-    '- nos históricos operacionais,',
-    '- nas análises anteriores,',
-    '- e nas interações realizadas pelo time técnico.',
-    '',
-    'Seu objetivo é auxiliar continuamente na melhoria da qualidade, estabilidade, capacidade e governança da rede.',
-    '',
-    'Você atua principalmente em análises relacionadas a:',
-    '- ocupação de portas,',
-    '- splitters,',
-    '- CTOs,',
-    '- OLTs,',
-    '- saturação,',
-    '- rompimentos,',
-    '- reservas,',
-    '- inconsistências cadastrais,',
-    '- capacidade,',
-    '- balanceamento,',
-    '- rotas,',
-    '- expansão da rede,',
-    '- e riscos operacionais.',
-    '',
-    'Considere que:',
-    '- os dados do sistema são a principal fonte de verdade operacional;',
-    '- as interações do time técnico complementam e refinam as análises;',
-    '- padrões recorrentes devem ser considerados para melhoria contínua da rede.',
-    '',
-    'Você NÃO executa ações.',
-    'Você NÃO altera configurações.',
-    'Você NÃO inventa informações ausentes.',
-    '',
-    'Seu papel é:',
-    '- identificar riscos,',
-    '- apontar inconsistências,',
-    '- sugerir possíveis causas,',
-    '- recomendar ações práticas,',
-    '- e apoiar decisões operacionais.',
-    '',
-    'Diretrizes obrigatórias:',
-    '- Diferencie fatos de inferências.',
-    '- Nunca trate hipótese como certeza.',
-    '- Se faltar informação, informe explicitamente.',
-    '- Priorize impacto operacional e continuidade da rede.',
-    '- Considere regras de alívio e balanceamento já aplicadas no contexto recebido.',
-    '- Troque nomes de campos internos do JSON de contexto (ex.: busyCount, trendSummary, score, hasReliefWithinRoute) por descrições naturais em português nas suas frases.',
-    '',
-    'Diretrizes para análises de CTOs:',
-    '- Considere sempre latitude e longitude fornecidas pelo sistema.',
-    '- Avalie atendimento preferencialmente pelas vias públicas em linha reta.',
-    '- Não considere trajetos sobre telhados, áreas internas de terrenos, fundos de residências ou caminhos sem acesso viário direto.',
-    '- Priorize CTOs com atendimento possível pela mesma rua ou por cruzamentos diretos entre ruas próximas.',
-    '- Não considere apenas distância em linha aérea.',
-    '- Avalie viabilidade operacional considerando trajeto urbano, facilidade de lançamento da rede, capacidade disponível e risco de saturação.',
-    '- Em casos de múltiplas CTOs próximas, priorize:',
-    '  1. menor trajeto viário;',
-    '  2. menor impacto operacional;',
-    '  3. melhor capacidade disponível;',
-    '  4. menor risco de saturação futura.',
-    '- Quando houver limitação de análise geográfica, informe explicitamente nas lacunas.',
-    '',
-    'Diretrizes de linguagem:',
-    '- Responda sempre em português do Brasil.',
-    '- Use linguagem clara, objetiva, profissional e operacional.',
-    '- Evite nomes técnicos internos, variáveis, chaves JSON e termos crus em inglês.',
-    '- Explique termos técnicos de forma simples quando necessário.',
-    '- Nunca responda como log, documentação ou saída de sistema.',
-    '- Seja direto e evite respostas longas ou repetitivas.',
-    '- Prefira frases curtas e análises resumidas.',
-    '',
-    'Prioridade da análise:',
-    '1. Identificar risco imediato.',
-    '2. Detectar possível causa.',
-    '3. Avaliar impacto operacional.',
-    '4. Sugerir ação prática.',
-    '5. Informar limitações da análise.',
-  ];
+  const basePrompt = ISA_PLANNING_TEAM_INSTRUCTIONS.trim().split('\n');
 
   const formatPrompt =
     responseMode === 'text'
@@ -740,6 +1231,22 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
           'Responda em texto simples, sem markdown e sem JSON, usando exatamente estes blocos nesta ordem:',
           'Conclusao:',
           'Gravidade: (uma linha: baixa, media, alta ou critica)',
+          'ClassificacaoGeografica: (uma linha: um dos valores ESQUINA, ESQUINA_DIAGONAL, MEIO_DE_QUADRA, BIFURCACAO, ROTATORIA, CRUZAMENTO_COMPLEXO, PONTA_DE_RUA, VIA_PRINCIPAL, VIA_SECUNDARIA ou vazio)',
+          'Confianca: (ex.: 0% a 100%)',
+          'Capilaridade: (uma linha: baixa, media ou alta)',
+          'DistanciaOperacional:',
+          'DistanciaCruzamento:',
+          'AnguloVias:',
+          'DecisaoOperacional: (uma linha: EXPANSAO, REMANEJO, ALIVIO, NOVA_CTO, REBALANCEAMENTO ou SEM_VIABILIDADE)',
+          'ViabilidadeRemanejo: (baixa, media ou alta)',
+          'ViabilidadeExpansao: (baixa, media ou alta)',
+          'JustificativaDecisao:',
+          'AcaoPrioritaria:',
+          'ScoreOperacional: (um número inteiro estimado, ou a palavra null se não for possível calcular)',
+          'JustificativaScore:',
+          'RuasIdentificadas:',
+          'AtendimentoPrioritario:',
+          'CtosVizinhasAnalisadas: (uma linha por CTO: código; distância; ocupação; livre; classificação geo; viabilidade)',
           'Fatores:',
           'Evidencias:',
           'Inferencias:',
@@ -751,21 +1258,51 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
         ]
       : [
           '',
+          'Ao preencher strings com base no contexto JSON abaixo, descreva os dados em português natural.',
+          'Nas frases, não repita nomes de campos internos do contexto (ex.: busyCount, trendSummary, score, hasReliefWithinRoute) como rótulos técnicos.',
+          '',
           'Você deve responder SOMENTE em JSON válido.',
           'Nunca utilize markdown.',
           'Nunca escreva texto fora do JSON.',
           '',
-          'Use exatamente esta estrutura:',
+          'Use exatamente esta estrutura (chaves e tipos obrigatórios):',
           '{',
           '  "conclusao": "Resumo técnico curto e objetivo.",',
           '  "gravidade": "baixa | media | alta | critica",',
+          '  "classificacao_geografica": "ESQUINA | ESQUINA_DIAGONAL | MEIO_DE_QUADRA | BIFURCACAO | ROTATORIA | CRUZAMENTO_COMPLEXO | PONTA_DE_RUA | VIA_PRINCIPAL | VIA_SECUNDARIA",',
+          '  "confianca": "0% a 100%",',
+          '  "capilaridade": "baixa | media | alta",',
+          '  "distancia_operacional": "Distância operacional estimada.",',
+          '  "distancia_cruzamento": "Distância estimada até o cruzamento.",',
+          '  "angulo_vias": "Ângulo estimado entre vias.",',
+          '  "decisao_operacional": "EXPANSAO | REMANEJO | ALIVIO | NOVA_CTO | REBALANCEAMENTO | SEM_VIABILIDADE",',
+          '  "viabilidade_remanejo": "baixa | media | alta",',
+          '  "viabilidade_expansao": "baixa | media | alta",',
+          '  "justificativa_decisao": "Motivo técnico principal da decisão.",',
+          '  "acao_prioritaria": "Ação operacional recomendada.",',
+          '  "score_operacional": null,',
+          '  "justificativa_score": "Resumo dos termos somados ou penalizados conforme a seção SCORE OPERACIONAL do prompt; use string vazia se não calculou.",',
+          '  "ruas_identificadas": [',
+          '    "Rua identificada"',
+          '  ],',
+          '  "atendimento_prioritario": [',
+          '    "Rua prioritária"',
+          '  ],',
+          '  "ctos_vizinhas_analisadas": [',
+          '    {',
+          '      "cto": "Código operacional (ex.: SLE-C-...) ou título da CTO vizinha, sem ID numérico interno.",',
+          '      "distancia_operacional": "Distância operacional estimada pela rota.",',
+          '      "ocupacao": "Portas ocupadas (texto).",',
+          '      "capacidade_livre": "Portas livres (texto).",',
+          '      "classificacao_geografica": "ESQUINA | ESQUINA_DIAGONAL | MEIO_DE_QUADRA | BIFURCACAO | ROTATORIA | CRUZAMENTO_COMPLEXO | PONTA_DE_RUA | VIA_PRINCIPAL | VIA_SECUNDARIA | OUTROS",',
+          '      "viabilidade": "alta | media | baixa"',
+          '    }',
+          '  ],',
           '  "fatores": [',
-          '    "Fator relevante.",',
-          '    "Outro fator relevante."',
+          '    "Fator relevante."',
           '  ],',
           '  "evidencias": [',
-          '    "Fato confirmado.",',
-          '    "Outro fato confirmado."',
+          '    "Fato confirmado."',
           '  ],',
           '  "inferencias": [',
           '    "Hipótese baseada nos indícios."',
@@ -779,7 +1316,18 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
           '  "recomendacao": "Ação prática recomendada."',
           '}',
           '',
+          'O campo conclusao deve ter no maximo ~750 caracteres, preferir um unico paragrafo curto, e terminar obrigatoriamente com ponto final interrogacao ou exclamacao; nao deixe parenteses abertos nem codigos cortados.',
+          'Nao cite identificadores numericos internos do cadastro (ID do equipamento); use codigo operacional (ex.: SLE-C-...) e titulo quando identificar equipamentos.',
+          '',
+          'O objeto metricas_decisao_sistema no contexto JSON foi calculado pelo sistema (não confundir com o campo decisao_operacional da sua resposta). Use melhorCandidatoRemanejamento, somaPortasLivresVizinhosNaAmostra, vizinhosComPortaLivreNaAmostra e alivioPelasRegrasDoSistema como fatos nas evidencias quando forem relevantes.',
+          'Nao contradiga alivioPelasRegrasDoSistema nem os numeros de metricas_decisao_sistema sem explicar em lacunas (ex.: dados fora da amostra, cadastro incompleto, regra de negocio adicional).',
+          'Preencha ctos_vizinhas_analisadas com base em vizinhosAmostra e na pergunta; se a amostra for insuficiente, declare em lacunas e ainda assim preencha decisao_operacional quando houver indicios.',
+          'Quando alivio.encontrouAlivio for true, cite obrigatoriamente nas evidencias (e na recomendacao quando fizer sentido) o codigo e o titulo do splitter de destino: use alivio.vizinhoAlivioPrincipal se existir; senao use metricas_decisao_sistema.melhorCandidatoRemanejamento; nunca deixe o alívio sem nome de equipamento quando o contexto trouxer um.',
+          'decisao_operacional na resposta deve ser exatamente um dos valores listados (sem espacos extras).',
           'Preencha cada array com frases completas em português do Brasil; use arrays vazios [] apenas quando não houver conteúdo adequado.',
+          'No campo fatores: use 5 a 9 itens curtos (cada um com no máximo ~240 caracteres), um argumento por item, cada frase terminada em ponto, interrogação ou exclamação. Evite um único item longo que misture vários argumentos.',
+          'score_operacional deve ser um número inteiro (soma aproximada dos pesos e penalidades) ou null se os dados forem insuficientes.',
+          'Use string vazia "" apenas quando um campo de texto não se aplicar; para classificacao_geografica e capilaridade use o valor mais adequado ou indique incerteza em lacunas.',
         ];
 
   return [
@@ -792,11 +1340,45 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
   ].join('\n');
 }
 
-function looksLikeTruncatedAnswer(structured, rawText) {
+/** Heurística para JSON válido mas com strings cortadas no limite de tokens. */
+function naturalSummaryLooksTruncated(value, minLen) {
+  const t = toCleanString(value);
+  if (t.length < minLen) return false;
+  if (/\([^)]*$/.test(t)) return true;
+  if (!/[.!?…]\s*$/.test(t) && t.length >= 160) return true;
+  return stringFieldLooksTruncated(value, 100);
+}
+
+function stringFieldLooksTruncated(value, minLen) {
+  const t = toCleanString(value);
+  if (t.length < minLen) return false;
+  if (
+    /\s+(pois|porque|enquanto|portanto|porém|porem|contudo|todavia|assim|logo)\s*$/i.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (t.length >= 360 && !/[.!?…]["')\]]?\s*$/.test(t)) return true;
+  return false;
+}
+
+function looksLikeTruncatedAnswer(structured, rawText, finishReason) {
   const conclusao = toCleanString(structured?.conclusao);
   const fatores = Array.isArray(structured?.fatores) ? structured.fatores : [];
   const recomendacao = toCleanString(structured?.recomendacao);
   const normalizedRaw = toCleanString(rawText);
+  const fr = toCleanString(finishReason).toUpperCase();
+
+  if (fr.includes('MAX') && fr.includes('TOKEN')) return true;
+
+  const truncatedFactor = fatores.some(
+    (f) => typeof f === 'string' && stringFieldLooksTruncated(f, 100),
+  );
+  if (truncatedFactor) return true;
+
+  if (naturalSummaryLooksTruncated(structured?.conclusao, 120)) return true;
+  if (naturalSummaryLooksTruncated(structured?.recomendacao, 100)) return true;
 
   const hasOddQuotes = (normalizedRaw.match(/"/g) || []).length % 2 === 1;
   const conclusionHasOpenQuoteOnly =
@@ -824,7 +1406,7 @@ async function requestGeminiAnswer({ apiKey, model, question, context, responseM
     generationConfig: {
       temperature: 0.15,
       topP: 0.9,
-      maxOutputTokens: 1800,
+      maxOutputTokens: 8192,
       ...(responseMode === 'json' ? { responseMimeType: 'application/json' } : {}),
     },
   };
@@ -851,14 +1433,14 @@ async function requestGeminiAnswer({ apiKey, model, question, context, responseM
     throw error;
   }
 
-  const rawText = flattenGeminiText(payload);
+  const { rawText, finishReason } = flattenGeminiCandidate(payload);
   if (!rawText) {
     const error = new Error('Gemini respondeu sem texto utilizavel.');
     error.statusCode = 502;
     throw error;
   }
 
-  return rawText;
+  return { rawText, finishReason };
 }
 
 export async function askPlanningAssistant({ question, context }) {
@@ -872,7 +1454,7 @@ export async function askPlanningAssistant({ question, context }) {
   const startedAt = Date.now();
 
   try {
-    const rawJsonText = await requestGeminiAnswer({
+    const { rawText: rawJsonText, finishReason: finishJson } = await requestGeminiAnswer({
       apiKey,
       model,
       question,
@@ -882,11 +1464,15 @@ export async function askPlanningAssistant({ question, context }) {
     let structured = parseGeminiStructuredAnswer(rawJsonText);
     let responseMode = 'json';
 
-    if (looksLikeTruncatedAnswer(structured, rawJsonText)) {
+    if (
+      looksLikeTruncatedAnswer(structured, rawJsonText, finishJson) ||
+      geminiFinishIndicatesOutputTruncated(finishJson)
+    ) {
       logger.warn('planning_assistant_gemini_retry_text_mode', {
         model,
+        finishReason: finishJson,
       });
-      const rawTextMode = await requestGeminiAnswer({
+      const { rawText: rawTextMode, finishReason: finishText } = await requestGeminiAnswer({
         apiKey,
         model,
         question,
@@ -895,10 +1481,13 @@ export async function askPlanningAssistant({ question, context }) {
       });
       structured = parseGeminiStructuredAnswer(rawTextMode);
       responseMode = 'text';
+      if (/MAX_TOKEN/i.test(toCleanString(finishText))) {
+        logger.warn('planning_assistant_gemini_text_mode_still_max_tokens', { model });
+      }
     }
 
     structured = enrichStructuredAnswer(structured, context);
-    structured = repairStructuredPlanningAnswer(structured);
+    structured = repairStructuredPlanningAnswer(structured, context);
 
     logger.info('planning_assistant_gemini_ok', {
       model,

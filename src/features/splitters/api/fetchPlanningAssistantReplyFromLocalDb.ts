@@ -3,10 +3,60 @@ import { env } from '@/shared/config/env'
 
 export type IsaGravidade = 'baixa' | 'media' | 'alta' | 'critica' | ''
 
+export type IsaCapilaridade = 'baixa' | 'media' | 'alta' | ''
+
+export type IsaDecisaoOperacional =
+  | 'EXPANSAO'
+  | 'REMANEJO'
+  | 'ALIVIO'
+  | 'NOVA_CTO'
+  | 'REBALANCEAMENTO'
+  | 'SEM_VIABILIDADE'
+  | ''
+
+export type IsaCtoVizinhaAnalisada = {
+  cto: string
+  distancia_operacional: string
+  ocupacao: string
+  capacidade_livre: string
+  /** Classificação geo da CTO vizinha (inclui OUTROS quando não couber no conjunto principal). */
+  classificacao_geografica: string
+  viabilidade: IsaCapilaridade
+}
+
+export type IsaClassificacaoGeografica =
+  | 'ESQUINA'
+  | 'ESQUINA_DIAGONAL'
+  | 'MEIO_DE_QUADRA'
+  | 'BIFURCACAO'
+  | 'ROTATORIA'
+  | 'CRUZAMENTO_COMPLEXO'
+  | 'PONTA_DE_RUA'
+  | 'VIA_PRINCIPAL'
+  | 'VIA_SECUNDARIA'
+  | ''
+
 export type PlanningAssistantStructuredAnswer = {
   conclusao: string
   /** Um de: baixa | media | alta | critica; vazio se o modelo não informar. */
   gravidade: IsaGravidade
+  classificacao_geografica: IsaClassificacaoGeografica
+  confianca: string
+  capilaridade: IsaCapilaridade
+  distancia_operacional: string
+  distancia_cruzamento: string
+  angulo_vias: string
+  decisao_operacional: IsaDecisaoOperacional
+  viabilidade_remanejo: IsaCapilaridade
+  viabilidade_expansao: IsaCapilaridade
+  justificativa_decisao: string
+  acao_prioritaria: string
+  /** Soma aproximada dos pesos/penalidades (SCORE OPERACIONAL); null se indisponível. */
+  score_operacional: number | null
+  justificativa_score: string
+  ruas_identificadas: string[]
+  atendimento_prioritario: string[]
+  ctos_vizinhas_analisadas: IsaCtoVizinhaAnalisada[]
   fatores: string[]
   evidencias: string[]
   inferencias: string[]
@@ -39,6 +89,86 @@ export function normalizeIsaGravidade(raw: unknown): IsaGravidade {
   if (/medi/.test(s)) return 'media'
   if (/baix/.test(s)) return 'baixa'
   return ''
+}
+
+const ISA_CLASSIFICACAO_GEO_ALLOWED = new Set<string>([
+  'ESQUINA',
+  'ESQUINA_DIAGONAL',
+  'MEIO_DE_QUADRA',
+  'BIFURCACAO',
+  'ROTATORIA',
+  'CRUZAMENTO_COMPLEXO',
+  'PONTA_DE_RUA',
+  'VIA_PRINCIPAL',
+  'VIA_SECUNDARIA',
+])
+
+export function normalizeIsaClassificacaoGeografica(raw: unknown): IsaClassificacaoGeografica {
+  const s = toCleanString(raw)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Z_]/g, '')
+  if (ISA_CLASSIFICACAO_GEO_ALLOWED.has(s)) return s as IsaClassificacaoGeografica
+  if (s.includes('ESQUINA') && s.includes('DIAGONAL')) return 'ESQUINA_DIAGONAL'
+  if (/MEIO/.test(s) && /QUADRA/.test(s)) return 'MEIO_DE_QUADRA'
+  if (/BIFURC/.test(s)) return 'BIFURCACAO'
+  if (/ROTATOR/.test(s)) return 'ROTATORIA'
+  if (/CRUZAMENTO/.test(s) && /COMPLEX/.test(s)) return 'CRUZAMENTO_COMPLEXO'
+  if (/PONTA/.test(s) && /RUA/.test(s)) return 'PONTA_DE_RUA'
+  if (/VIA_PRINCIPAL|PRINCIPAL/.test(s)) return 'VIA_PRINCIPAL'
+  if (/VIA_SECUNDARIA|SECUNDARIA/.test(s)) return 'VIA_SECUNDARIA'
+  if (s === 'ESQUINA') return 'ESQUINA'
+  return ''
+}
+
+export function normalizeIsaCapilaridade(raw: unknown): IsaCapilaridade {
+  const s = toCleanString(raw)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+  if (/alt/.test(s)) return 'alta'
+  if (/medi/.test(s)) return 'media'
+  if (/baix/.test(s)) return 'baixa'
+  return ''
+}
+
+const ISA_DECISAO_OPERACIONAL = new Set<string>([
+  'EXPANSAO',
+  'REMANEJO',
+  'ALIVIO',
+  'NOVA_CTO',
+  'REBALANCEAMENTO',
+  'SEM_VIABILIDADE',
+])
+
+export function normalizeIsaDecisaoOperacional(raw: unknown): IsaDecisaoOperacional {
+  let s = toCleanString(raw)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s*\|\s*/g, '|')
+  const head = (s.split('|')[0] ?? s).replace(/[^A-Z_]/g, '')
+  if (ISA_DECISAO_OPERACIONAL.has(head)) return head as IsaDecisaoOperacional
+  if (/^EXPAND|^EXPANS/.test(head)) return 'EXPANSAO'
+  if (/ALIV/.test(head)) return 'ALIVIO'
+  if (/REMANE/.test(head)) return 'REMANEJO'
+  if (/NOVACTO|NOVA_CTO|NOVACT/.test(head)) return 'NOVA_CTO'
+  if (/REBAL/.test(head)) return 'REBALANCEAMENTO'
+  if (/SEMVIABIL|SEM_VIABIL/.test(head)) return 'SEM_VIABILIDADE'
+  return ''
+}
+
+export function normalizeIsaScoreOperacional(raw: unknown): number | null {
+  if (raw === null || raw === undefined) return null
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.round(raw)
+  const s = toCleanString(raw)
+  if (s === '' || /^null$/i.test(s) || /^n\/a$/i.test(s)) return null
+  const m = s.match(/-?\d+/)
+  if (!m) return null
+  const n = Number(m[0])
+  return Number.isFinite(n) ? Math.round(n) : null
 }
 
 function combinedUtf8MojibakePenalty(text: string): number {
@@ -147,6 +277,41 @@ export function normalizeIsaText(value: unknown): string {
     .normalize('NFC')
 }
 
+function normalizeIsaClassificacaoVizinha(raw: unknown): string {
+  const std = normalizeIsaClassificacaoGeografica(raw)
+  if (std) return std
+  const t = toCleanString(raw).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (/\bOUTROS?\b/.test(t)) return 'OUTROS'
+  return toCleanString(raw)
+}
+
+function normalizeIsaCtoVizinhaEntry(raw: unknown): IsaCtoVizinhaAnalisada | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const cto = normalizeIsaText(o.cto)
+  if (!cto) return null
+  return {
+    cto,
+    distancia_operacional: normalizeIsaText(o.distancia_operacional),
+    ocupacao: normalizeIsaText(o.ocupacao),
+    capacidade_livre: normalizeIsaText(o.capacidade_livre),
+    classificacao_geografica: normalizeIsaText(
+      normalizeIsaClassificacaoVizinha(o.classificacao_geografica),
+    ),
+    viabilidade: normalizeIsaCapilaridade(o.viabilidade),
+  }
+}
+
+export function normalizeIsaCtosVizinhasAnalisadas(raw: unknown): IsaCtoVizinhaAnalisada[] {
+  if (!Array.isArray(raw)) return []
+  const out: IsaCtoVizinhaAnalisada[] = []
+  for (const item of raw) {
+    const row = normalizeIsaCtoVizinhaEntry(item)
+    if (row) out.push(row)
+  }
+  return out
+}
+
 function toStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value
@@ -189,6 +354,24 @@ export async function fetchPlanningAssistantReplyFromLocalDb(input: {
     structuredAnswer: {
       conclusao: normalizeIsaText(structured.conclusao),
       gravidade: normalizeIsaGravidade(structured.gravidade),
+      classificacao_geografica: normalizeIsaClassificacaoGeografica(
+        structured.classificacao_geografica,
+      ),
+      confianca: normalizeIsaText(structured.confianca),
+      capilaridade: normalizeIsaCapilaridade(structured.capilaridade),
+      distancia_operacional: normalizeIsaText(structured.distancia_operacional),
+      distancia_cruzamento: normalizeIsaText(structured.distancia_cruzamento),
+      angulo_vias: normalizeIsaText(structured.angulo_vias),
+      decisao_operacional: normalizeIsaDecisaoOperacional(structured.decisao_operacional),
+      viabilidade_remanejo: normalizeIsaCapilaridade(structured.viabilidade_remanejo),
+      viabilidade_expansao: normalizeIsaCapilaridade(structured.viabilidade_expansao),
+      justificativa_decisao: normalizeIsaText(structured.justificativa_decisao),
+      acao_prioritaria: normalizeIsaText(structured.acao_prioritaria),
+      score_operacional: normalizeIsaScoreOperacional(structured.score_operacional),
+      justificativa_score: normalizeIsaText(structured.justificativa_score),
+      ruas_identificadas: toStringList(structured.ruas_identificadas),
+      atendimento_prioritario: toStringList(structured.atendimento_prioritario),
+      ctos_vizinhas_analisadas: normalizeIsaCtosVizinhasAnalisadas(structured.ctos_vizinhas_analisadas),
       fatores: toStringList(structured.fatores),
       evidencias: toStringList(structured.evidencias),
       inferencias: toStringList(structured.inferencias),

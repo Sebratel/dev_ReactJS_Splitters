@@ -4,7 +4,7 @@ import { resolveGeocodedAddressForSplitter } from '@/features/splitters/api/reve
 import type { SplitterMapNeighbor } from '@/features/splitters/model/splitterMap'
 
 /** Limite de chamadas Nominatim/proxy por abertura do mapa (vizinhos sem rua no BFF). */
-const NEIGHBOR_CLIENT_GEOCODE_MAX = 4
+const NEIGHBOR_CLIENT_GEOCODE_MAX = 14
 /** Pausa curta entre requisições; ruas já vêm do cadastro quando possível (BFF não bloqueia mais no enrich). */
 const NEIGHBOR_GEOCODE_GAP_MS = 450
 
@@ -24,18 +24,23 @@ function sortNeighborTargetsForStreet(
     if (n.isCondominium) return 2
     return hasFreePort(n) ? 0 : 1
   }
-  return [...empty]
-    .sort((a, b) => {
-      const d = tier(a) - tier(b)
-      if (d !== 0) return d
-      return routeDist(a) - routeDist(b)
-    })
-    .slice(0, NEIGHBOR_CLIENT_GEOCODE_MAX)
+  /**
+   * Ordenar primeiro por distância (vizinhos mais próximos primeiro).
+   * Antes: tier (porta livre) vinha antes da distância — splitters lotados sem rua no cadastro
+   * (ex.: alívio em CTO cheia) ficavam fora dos 4 geocodes e apareciam "Não informada" no popup,
+   * enquanto no marcador "splitter atual" a rua vinha do detalhe + geocode do centro.
+   */
+  return [...empty].sort((a, b) => {
+    const d = routeDist(a) - routeDist(b)
+    if (d !== 0) return d
+    return tier(a) - tier(b)
+  }).slice(0, NEIGHBOR_CLIENT_GEOCODE_MAX)
 }
 
 /**
  * Reverse geocode no browser para vizinhos ainda sem `street` na resposta do BFF
  * (fallback quando o servidor não enriquece ou cache/proxy está desatualizado).
+ * Ordem: mais próximos primeiro (até NEIGHBOR_CLIENT_GEOCODE_MAX), para o popup coincidir com o contexto do equipamento atual.
  */
 export function useNeighborStreetsReverseGeocode(args: {
   enabled: boolean

@@ -15,6 +15,7 @@ import {
   queryFullOccupancySplitterCandidates,
   querySplitterNeighborsWithOrigin,
   splitterIdentifierMatchSql,
+  SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
 } from './splitterNeighborRouting.js';
 import { fetchRoadFromReverseGeocode } from './reverseGeocode.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
@@ -195,10 +196,20 @@ const EMPTY_ASSISTANT_TREND = {
 };
 
 async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeters, maxRouteMeters }) {
+  /** Alívio e badge "Apoio" do mapa usam 200 m em linha reta; pedidos maiores são limitados aqui. */
+  const neighborStraightRadiusMeters = Math.min(
+    Math.max(Number(straightRadiusMeters) || SPLITTER_MAP_STRAIGHT_RADIUS_METERS, 1),
+    SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+  );
+
   const context = {
     generatedAt: new Date().toISOString(),
     reliefRule: {
-      straightRadiusMeters,
+      straightRadiusMeters: neighborStraightRadiusMeters,
+      straightRadiusMetersSolicitado:
+        Number(straightRadiusMeters) > neighborStraightRadiusMeters
+          ? Number(straightRadiusMeters)
+          : null,
       maxRouteMeters,
       crossStreetMaxRouteMeters: 30,
       sameStreetOnlyForFullRouteLimit: true,
@@ -318,13 +329,13 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
   };
 
   const relief = await evaluateReliefForSplitter(pool, normalizedCode, {
-    straightRadiusMeters,
+    straightRadiusMeters: neighborStraightRadiusMeters,
     maxRouteMeters,
   });
   context.reliefEvaluation = relief;
 
   const { origin, neighbors, originStreet, originIsCondominium } =
-    await querySplitterNeighborsWithOrigin(pool, normalizedCode, straightRadiusMeters);
+    await querySplitterNeighborsWithOrigin(pool, normalizedCode, neighborStraightRadiusMeters);
 
   let effectiveOriginStreet = originStreet;
   if (origin && (effectiveOriginStreet == null || String(effectiveOriginStreet).trim() === '')) {

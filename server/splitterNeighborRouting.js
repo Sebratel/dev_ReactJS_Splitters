@@ -13,6 +13,9 @@ const CONDOMINIUM_TITLE_PREFIX_REGEX = /\b(?:RES|COND|ED)\./i;
 const STREET_RELIEF_MAX_ROUTE_METERS = 200;
 const CROSS_STREET_RELIEF_MAX_ROUTE_METERS = 30;
 
+/** Mesmo raio em linha reta do mapa do detalhe (`SPLITTER_MAP_NEIGHBOR_RADIUS_METERS` no frontend). */
+export const SPLITTER_MAP_STRAIGHT_RADIUS_METERS = 200;
+
 /**
  * Mesmo critério do SPLITTERS_BASE_QUERY para classificar condomínio pelo título.
  * @param {unknown} title
@@ -246,7 +249,12 @@ export async function querySplitterNeighborsWithOrigin(pool, code, radiusMeters)
     `;
 
   const nRes = await pool.query(neighborsSql, [oLat, oLng, radiusMeters, csId]);
-  const rows = nRes.rows ?? [];
+  /** DISTINCT ON exige ORDER BY id no SQL; reordenamos por distância para cap / OSRM / alívio serem simétricos. */
+  const rows = (nRes.rows ?? []).slice().sort((a, b) => {
+    const da = Number(a.distanceMeters ?? 0);
+    const db = Number(b.distanceMeters ?? 0);
+    return da - db;
+  });
 
   const origin = { lat: oLat, lng: oLng };
   const originIsCondominium = isCondominiumSplitterTitle(or0.title);
@@ -356,6 +364,9 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
       routingOk: true,
       straightNeighborsCount: 0,
       condominiumRelief: true,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
     };
   }
   if (targetIsCondominium) {
@@ -364,6 +375,9 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
       routingOk: true,
       straightNeighborsCount: 0,
       condominiumRelief: false,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
     };
   }
 
@@ -382,6 +396,9 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
       hasReliefWithinRoute: false,
       routingOk: true,
       straightNeighborsCount: streetNeighbors.length,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
     };
   }
 
@@ -397,6 +414,9 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
       hasReliefWithinRoute: false,
       routingOk: false,
       straightNeighborsCount: capped.length,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
     };
   }
 
@@ -445,6 +465,10 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
       targetStreet !== null &&
       neighborStreet !== null &&
       targetStreet === neighborStreet;
+    /**
+     * Paridade com `findFirstStreetReliefNeighbor` no frontend (`splitterStreetRelief.ts`):
+     * mesma rua → limite completo por rota; caso contrário (ruas diferentes ou rua desconhecida) → travessia curta.
+     */
     const routeLimit = sameStreet
       ? maxRouteMeters
       : Math.min(maxRouteMeters, CROSS_STREET_RELIEF_MAX_ROUTE_METERS);
@@ -452,10 +476,15 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
     const outPorts = Number(capped[i].outPorts ?? 0);
     const busyCount = Number(capped[i].busyCount ?? 0);
     if (outPorts > 0 && busyCount < outPorts) {
+      const nCode = String(capped[i]?.code ?? '').trim();
+      const nTitle = String(capped[i]?.title ?? '').trim();
       return {
         hasReliefWithinRoute: true,
         routingOk: true,
         straightNeighborsCount: capped.length,
+        reliefNeighborCode: nCode || null,
+        reliefNeighborTitle: nTitle || null,
+        reliefNeighborRouteMeters: Math.round(Number(rm)),
       };
     }
   }
@@ -464,6 +493,9 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
     hasReliefWithinRoute: false,
     routingOk: true,
     straightNeighborsCount: capped.length,
+    reliefNeighborCode: null,
+    reliefNeighborTitle: null,
+    reliefNeighborRouteMeters: null,
   };
 }
 

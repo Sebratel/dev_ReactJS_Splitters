@@ -10,7 +10,12 @@ import { Activity, Bot, Download, GitBranch, KeyRound, Loader2, ListOrdered, Spa
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import {
   fetchPlanningAssistantReplyFromLocalDb,
+  normalizeIsaCapilaridade,
+  normalizeIsaClassificacaoGeografica,
+  normalizeIsaCtosVizinhasAnalisadas,
+  normalizeIsaDecisaoOperacional,
   normalizeIsaGravidade,
+  normalizeIsaScoreOperacional,
   normalizeIsaText,
   type PlanningAssistantReply,
 } from '@/features/splitters/api/fetchPlanningAssistantReplyFromLocalDb'
@@ -97,9 +102,9 @@ function AssistantSection(props: {
       {hasItems ? (
         <ul className="mt-1.5 space-y-1.5 text-[12px] leading-relaxed text-neutral-800">
           {props.items?.map((item, index) => (
-            <li key={`${index}:${item.slice(0, 120)}`} className="flex gap-2">
+            <li key={`${index}:${item.slice(0, 120)}`} className="flex min-w-0 gap-2">
               <span className="mt-[6px] size-1.5 shrink-0 rounded-full bg-sky-500" />
-              <span>{item}</span>
+              <span className="min-w-0 break-words">{item}</span>
             </li>
           ))}
         </ul>
@@ -395,6 +400,46 @@ export function SplittersOperationalPriorityFab({
       : {
           conclusao: normalizeIsaText(assistantReply.structuredAnswer?.conclusao),
           gravidade: normalizeIsaGravidade(assistantReply.structuredAnswer?.gravidade),
+          classificacao_geografica: normalizeIsaClassificacaoGeografica(
+            assistantReply.structuredAnswer?.classificacao_geografica,
+          ),
+          confianca: normalizeIsaText(assistantReply.structuredAnswer?.confianca),
+          capilaridade: normalizeIsaCapilaridade(assistantReply.structuredAnswer?.capilaridade),
+          distancia_operacional: normalizeIsaText(
+            assistantReply.structuredAnswer?.distancia_operacional,
+          ),
+          distancia_cruzamento: normalizeIsaText(
+            assistantReply.structuredAnswer?.distancia_cruzamento,
+          ),
+          angulo_vias: normalizeIsaText(assistantReply.structuredAnswer?.angulo_vias),
+          decisao_operacional: normalizeIsaDecisaoOperacional(
+            assistantReply.structuredAnswer?.decisao_operacional,
+          ),
+          viabilidade_remanejo: normalizeIsaCapilaridade(
+            assistantReply.structuredAnswer?.viabilidade_remanejo,
+          ),
+          viabilidade_expansao: normalizeIsaCapilaridade(
+            assistantReply.structuredAnswer?.viabilidade_expansao,
+          ),
+          justificativa_decisao: normalizeIsaText(
+            assistantReply.structuredAnswer?.justificativa_decisao,
+          ),
+          acao_prioritaria: normalizeIsaText(assistantReply.structuredAnswer?.acao_prioritaria),
+          score_operacional: normalizeIsaScoreOperacional(
+            assistantReply.structuredAnswer?.score_operacional,
+          ),
+          justificativa_score: normalizeIsaText(
+            assistantReply.structuredAnswer?.justificativa_score,
+          ),
+          ruas_identificadas: (assistantReply.structuredAnswer?.ruas_identificadas ?? []).map(
+            (item) => normalizeIsaText(item),
+          ),
+          atendimento_prioritario: (
+            assistantReply.structuredAnswer?.atendimento_prioritario ?? []
+          ).map((item) => normalizeIsaText(item)),
+          ctos_vizinhas_analisadas: normalizeIsaCtosVizinhasAnalisadas(
+            assistantReply.structuredAnswer?.ctos_vizinhas_analisadas,
+          ),
           fatores: (assistantReply.structuredAnswer?.fatores ?? []).map((item) =>
             normalizeIsaText(item),
           ),
@@ -931,12 +976,148 @@ export function SplittersOperationalPriorityFab({
                         Gravidade: {assistantDisplayStructured.gravidade}
                       </span>
                     ) : null}
+                    {assistantDisplayStructured.classificacao_geografica ? (
+                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-950">
+                        Geo:{' '}
+                        {assistantDisplayStructured.classificacao_geografica.replaceAll('_', ' ')}
+                      </span>
+                    ) : null}
+                    {assistantDisplayStructured.capilaridade ? (
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-950">
+                        Capilaridade: {assistantDisplayStructured.capilaridade}
+                      </span>
+                    ) : null}
+                    {assistantDisplayStructured.confianca ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-800">
+                        Confiança: {assistantDisplayStructured.confianca}
+                      </span>
+                    ) : null}
+                    {assistantDisplayStructured.score_operacional != null ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-950">
+                        Score operacional: {assistantDisplayStructured.score_operacional}
+                      </span>
+                    ) : null}
                   </div>
                   <AssistantSection
                     title="Conclusão"
                     content={assistantDisplayStructured.conclusao}
                     tone="info"
                   />
+                  {assistantDisplayStructured.decisao_operacional ||
+                  assistantDisplayStructured.justificativa_decisao ||
+                  assistantDisplayStructured.acao_prioritaria ||
+                  assistantDisplayStructured.viabilidade_remanejo ||
+                  assistantDisplayStructured.viabilidade_expansao ? (
+                    <div className="rounded-xl border border-indigo-200/90 bg-indigo-50/50 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-800">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-950/90">
+                        Decisão operacional
+                      </p>
+                      {assistantDisplayStructured.decisao_operacional ? (
+                        <p className="mt-1.5 font-semibold text-indigo-950">
+                          {assistantDisplayStructured.decisao_operacional.replaceAll('_', ' ')}
+                        </p>
+                      ) : null}
+                      <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-indigo-950/90">
+                        {assistantDisplayStructured.viabilidade_remanejo ? (
+                          <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
+                            Remanejo: {assistantDisplayStructured.viabilidade_remanejo}
+                          </span>
+                        ) : null}
+                        {assistantDisplayStructured.viabilidade_expansao ? (
+                          <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
+                            Expansão: {assistantDisplayStructured.viabilidade_expansao}
+                          </span>
+                        ) : null}
+                      </div>
+                      {assistantDisplayStructured.justificativa_decisao ? (
+                        <p className="mt-1.5">
+                          <span className="font-semibold text-neutral-700">Justificativa:</span>{' '}
+                          {assistantDisplayStructured.justificativa_decisao}
+                        </p>
+                      ) : null}
+                      {assistantDisplayStructured.acao_prioritaria ? (
+                        <p className="mt-1.5">
+                          <span className="font-semibold text-neutral-700">Ação prioritária:</span>{' '}
+                          {assistantDisplayStructured.acao_prioritaria}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <AssistantSection
+                    title="Justificativa do score operacional"
+                    content={assistantDisplayStructured.justificativa_score}
+                  />
+                  {assistantDisplayStructured.distancia_operacional ||
+                  assistantDisplayStructured.distancia_cruzamento ||
+                  assistantDisplayStructured.angulo_vias ? (
+                    <div className="rounded-xl border border-sky-100/90 bg-sky-50/40 px-3 py-2 text-[11px] leading-snug text-neutral-800">
+                      <p className="mb-1 font-semibold text-sky-950">Distância e geometria (estimativa)</p>
+                      {assistantDisplayStructured.distancia_operacional ? (
+                        <p>
+                          <span className="text-neutral-500">Operacional:</span>{' '}
+                          {assistantDisplayStructured.distancia_operacional}
+                        </p>
+                      ) : null}
+                      {assistantDisplayStructured.distancia_cruzamento ? (
+                        <p>
+                          <span className="text-neutral-500">Até cruzamento:</span>{' '}
+                          {assistantDisplayStructured.distancia_cruzamento}
+                        </p>
+                      ) : null}
+                      {assistantDisplayStructured.angulo_vias ? (
+                        <p>
+                          <span className="text-neutral-500">Ângulo entre vias:</span>{' '}
+                          {assistantDisplayStructured.angulo_vias}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <AssistantSection
+                    title="Ruas identificadas"
+                    items={assistantDisplayStructured.ruas_identificadas}
+                  />
+                  <AssistantSection
+                    title="Atendimento prioritário (ruas)"
+                    items={assistantDisplayStructured.atendimento_prioritario}
+                  />
+                  {assistantDisplayStructured.ctos_vizinhas_analisadas.length > 0 ? (
+                    <div className="rounded-xl border border-violet-200/90 bg-violet-50/40 px-3 py-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90">
+                        CTOs vizinhas analisadas
+                      </p>
+                      <div className="mt-2 overflow-x-auto">
+                        <table className="w-full min-w-[28rem] border-collapse text-left text-[10px] text-neutral-800">
+                          <thead>
+                            <tr className="border-b border-violet-200/80 text-[9px] uppercase tracking-wide text-violet-900/80">
+                              <th className="py-1 pr-2 font-semibold">CTO</th>
+                              <th className="py-1 pr-2 font-semibold">Dist. op.</th>
+                              <th className="py-1 pr-2 font-semibold">Ocup.</th>
+                              <th className="py-1 pr-2 font-semibold">Livre</th>
+                              <th className="py-1 pr-2 font-semibold">Geo</th>
+                              <th className="py-1 font-semibold">Viab.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {assistantDisplayStructured.ctos_vizinhas_analisadas.map((row, idx) => (
+                              <tr
+                                key={`${idx}:${row.cto}`}
+                                className="border-b border-violet-100/90 align-top last:border-0"
+                              >
+                                <td className="py-1.5 pr-2 font-medium text-neutral-900">{row.cto}</td>
+                                <td className="py-1.5 pr-2">{row.distancia_operacional}</td>
+                                <td className="py-1.5 pr-2">{row.ocupacao}</td>
+                                <td className="py-1.5 pr-2">{row.capacidade_livre}</td>
+                                <td className="py-1.5 pr-2">
+                                  {row.classificacao_geografica.replaceAll('_', ' ')}
+                                </td>
+                                <td className="py-1.5">{row.viabilidade || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : null}
                   <AssistantSection
                     title="Fatores considerados"
                     items={assistantDisplayStructured.fatores}
