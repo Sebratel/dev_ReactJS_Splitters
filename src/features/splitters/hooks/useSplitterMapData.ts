@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchSplitterNeighborsRoutedFromLocalDb } from '@/features/splitters/api/fetchSplitterNeighborsRoutedFromLocalDb'
 import { occupancyBandForUsage } from '@/features/splitters/lib/splitterNeighborOccupancyBand'
@@ -13,8 +13,8 @@ import {
 } from '@/features/splitters/model/splitterMap'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 
-/** Geocode de ruas no BFF — stale mais curto que a lista global (5 min). */
-const SPLITTER_MAP_NEIGHBORS_STALE_TIME_MS = Math.min(SPLITTERS_LIST_STALE_TIME_MS, 90 * 1000)
+/** Vizinhos roteados: mesmo TTL da lista (evita refetch/OSRM ao reabrir o detalhe). */
+const SPLITTER_MAP_NEIGHBORS_STALE_TIME_MS = SPLITTERS_LIST_STALE_TIME_MS
 
 export type SplitterMapDataState =
   | { type: 'no-coordinates' }
@@ -61,52 +61,72 @@ export function useSplitterMapData(args: {
     enabled: hasCenter,
   })
 
-  const refetch = () => {
+  const refetch = useCallback(() => {
     void neighborsQuery.refetch()
-  }
+  }, [neighborsQuery])
 
-  if (center === null) {
-    return { state: { type: 'no-coordinates' }, refetch }
-  }
+  const successPayload = useMemo((): SplitterMapSuccessPayload | null => {
+    if (center === null || neighborsQuery.data === undefined) {
+      return null
+    }
+    const rawNeighbors = neighborsQuery.data.neighbors ?? []
+    const routingUnavailable = Boolean(neighborsQuery.data.routingUnavailable)
+    const isCondominium = Boolean(neighborsQuery.data.isCondominium)
+    const condominiumReliefAvailable = Boolean(neighborsQuery.data.condominiumReliefAvailable)
+    const currentStreet = neighborsQuery.data.originStreet ?? null
+    const originStreetRaw = neighborsQuery.data.originStreetRaw ?? null
 
-  if (neighborsQuery.isPending) {
-    return { state: { type: 'loading' }, refetch }
-  }
+    const neighbors = rawNeighbors.map((neighbor) => ({
+      ...neighbor,
+      occupancyBand: occupancyBandForUsage(
+        neighbor.busyCount,
+        neighbor.outPorts,
+      ),
+    }))
 
-  if (neighborsQuery.isError) {
-    return { state: { type: 'error', error: neighborsQuery.error }, refetch }
-  }
-
-  const rawNeighbors = neighborsQuery.data?.neighbors ?? []
-  const routingUnavailable = Boolean(neighborsQuery.data?.routingUnavailable)
-  const isCondominium = Boolean(neighborsQuery.data?.isCondominium)
-  const condominiumReliefAvailable = Boolean(
-    neighborsQuery.data?.condominiumReliefAvailable,
-  )
-  const currentStreet = neighborsQuery.data?.originStreet ?? null
-  const originStreetRaw = neighborsQuery.data?.originStreetRaw ?? null
-
-  const neighbors = rawNeighbors.map((neighbor) => ({
-    ...neighbor,
-    occupancyBand: occupancyBandForUsage(
-      neighbor.busyCount,
-      neighbor.outPorts,
-    ),
-  }))
-
-  const payload: SplitterMapSuccessPayload = {
+    return {
+      center,
+      currentSplitterCode: args.splitterCode.trim(),
+      currentSplitterTitle: args.splitterTitle.trim(),
+      currentStreet,
+      originStreetRaw,
+      neighbors,
+      oltPoint: resolveOltPoint(args.olt),
+      clientPoints: args.clientPoints,
+      routingUnavailable,
+      isCondominium,
+      condominiumReliefAvailable,
+    }
+  }, [
     center,
-    currentSplitterCode: args.splitterCode.trim(),
-    currentSplitterTitle: args.splitterTitle.trim(),
-    currentStreet,
-    originStreetRaw,
-    neighbors,
-    oltPoint: resolveOltPoint(args.olt),
-    clientPoints: args.clientPoints,
-    routingUnavailable,
-    isCondominium,
-    condominiumReliefAvailable,
-  }
+    neighborsQuery.data,
+    args.splitterCode,
+    args.splitterTitle,
+    args.olt,
+    args.clientPoints,
+  ])
 
-  return { state: { type: 'success', payload }, refetch }
+  const state = useMemo((): SplitterMapDataState => {
+    if (center === null) {
+      return { type: 'no-coordinates' }
+    }
+    if (neighborsQuery.isPending) {
+      return { type: 'loading' }
+    }
+    if (neighborsQuery.isError) {
+      return { type: 'error', error: neighborsQuery.error }
+    }
+    if (successPayload === null) {
+      return { type: 'loading' }
+    }
+    return { type: 'success', payload: successPayload }
+  }, [
+    center,
+    neighborsQuery.isPending,
+    neighborsQuery.isError,
+    neighborsQuery.error,
+    successPayload,
+  ])
+
+  return { state, refetch }
 }

@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css'
 
-import L from 'leaflet'
-import { useEffect, useMemo } from 'react'
+import L, { type PopupOptions } from 'leaflet'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Circle,
   MapContainer,
@@ -9,7 +9,6 @@ import {
   Polyline,
   Popup,
   TileLayer,
-  Tooltip,
   useMap,
 } from 'react-leaflet'
 import { Link, useLocation } from 'react-router-dom'
@@ -48,50 +47,66 @@ function clientDisplayName(cl: {
   return `Cliente (autenticação nº ${cl.authenticationId})`
 }
 
-/** Uma linha: largura acompanha o texto até ao limite da viewport; scroll X fino se necessário (padrão em todos os tooltips do mapa). */
-const TOOLTIP_MAP_HORIZ_BASE =
-  '!pointer-events-auto !box-border !rounded-lg !border !bg-white !px-2.5 !py-1.5 !text-[11px] !leading-snug !shadow-md !w-fit !max-w-[calc(100vw-2rem)] !whitespace-nowrap !overflow-x-auto !text-left [scrollbar-width:thin]'
+function escapeAttr(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+}
 
-const TOOLTIP_CLIENT =
-  `client-map-tooltip ${TOOLTIP_MAP_HORIZ_BASE} !border-amber-300/90 !font-bold !text-amber-950`
+/** Leaflet usa z-index ≈ posição Y + offset; diferenças grandes evitam assinantes “por cima” dos vizinhos. */
+const Z_CLIENT = 100
+const Z_OLT = 2_000
+const Z_NEIGHBOR = 50_000
+const Z_CURRENT = 60_000
 
-const TOOLTIP_CLIENT_CORPORATE =
-  `client-map-corporate-tooltip ${TOOLTIP_MAP_HORIZ_BASE} !border-violet-400/90 !font-bold !text-violet-950`
+/** Card compacto: altura limitada com scroll; sem auto-pan para não “prender” o arraste do mapa. */
+const MAP_HOST_CLASS = 'splitter-map-leaflet-host'
+const MAP_CARD_POPUP: Pick<
+  PopupOptions,
+  'className' | 'maxWidth' | 'minWidth' | 'maxHeight' | 'autoPan' | 'autoPanPadding' | 'keepInView'
+> = {
+  className: 'splitter-map-card-popup',
+  maxWidth: 268,
+  minWidth: 200,
+  maxHeight: 280,
+  autoPan: false,
+  autoPanPadding: [32, 32],
+  keepInView: false,
+}
 
-const TOOLTIP_CURRENT_SPLITTER =
-  `map-splitter-current-tooltip ${TOOLTIP_MAP_HORIZ_BASE} !border-rose-200/90 !text-neutral-900`
-
-const TOOLTIP_NEIGHBOR =
-  `map-splitter-neighbor-tooltip ${TOOLTIP_MAP_HORIZ_BASE} !border-emerald-200/90 !text-neutral-900`
-
-const TOOLTIP_OLT =
-  `map-olt-hover-tooltip ${TOOLTIP_MAP_HORIZ_BASE} !border-blue-200/90 !text-neutral-900`
-
-function neighborDivIcon(band: SplitterMapNeighbor['occupancyBand']): L.DivIcon {
+function neighborDivIcon(band: SplitterMapNeighbor['occupancyBand'], hoverTitle: string): L.DivIcon {
   const fill = BAND_COLOR[band]
+  const t = escapeAttr(hoverTitle.trim() || 'Vizinho')
+  const sz = 28
+  const r = Math.round(sz / 2)
   return L.divIcon({
     className: 'splitter-map-neighbor-marker',
-    html: `<div style="width:22px;height:22px;border-radius:9999px;background:${fill};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
+    html: `<div role="img" aria-label="${t}" title="${t}" style="width:${sz}px;height:${sz}px;border-radius:9999px;background:${fill};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);pointer-events:auto;cursor:pointer"></div>`,
+    iconSize: [sz, sz],
+    iconAnchor: [r, r],
   })
 }
 
-const currentIcon = L.divIcon({
-  className: 'splitter-map-current-marker',
-  html:
-    '<div style="width:24px;height:24px;border-radius:9999px 9999px 9999px 0;background:#ef4444;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 24],
-})
+function buildCurrentSplitterIcon(hoverTitle: string): L.DivIcon {
+  const t = escapeAttr(hoverTitle.trim() || 'Splitter atual')
+  return L.divIcon({
+    className: 'splitter-map-current-marker',
+    html: `<div role="img" aria-label="${t}" title="${t}" style="width:24px;height:24px;border-radius:9999px 9999px 9999px 0;background:#ef4444;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.4);pointer-events:auto;cursor:pointer"></div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 24],
+  })
+}
 
-const oltIcon = L.divIcon({
-  className: 'splitter-map-olt-marker',
-  html:
-    '<div style="width:20px;height:20px;border-radius:4px;background:#3b82f6;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-})
+function buildOltIcon(hoverTitle: string): L.DivIcon {
+  const t = escapeAttr(hoverTitle.trim() || 'OLT')
+  return L.divIcon({
+    className: 'splitter-map-olt-marker',
+    html: `<div role="img" aria-label="${t}" title="${t}" style="width:20px;height:20px;border-radius:4px;background:#3b82f6;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35);pointer-events:auto;cursor:pointer"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  })
+}
 
 /** Casa em quadrado — âmbar (residencial) ou roxo (corporativo), mesmo SVG. */
 const CLIENT_HOUSE_SVG =
@@ -99,35 +114,36 @@ const CLIENT_HOUSE_SVG =
   '<path fill="#fff" d="M12 2 2 11.5h3.5V21h6.5v-5h2v5H18.5V11.5H22L12 2z"/>' +
   '</svg>'
 
-const clientIcon = L.divIcon({
-  className: 'splitter-map-client-marker',
-  html:
-    `<div style="width:26px;height:26px;border-radius:7px;background:#ca8a04;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center" aria-hidden="true">${CLIENT_HOUSE_SVG}</div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 26],
-})
-
-const clientIconCorporate = L.divIcon({
-  className: 'splitter-map-client-marker-corporate',
-  html:
-    `<div style="width:26px;height:26px;border-radius:7px;background:#7c3aed;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center" aria-hidden="true">${CLIENT_HOUSE_SVG}</div>`,
-  iconSize: [26, 26],
-  iconAnchor: [13, 26],
-})
+function buildClientIcon(corporate: boolean, hoverTitle: string): L.DivIcon {
+  const bg = corporate ? '#7c3aed' : '#ca8a04'
+  const t = escapeAttr(hoverTitle.trim() || 'Cliente')
+  return L.divIcon({
+    className: corporate ? 'splitter-map-client-marker-corporate' : 'splitter-map-client-marker',
+    html: `<div role="img" aria-label="${t}" title="${t}" style="width:26px;height:26px;border-radius:7px;background:${bg};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;pointer-events:auto;cursor:pointer">${CLIENT_HOUSE_SVG}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+  })
+}
 
 function FitBoundsController({
   fitPoints,
+  fitBoundsKey,
   fallbackCenter,
   fallbackZoom = 16,
 }: {
   fitPoints: [number, number][]
+  /** Só refaz fit quando a geometria mudar (evita reset ao atualizar só texto dos vizinhos / ruas). */
+  fitBoundsKey: string
   fallbackCenter: [number, number]
   fallbackZoom?: number
 }) {
   const map = useMap()
+  const fitPointsRef = useRef(fitPoints)
+  fitPointsRef.current = fitPoints
 
   useEffect(() => {
-    const valid = fitPoints.filter(
+    const pts = fitPointsRef.current
+    const valid = pts.filter(
       ([a, b]) =>
         Number.isFinite(a) &&
         Number.isFinite(b) &&
@@ -144,8 +160,37 @@ function FitBoundsController({
     } else {
       map.setView(fallbackCenter, fallbackZoom)
     }
-  }, [map, fitPoints, fallbackCenter, fallbackZoom])
+  }, [map, fitBoundsKey, fallbackCenter, fallbackZoom])
 
+  return null
+}
+
+/** Leaflet pode deixar `leaflet-dragging` / `pointer-events` no body; isso bloqueia cliques fora do mapa. */
+function LeafletDocumentGuards() {
+  const map = useMap()
+  useEffect(() => {
+    const sync = () => {
+      document.body.classList.remove('leaflet-dragging')
+      document.body.style.removeProperty('pointer-events')
+      document.querySelectorAll('.leaflet-drag-target').forEach((el) => {
+        el.classList.remove('leaflet-drag-target')
+      })
+    }
+    sync()
+    map.on('dragend', sync)
+    map.on('zoomend', sync)
+    window.addEventListener('mouseup', sync)
+    window.addEventListener('touchend', sync, { passive: true })
+    window.addEventListener('blur', sync)
+    return () => {
+      map.off('dragend', sync)
+      map.off('zoomend', sync)
+      window.removeEventListener('mouseup', sync)
+      window.removeEventListener('touchend', sync)
+      window.removeEventListener('blur', sync)
+      sync()
+    }
+  }, [map])
   return null
 }
 
@@ -180,6 +225,8 @@ type SplitterMapLeafletProps = {
   showClientMarkers?: boolean
   /** Classes do container do mapa (altura/largura/borda). */
   mapClassName?: string
+  /** Linha verde centro → vizinho de alívio (regra de planejamento por rua + OSRM). */
+  reliefFootPath?: [[number, number], [number, number]] | null
 }
 
 /**
@@ -189,7 +236,8 @@ export function SplitterMapLeaflet({
   payload,
   currentStreetDisplay,
   showClientMarkers = true,
-  mapClassName = 'z-0 h-full min-h-[200px] w-full rounded-2xl',
+  mapClassName = 'relative h-full min-h-[200px] w-full rounded-2xl',
+  reliefFootPath = null,
 }: SplitterMapLeafletProps) {
   const location = useLocation()
   const {
@@ -201,9 +249,15 @@ export function SplitterMapLeaflet({
     oltPoint,
     clientPoints,
     routingUnavailable,
+    isCondominium,
+    condominiumReliefAvailable,
+    originStreetRaw,
   } = payload
   const streetLineForCurrentMarker = (currentStreetDisplay ?? currentStreet)?.trim() || 'Não informada'
-  const c: [number, number] = [center.lat, center.lng]
+  const c = useMemo(
+    () => [center.lat, center.lng] as [number, number],
+    [center.lat, center.lng],
+  )
   const oltPos = useMemo<[number, number] | null>(() => {
     const oltLat = oltPoint?.lat ?? null
     const oltLng = oltPoint?.lng ?? null
@@ -226,14 +280,150 @@ export function SplitterMapLeaflet({
     return pts
   }, [center.lat, center.lng, neighbors, oltPos, clientPoints, showClientMarkers])
 
+  const fitBoundsGeometryKey = useMemo(() => {
+    const nKey = [...neighbors]
+      .map((n) => `${String(n.code).trim()}:${Number(n.lat).toFixed(5)},${Number(n.lng).toFixed(5)}`)
+      .sort()
+      .join('|')
+    const clKey = showClientMarkers
+      ? [...clientPoints]
+          .map((cl) => `${cl.authenticationId}:${Number(cl.lat).toFixed(5)},${Number(cl.lng).toFixed(5)}`)
+          .sort((a, b) => a.localeCompare(b))
+          .join('|')
+      : ''
+    const oltKey =
+      oltPos !== null ? `${Number(oltPos[0]).toFixed(5)},${Number(oltPos[1]).toFixed(5)}` : ''
+    return [
+      `${Number(center.lat).toFixed(6)},${Number(center.lng).toFixed(6)}`,
+      nKey,
+      oltKey,
+      showClientMarkers ? `cl:${clKey}` : 'cl:off',
+    ].join('::')
+  }, [center.lat, center.lng, neighbors, oltPos, clientPoints, showClientMarkers])
+
+  const reliefLinePositions = useMemo(() => {
+    if (reliefFootPath === null || reliefFootPath.length !== 2) return null
+    const [a, b] = reliefFootPath
+    if (
+      !Array.isArray(a) ||
+      !Array.isArray(b) ||
+      a.length !== 2 ||
+      b.length !== 2 ||
+      !Number.isFinite(a[0]) ||
+      !Number.isFinite(a[1]) ||
+      !Number.isFinite(b[0]) ||
+      !Number.isFinite(b[1])
+    ) {
+      return null
+    }
+    return [
+      [a[0], a[1]] as [number, number],
+      [b[0], b[1]] as [number, number],
+    ]
+  }, [reliefFootPath])
+
+  const currentMarkerIcon = useMemo(() => {
+    const code = currentSplitterCode.trim()
+    const title = currentSplitterTitle.trim()
+    const head = title || code || 'Equipamento atual'
+    const label = code !== '' && head !== code ? `${head} (${code})` : head
+    return buildCurrentSplitterIcon(label)
+  }, [currentSplitterCode, currentSplitterTitle])
+
+  const oltMarkerIcon = useMemo(() => {
+    if (!oltPoint) return null
+    const code = oltPoint.code.trim()
+    const title = oltPoint.title.trim()
+    const head = title || code || 'OLT'
+    const label = code !== '' && head !== code ? `OLT · ${head} (${code})` : `OLT · ${head}`
+    return buildOltIcon(label)
+  }, [oltPoint])
+
+  const clientPointsSignature = useMemo(
+    () =>
+      [...clientPoints]
+        .map(
+          (cl) =>
+            `${cl.authenticationId}:${Number(cl.lat).toFixed(6)},${Number(cl.lng).toFixed(6)}:${cl.isCorporate === true ? 1 : 0}:${cl.name.trim()}:${cl.user.trim()}`,
+        )
+        .sort()
+        .join('|'),
+    [clientPoints],
+  )
+
+  const neighborsSignature = useMemo(
+    () =>
+      [...neighbors]
+        .map((n) =>
+          [
+            String(n.code).trim(),
+            Number(n.lat).toFixed(6),
+            Number(n.lng).toFixed(6),
+            n.occupancyBand,
+            String(n.title ?? '').trim(),
+            n.busyCount,
+            n.outPorts,
+            String(n.street ?? '').trim(),
+            n.routeMeters ?? 'nr',
+            n.straightMeters ?? 'ns',
+          ].join(':'),
+        )
+        .sort()
+        .join('|'),
+    [neighbors],
+  )
+
+  /**
+   * Novas instâncias de L.DivIcon a cada render fazem o Marker chamar setIcon sempre;
+   * isso reinicia o ícone e pode quebrar clique/bindPopup. Manter referências estáveis.
+   */
+  const clientMarkerEntries = useMemo(
+    () =>
+      clientPoints.map((cl) => {
+        const title = clientDisplayName(cl)
+        const corporate = cl.isCorporate === true
+        return {
+          cl,
+          title,
+          corporate,
+          icon: buildClientIcon(corporate, title),
+        }
+      }),
+    [clientPointsSignature],
+  )
+
+  const neighborMarkerEntries = useMemo(
+    () =>
+      neighbors.map((n) => {
+        const code = n.code.trim()
+        const title = n.title.trim()
+        const head = title || code || 'Splitter vizinho'
+        const hoverLabel = code !== '' && head !== code ? `${head} (${code})` : head
+        return { n, icon: neighborDivIcon(n.occupancyBand, hoverLabel) }
+      }),
+    [neighborsSignature],
+  )
+
   return (
-    <MapContainer center={c} zoom={16} className={mapClassName} scrollWheelZoom>
+    <MapContainer
+      center={c}
+      zoom={16}
+      className={`${MAP_HOST_CLASS} ${mapClassName}`.trim()}
+      scrollWheelZoom
+    >
+      <LeafletDocumentGuards />
       <InvalidateSizeOnMountAndResize />
-      <FitBoundsController fitPoints={fitPoints} fallbackCenter={c} fallbackZoom={16} />
+      <FitBoundsController
+        fitPoints={fitPoints}
+        fitBoundsKey={fitBoundsGeometryKey}
+        fallbackCenter={c}
+        fallbackZoom={16}
+      />
       <TileLayer attribution={OSM_ATTR} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <Circle
         center={c}
         radius={SPLITTER_MAP_NEIGHBOR_RADIUS_METERS}
+        interactive={false}
         pathOptions={{
           color: '#22c55e',
           fillColor: '#22c55e',
@@ -244,200 +434,158 @@ export function SplitterMapLeaflet({
       {oltPos !== null ? (
         <Polyline
           positions={[oltPos, c]}
-          pathOptions={{ color: '#fb923c', weight: 3 }}
+          pathOptions={{ color: '#fb923c', weight: 3, interactive: false }}
         />
       ) : null}
-      <Marker position={c} icon={currentIcon}>
-        <Tooltip
-          direction="top"
-          offset={[0, -10]}
-          opacity={1}
-          sticky
-          className={TOOLTIP_CURRENT_SPLITTER}
-        >
-          <span className="inline-block whitespace-nowrap">
-            {(() => {
-              const code = currentSplitterCode.trim()
-              const title = currentSplitterTitle.trim()
-              const head = title || code || 'Equipamento atual'
-              const showCode = code !== '' && head !== code
-              return (
-                <>
-                  <span className="font-bold">{head}</span>
-                  {showCode ? (
-                    <span className="font-mono text-[10px] font-semibold text-neutral-600">
-                      {' · '}
-                      {code}
-                    </span>
+      {reliefLinePositions !== null ? (
+        <Polyline
+          positions={reliefLinePositions}
+          pathOptions={{
+            color: '#15803d',
+            weight: 3,
+            opacity: 0.88,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }}
+        />
+      ) : null}
+      {showClientMarkers
+        ? clientMarkerEntries.map(({ cl, title, corporate, icon }) => (
+            <Marker
+              key={`client-${cl.authenticationId}`}
+              position={[cl.lat, cl.lng]}
+              icon={icon}
+              zIndexOffset={Z_CLIENT}
+            >
+              <Popup {...MAP_CARD_POPUP}>
+                <div className="min-w-0 max-w-full text-sm leading-snug">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                    {corporate ? 'Cliente corporativo' : 'Cliente'}
+                  </p>
+                  <p className="mt-0.5 text-base font-semibold leading-snug text-neutral-900">{title}</p>
+                  {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
+                    <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
                   ) : null}
-                </>
-              )
-            })()}
-          </span>
-        </Tooltip>
-        <Popup>
-          <div className="min-w-[220px] text-sm">
-            <p className="font-semibold text-neutral-900">
+                  <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
+                  <Link
+                    className={
+                      corporate
+                        ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 underline'
+                        : 'mt-2 inline-flex text-sm font-semibold text-amber-800 underline'
+                    }
+                    to={`/clientes/${cl.authenticationId}`}
+                    state={location.state}
+                  >
+                    Abrir cliente
+                  </Link>
+                </div>
+              </Popup>
+            </Marker>
+          ))
+        : null}
+      {oltPos !== null && oltPoint !== null && oltMarkerIcon !== null ? (
+        <Marker position={oltPos} icon={oltMarkerIcon} zIndexOffset={Z_OLT}>
+          <Popup {...MAP_CARD_POPUP}>
+            <div className="min-w-0 max-w-full text-sm leading-snug">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-800/90">OLT</p>
+              <p className="mt-0.5 font-semibold text-neutral-900">
+                {oltPoint.title.trim() || oltPoint.code.trim() || 'OLT'}
+              </p>
+              {oltPoint.code.trim() !== '' && oltPoint.title.trim() !== oltPoint.code.trim() ? (
+                <p className="font-mono text-neutral-500">{oltPoint.code}</p>
+              ) : null}
+            </div>
+          </Popup>
+        </Marker>
+      ) : null}
+      {neighborMarkerEntries.map(({ n, icon }) => {
+        const code = n.code.trim()
+        return (
+          <Marker key={`neighbor-${code}:${n.lat}:${n.lng}`} position={[n.lat, n.lng]} icon={icon} zIndexOffset={Z_NEIGHBOR}>
+            <Popup {...MAP_CARD_POPUP}>
+              <div className="min-w-0 max-w-full text-sm leading-snug">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90">
+                  Splitter vizinho
+                </p>
+                <p className="mt-1 font-semibold leading-snug text-neutral-900">{n.title.trim() || n.code}</p>
+                <Link
+                  className="mt-2 inline-flex items-center text-sm font-semibold text-emerald-700 underline"
+                  to={`/splitters/${encodeURIComponent(n.code)}`}
+                  state={location.state}
+                >
+                  Abrir detalhe
+                </Link>
+                <div className="mt-2 flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: BAND_COLOR[n.occupancyBand] }}
+                  />
+                  <span className="text-xs font-semibold text-neutral-700">{BAND_LABEL[n.occupancyBand]}</span>
+                </div>
+                <p className="mt-2 text-xs text-neutral-600">
+                  {n.busyCount} porta(s) ocupada(s) de {n.outPorts}
+                </p>
+                <p className="mt-1 text-xs text-neutral-600">
+                  Rua: <span className="font-semibold text-neutral-800">{n.street?.trim() || 'Não informada'}</span>
+                </p>
+                {n.straightMeters !== undefined ? (
+                  <p className="mt-1 text-[11px] text-neutral-600">
+                    Linha reta: ~{n.straightMeters.toLocaleString('pt-BR')} m
+                    {routingUnavailable || n.routeMeters == null
+                      ? ' · rota pedestre indisponível'
+                      : ` · rota pedestre (OSRM): ~${n.routeMeters.toLocaleString('pt-BR')} m`}
+                  </p>
+                ) : null}
+              </div>
+            </Popup>
+          </Marker>
+        )
+      })}
+      <Marker position={c} icon={currentMarkerIcon} zIndexOffset={Z_CURRENT}>
+        <Popup {...MAP_CARD_POPUP}>
+          <div className="min-w-0 max-w-full text-sm leading-snug">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/90">Splitter atual</p>
+            <p className="mt-1 font-semibold leading-snug text-neutral-900">
               {currentSplitterTitle.trim() || currentSplitterCode.trim() || 'Equipamento atual'}
             </p>
             {currentSplitterCode.trim() !== '' && currentSplitterTitle.trim() !== currentSplitterCode.trim() ? (
-              <p className="font-mono text-neutral-500">{currentSplitterCode}</p>
+              <p className="mt-0.5 font-mono text-xs text-neutral-500">{currentSplitterCode}</p>
             ) : null}
             <p className="mt-2 text-xs text-neutral-600">
               Rua: <span className="font-semibold text-neutral-800">{streetLineForCurrentMarker}</span>
             </p>
+            {originStreetRaw != null &&
+            String(originStreetRaw).trim() !== '' &&
+            String(originStreetRaw).trim() !== streetLineForCurrentMarker ? (
+              <p className="mt-1 text-[11px] text-neutral-500">
+                Via (geocodificação):{' '}
+                <span className="font-medium text-neutral-700">{String(originStreetRaw).trim()}</span>
+              </p>
+            ) : null}
+            {isCondominium === true ? (
+              <p className="mt-2 text-[11px] font-medium text-neutral-700">Classificação: condomínio (título)</p>
+            ) : null}
+            {condominiumReliefAvailable === true ? (
+              <p className="mt-1 text-[11px] text-emerald-800">
+                Há porta livre em outro splitter do mesmo condomínio (alívio interna).
+              </p>
+            ) : null}
+            {routingUnavailable === true ? (
+              <p className="mt-2 text-[11px] text-amber-800">Rota pedestre (vizinhos) indisponível neste momento.</p>
+            ) : null}
+            {currentSplitterCode.trim() !== '' ? (
+              <Link
+                className="mt-3 inline-flex text-sm font-semibold text-rose-700 underline"
+                to={`/splitters/${encodeURIComponent(currentSplitterCode.trim())}`}
+                state={location.state}
+              >
+                Abrir ficha do splitter
+              </Link>
+            ) : null}
           </div>
         </Popup>
       </Marker>
-      {oltPos !== null && oltPoint !== null ? (
-        <Marker position={oltPos} icon={oltIcon}>
-          <Tooltip
-            direction="top"
-            offset={[0, -8]}
-            opacity={1}
-            sticky
-            className={TOOLTIP_OLT}
-          >
-            <span className="inline-block whitespace-nowrap">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-blue-800/90">
-                OLT
-              </span>
-              {(() => {
-                const code = oltPoint.code.trim()
-                const title = oltPoint.title.trim()
-                const head = title || code || 'OLT'
-                const showCode = code !== '' && head !== code
-                return (
-                  <>
-                    <span className="text-neutral-400">{' · '}</span>
-                    <span className="font-bold">{head}</span>
-                    {showCode ? (
-                      <span className="font-mono text-[10px] font-semibold text-neutral-600">
-                        {' · '}
-                        {code}
-                      </span>
-                    ) : null}
-                  </>
-                )
-              })()}
-            </span>
-          </Tooltip>
-        </Marker>
-      ) : null}
-      {showClientMarkers
-        ? clientPoints.map((cl) => {
-            const title = clientDisplayName(cl)
-            const corporate = cl.isCorporate === true
-            const markerIcon = corporate ? clientIconCorporate : clientIcon
-            return (
-              <Marker key={`client-${cl.authenticationId}`} position={[cl.lat, cl.lng]} icon={markerIcon}>
-                <Tooltip
-                  direction="top"
-                  offset={[0, -12]}
-                  opacity={1}
-                  sticky
-                  className={corporate ? TOOLTIP_CLIENT_CORPORATE : TOOLTIP_CLIENT}
-                >
-                  <span className="inline-block whitespace-nowrap">{title}</span>
-                </Tooltip>
-                <Popup>
-                  <div className="min-w-[220px] text-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                      {corporate ? 'Cliente corporativo' : 'Cliente'}
-                    </p>
-                    <p className="mt-0.5 text-base font-semibold leading-snug text-neutral-900">{title}</p>
-                    {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
-                      <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
-                    ) : null}
-                    <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
-                    <Link
-                      className={
-                        corporate
-                          ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 underline'
-                          : 'mt-2 inline-flex text-sm font-semibold text-amber-800 underline'
-                      }
-                      to={`/clientes/${cl.authenticationId}`}
-                      state={location.state}
-                    >
-                      Abrir cliente
-                    </Link>
-                  </div>
-                </Popup>
-              </Marker>
-            )
-          })
-        : null}
-      {neighbors.map((n) => (
-        <Marker
-          key={n.code}
-          position={[n.lat, n.lng]}
-          icon={neighborDivIcon(n.occupancyBand)}
-        >
-          <Tooltip
-            direction="top"
-            offset={[0, -8]}
-            opacity={1}
-            sticky
-            className={TOOLTIP_NEIGHBOR}
-          >
-            <span className="inline-block whitespace-nowrap">
-              {(() => {
-                const code = n.code.trim()
-                const title = n.title.trim()
-                const head = title || code || 'Splitter vizinho'
-                const showCode = code !== '' && head !== code
-                return (
-                  <>
-                    <span className="font-bold">{head}</span>
-                    {showCode ? (
-                      <span className="font-mono text-[10px] font-semibold text-neutral-600">
-                        {' · '}
-                        {code}
-                      </span>
-                    ) : null}
-                  </>
-                )
-              })()}
-            </span>
-          </Tooltip>
-          <Popup>
-            <div className="min-w-[220px] text-sm">
-              <p className="font-semibold text-neutral-900">{n.title}</p>
-              <p className="font-mono text-neutral-500">{n.code}</p>
-              <div className="mt-2 flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: BAND_COLOR[n.occupancyBand] }}
-                />
-                <span className="text-xs font-semibold text-neutral-700">
-                  {BAND_LABEL[n.occupancyBand]}
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-neutral-600">
-                {n.busyCount} porta(s) ocupada(s) de {n.outPorts}
-              </p>
-              <p className="mt-1 text-xs text-neutral-600">
-                Rua: <span className="font-semibold text-neutral-800">{n.street?.trim() || 'Não informada'}</span>
-              </p>
-              {n.straightMeters !== undefined ? (
-                <p className="mt-1 text-[11px] text-neutral-600">
-                  Linha reta: ~{n.straightMeters.toLocaleString('pt-BR')} m
-                  {routingUnavailable || n.routeMeters == null
-                    ? ' · rota pedestre indisponível'
-                    : ` · rota pedestre (OSRM): ~${n.routeMeters.toLocaleString('pt-BR')} m`}
-                </p>
-              ) : null}
-              <Link
-                className="mt-3 inline-flex items-center text-sm font-semibold text-emerald-700 underline"
-                to={`/splitters/${encodeURIComponent(n.code)}`}
-                state={location.state}
-              >
-                Abrir detalhe
-              </Link>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
     </MapContainer>
   )
 }

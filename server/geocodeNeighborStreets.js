@@ -1,6 +1,7 @@
 /**
- * Preenche `street` em vizinhos do mapa via reverse geocode, com limite e pausa (política Nominatim).
- * Prioriza candidatos a alívio (porta livre, não condomínio) e depois os mais próximos por rota OSRM.
+ * Preenche `street` em vizinhos via reverse geocode, com limite e pausa (política Nominatim).
+ * O GET `/api/splitters/neighbors-routed` não aguarda mais esta função (mapa enriquece no browser);
+ * mantida para reutilização (ex.: jobs) ou chamadas futuras.
  */
 
 import { fetchRoadFromReverseGeocode, isReverseGeocodeDisabled } from './reverseGeocode.js';

@@ -1,14 +1,20 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { resolveGeocodedAddressForSplitter } from '@/features/splitters/api/reverseGeocode'
 import { useSplitterClientes } from '@/features/splitters/hooks/useSplitterClientes'
 import { useNeighborStreetsReverseGeocode } from '@/features/splitters/hooks/useNeighborStreetsReverseGeocode'
 import { useSplitterMapData } from '@/features/splitters/hooks/useSplitterMapData'
 import { useSplitterOlt } from '@/features/splitters/hooks/useSplitterOlt'
+import {
+  findFirstStreetReliefNeighbor,
+  normalizeStreetForRelief,
+  SPLITTER_ROUTE_RELIEF_MAX_METERS,
+  type SplitterMapReliefInsight,
+} from '@/features/splitters/lib/splitterStreetRelief'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterMapClientPoint, SplitterMapSuccessPayload } from '@/features/splitters/model/splitterMap'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
+import { cn } from '@/shared/lib/utils'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
@@ -21,29 +27,8 @@ const SplitterMapLeaflet = lazy(async () => {
 
 type SplitterMapSectionProps = {
   splitter: Splitter
-}
-
-/** Planejamento: vizinho com porta livre a até esta distância por rota pedestre (OSRM foot). */
-const SPLITTER_ROUTE_RELIEF_MAX_METERS = 200
-const SPLITTER_CROSS_STREET_RELIEF_MAX_METERS = 30
-
-function normalizeStreetForRelief(street: string | null | undefined): string | null {
-  const normalized = String(street ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const withoutPrefix = normalized.replace(
-    /^(rua|r|avenida|av|travessa|trav|alameda|estrada|rodovia|beco|largo|praca|praça)\s+/,
-    '',
-  )
-  const withoutJoiners = withoutPrefix
-    .replace(/\b(de|da|do|das|dos)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return withoutJoiners === '' ? null : withoutJoiners
+  /** Atualiza o header do detalhe com vizinho de alívio (rua) após geocodes relevantes. */
+  onMapReliefInsightChange?: (insight: SplitterMapReliefInsight) => void
 }
 
 function LegendDot({
@@ -64,9 +49,27 @@ function LegendDot({
   )
 }
 
-export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
+export function SplitterMapSection({ splitter, onMapReliefInsightChange }: SplitterMapSectionProps) {
   const [showClientsOnMap, setShowClientsOnMap] = useState(true)
   const [mapExpandedOpen, setMapExpandedOpen] = useState(false)
+
+  /** Ao trocar de equipamento na mesma tela (ex.: link no mapa), evita modal “fantasma” com outro código. */
+  useEffect(() => {
+    setMapExpandedOpen(false)
+  }, [splitter.code])
+
+  /** Fechar com Escape — o overlay fica abaixo da sidebar, mas isso cobre teclado e hábito de outros modais. */
+  useEffect(() => {
+    if (!mapExpandedOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMapExpandedOpen(false)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mapExpandedOpen])
 
   const oltCode = splitter.oltCode
   const { state: oltState } = useSplitterOlt(oltCode)
@@ -166,23 +169,65 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
     }
   }, [splitterMapSuccessPayload, neighborStreetsQuery.data])
 
+  useEffect(() => {
+    if (!onMapReliefInsightChange) return
+    if (mapState.type !== 'success') {
+      onMapReliefInsightChange({ evaluationSettled: false, streetReliefNeighbor: null })
+      return
+    }
+    const p = mapState.payload
+    const merged = leafletMergedPayload ?? p
+    const mapStreet =
+      splitter.street?.trim() ||
+      p.originStreetRaw?.trim() ||
+      clientReverseStreetQuery.data?.street?.trim() ||
+      p.currentStreet?.trim() ||
+      null
+    const curNorm = normalizeStreetForRelief(mapStreet)
+    const isCondo = Boolean(p.isCondominium)
+    const needClientGeo =
+      !splitter.street?.trim() &&
+      !p.originStreetRaw?.trim() &&
+      !p.currentStreet?.trim()
+    const clientBlock =
+      needClientGeo &&
+      !clientReverseStreetQuery.isError &&
+      (clientReverseStreetQuery.isPending || clientReverseStreetQuery.isFetching)
+    const neighborBlock =
+      neighborStreetsQuery.isEnabled &&
+      !neighborStreetsQuery.isError &&
+      (neighborStreetsQuery.isPending || neighborStreetsQuery.isFetching)
+    const pending = !isCondo && (clientBlock || neighborBlock)
+    const n = pending
+      ? null
+      : findFirstStreetReliefNeighbor({
+          neighbors: merged.neighbors,
+          currentStreetNormalized: curNorm,
+          currentIsCondominium: isCondo,
+        })
+    onMapReliefInsightChange({
+      evaluationSettled: isCondo || !pending,
+      streetReliefNeighbor:
+        pending || !n ? null : { code: String(n.code).trim(), title: String(n.title || n.code).trim() },
+    })
+  }, [
+    onMapReliefInsightChange,
+    mapState,
+    leafletMergedPayload,
+    splitter.street,
+    clientReverseStreetQuery.data,
+    clientReverseStreetQuery.isPending,
+    clientReverseStreetQuery.isFetching,
+    clientReverseStreetQuery.isError,
+    neighborStreetsQuery.isEnabled,
+    neighborStreetsQuery.isPending,
+    neighborStreetsQuery.isFetching,
+    neighborStreetsQuery.isError,
+  ])
+
   const oltCodeTrim = (oltCode ?? '').trim()
   const showOltMissing =
     oltCodeTrim.length > 0 && oltState.type === 'not-found'
-
-  useEffect(() => {
-    if (!mapExpandedOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMapExpandedOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [mapExpandedOpen])
 
   if (mapState.type === 'no-coordinates') {
     return (
@@ -221,28 +266,35 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
     payload.currentStreet?.trim() ||
     null
   const currentStreet = normalizeStreetForRelief(mapCurrentStreetDisplay)
+  const reliefGeoPendingForStreetRule =
+    !currentIsCondominium &&
+    ((needsClientReverseStreet &&
+      !clientReverseStreetQuery.isError &&
+      (clientReverseStreetQuery.isPending || clientReverseStreetQuery.isFetching)) ||
+      (neighborStreetsQuery.isEnabled &&
+        !neighborStreetsQuery.isError &&
+        (neighborStreetsQuery.isPending || neighborStreetsQuery.isFetching)))
+  const streetReliefNeighbor = findFirstStreetReliefNeighbor({
+    neighbors: mapLeafletPayload.neighbors,
+    currentStreetNormalized: currentStreet,
+    currentIsCondominium,
+  })
+  const hasReliefNeighborWithinRoute = streetReliefNeighbor !== null
+  const reliefFootPathPositions: [[number, number], [number, number]] | null =
+    reliefGeoPendingForStreetRule || currentIsCondominium || streetReliefNeighbor === null
+      ? null
+      : [
+          [payload.center.lat, payload.center.lng],
+          [streetReliefNeighbor.lat, streetReliefNeighbor.lng],
+        ]
   const splitterFullOccupancy =
     splitter.outPorts > 0 && splitter.busyCount >= splitter.outPorts
-  const hasReliefNeighborWithinRoute = mapLeafletPayload.neighbors.some((neighbor) => {
-    if (currentIsCondominium) return false
-    if (neighbor.isCondominium) return false
-    if (neighbor.outPorts <= 0 || neighbor.busyCount >= neighbor.outPorts) return false
-    if (neighbor.routeMeters == null) return false
-    const neighborStreet = normalizeStreetForRelief(neighbor.street)
-    const sameStreet =
-      currentStreet !== null &&
-      neighborStreet !== null &&
-      currentStreet === neighborStreet
-    const routeLimit = sameStreet
-      ? SPLITTER_ROUTE_RELIEF_MAX_METERS
-      : SPLITTER_CROSS_STREET_RELIEF_MAX_METERS
-    return neighbor.routeMeters <= routeLimit
-  })
   const showNetworkPlanningAlert = (() => {
     if (!splitterFullOccupancy) return false
     if (currentIsCondominium) {
       return !condominiumReliefAvailable
     }
+    if (reliefGeoPendingForStreetRule) return false
     return !routingUnavailable && !hasReliefNeighborWithinRoute
   })()
 
@@ -250,7 +302,12 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border border-outline-variant bg-gradient-to-br from-white via-surface to-surface-container-low/40 shadow-sm"
+      className={cn(
+        'relative rounded-2xl border border-outline-variant bg-gradient-to-br from-white via-surface to-surface-container-low/40 shadow-sm',
+        mapExpandedOpen
+          ? 'z-[1] min-h-[min(92dvh,900px)] overflow-visible'
+          : 'overflow-hidden',
+      )}
       aria-labelledby="splitter-map-heading"
     >
       <div className="border-b border-outline-variant/50 bg-white/80 px-4 py-3 backdrop-blur-sm">
@@ -286,6 +343,10 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
               <LegendDot color="#ca8a04" label="Cliente" />
               <LegendDot color="#7c3aed" label="Cliente corporativo" />
             </div>
+            <p className="text-[10px] leading-snug text-on-surface-variant/70">
+              Para abrir o card: clique no <span className="font-semibold text-on-surface/85">círculo colorido</span>{' '}
+              (vizinho) ou no <span className="font-semibold text-on-surface/85">quadrado com casa</span> (assinante).
+            </p>
           </div>
 
           <div className="grid gap-1.5 text-xs text-on-surface-variant/80">
@@ -306,6 +367,17 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
                 <RadioTower size={14} className="mt-0.5 shrink-0 text-secondary" strokeWidth={1.75} />
                 <span className="leading-snug">
                   A linha laranja mostra a ligação entre a OLT e o splitter atual.
+                </span>
+              </div>
+            ) : null}
+
+            {reliefFootPathPositions !== null ? (
+              <div className="flex items-start gap-2 rounded-lg border border-emerald-200/90 bg-emerald-50/90 px-2.5 py-2 shadow-sm">
+                <CircleDot size={14} className="mt-0.5 shrink-0 text-emerald-700" strokeWidth={1.75} />
+                <span className="leading-snug text-emerald-950">
+                  A linha verde liga este splitter a um vizinho com{' '}
+                  <span className="font-semibold">porta livre</span> dentro da regra de planejamento (mesma rua até{' '}
+                  {SPLITTER_ROUTE_RELIEF_MAX_METERS} m de rota pedestre, ou até 30 m entre ruas).
                 </span>
               </div>
             ) : null}
@@ -343,6 +415,15 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
               <span className="font-semibold">porta livre</span>. Esse caso não entra na fila de planejamento por
               vizinhança OSRM.
             </p>
+          </div>
+        ) : null}
+
+        {splitterFullOccupancy && !currentIsCondominium && reliefGeoPendingForStreetRule ? (
+          <div
+            className="mt-3 rounded-xl border border-slate-200/90 bg-slate-50/95 px-3 py-2 text-xs text-slate-700 shadow-sm"
+            role="status"
+          >
+            A confirmar nomes de via no mapa para o aviso de planejamento…
           </div>
         ) : null}
 
@@ -426,92 +507,112 @@ export function SplitterMapSection({ splitter }: SplitterMapSectionProps) {
                 </div>
               }
             >
-              <SplitterMapLeaflet
-                payload={mapLeafletPayload}
-                currentStreetDisplay={mapCurrentStreetDisplay}
-                showClientMarkers={showClientsOnMap}
-              />
+              {mapExpandedOpen ? (
+                <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-surface-container-low/80 px-4 text-center text-xs text-on-surface-variant">
+                  <span className="font-semibold text-on-surface-variant/80">Mapa na janela ampliada</span>
+                  <span className="text-on-surface-variant/65">Feche o modal para voltar ao mapa aqui.</span>
+                </div>
+              ) : (
+                <div
+                  key={`splitter-map-leaflet-${splitter.code}`}
+                  className="relative z-0 h-full min-h-0 w-full max-w-full overflow-hidden"
+                >
+                  <SplitterMapLeaflet
+                    payload={mapLeafletPayload}
+                    currentStreetDisplay={mapCurrentStreetDisplay}
+                    showClientMarkers={showClientsOnMap}
+                    reliefFootPath={reliefFootPathPositions}
+                  />
+                </div>
+              )}
             </Suspense>
           </div>
         </div>
       </div>
 
-      {mapExpandedOpen
-        ? createPortal(
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5">
-              <button
-                type="button"
-                className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[1px]"
-                aria-label="Fechar mapa ampliado"
-                onClick={() => setMapExpandedOpen(false)}
-              />
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="splitter-map-expanded-title"
-                className="relative flex h-[min(92vh,880px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-outline-variant bg-white shadow-2xl"
+      {/*
+        Modal só sobre este card (`absolute` no section `relative`): `fixed` cobria a viewport inteira
+        e, com ancestral com transform (animate-in na página), podia interceptar cliques fora do mapa.
+      */}
+      {mapExpandedOpen ? (
+        <div className="absolute inset-0 z-50 grid min-h-0 place-items-center p-2 sm:p-4 md:p-5">
+          <button
+            type="button"
+            className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[1px]"
+            aria-label="Fechar mapa ampliado"
+            onClick={() => setMapExpandedOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="splitter-map-expanded-title"
+            className="relative flex h-[min(88dvh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-outline-variant bg-white shadow-2xl"
+          >
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-outline-variant bg-surface-container-low/35 px-3 py-2.5">
+              <h3
+                id="splitter-map-expanded-title"
+                className="text-sm font-semibold tracking-tight text-on-surface"
               >
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-outline-variant bg-surface-container-low/35 px-3 py-2.5">
-                  <h3
-                    id="splitter-map-expanded-title"
-                    className="text-sm font-semibold tracking-tight text-on-surface"
-                  >
-                    Mapa ampliado · {splitter.code}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={openStreetMapHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-white px-2 py-1.5 text-[11px] font-semibold text-primary underline-offset-2 hover:bg-surface-container-low hover:underline"
-                    >
-                      <ExternalLink size={12} aria-hidden />
-                      OpenStreetMap
-                    </a>
-                    {clientOnMapCount > 0 ? (
-                      <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1 py-0.5">
-                        <input
-                          type="checkbox"
-                          checked={showClientsOnMap}
-                          onChange={(e) => setShowClientsOnMap(e.target.checked)}
-                          className="size-3.5 rounded border-outline-variant text-primary focus:ring-2 focus:ring-primary/30"
-                        />
-                        <span className="text-[11px] font-semibold text-on-surface">Assinantes</span>
-                      </label>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setMapExpandedOpen(false)}
-                      className="flex size-9 items-center justify-center rounded-lg border border-outline-variant bg-white text-on-surface shadow-sm transition hover:bg-surface-container-low"
-                      aria-label="Fechar"
-                    >
-                      <X size={18} strokeWidth={2} aria-hidden />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
-                  <div className="relative min-h-[280px] flex-1 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low/30">
-                    <Suspense
-                      fallback={
-                        <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-on-surface-variant/65">
-                          Carregando mapa…
-                        </div>
-                      }
-                    >
-                      <SplitterMapLeaflet
-                        payload={mapLeafletPayload}
-                        currentStreetDisplay={mapCurrentStreetDisplay}
-                        showClientMarkers={showClientsOnMap}
-                        mapClassName="absolute inset-0 z-0 h-full w-full rounded-xl"
-                      />
-                    </Suspense>
-                  </div>
-                </div>
+                Mapa ampliado · {splitter.code}
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={openStreetMapHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-white px-2 py-1.5 text-[11px] font-semibold text-primary underline-offset-2 hover:bg-surface-container-low hover:underline"
+                >
+                  <ExternalLink size={12} aria-hidden />
+                  OpenStreetMap
+                </a>
+                {clientOnMapCount > 0 ? (
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent px-1 py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={showClientsOnMap}
+                      onChange={(e) => setShowClientsOnMap(e.target.checked)}
+                      className="size-3.5 rounded border-outline-variant text-primary focus:ring-2 focus:ring-primary/30"
+                    />
+                    <span className="text-[11px] font-semibold text-on-surface">Assinantes</span>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setMapExpandedOpen(false)}
+                  className="flex size-9 items-center justify-center rounded-lg border border-outline-variant bg-white text-on-surface shadow-sm transition hover:bg-surface-container-low"
+                  aria-label="Fechar"
+                >
+                  <X size={18} strokeWidth={2} aria-hidden />
+                </button>
               </div>
-            </div>,
-            document.body,
-          )
-        : null}
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low/30">
+                <Suspense
+                  fallback={
+                    <div className="flex h-full min-h-[280px] items-center justify-center text-sm text-on-surface-variant/65">
+                      Carregando mapa…
+                    </div>
+                  }
+                >
+                  <div
+                    key={`splitter-map-leaflet-expanded-${splitter.code}`}
+                    className="relative z-0 h-full min-h-0 w-full max-w-full overflow-hidden"
+                  >
+                    <SplitterMapLeaflet
+                      payload={mapLeafletPayload}
+                      currentStreetDisplay={mapCurrentStreetDisplay}
+                      showClientMarkers={showClientsOnMap}
+                      mapClassName="absolute inset-0 h-full w-full rounded-xl"
+                      reliefFootPath={reliefFootPathPositions}
+                    />
+                  </div>
+                </Suspense>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

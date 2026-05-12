@@ -4,8 +4,9 @@ import { resolveGeocodedAddressForSplitter } from '@/features/splitters/api/reve
 import type { SplitterMapNeighbor } from '@/features/splitters/model/splitterMap'
 
 /** Limite de chamadas Nominatim/proxy por abertura do mapa (vizinhos sem rua no BFF). */
-const NEIGHBOR_CLIENT_GEOCODE_MAX = 6
-const NEIGHBOR_GEOCODE_GAP_MS = 800
+const NEIGHBOR_CLIENT_GEOCODE_MAX = 4
+/** Pausa curta entre requisições; ruas já vêm do cadastro quando possível (BFF não bloqueia mais no enrich). */
+const NEIGHBOR_GEOCODE_GAP_MS = 450
 
 function sortNeighborTargetsForStreet(
   neighbors: ReadonlyArray<SplitterMapNeighbor>,

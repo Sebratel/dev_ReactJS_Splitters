@@ -16,8 +16,7 @@ import {
   querySplitterNeighborsWithOrigin,
   splitterIdentifierMatchSql,
 } from './splitterNeighborRouting.js';
-import { fetchRoadFromReverseGeocode, isReverseGeocodeDisabled } from './reverseGeocode.js';
-import { enrichNeighborStreetsForMap } from './geocodeNeighborStreets.js';
+import { fetchRoadFromReverseGeocode } from './reverseGeocode.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import {
   buildSplitterOperationalScore,
@@ -2188,22 +2187,11 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       hasIntraCondominiumFreePortSibling(pool, code),
     ]);
 
-    let effectiveOriginStreet = originStreet;
-    /** Via humana (Nominatim) quando cadastro não tem rua — só para exibição no mapa. */
-    let originStreetRaw = null;
-    let didReverseGeocodeForOrigin = false;
-    if (
-      !isReverseGeocodeDisabled() &&
-      origin &&
-      (effectiveOriginStreet == null || String(effectiveOriginStreet).trim() === '')
-    ) {
-      didReverseGeocodeForOrigin = true;
-      const road = await fetchRoadFromReverseGeocode(origin.lat, origin.lng);
-      if (road && road.trim() !== '') {
-        originStreetRaw = road.trim();
-        effectiveOriginStreet = normalizeStreetForRelief(road);
-      }
-    }
+    /**
+     * Reverse geocode da origem e ruas dos vizinhos ficam no browser (`resolveGeocodedAddressForSplitter` /
+     * `useNeighborStreetsReverseGeocode`) para esta rota responder só com PG + OSRM e o mapa sair do loading rápido.
+     */
+    const originStreetRaw = null;
 
     if (!origin) {
       return res.json({
@@ -2213,7 +2201,7 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
         routingUnavailable: false,
         isCondominium: originIsCondominium,
         condominiumReliefAvailable,
-        originStreet: effectiveOriginStreet,
+        originStreet,
         originStreetRaw,
         origin: null,
         neighbors: [],
@@ -2247,18 +2235,6 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       isCondominium: isCondominiumSplitterTitle(n.title),
     }));
 
-    try {
-      await enrichNeighborStreetsForMap(data, {
-        routingUnavailable,
-        pauseAfterOriginMs: didReverseGeocodeForOrigin ? 1200 : 0,
-      });
-    } catch (err) {
-      logger.warn('neighbors_routed_enrich_neighbor_streets_failed', {
-        code,
-        error: String(err?.message ?? err),
-      });
-    }
-
     res.json({
       success: true,
       straightRadiusMeters: straightRadius,
@@ -2266,7 +2242,7 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
       routingUnavailable,
       isCondominium: originIsCondominium,
       condominiumReliefAvailable,
-      originStreet: effectiveOriginStreet,
+      originStreet,
       originStreetRaw,
       origin,
       neighbors: data,

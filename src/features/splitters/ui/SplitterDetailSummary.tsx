@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import type { SplitterMapReliefInsight } from '@/features/splitters/lib/splitterStreetRelief'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import type {
@@ -25,6 +26,8 @@ type SplitterDetailSummaryProps = {
   onRefreshNow: () => void
   isRefreshing: boolean
   lastUpdatedAtMs: number
+  /** Alívio por rua (após geocode no mapa); opcional. */
+  mapReliefInsight?: SplitterMapReliefInsight | null
 }
 
 function formatLastUpdatedAge(lastUpdatedAtMs: number, nowMs: number): string {
@@ -177,7 +180,9 @@ export function SplitterDetailSummary({
   onRefreshNow,
   isRefreshing,
   lastUpdatedAtMs,
+  mapReliefInsight = null,
 }: SplitterDetailSummaryProps) {
+  const location = useLocation()
   const canOpenMassiva = useAccessAuthStore((state) => state.hasPermission('canOpenMassiva'))
   const [clockMs, setClockMs] = useState(() => Date.now())
   const mirrorLive = connectionsLoadState === 'success'
@@ -283,12 +288,32 @@ export function SplitterDetailSummary({
             </button>
           </div>
 
-          <h1
-            id="splitter-detail-heading"
-            className="mt-2 text-3xl font-extrabold leading-tight tracking-tight text-on-surface md:text-[2.1rem]"
-          >
-            {splitter.title || splitter.code}
-          </h1>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
+            <h1
+              id="splitter-detail-heading"
+              className="text-3xl font-extrabold leading-tight tracking-tight text-on-surface md:text-[2.1rem]"
+            >
+              {splitter.title || splitter.code}
+            </h1>
+            {mapReliefInsight?.evaluationSettled && mapReliefInsight.streetReliefNeighbor ? (
+              <Link
+                to={`/splitters/${encodeURIComponent(mapReliefInsight.streetReliefNeighbor.code)}`}
+                state={location.state}
+                className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 bg-emerald-50/95 px-2 py-0.5 text-xs font-medium text-emerald-950 no-underline transition hover:bg-emerald-100/95 hover:underline"
+                title="Splitter sugerido para alívio de rede (porta livre na regra do mapa)"
+              >
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">
+                  Apoio
+                </span>
+                <span className="truncate font-semibold">
+                  {mapReliefInsight.streetReliefNeighbor.title}
+                </span>
+                <span className="shrink-0 font-mono text-[10px] text-emerald-900/80">
+                  {mapReliefInsight.streetReliefNeighbor.code}
+                </span>
+              </Link>
+            ) : null}
+          </div>
 
           {slot && port ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
