@@ -10,6 +10,8 @@ import { Activity, Bot, Download, GitBranch, KeyRound, Loader2, ListOrdered, Spa
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import {
   fetchPlanningAssistantReplyFromLocalDb,
+  type PlanningAssistantConversationTurn,
+  type IsaCtoVizinhaAnalisada,
   normalizeIsaCapilaridade,
   normalizeIsaClassificacaoGeografica,
   normalizeIsaCtosVizinhasAnalisadas,
@@ -40,6 +42,103 @@ const ISA_PRIORITY_LOADING_MSG =
 const ISA_PRIORITY_READY_MSG = '✨ Prontinho por aqui — pode abrir e dar uma olhada 🙂'
 
 const ISA_READY_PULSE_MS = 3000
+const ISA_CONVERSATION_PROMPT_LIMIT = 20
+
+function buildAssistantConversationTurn(
+  prompt: string,
+  reply: PlanningAssistantReply,
+): PlanningAssistantConversationTurn {
+  const structured = reply.structuredAnswer
+  return {
+    userPrompt: normalizeIsaText(prompt),
+    assistantSummary: {
+      conclusao: normalizeIsaText(structured?.conclusao),
+      decisao_operacional: normalizeIsaDecisaoOperacional(structured?.decisao_operacional),
+      acao_prioritaria: normalizeIsaText(structured?.acao_prioritaria),
+      recomendacao: normalizeIsaText(structured?.recomendacao),
+    },
+  }
+}
+
+function getAssistantConversationWarning(promptCount: number): {
+  tone: 'info' | 'warning' | 'danger'
+  message: string
+} | null {
+  switch (promptCount) {
+    case 15:
+      return {
+        tone: 'info',
+        message:
+          'Esta conversa está com 15 de 20 prompts. A ISA ainda mantém o contexto, mas já está perto do limite.',
+      }
+    case 18:
+      return {
+        tone: 'warning',
+        message:
+          'Atenção: esta conversa chegou a 18 de 20 prompts. Faltam poucas interações antes do reinício automático.',
+      }
+    case 19:
+      return {
+        tone: 'danger',
+        message:
+          'Você está no 19º prompt. Depois de completar o limite, a próxima pergunta reiniciará a conversa do zero.',
+      }
+    case 20:
+      return {
+        tone: 'danger',
+        message:
+          'Limite de 20 prompts atingido. A próxima pergunta reiniciará automaticamente a conversa.',
+      }
+    default:
+      return null
+  }
+}
+
+function AssistantConversationHistoryPreview(props: {
+  history: PlanningAssistantConversationTurn[]
+}) {
+  if (props.history.length === 0) return null
+
+  const recentTurns = props.history.slice(-3).reverse()
+
+  return (
+    <div className="rounded-xl border border-neutral-200/90 bg-neutral-50/70 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-600">
+          Últimas interações
+        </p>
+        <span className="text-[10px] text-neutral-500">
+          mostrando {Math.min(props.history.length, 3)} de {props.history.length}
+        </span>
+      </div>
+
+      <div className="mt-2 space-y-2">
+        {recentTurns.map((turn, index) => (
+          <div
+            key={`${props.history.length - index}:${turn.userPrompt.slice(0, 48)}`}
+            className="rounded-xl border border-white/80 bg-white/90 px-2.5 py-2 shadow-sm"
+          >
+            <p className="line-clamp-2 text-[11px] font-medium leading-relaxed text-neutral-800">
+              {turn.userPrompt}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {turn.assistantSummary?.decisao_operacional ? (
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-950">
+                  {turn.assistantSummary.decisao_operacional.replaceAll('_', ' ')}
+                </span>
+              ) : null}
+              {turn.assistantSummary?.acao_prioritaria ? (
+                <span className="line-clamp-1 rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] text-neutral-700">
+                  {turn.assistantSummary.acao_prioritaria}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function csvEscape(value: string): string {
   return `"${value.replaceAll('"', '""')}"`
@@ -70,6 +169,62 @@ function isaGravidadeBadgeClass(gravidade: string): string {
     default:
       return 'border-neutral-200 bg-neutral-50 text-neutral-700'
   }
+}
+
+function isaCapilaridadeBadgeClass(capilaridade: string): string {
+  switch (capilaridade) {
+    case 'alta':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-950'
+    case 'media':
+      return 'border-amber-300 bg-amber-50 text-amber-950'
+    case 'baixa':
+      return 'border-rose-200 bg-rose-50 text-rose-950'
+    default:
+      return 'border-neutral-200 bg-neutral-50 text-neutral-700'
+  }
+}
+
+function AssistantMetaPill(props: {
+  label: string
+  value?: string | number | null
+  className?: string
+}) {
+  if (props.value == null || String(props.value).trim() === '') return null
+
+  return (
+    <span
+      className={cn(
+        'rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide',
+        props.className ?? 'border-neutral-200 bg-neutral-50 text-neutral-700',
+      )}
+    >
+      {props.label}: {props.value}
+    </span>
+  )
+}
+
+function AssistantMetricCard(props: {
+  label: string
+  value?: string | number | null
+  tone?: 'sky' | 'violet' | 'emerald'
+}) {
+  if (props.value == null || String(props.value).trim() === '') return null
+
+  const toneClassName =
+    props.tone === 'violet'
+      ? 'border-violet-200/90 bg-violet-50/55'
+      : props.tone === 'emerald'
+        ? 'border-emerald-200/90 bg-emerald-50/55'
+        : 'border-sky-200/90 bg-sky-50/55'
+
+  return (
+    <div className={cn('rounded-xl border px-3 py-2 shadow-sm', toneClassName)}>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+        {props.label}
+      </p>
+      <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-900">{props.value}</p>
+    </div>
+  )
 }
 
 function AssistantSection(props: {
@@ -110,6 +265,154 @@ function AssistantSection(props: {
         </ul>
       ) : null}
     </section>
+  )
+}
+
+function AssistantNeighborCards(props: { rows: IsaCtoVizinhaAnalisada[] }) {
+  if (props.rows.length === 0) return null
+
+  return (
+    <section className="rounded-xl border border-violet-200/90 bg-violet-50/45 px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90">
+          CTOs vizinhas analisadas
+        </p>
+        <span className="rounded-full border border-violet-200 bg-white/80 px-2 py-0.5 text-[10px] font-medium text-violet-950">
+          {props.rows.length} candidata(s)
+        </span>
+      </div>
+
+      <div className="mt-2 grid gap-2 lg:grid-cols-2">
+        {props.rows.map((row, idx) => (
+          <div
+            key={`${idx}:${row.cto}`}
+            className="rounded-xl border border-white/80 bg-white/85 px-3 py-2.5 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 break-words text-[12px] font-semibold text-neutral-900">
+                {row.cto}
+              </p>
+              <span
+                className={cn(
+                  'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize',
+                  isaCapilaridadeBadgeClass(row.viabilidade),
+                )}
+              >
+                {row.viabilidade || 'N/A'}
+              </span>
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+              <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-950">
+                {row.distancia_operacional || 'Distância N/A'}
+              </span>
+              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-medium text-neutral-800">
+                Ocupação {row.ocupacao || 'N/A'}
+              </span>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-950">
+                {row.capacidade_livre || 'Livre N/A'}
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] leading-relaxed text-neutral-700">
+              <span className="font-semibold text-neutral-800">Geografia:</span>{' '}
+              {row.classificacao_geografica
+                ? row.classificacao_geografica.replaceAll('_', ' ')
+                : 'N/A'}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function AssistantThinkingState(props: { splitterCode: string; question: string }) {
+  const splitterCode = props.splitterCode.trim()
+  const question = props.question.trim()
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-sky-200/90 bg-gradient-to-br from-sky-50/95 via-white to-indigo-50/80 px-3 py-3 shadow-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="relative mt-0.5 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-sky-100 text-sky-900"
+          aria-hidden
+        >
+          <motion.span
+            className="absolute inset-0 rounded-2xl border border-sky-300/80"
+            animate={{ scale: [1, 1.18, 1], opacity: [0.55, 0.08, 0.55] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.span
+            className="absolute inset-1 rounded-xl bg-gradient-to-br from-sky-200/70 to-indigo-200/70"
+            animate={{ rotate: [0, 180, 360] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+          />
+          <Bot className="relative z-[1] size-5" />
+          <motion.span
+            className="absolute right-1.5 top-1.5 z-[1] text-sky-700"
+            animate={{ scale: [0.9, 1.15, 0.9], opacity: [0.55, 1, 0.55] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Sparkles className="size-3" />
+          </motion.span>
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-sky-950">ISA pensando na melhor leitura</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90">
+            Cruzando contexto operacional, regra de ruas e histórico recente para responder com mais
+            precisão.
+          </p>
+          {splitterCode ? (
+            <p className="mt-1 text-[10px] text-neutral-600">
+              Splitter em foco: <span className="font-semibold text-neutral-800">{splitterCode}</span>
+            </p>
+          ) : null}
+          {question ? (
+            <p className="mt-1 line-clamp-2 text-[10px] text-neutral-500">
+              Pergunta: {question}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-1.5">
+        {[0, 1, 2].map((index) => (
+          <motion.span
+            key={index}
+            className="size-2 rounded-full bg-sky-500"
+            animate={{ y: [0, -4, 0], opacity: [0.35, 1, 0.35] }}
+            transition={{ duration: 0.9, repeat: Infinity, delay: index * 0.14 }}
+          />
+        ))}
+        <span className="ml-1 text-[11px] text-neutral-600">
+          Validando ruas, vizinhos e possibilidade de alívio...
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {[
+          'Lendo contexto do splitter',
+          'Comparando rotas e ruas válidas',
+          'Montando conclusão da ISA',
+        ].map((step, index) => (
+          <motion.div
+            key={step}
+            className="rounded-xl border border-white/80 bg-white/80 px-2.5 py-2 text-[10px] font-medium text-neutral-700 shadow-sm"
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 1.8, repeat: Infinity, delay: index * 0.18 }}
+          >
+            {step}
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
   )
 }
 
@@ -179,6 +482,7 @@ export function SplittersOperationalPriorityFab({
   const location = useLocation()
   const isDesktopLayout = useMediaQuery(`(min-width: ${BREAKPOINT_PX.xl}px)`)
   const isWideDesktop = useMediaQuery(`(min-width: ${BREAKPOINT_PX['2xl']}px)`)
+  const isTallAssistantViewport = useMediaQuery('(min-height: 860px)')
   const canUsePlanningAssistant = useAccessAuthStore((s) =>
     s.hasPermission('canUsePlanningAssistant'),
   )
@@ -192,6 +496,10 @@ export function SplittersOperationalPriorityFab({
   const [assistantReply, setAssistantReply] = useState<PlanningAssistantReply | null>(null)
   const [assistantError, setAssistantError] = useState<string | null>(null)
   const [assistantLoading, setAssistantLoading] = useState(false)
+  const [assistantConversationHistory, setAssistantConversationHistory] = useState<
+    PlanningAssistantConversationTurn[]
+  >([])
+  const [assistantSessionNotice, setAssistantSessionNotice] = useState<string | null>(null)
   const prevPriorityLoadingRef = useRef<boolean | null>(null)
 
   const overlayOpen = menuOpen || activePanel !== null
@@ -308,6 +616,15 @@ export function SplittersOperationalPriorityFab({
   if (!enabled || mobileNavOpen) return null
 
   const isDockedOnSidebar = shouldLowerFabForNotebookSidebar && sidebarDockMetrics !== null
+  const assistantHasActivity =
+    activePanel === 'assistant' &&
+    (assistantLoading || assistantReply !== null || Boolean(assistantError))
+  const assistantUsesWideDesktopLayout =
+    activePanel === 'assistant' &&
+    isWideDesktop &&
+    isTallAssistantViewport &&
+    assistantHasActivity &&
+    !isDockedOnSidebar
 
   const fabPositionStyle = (() => {
     if (isDockedOnSidebar && sidebarDockMetrics) {
@@ -457,6 +774,18 @@ export function SplittersOperationalPriorityFab({
           ),
           recomendacao: normalizeIsaText(assistantReply.structuredAnswer?.recomendacao),
         }
+  const hasAssistantResponse = assistantReply !== null && assistantDisplayStructured !== null
+  const assistantPromptCount = assistantConversationHistory.length
+  const assistantLimitWarning = getAssistantConversationWarning(assistantPromptCount)
+
+  const handleAssistantResetConversation = () => {
+    setAssistantConversationHistory([])
+    setAssistantReply(null)
+    setAssistantError(null)
+    setAssistantSessionNotice(
+      'Conversa reiniciada. A próxima resposta da ISA vai considerar apenas a nova pergunta e o contexto atual.',
+    )
+  }
 
   const handleAssistantSubmit = async () => {
     const trimmedMessage = assistantInput.trim()
@@ -465,16 +794,33 @@ export function SplittersOperationalPriorityFab({
       return
     }
 
+    let conversationHistoryForRequest = assistantConversationHistory
+    let sessionNotice: string | null = null
+    if (assistantConversationHistory.length >= ISA_CONVERSATION_PROMPT_LIMIT) {
+      conversationHistoryForRequest = []
+      sessionNotice =
+        'A conversa anterior atingiu 20 prompts e foi reiniciada automaticamente antes desta nova pergunta.'
+      setAssistantConversationHistory([])
+      setAssistantReply(null)
+    }
+
     setAssistantLoading(true)
     setAssistantError(null)
+    setAssistantSessionNotice(sessionNotice)
+    setAssistantInput('')
     try {
       const reply = await fetchPlanningAssistantReplyFromLocalDb({
         message: trimmedMessage,
         splitterCode: assistantSplitterCode.trim() || undefined,
         straightRadiusMeters: 500,
         maxRouteMeters: 200,
+        conversationHistory: conversationHistoryForRequest,
       })
       setAssistantReply(reply)
+      setAssistantConversationHistory([
+        ...conversationHistoryForRequest,
+        buildAssistantConversationTurn(trimmedMessage, reply),
+      ])
     } catch (error) {
       setAssistantError(
         error instanceof Error ? error.message : 'Falha ao consultar a ISA.',
@@ -500,7 +846,17 @@ export function SplittersOperationalPriorityFab({
         <div
           className={cn(
           'pointer-events-none fixed z-[60] flex max-w-[calc(100vw-2rem)] flex-col gap-2.5 transition-[left,right,top,bottom,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-          isDockedOnSidebar ? 'w-[min(calc(100vw-2rem),20rem)] items-center' : 'w-[min(calc(100vw-2rem),42rem)]',
+          isDockedOnSidebar
+            ? 'w-[min(calc(100vw-2rem),20rem)] items-center'
+            : activePanel === 'assistant'
+              ? assistantUsesWideDesktopLayout
+                ? 'w-[min(calc(100vw-2rem),58rem)]'
+                : isDesktopLayout
+                  ? assistantHasActivity
+                    ? 'w-[min(calc(100vw-2rem),44rem)]'
+                    : 'w-[min(calc(100vw-2rem),28rem)]'
+                  : 'w-[min(calc(100vw-1rem),36rem)]'
+              : 'w-[min(calc(100vw-2rem),42rem)]',
           !isDockedOnSidebar && (isDesktopLayout ? 'items-start' : 'items-end'),
           filtersDrawerOpen
             ? 'bottom-[max(10rem,calc(env(safe-area-inset-bottom)+8rem))]'
@@ -840,7 +1196,7 @@ export function SplittersOperationalPriorityFab({
             aria-labelledby="splitters-assistant-fab-title"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-sky-100/90 bg-white/80 px-3.5 py-2.5">
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-sky-100/90 bg-white/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
               <h2
                 id="splitters-assistant-fab-title"
                 className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-sky-950"
@@ -857,281 +1213,337 @@ export function SplittersOperationalPriorityFab({
                 </button>
               </div>
 
-            <div className="max-h-[min(78vh,40rem)] overflow-x-hidden overflow-y-auto overscroll-contain px-3.5 py-3">
-              <div className="space-y-3">
-              <div className="rounded-xl border border-sky-100/90 bg-sky-50/70 px-3 py-2.5 text-[11px] leading-relaxed text-sky-950/95">
-                <p className="font-semibold">Modo restrito ao planejamento de rede</p>
-                <p className="mt-1">
-                  Este painel fica pronto para a conversa com a ISA usando Gemini pelo backend interno.
-                  O token nao sera exposto no browser.
-                </p>
-              </div>
+            <div className="max-h-[min(82dvh,44rem)] overflow-x-hidden overflow-y-auto overscroll-contain px-2.5 py-2.5 sm:px-3.5 sm:py-3">
+              <div
+                className={cn(
+                  'grid gap-3',
+                  assistantUsesWideDesktopLayout
+                    ? '2xl:grid-cols-[minmax(18rem,21rem)_minmax(0,1fr)]'
+                    : 'grid-cols-1',
+                )}
+              >
+                <div
+                  className={cn(
+                    'space-y-3',
+                    assistantUsesWideDesktopLayout && '2xl:sticky 2xl:top-0 2xl:self-start',
+                  )}
+                >
+                  <div className="space-y-3 rounded-xl border border-neutral-200/90 bg-white px-3 py-3 text-[11px] text-neutral-700 shadow-sm">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-900">
+                        <Bot size={15} strokeWidth={2} aria-hidden />
+                      </span>
+                      <div>
+                        <p className="font-semibold text-neutral-900">Consulta assistida por Gemini</p>
+                        <p className="mt-1 leading-relaxed">
+                          A ISA cruza contexto determinístico de rede e devolve uma análise mais objetiva
+                          para planejamento.
+                        </p>
+                      </div>
+                    </div>
 
-              <div className="space-y-3 rounded-xl border border-neutral-200/90 bg-white px-3 py-3 text-[11px] text-neutral-700 shadow-sm">
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-900">
-                    <Bot size={15} strokeWidth={2} aria-hidden />
-                  </span>
-                  <div>
-                    <p className="font-semibold text-neutral-900">Consulta assistida por Gemini</p>
-                    <p className="mt-1 leading-relaxed">
-                      A ISA consulta o backend interno com contexto determinístico de rede e devolve uma análise
-                      explicativa. O token fica só no servidor.
-                    </p>
-                  </div>
-                </div>
+                    <div className="rounded-xl border border-sky-100/90 bg-sky-50/75 px-3 py-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900/80">
+                            Conversa atual
+                          </p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90">
+                            A ISA reaproveita as perguntas anteriores desta conversa.
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-sky-200 bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-sky-950">
+                          {assistantPromptCount}/{ISA_CONVERSATION_PROMPT_LIMIT} prompts
+                        </span>
+                      </div>
+                      {assistantPromptCount > 0 ? (
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={handleAssistantResetConversation}
+                            className="text-[10px] font-semibold text-sky-900 transition hover:text-sky-950"
+                          >
+                            Reiniciar conversa
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
 
-                <label className="grid gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                    Código do splitter
-                  </span>
-                  <input
-                    value={assistantSplitterCode}
-                    onChange={(e) => setAssistantSplitterCode(e.target.value)}
-                    placeholder="Opcional. Ex.: SLE-C-1966-4-9-12/5 ou 10675"
-                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[12px] text-neutral-900 shadow-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-500/15"
-                  />
-                </label>
+                    <label className="grid gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Splitter
+                      </span>
+                      <input
+                        value={assistantSplitterCode}
+                        onChange={(e) => setAssistantSplitterCode(e.target.value)}
+                        placeholder="Opcional. Ex.: SLE-C-1966-4-9-12/5 ou 10675"
+                        className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[12px] text-neutral-900 shadow-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-500/15"
+                      />
+                    </label>
 
-                <label className="grid gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                    Pergunta ao assistente
-                  </span>
-                  <textarea
-                    value={assistantInput}
-                    onChange={(e) => setAssistantInput(e.target.value)}
-                    placeholder="Ex.: Este splitter realmente precisa expansão ou existe alternativa operacional?"
-                    rows={5}
-                    className="resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-neutral-900 shadow-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-500/15"
-                  />
-                </label>
+                    <label className="grid gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                        Pergunta ao assistente
+                      </span>
+                      <textarea
+                        value={assistantInput}
+                        onChange={(e) => setAssistantInput(e.target.value)}
+                        placeholder="Ex.: Este splitter realmente precisa expansão ou existe alternativa operacional?"
+                        rows={4}
+                        className="resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-neutral-900 shadow-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-500/15"
+                      />
+                    </label>
 
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleAssistantSubmit()
-                    }}
-                    disabled={assistantLoading}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-semibold text-sky-950 shadow-sm transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {assistantLoading ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                        Consultando ISA...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="size-4" aria-hidden />
-                        Perguntar à ISA
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800/80">
-                  Perguntas iniciais sugeridas
-                </p>
-                <div className="grid gap-2">
-                  {ISA_ASSISTANT_SUGGESTIONS.map((prompt) => (
                     <button
-                      key={prompt}
                       type="button"
-                      onClick={() => setAssistantInput(prompt)}
-                      className="rounded-xl border border-sky-200/85 bg-white px-3 py-2 text-left text-[11px] font-medium text-neutral-800 shadow-sm transition hover:bg-sky-50"
+                      onClick={() => {
+                        void handleAssistantSubmit()
+                      }}
+                      disabled={assistantLoading}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] font-semibold text-sky-950 shadow-sm transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      {prompt}
+                      {assistantLoading ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" aria-hidden />
+                          Consultando ISA...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="size-4" aria-hidden />
+                          Perguntar à ISA
+                        </>
+                      )}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {assistantError ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-relaxed text-rose-950">
-                  {assistantError}
-                </div>
-              ) : null}
-
-                {assistantReply && assistantDisplayStructured ? (
-                  <div className="space-y-2 rounded-xl border border-sky-200/85 bg-white px-3 py-3 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-sky-800/80">
-                      <span className="font-bold">Resposta da ISA</span>
-                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 normal-case tracking-normal text-sky-950">
-                      {assistantReply.model}
-                    </span>
-                    {assistantReply.contextPreview?.splitterCode ? (
-                      <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 normal-case tracking-normal text-neutral-700">
-                        Contexto: {assistantReply.contextPreview.splitterCode}
-                      </span>
-                    ) : null}
-                    {assistantDisplayStructured.gravidade ? (
-                      <span
-                        className={cn(
-                          'rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide',
-                          isaGravidadeBadgeClass(assistantDisplayStructured.gravidade),
-                        )}
-                      >
-                        Gravidade: {assistantDisplayStructured.gravidade}
-                      </span>
-                    ) : null}
-                    {assistantDisplayStructured.classificacao_geografica ? (
-                      <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-950">
-                        Geo:{' '}
-                        {assistantDisplayStructured.classificacao_geografica.replaceAll('_', ' ')}
-                      </span>
-                    ) : null}
-                    {assistantDisplayStructured.capilaridade ? (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-950">
-                        Capilaridade: {assistantDisplayStructured.capilaridade}
-                      </span>
-                    ) : null}
-                    {assistantDisplayStructured.confianca ? (
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-800">
-                        Confiança: {assistantDisplayStructured.confianca}
-                      </span>
-                    ) : null}
-                    {assistantDisplayStructured.score_operacional != null ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-950">
-                        Score operacional: {assistantDisplayStructured.score_operacional}
-                      </span>
-                    ) : null}
                   </div>
-                  <AssistantSection
-                    title="Conclusão"
-                    content={assistantDisplayStructured.conclusao}
-                    tone="info"
-                  />
-                  {assistantDisplayStructured.decisao_operacional ||
-                  assistantDisplayStructured.justificativa_decisao ||
-                  assistantDisplayStructured.acao_prioritaria ||
-                  assistantDisplayStructured.viabilidade_remanejo ||
-                  assistantDisplayStructured.viabilidade_expansao ? (
-                    <div className="rounded-xl border border-indigo-200/90 bg-indigo-50/50 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-800">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-950/90">
-                        Decisão operacional
-                      </p>
-                      {assistantDisplayStructured.decisao_operacional ? (
-                        <p className="mt-1.5 font-semibold text-indigo-950">
-                          {assistantDisplayStructured.decisao_operacional.replaceAll('_', ' ')}
-                        </p>
-                      ) : null}
-                      <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-indigo-950/90">
-                        {assistantDisplayStructured.viabilidade_remanejo ? (
-                          <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
-                            Remanejo: {assistantDisplayStructured.viabilidade_remanejo}
-                          </span>
-                        ) : null}
-                        {assistantDisplayStructured.viabilidade_expansao ? (
-                          <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
-                            Expansão: {assistantDisplayStructured.viabilidade_expansao}
-                          </span>
-                        ) : null}
-                      </div>
-                      {assistantDisplayStructured.justificativa_decisao ? (
-                        <p className="mt-1.5">
-                          <span className="font-semibold text-neutral-700">Justificativa:</span>{' '}
-                          {assistantDisplayStructured.justificativa_decisao}
-                        </p>
-                      ) : null}
-                      {assistantDisplayStructured.acao_prioritaria ? (
-                        <p className="mt-1.5">
-                          <span className="font-semibold text-neutral-700">Ação prioritária:</span>{' '}
-                          {assistantDisplayStructured.acao_prioritaria}
-                        </p>
-                      ) : null}
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800/80">
+                      Perguntas iniciais sugeridas
+                    </p>
+                    <div className="grid gap-2">
+                      {ISA_ASSISTANT_SUGGESTIONS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setAssistantInput(prompt)}
+                          className="rounded-xl border border-sky-200/85 bg-white px-3 py-2 text-left text-[11px] font-medium text-neutral-800 shadow-sm transition hover:bg-sky-50"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
                     </div>
-                  ) : null}
-                  <AssistantSection
-                    title="Justificativa do score operacional"
-                    content={assistantDisplayStructured.justificativa_score}
-                  />
-                  {assistantDisplayStructured.distancia_operacional ||
-                  assistantDisplayStructured.distancia_cruzamento ||
-                  assistantDisplayStructured.angulo_vias ? (
-                    <div className="rounded-xl border border-sky-100/90 bg-sky-50/40 px-3 py-2 text-[11px] leading-snug text-neutral-800">
-                      <p className="mb-1 font-semibold text-sky-950">Distância e geometria (estimativa)</p>
-                      {assistantDisplayStructured.distancia_operacional ? (
-                        <p>
-                          <span className="text-neutral-500">Operacional:</span>{' '}
-                          {assistantDisplayStructured.distancia_operacional}
-                        </p>
-                      ) : null}
-                      {assistantDisplayStructured.distancia_cruzamento ? (
-                        <p>
-                          <span className="text-neutral-500">Até cruzamento:</span>{' '}
-                          {assistantDisplayStructured.distancia_cruzamento}
-                        </p>
-                      ) : null}
-                      {assistantDisplayStructured.angulo_vias ? (
-                        <p>
-                          <span className="text-neutral-500">Ângulo entre vias:</span>{' '}
-                          {assistantDisplayStructured.angulo_vias}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <AssistantSection
-                    title="Ruas identificadas"
-                    items={assistantDisplayStructured.ruas_identificadas}
-                  />
-                  <AssistantSection
-                    title="Atendimento prioritário (ruas)"
-                    items={assistantDisplayStructured.atendimento_prioritario}
-                  />
-                  {assistantDisplayStructured.ctos_vizinhas_analisadas.length > 0 ? (
-                    <div className="rounded-xl border border-violet-200/90 bg-violet-50/40 px-3 py-2.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90">
-                        CTOs vizinhas analisadas
-                      </p>
-                      <div className="mt-2 overflow-x-auto">
-                        <table className="w-full min-w-[28rem] border-collapse text-left text-[10px] text-neutral-800">
-                          <thead>
-                            <tr className="border-b border-violet-200/80 text-[9px] uppercase tracking-wide text-violet-900/80">
-                              <th className="py-1 pr-2 font-semibold">CTO</th>
-                              <th className="py-1 pr-2 font-semibold">Dist. op.</th>
-                              <th className="py-1 pr-2 font-semibold">Ocup.</th>
-                              <th className="py-1 pr-2 font-semibold">Livre</th>
-                              <th className="py-1 pr-2 font-semibold">Geo</th>
-                              <th className="py-1 font-semibold">Viab.</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {assistantDisplayStructured.ctos_vizinhas_analisadas.map((row, idx) => (
-                              <tr
-                                key={`${idx}:${row.cto}`}
-                                className="border-b border-violet-100/90 align-top last:border-0"
-                              >
-                                <td className="py-1.5 pr-2 font-medium text-neutral-900">{row.cto}</td>
-                                <td className="py-1.5 pr-2">{row.distancia_operacional}</td>
-                                <td className="py-1.5 pr-2">{row.ocupacao}</td>
-                                <td className="py-1.5 pr-2">{row.capacidade_livre}</td>
-                                <td className="py-1.5 pr-2">
-                                  {row.classificacao_geografica.replaceAll('_', ' ')}
-                                </td>
-                                <td className="py-1.5">{row.viabilidade || '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : null}
-                  <AssistantSection
-                    title="Fatores considerados"
-                    items={assistantDisplayStructured.fatores}
-                  />
-                  <AssistantSection title="Evidências" items={assistantDisplayStructured.evidencias} />
-                  <AssistantSection title="Inferências" items={assistantDisplayStructured.inferencias} />
-                  <AssistantSection title="Riscos" items={assistantDisplayStructured.riscos} />
-                  <AssistantSection title="Lacunas" items={assistantDisplayStructured.lacunas} />
-                  <AssistantSection
-                    title="Recomendação prática"
-                    content={assistantDisplayStructured.recomendacao}
+                  </div>
+
+                  <AssistantConversationHistoryPreview
+                    history={assistantConversationHistory}
                   />
                 </div>
-              ) : null}
+
+                {assistantHasActivity ? (
+                  <div className="min-w-0 space-y-3">
+                  {assistantSessionNotice ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-950">
+                      {assistantSessionNotice}
+                    </div>
+                  ) : null}
+
+                  {assistantLimitWarning ? (
+                    <div
+                      className={cn(
+                        'rounded-xl border px-3 py-2 text-[11px] leading-relaxed',
+                        assistantLimitWarning.tone === 'info'
+                          ? 'border-sky-200 bg-sky-50 text-sky-950'
+                          : assistantLimitWarning.tone === 'warning'
+                            ? 'border-amber-200 bg-amber-50 text-amber-950'
+                            : 'border-rose-200 bg-rose-50 text-rose-950',
+                      )}
+                    >
+                      {assistantLimitWarning.message}
+                    </div>
+                  ) : null}
+
+                  {assistantError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] leading-relaxed text-rose-950">
+                      {assistantError}
+                    </div>
+                  ) : null}
+
+                  {assistantLoading ? (
+                    <AssistantThinkingState
+                      splitterCode={assistantSplitterCode}
+                      question={assistantInput}
+                    />
+                  ) : null}
+
+                  {hasAssistantResponse && assistantDisplayStructured ? (
+                    <div className="space-y-3 rounded-xl border border-sky-200/85 bg-white px-3 py-3 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-sky-800/80">
+                        <span className="font-bold">Resposta da ISA</span>
+                        <AssistantMetaPill
+                          label="Modelo"
+                          value={assistantReply.model}
+                          className="border-sky-200 bg-sky-50 text-sky-950 normal-case tracking-normal"
+                        />
+                        <AssistantMetaPill
+                          label="Contexto"
+                          value={
+                            assistantReply.contextPreview?.splitterTitle ||
+                            assistantReply.contextPreview?.splitterCode
+                          }
+                          className="border-neutral-200 bg-neutral-50 text-neutral-700 normal-case tracking-normal"
+                        />
+                        <AssistantMetaPill
+                          label="Gravidade"
+                          value={assistantDisplayStructured.gravidade}
+                          className={isaGravidadeBadgeClass(assistantDisplayStructured.gravidade)}
+                        />
+                        <AssistantMetaPill
+                          label="Geo"
+                          value={assistantDisplayStructured.classificacao_geografica.replaceAll('_', ' ')}
+                          className="border-violet-200 bg-violet-50 text-violet-950"
+                        />
+                        <AssistantMetaPill
+                          label="Capilaridade"
+                          value={assistantDisplayStructured.capilaridade}
+                          className={isaCapilaridadeBadgeClass(assistantDisplayStructured.capilaridade)}
+                        />
+                        <AssistantMetaPill
+                          label="Confiança"
+                          value={assistantDisplayStructured.confianca}
+                          className="border-slate-200 bg-slate-50 text-slate-800"
+                        />
+                        <AssistantMetaPill
+                          label="Score"
+                          value={assistantDisplayStructured.score_operacional}
+                          className="border-amber-200 bg-amber-50 text-amber-950"
+                        />
+                      </div>
+
+                      <AssistantSection
+                        title="Conclusão"
+                        content={assistantDisplayStructured.conclusao}
+                        tone="info"
+                      />
+
+                      {assistantDisplayStructured.decisao_operacional ||
+                      assistantDisplayStructured.justificativa_decisao ||
+                      assistantDisplayStructured.acao_prioritaria ||
+                      assistantDisplayStructured.viabilidade_remanejo ||
+                      assistantDisplayStructured.viabilidade_expansao ? (
+                        <div className="rounded-xl border border-indigo-200/90 bg-indigo-50/50 px-3 py-2.5 text-[11px] leading-relaxed text-neutral-800">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-950/90">
+                            Decisão operacional
+                          </p>
+                          {assistantDisplayStructured.decisao_operacional ? (
+                            <p className="mt-1.5 font-semibold text-indigo-950">
+                              {assistantDisplayStructured.decisao_operacional.replaceAll('_', ' ')}
+                            </p>
+                          ) : null}
+                          <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-indigo-950/90">
+                            {assistantDisplayStructured.viabilidade_remanejo ? (
+                              <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
+                                Remanejo: {assistantDisplayStructured.viabilidade_remanejo}
+                              </span>
+                            ) : null}
+                            {assistantDisplayStructured.viabilidade_expansao ? (
+                              <span className="rounded-full border border-indigo-200 bg-white/80 px-2 py-0.5">
+                                Expansão: {assistantDisplayStructured.viabilidade_expansao}
+                              </span>
+                            ) : null}
+                          </div>
+                          {assistantDisplayStructured.justificativa_decisao ? (
+                            <p className="mt-1.5">
+                              <span className="font-semibold text-neutral-700">Justificativa:</span>{' '}
+                              {assistantDisplayStructured.justificativa_decisao}
+                            </p>
+                          ) : null}
+                          {assistantDisplayStructured.acao_prioritaria ? (
+                            <p className="mt-1.5">
+                              <span className="font-semibold text-neutral-700">Ação prioritária:</span>{' '}
+                              {assistantDisplayStructured.acao_prioritaria}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <AssistantMetricCard
+                          label="Distância operacional"
+                          value={assistantDisplayStructured.distancia_operacional}
+                        />
+                        <AssistantMetricCard
+                          label="Até cruzamento"
+                          value={assistantDisplayStructured.distancia_cruzamento}
+                          tone="violet"
+                        />
+                        <AssistantMetricCard
+                          label="Ângulo entre vias"
+                          value={assistantDisplayStructured.angulo_vias}
+                          tone="emerald"
+                        />
+                      </div>
+
+                      <AssistantSection
+                        title="Justificativa do score operacional"
+                        content={assistantDisplayStructured.justificativa_score}
+                      />
+
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <AssistantSection
+                          title="Ruas identificadas"
+                          items={assistantDisplayStructured.ruas_identificadas}
+                        />
+                        <AssistantSection
+                          title="Atendimento prioritário"
+                          items={assistantDisplayStructured.atendimento_prioritario}
+                        />
+                      </div>
+
+                      <AssistantNeighborCards
+                        rows={assistantDisplayStructured.ctos_vizinhas_analisadas}
+                      />
+
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <AssistantSection
+                          title="Fatores considerados"
+                          items={assistantDisplayStructured.fatores}
+                        />
+                        <AssistantSection
+                          title="Evidências"
+                          items={assistantDisplayStructured.evidencias}
+                        />
+                        <AssistantSection
+                          title="Inferências"
+                          items={assistantDisplayStructured.inferencias}
+                        />
+                        <AssistantSection
+                          title="Riscos"
+                          items={assistantDisplayStructured.riscos}
+                        />
+                        <AssistantSection
+                          title="Lacunas"
+                          items={assistantDisplayStructured.lacunas}
+                        />
+                        <AssistantSection
+                          title="Recomendação prática"
+                          content={assistantDisplayStructured.recomendacao}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    !assistantLoading &&
+                    !assistantError && (
+                      <div className="rounded-xl border border-dashed border-sky-200/90 bg-white/70 px-4 py-5 text-[12px] leading-relaxed text-neutral-600 shadow-sm">
+                        <p className="font-semibold text-neutral-900">A resposta da ISA aparece aqui</p>
+                        <p className="mt-1">
+                          Use uma pergunta objetiva sobre o splitter ou sobre planejamento de rede para
+                          receber uma leitura estruturada, com decisão operacional, ruas e CTOs vizinhas.
+                        </p>
+                      </div>
+                    )
+                  )}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

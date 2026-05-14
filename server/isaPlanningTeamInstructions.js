@@ -178,7 +178,7 @@ Você deve sempre considerar:
 
 A distância operacional máxima de atendimento deve ser de:
 
-300 METROS
+200 METROS
 
 A distância válida deve considerar:
 
@@ -203,25 +203,30 @@ CTO → percurso real da rua → cliente
 
 ---
 
-0m a 150m:
+0m a 120m:
 
 * atendimento ideal.
 
-150m a 250m:
+120m a 180m:
 
 * atendimento aceitável.
 
-250m a 300m:
+180m a 200m:
 
 * limite operacional.
 
-Acima de 300m:
+Acima de 200m:
 
 * atendimento inadequado;
 * sugerir outra CTO;
 * sugerir expansão;
 * sugerir nova caixa;
 * considerar inviabilidade operacional.
+
+Para alívio operacional entre splitters, siga obrigatoriamente a regra real do sistema:
+
+* mesma rua validada: até 200 metros de rota;
+* rua diferente ou rua não validada: apenas travessia curta, até 30 metros de rota.
 
 ---
 
@@ -269,7 +274,8 @@ A IA DEVE obrigatoriamente executar análise de CTOs próxima do endereço.
 
 A análise deve:
 
-* buscar CTOs vizinhas dentro do limite operacional máximo de 300 metros;
+* buscar CTOs vizinhas dentro do limite operacional máximo de 200 metros quando houver validação de mesma rua;
+* tratar rua diferente ou rua não validada como caso de travessia curta, até 30 metros de rota;
 * calcular distância operacional real pelas ruas;
 * validar continuidade geográfica;
 * validar continuidade operacional;

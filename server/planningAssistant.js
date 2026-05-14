@@ -265,36 +265,215 @@ function stripInternalSplitterNumericIds(text, context) {
   return s;
 }
 
+function escapeRegex(text) {
+  return String(text ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildEquipmentLabelEntries(context) {
+  const entries = new Map();
+  const register = (code, title) => {
+    const codeText = toCleanString(code);
+    const titleText = toCleanString(title);
+    if (!codeText || !titleText || codeText === titleText) return;
+    entries.set(codeText, titleText);
+  };
+
+  register(context?.splitter?.code, context?.splitter?.title);
+  register(
+    context?.reliefEvaluation?.reliefNeighborCode,
+    context?.reliefEvaluation?.reliefNeighborTitle,
+  );
+
+  for (const neighbor of Array.isArray(context?.neighborsSample) ? context.neighborsSample : []) {
+    register(neighbor?.code, neighbor?.title);
+  }
+
+  return [...entries.entries()].sort((a, b) => b[0].length - a[0].length);
+}
+
+function preferEquipmentNomenclature(text, context) {
+  let s = String(text ?? '').trim();
+  if (!s || !context) return s;
+
+  for (const [code, label] of buildEquipmentLabelEntries(context)) {
+    const codeRx = escapeRegex(code);
+    s = s.replace(new RegExp(`\\(\\s*c[oó]digo\\s+${codeRx}\\s*\\)`, 'gi'), '');
+    s = s.replace(new RegExp(`\\bc[oó]digo\\s+${codeRx}\\b`, 'gi'), label);
+    s = s.replace(new RegExp(`\\bCTO\\s+${codeRx}\\b`, 'gi'), label);
+    s = s.replace(new RegExp(`\\bsplitter\\s+${codeRx}\\b`, 'gi'), `splitter ${label}`);
+    s = s.replace(new RegExp(`\\b${codeRx}\\b`, 'g'), label);
+  }
+
+  return s
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+,/g, ',')
+    .replace(/\(\s*,/g, '(')
+    .trim();
+}
+
+function metricFieldLooksOverstuffed(value) {
+  const text = toCleanString(value);
+  if (!text) return false;
+  if (/^(?:n\/?a|nao aplicavel|não aplicável|null)$/i.test(text)) return false;
+
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const sentences = (text.match(/[.!?]/g) || []).length;
+
+  if (text.length > 140) return true;
+  if (sentences > 1) return true;
+
+  return [
+    'a pontuacao',
+    'considerar as ctos',
+    'monitorar a ocupacao',
+    'evidencias',
+    'inferencias',
+    'riscos',
+    'lacunas',
+    'recomendacao',
+    'o splitter apresenta',
+    'existem ctos vizinhas',
+  ].some((token) => normalized.includes(token));
+}
+
+function normalizeCompactMetricField(value, fallback = 'N/A') {
+  const text = toCleanString(value);
+  if (!text) return '';
+  if (/^(?:n\/?a|nao aplicavel|não aplicável|null)\b/i.test(text)) return 'N/A';
+
+  const firstSentence = toCleanString(extractFirstSentence(text));
+  if (firstSentence && !metricFieldLooksOverstuffed(firstSentence) && firstSentence.length <= 120) {
+    return firstSentence;
+  }
+
+  const metricSnippet = text.match(
+    /\b(?:cerca de|aprox(?:\.|imadamente)?|aproximadamente)?\s*\d+\s*m\b[^.!?]{0,60}/i,
+  );
+  if (metricSnippet?.[0]) {
+    return toCleanString(metricSnippet[0]);
+  }
+
+  return fallback;
+}
+
+function normalizeComparableText(value) {
+  return toCleanString(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function dedupeAndLimitList(items, maxItems) {
+  const out = [];
+  const seen = new Set();
+  for (const item of Array.isArray(items) ? items : []) {
+    const cleaned = toCleanString(item);
+    if (!cleaned) continue;
+    const key = normalizeComparableText(cleaned);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(cleaned);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+function compactNarrative(value, options = {}) {
+  const maxSentences = Math.max(Number(options.maxSentences ?? 2) || 2, 1);
+  const maxChars = Math.max(Number(options.maxChars ?? 320) || 320, 80);
+  const cleaned = toCleanString(value);
+  if (!cleaned) return '';
+  if (cleaned.length <= maxChars && (cleaned.match(/[.!?]/g) || []).length <= maxSentences) {
+    return cleaned;
+  }
+
+  const parts = cleaned.match(/[^.!?]+[.!?]?/g) ?? [cleaned];
+  const out = [];
+  const seen = new Set();
+  let used = 0;
+
+  for (const part of parts) {
+    const sentence = toCleanString(part);
+    if (!sentence) continue;
+    const key = normalizeComparableText(sentence);
+    if (!key || seen.has(key)) continue;
+    const projected = used === 0 ? sentence.length : used + 1 + sentence.length;
+    if (projected > maxChars && out.length > 0) break;
+    seen.add(key);
+    out.push(sentence);
+    used = projected;
+    if (out.length >= maxSentences) break;
+  }
+
+  const result = toCleanString(out.join(' ')) || cleaned.slice(0, maxChars).trim();
+  return /[.!?…]$/.test(result) ? result : `${result}.`;
+}
+
+function buildDeterministicOperationalDistance(context) {
+  const reliefMeters = context?.reliefEvaluation?.reliefNeighborRouteMeters;
+  if (reliefMeters != null && Number.isFinite(Number(reliefMeters))) {
+    return `Cerca de ${Math.round(Number(reliefMeters))} m pela rota até o melhor alívio identificado.`;
+  }
+
+  const best = buildOperationalDecisionContext(context)?.melhorCandidatoRemanejamento;
+  const bestMeters = best?.distanciaRotaMetros;
+  if (bestMeters != null && Number.isFinite(Number(bestMeters))) {
+    return `Melhor candidato da amostra a cerca de ${Math.round(Number(bestMeters))} m de rota.`;
+  }
+
+  return 'N/A';
+}
+
 function repairStructuredPlanningAnswer(structured, context = null) {
   const strip = (raw) => {
     const r = repairUtf8Mojibake(toCleanString(raw));
-    return context ? stripInternalSplitterNumericIds(r, context) : r;
+    if (!context) return r;
+    return preferEquipmentNomenclature(stripInternalSplitterNumericIds(r, context), context);
   };
   const stripList = (arr) =>
     toStringList(arr).map((item) => {
       const r = repairUtf8Mojibake(item);
-      return context ? stripInternalSplitterNumericIds(r, context) : r;
+      if (!context) return r;
+      return preferEquipmentNomenclature(stripInternalSplitterNumericIds(r, context), context);
     });
 
-  const fatores = stripList(structured?.fatores);
-  const evidencias = stripList(structured?.evidencias);
-  const inferencias = stripList(structured?.inferencias);
-  const riscos = stripList(structured?.riscos);
-  const lacunas = stripList(structured?.lacunas);
-  const ruasIdentificadas = stripList(structured?.ruas_identificadas);
-  const atendimentoPrioritario = stripList(structured?.atendimento_prioritario);
+  const fatores = dedupeAndLimitList(stripList(structured?.fatores), 6);
+  const evidencias = dedupeAndLimitList(stripList(structured?.evidencias), 5);
+  const inferencias = dedupeAndLimitList(stripList(structured?.inferencias), 4);
+  const riscos = dedupeAndLimitList(stripList(structured?.riscos), 4);
+  const lacunas = dedupeAndLimitList(stripList(structured?.lacunas), 4);
+  const ruasIdentificadas = dedupeAndLimitList(stripList(structured?.ruas_identificadas), 5);
+  const atendimentoPrioritario = dedupeAndLimitList(
+    stripList(structured?.atendimento_prioritario),
+    5,
+  );
+  const distanciaOperacional = normalizeCompactMetricField(
+    strip(structured?.distancia_operacional),
+    context ? buildDeterministicOperationalDistance(context) : 'N/A',
+  );
+  const distanciaCruzamento = normalizeCompactMetricField(strip(structured?.distancia_cruzamento));
+  const anguloVias = normalizeCompactMetricField(strip(structured?.angulo_vias));
 
   return {
-    conclusao: strip(structured?.conclusao),
+    conclusao: compactNarrative(strip(structured?.conclusao), {
+      maxSentences: 3,
+      maxChars: 720,
+    }),
     gravidade: normalizeGravidade(repairUtf8Mojibake(toCleanString(structured?.gravidade))),
     classificacao_geografica: normalizeClassificacaoGeografica(
       repairUtf8Mojibake(toCleanString(structured?.classificacao_geografica)),
     ),
     confianca: repairUtf8Mojibake(toCleanString(structured?.confianca)),
     capilaridade: normalizeCapilaridadeIsa(repairUtf8Mojibake(toCleanString(structured?.capilaridade))),
-    distancia_operacional: strip(structured?.distancia_operacional),
-    distancia_cruzamento: strip(structured?.distancia_cruzamento),
-    angulo_vias: strip(structured?.angulo_vias),
+    distancia_operacional: distanciaOperacional,
+    distancia_cruzamento: distanciaCruzamento,
+    angulo_vias: anguloVias,
     decisao_operacional: normalizeDecisaoOperacional(structured?.decisao_operacional),
     viabilidade_remanejo: normalizeCapilaridadeIsa(
       repairUtf8Mojibake(toCleanString(structured?.viabilidade_remanejo)),
@@ -302,14 +481,25 @@ function repairStructuredPlanningAnswer(structured, context = null) {
     viabilidade_expansao: normalizeCapilaridadeIsa(
       repairUtf8Mojibake(toCleanString(structured?.viabilidade_expansao)),
     ),
-    justificativa_decisao: strip(structured?.justificativa_decisao),
-    acao_prioritaria: strip(structured?.acao_prioritaria),
+    justificativa_decisao: compactNarrative(strip(structured?.justificativa_decisao), {
+      maxSentences: 2,
+      maxChars: 360,
+    }),
+    acao_prioritaria: compactNarrative(strip(structured?.acao_prioritaria), {
+      maxSentences: 2,
+      maxChars: 220,
+    }),
     ruas_identificadas: ruasIdentificadas,
     atendimento_prioritario: atendimentoPrioritario,
     score_operacional: normalizeScoreOperacional(structured?.score_operacional),
-    justificativa_score: strip(structured?.justificativa_score),
-    ctos_vizinhas_analisadas: normalizeCtrosVizinhasAnalisadas(structured?.ctos_vizinhas_analisadas).map(
-      (row) => ({
+    justificativa_score: compactNarrative(strip(structured?.justificativa_score), {
+      maxSentences: 3,
+      maxChars: 420,
+    }),
+    ctos_vizinhas_analisadas: normalizeCtrosVizinhasAnalisadas(
+      structured?.ctos_vizinhas_analisadas,
+    )
+      .map((row) => ({
         ...row,
         cto: strip(row.cto),
         distancia_operacional: strip(row.distancia_operacional),
@@ -331,14 +521,17 @@ function repairStructuredPlanningAnswer(structured, context = null) {
               )
             : repairUtf8Mojibake(toCleanString(row.viabilidade)),
         ),
-      }),
-    ),
+      }))
+      .slice(0, 4),
     fatores,
     evidencias,
     inferencias,
     riscos,
     lacunas,
-    recomendacao: strip(structured?.recomendacao),
+    recomendacao: compactNarrative(strip(structured?.recomendacao), {
+      maxSentences: 2,
+      maxChars: 360,
+    }),
   };
 }
 
@@ -979,6 +1172,11 @@ function buildOperationalDecisionContext(context) {
   const splitter = context?.splitter ?? null;
   const relief = context?.reliefEvaluation ?? null;
   const neighbors = Array.isArray(context?.neighborsSample) ? context.neighborsSample : [];
+  const maxRoute = Math.max(Number(context?.reliefRule?.maxRouteMeters ?? 0) || 0, 0);
+  const crossStreetMax = Math.max(
+    Number(context?.reliefRule?.crossStreetMaxRouteMeters ?? 0) || 0,
+    0,
+  );
 
   if (!splitter?.found) {
     return {
@@ -988,9 +1186,12 @@ function buildOperationalDecisionContext(context) {
       osrmOkParaAvaliarVizinhos: false,
       quantidadeVizinhosNaAmostra: 0,
       vizinhosComPortaLivreNaAmostra: 0,
+      vizinhosComPortaLivreDentroDaRegra: 0,
       somaPortasLivresVizinhosNaAmostra: 0,
+      somaPortasLivresDentroDaRegra: 0,
       melhorCandidatoRemanejamento: null,
       candidatosRemanejamentoOrdenados: [],
+      melhoresAlternativasForaDaRegra: [],
       nota: 'Splitter nao encontrado no contexto; demais campos nao aplicaveis.',
     };
   }
@@ -1010,8 +1211,20 @@ function buildOperationalDecisionContext(context) {
           ? null
           : Math.round(Number(n.routeMeters));
       const linha = Number(n?.straightMeters ?? 0);
+      const identificacao = toCleanString(n?.title) || toCleanString(n?.code);
+      const mesmaRua = Boolean(n?.sameStreet);
+      const limiteAplicadoMetros =
+        maxRoute <= 0
+          ? null
+          : mesmaRua
+            ? maxRoute
+            : crossStreetMax > 0
+              ? Math.min(maxRoute, crossStreetMax)
+              : maxRoute;
+      const dentroDaRegraAlivio =
+        rm != null && limiteAplicadoMetros != null ? rm <= limiteAplicadoMetros : false;
       return {
-        codigo: toCleanString(n?.code),
+        identificacao,
         titulo: toCleanString(n?.title),
         rua: toCleanString(n?.street),
         portasLivres: livres,
@@ -1019,12 +1232,15 @@ function buildOperationalDecisionContext(context) {
         portasOcupadas: bc,
         distanciaRotaMetros: rm,
         distanciaLinhaRetaMetros: Number.isFinite(linha) && linha > 0 ? Math.round(linha) : null,
-        mesmaRua: Boolean(n?.sameStreet),
+        mesmaRua,
+        limiteAplicadoMetros,
+        dentroDaRegraAlivio,
       };
     })
-    .filter((n) => n.portasLivres > 0 && n.codigo !== '');
+    .filter((n) => n.portasLivres > 0 && n.identificacao !== '');
 
   candidatos.sort((a, b) => {
+    if (a.dentroDaRegraAlivio !== b.dentroDaRegraAlivio) return a.dentroDaRegraAlivio ? -1 : 1;
     if (a.mesmaRua !== b.mesmaRua) return a.mesmaRua ? -1 : 1;
     const ra = a.distanciaRotaMetros;
     const rb = b.distanciaRotaMetros;
@@ -1036,7 +1252,17 @@ function buildOperationalDecisionContext(context) {
     return la - lb;
   });
 
-  const ordenados = candidatos.slice(0, 5).map((row) => {
+  const candidatosDentroDaRegra = candidatos.filter((row) => row.dentroDaRegraAlivio);
+  const candidatosForaDaRegra = candidatos.filter((row) => !row.dentroDaRegraAlivio);
+
+  const ordenados = candidatosDentroDaRegra.slice(0, 5).map((row) => {
+    const { distanciaLinhaRetaMetros, ...pub } = row;
+    return {
+      ...pub,
+      ...(distanciaLinhaRetaMetros != null ? { distanciaLinhaRetaMetros } : {}),
+    };
+  });
+  const alternativasForaDaRegra = candidatosForaDaRegra.slice(0, 3).map((row) => {
     const { distanciaLinhaRetaMetros, ...pub } = row;
     return {
       ...pub,
@@ -1045,6 +1271,7 @@ function buildOperationalDecisionContext(context) {
   });
 
   const somaLivres = candidatos.reduce((acc, n) => acc + n.portasLivres, 0);
+  const somaLivresDentroDaRegra = candidatosDentroDaRegra.reduce((acc, n) => acc + n.portasLivres, 0);
 
   return {
     equipamentoReferenciaLotado: equipamentoReferenciaLotado,
@@ -1053,11 +1280,14 @@ function buildOperationalDecisionContext(context) {
     osrmOkParaAvaliarVizinhos: Boolean(relief?.routingOk),
     quantidadeVizinhosNaAmostra: neighbors.length,
     vizinhosComPortaLivreNaAmostra: candidatos.length,
+    vizinhosComPortaLivreDentroDaRegra: candidatosDentroDaRegra.length,
     somaPortasLivresVizinhosNaAmostra: somaLivres,
+    somaPortasLivresDentroDaRegra: somaLivresDentroDaRegra,
     melhorCandidatoRemanejamento: ordenados[0] ?? null,
     candidatosRemanejamentoOrdenados: ordenados,
+    melhoresAlternativasForaDaRegra: alternativasForaDaRegra,
     nota:
-      'Calculado no servidor a partir da amostra de vizinhos (ate 8) e das mesmas rotas OSRM usadas em alivio; nao inclui Homes Passed, largura de via nem clientes fora da amostra.',
+      'Calculado no servidor a partir da amostra de vizinhos (ate 8) e das mesmas rotas OSRM usadas em alivio. MelhorCandidatoRemanejamento so considera candidatos dentro da regra vigente; alternativas fora da regra ficam separadas.',
   };
 }
 
@@ -1077,7 +1307,7 @@ function describeReliefTargetForUser(context) {
   const title = toCleanString(relief.reliefNeighborTitle);
   const rm = relief.reliefNeighborRouteMeters;
   if (code || title) {
-    const main = title && code ? `${title} (${code})` : title || code;
+    const main = title || code;
     const routePart =
       rm != null && Number.isFinite(Number(rm))
         ? ` — rota a pé estimada em cerca de ${Math.round(Number(rm))} m`
@@ -1087,8 +1317,8 @@ function describeReliefTargetForUser(context) {
 
   const metrics = buildOperationalDecisionContext(context);
   const best = metrics?.melhorCandidatoRemanejamento;
-  if (best?.codigo) {
-    const label = toCleanString(best.titulo) ? `${toCleanString(best.titulo)} (${best.codigo})` : best.codigo;
+  if (best?.identificacao) {
+    const label = best.identificacao;
     const rm2 = best.distanciaRotaMetros;
     const route2 =
       rm2 != null && Number.isFinite(Number(rm2)) ? ` — rota cerca de ${Math.round(Number(rm2))} m` : '';
@@ -1113,7 +1343,7 @@ function buildCompactPlanningContext(context) {
     splitter: splitter
       ? {
           encontrado: Boolean(splitter?.found),
-          codigo: toCleanString(splitter?.code),
+          identificacao: toCleanString(splitter?.title) || toCleanString(splitter?.code),
           titulo: toCleanString(splitter?.title),
           rua: toCleanString(splitter?.street),
           bairro: toCleanString(splitter?.neighborhood),
@@ -1150,7 +1380,9 @@ function buildCompactPlanningContext(context) {
           vizinhoAlivioPrincipal:
             toCleanString(relief?.reliefNeighborCode) || toCleanString(relief?.reliefNeighborTitle)
               ? {
-                  codigo: toCleanString(relief?.reliefNeighborCode),
+                  identificacao:
+                    toCleanString(relief?.reliefNeighborTitle) ||
+                    toCleanString(relief?.reliefNeighborCode),
                   titulo: toCleanString(relief?.reliefNeighborTitle),
                   rotaMetros:
                     relief?.reliefNeighborRouteMeters == null ||
@@ -1209,24 +1441,101 @@ function buildCompactPlanningContext(context) {
       : null,
     vizinhosAmostra: Array.isArray(context?.neighborsSample)
       ? context.neighborsSample.slice(0, 5).map((neighbor) => ({
-          codigo: toCleanString(neighbor?.code),
+          identificacao: toCleanString(neighbor?.title) || toCleanString(neighbor?.code),
           titulo: toCleanString(neighbor?.title),
           rua: toCleanString(neighbor?.street),
           portasTotais: Number(neighbor?.outPorts ?? 0),
           portasOcupadas: Number(neighbor?.busyCount ?? 0),
           distanciaRotaMetros: Number(neighbor?.routeMeters ?? 0),
           mesmaRua: Boolean(neighbor?.sameStreet),
+          limiteRotaAplicadoMetros: Boolean(neighbor?.sameStreet)
+            ? Number(context?.reliefRule?.maxRouteMeters ?? 0)
+            : Number(context?.reliefRule?.crossStreetMaxRouteMeters ?? 0),
+          dentroDaRegraAlivio: Boolean(
+            neighbor?.routeMeters != null &&
+              Number.isFinite(Number(neighbor.routeMeters)) &&
+              Number(neighbor.routeMeters) <=
+                (Boolean(neighbor?.sameStreet)
+                  ? Number(context?.reliefRule?.maxRouteMeters ?? 0)
+                  : Number(context?.reliefRule?.crossStreetMaxRouteMeters ?? 0)),
+          ),
         }))
       : [],
     metricas_decisao_sistema: buildOperationalDecisionContext(context),
   };
 }
 
-function buildUserPrompt({ question, context, responseMode = 'json', promptSections = null }) {
+function limitPromptField(value, maxLen = 240) {
+  const text = toCleanString(value).replace(/\s+/g, ' ');
+  if (text.length <= maxLen) return text;
+  return `${text.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+function normalizeConversationHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .map((turn) => ({
+      userPrompt: limitPromptField(turn?.userPrompt, 220),
+      assistantSummary: {
+        conclusao: limitPromptField(turn?.assistantSummary?.conclusao, 260),
+        decisao_operacional: normalizeDecisaoOperacional(
+          turn?.assistantSummary?.decisao_operacional,
+        ),
+        acao_prioritaria: limitPromptField(turn?.assistantSummary?.acao_prioritaria, 180),
+        recomendacao: limitPromptField(turn?.assistantSummary?.recomendacao, 180),
+      },
+    }))
+    .filter((turn) => turn.userPrompt !== '')
+    .slice(-20);
+}
+
+function buildConversationHistoryPrompt(history) {
+  const normalized = normalizeConversationHistory(history);
+  if (normalized.length === 0) return [];
+
+  const lines = [
+    '',
+    'Histórico resumido da conversa atual (ordem cronológica):',
+    'Use esse histórico apenas para manter continuidade. Se houver conflito com o contexto estruturado atual do sistema, prevalece o contexto estruturado atual.',
+  ];
+
+  normalized.forEach((turn, index) => {
+    lines.push(`${index + 1}. Analista: ${turn.userPrompt}`);
+    const summaryParts = [];
+    if (turn.assistantSummary?.decisao_operacional) {
+      summaryParts.push(
+        `Decisão anterior: ${turn.assistantSummary.decisao_operacional.replaceAll('_', ' ')}.`,
+      );
+    }
+    if (turn.assistantSummary?.conclusao) {
+      summaryParts.push(`Conclusão anterior: ${turn.assistantSummary.conclusao}`);
+    }
+    if (turn.assistantSummary?.acao_prioritaria) {
+      summaryParts.push(`Ação anterior: ${turn.assistantSummary.acao_prioritaria}`);
+    }
+    if (turn.assistantSummary?.recomendacao) {
+      summaryParts.push(`Recomendação anterior: ${turn.assistantSummary.recomendacao}`);
+    }
+    if (summaryParts.length > 0) {
+      lines.push(`   ISA: ${summaryParts.join(' ')}`);
+    }
+  });
+
+  return lines;
+}
+
+function buildUserPrompt({
+  question,
+  context,
+  responseMode = 'json',
+  promptSections = null,
+  conversationHistory = [],
+}) {
   const compactContext = buildCompactPlanningContext(context);
   const contextJson = JSON.stringify(compactContext, null, 2);
   const basePrompt = composeIsaPlanningTeamInstructions(promptSections).trim().split('\n');
   const responseFormatNote = ISA_PROMPT_RESPONSE_FORMAT_NOTE.trim().split('\n');
+  const conversationHistoryPrompt = buildConversationHistoryPrompt(conversationHistory);
 
   const formatPrompt =
     responseMode === 'text'
@@ -1294,10 +1603,10 @@ function buildUserPrompt({ question, context, responseMode = 'json', promptSecti
           '  ],',
           '  "ctos_vizinhas_analisadas": [',
           '    {',
-          '      "cto": "Código operacional (ex.: SLE-C-...) ou título da CTO vizinha, sem ID numérico interno.",',
-          '      "distancia_operacional": "Distância operacional estimada pela rota.",',
-          '      "ocupacao": "Portas ocupadas (texto).",',
-          '      "capacidade_livre": "Portas livres (texto).",',
+          '      "cto": "Nomenclatura operacional/título da CTO vizinha. Use código apenas se o título estiver vazio; nunca cite código numérico interno isolado.",',
+          '      "distancia_operacional": "Valor curto. Ex.: \\"223 m\\" ou \\"N/A\\". Nunca coloque parágrafos aqui.",',
+          '      "ocupacao": "Portas ocupadas em texto curto. Ex.: \\"7/16\\".",',
+          '      "capacidade_livre": "Portas livres em texto curto. Ex.: \\"9 portas livres\\".",',
           '      "classificacao_geografica": "ESQUINA | ESQUINA_DIAGONAL | MEIO_DE_QUADRA | BIFURCACAO | ROTATORIA | CRUZAMENTO_COMPLEXO | PONTA_DE_RUA | VIA_PRINCIPAL | VIA_SECUNDARIA | OUTROS",',
           '      "viabilidade": "alta | media | baixa"',
           '    }',
@@ -1321,15 +1630,20 @@ function buildUserPrompt({ question, context, responseMode = 'json', promptSecti
           '}',
           '',
           'O campo conclusao deve ter no maximo ~750 caracteres, preferir um unico paragrafo curto, e terminar obrigatoriamente com ponto final interrogacao ou exclamacao; nao deixe parenteses abertos nem codigos cortados.',
-          'Nao cite identificadores numericos internos do cadastro (ID do equipamento); use codigo operacional (ex.: SLE-C-...) e titulo quando identificar equipamentos.',
+          'Prefira sempre a nomenclatura/titulo operacional do equipamento. Nao cite identificadores numericos internos do cadastro, e nao escreva algo como "(codigo 9890)" quando houver titulo/nomenclatura disponivel.',
+          'Os campos distancia_operacional, distancia_cruzamento e angulo_vias devem ser curtos e objetivos, com no maximo uma frase curta cada. Se nao houver dado confiavel, use "N/A". Nunca despeje justificativa longa nesses campos.',
+          'Regra deterministica do sistema: use estritamente alivio.regra.limiteMesmoLogradouroMetros para mesma rua e alivio.regra.limiteRuaDiferenteMetros para rua diferente ou rua nao validada. Esta regra do contexto sobrepoe qualquer texto geral anterior do prompt.',
           '',
           'O objeto metricas_decisao_sistema no contexto JSON foi calculado pelo sistema (não confundir com o campo decisao_operacional da sua resposta). Use melhorCandidatoRemanejamento, somaPortasLivresVizinhosNaAmostra, vizinhosComPortaLivreNaAmostra e alivioPelasRegrasDoSistema como fatos nas evidencias quando forem relevantes.',
           'Nao contradiga alivioPelasRegrasDoSistema nem os numeros de metricas_decisao_sistema sem explicar em lacunas (ex.: dados fora da amostra, cadastro incompleto, regra de negocio adicional).',
+          'Se metricas_decisao_sistema.alivioPelasRegrasDoSistema for false, nao trate candidato fora da regra como alivio/remanejamento valido. Voce pode citá-lo apenas como alternativa fora da regra ou referência exploratória em lacunas/riscos, sem recomendá-lo como solução operacional atual.',
           'Preencha ctos_vizinhas_analisadas com base em vizinhosAmostra e na pergunta; se a amostra for insuficiente, declare em lacunas e ainda assim preencha decisao_operacional quando houver indicios.',
-          'Quando alivio.encontrouAlivio for true, cite obrigatoriamente nas evidencias (e na recomendacao quando fizer sentido) o codigo e o titulo do splitter de destino: use alivio.vizinhoAlivioPrincipal se existir; senao use metricas_decisao_sistema.melhorCandidatoRemanejamento; nunca deixe o alívio sem nome de equipamento quando o contexto trouxer um.',
+          'Quando alivio.encontrouAlivio for true, cite obrigatoriamente nas evidencias (e na recomendacao quando fizer sentido) a identificacao operacional do splitter de destino: use alivio.vizinhoAlivioPrincipal se existir; senao use metricas_decisao_sistema.melhorCandidatoRemanejamento; nunca deixe o alívio sem nome de equipamento quando o contexto trouxer um.',
           'decisao_operacional na resposta deve ser exatamente um dos valores listados (sem espacos extras).',
           'Preencha cada array com frases completas em português do Brasil; use arrays vazios [] apenas quando não houver conteúdo adequado.',
           'No campo fatores: use 5 a 9 itens curtos (cada um com no máximo ~240 caracteres), um argumento por item, cada frase terminada em ponto, interrogação ou exclamação. Evite um único item longo que misture vários argumentos.',
+          'Evite repeticao: cada item de fatores, evidencias, inferencias, riscos e lacunas deve acrescentar informacao nova. Nao repita o mesmo nome de equipamento, mesma distancia e mesma ocupacao em varios itens sem necessidade.',
+          'justificativa_decisao deve ter no maximo 2 frases curtas. recomendacao deve ter no maximo 2 frases curtas e nao deve repetir a conclusao literalmente.',
           'score_operacional deve ser um número inteiro (soma aproximada dos pesos e penalidades) ou null se os dados forem insuficientes.',
           'Use string vazia "" apenas quando um campo de texto não se aplicar; para classificacao_geografica e capilaridade use o valor mais adequado ou indique incerteza em lacunas.',
         ];
@@ -1339,6 +1653,7 @@ function buildUserPrompt({ question, context, responseMode = 'json', promptSecti
     '',
     ...responseFormatNote,
     ...formatPrompt,
+    ...conversationHistoryPrompt,
     'Contexto estruturado do sistema:',
     contextJson,
     '',
@@ -1407,13 +1722,24 @@ async function requestGeminiAnswer({
   context,
   responseMode = 'json',
   promptSections = null,
+  conversationHistory = [],
 }) {
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
     contents: [
       {
         role: 'user',
-        parts: [{ text: buildUserPrompt({ question, context, responseMode, promptSections }) }],
+        parts: [
+          {
+            text: buildUserPrompt({
+              question,
+              context,
+              responseMode,
+              promptSections,
+              conversationHistory,
+            }),
+          },
+        ],
       },
     ],
     generationConfig: {
@@ -1456,7 +1782,13 @@ async function requestGeminiAnswer({
   return { rawText, finishReason };
 }
 
-export async function askPlanningAssistant({ question, context, promptSections = null, promptMeta = null }) {
+export async function askPlanningAssistant({
+  question,
+  context,
+  promptSections = null,
+  promptMeta = null,
+  conversationHistory = [],
+}) {
   const { apiKey, model } = getGeminiConfig();
   if (!apiKey) {
     const error = new Error('Assistente ISA nao configurado no servidor (GEMINI_API_KEY ausente).');
@@ -1474,6 +1806,7 @@ export async function askPlanningAssistant({ question, context, promptSections =
       context,
       responseMode: 'json',
       promptSections,
+      conversationHistory,
     });
     let structured = parseGeminiStructuredAnswer(rawJsonText);
     let responseMode = 'json';
@@ -1493,6 +1826,7 @@ export async function askPlanningAssistant({ question, context, promptSections =
         context,
         responseMode: 'text',
         promptSections,
+        conversationHistory,
       });
       structured = parseGeminiStructuredAnswer(rawTextMode);
       responseMode = 'text';

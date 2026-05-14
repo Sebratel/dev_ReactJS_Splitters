@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
 import {
+  analyzeStreetReliefContext,
   evaluateReliefForSplitter,
   fetchOsrmFootDistanceRowMeters,
   hasIntraCondominiumFreePortSibling,
@@ -17,7 +18,6 @@ import {
   splitterIdentifierMatchSql,
   SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
 } from './splitterNeighborRouting.js';
-import { fetchRoadFromReverseGeocode } from './reverseGeocode.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import {
   buildSplitterOperationalScore,
@@ -218,6 +218,8 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
     Math.max(Number(straightRadiusMeters) || SPLITTER_MAP_STRAIGHT_RADIUS_METERS, 1),
     SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
   );
+  /** A ISA deve seguir a mesma régua operacional da fila de alívio: até 200 m pela rota. */
+  const effectiveMaxRouteMeters = Math.min(Math.max(Number(maxRouteMeters) || 200, 1), 200);
 
   const context = {
     generatedAt: new Date().toISOString(),
@@ -227,7 +229,7 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
         Number(straightRadiusMeters) > neighborStraightRadiusMeters
           ? Number(straightRadiusMeters)
           : null,
-      maxRouteMeters,
+      maxRouteMeters: effectiveMaxRouteMeters,
       crossStreetMaxRouteMeters: 30,
       sameStreetOnlyForFullRouteLimit: true,
     },
@@ -345,61 +347,48 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
     massivaStats,
   };
 
-  const relief = await evaluateReliefForSplitter(pool, normalizedCode, {
+  const reliefAnalysis = await analyzeStreetReliefContext(pool, normalizedCode, {
     straightRadiusMeters: neighborStraightRadiusMeters,
-    maxRouteMeters,
+    maxRouteMeters: effectiveMaxRouteMeters,
   });
-  context.reliefEvaluation = relief;
+  context.reliefEvaluation = {
+    hasReliefWithinRoute: Boolean(
+      reliefAnalysis.reliefMatch || reliefAnalysis.condominiumRelief,
+    ),
+    routingOk: Boolean(reliefAnalysis.routingOk),
+    straightNeighborsCount: Number(reliefAnalysis.straightNeighborsCount ?? 0),
+    condominiumRelief: Boolean(reliefAnalysis.condominiumRelief),
+    reliefNeighborCode: reliefAnalysis.reliefMatch
+      ? normalizeAssistantText(reliefAnalysis.reliefMatch.code)
+      : null,
+    reliefNeighborTitle: reliefAnalysis.reliefMatch
+      ? normalizeAssistantText(reliefAnalysis.reliefMatch.title)
+      : null,
+    reliefNeighborRouteMeters:
+      reliefAnalysis.reliefMatch?.routeMeters == null
+        ? null
+        : Math.round(Number(reliefAnalysis.reliefMatch.routeMeters)),
+  };
 
-  const { origin, neighbors, originStreet, originIsCondominium } =
-    await querySplitterNeighborsWithOrigin(pool, normalizedCode, neighborStraightRadiusMeters);
+  context.origin = reliefAnalysis.origin;
+  context.originStreet = normalizeAssistantText(
+    reliefAnalysis.targetStreetDisplay ?? reliefAnalysis.targetStreetNormalized ?? '',
+  );
+  context.originIsCondominium = Boolean(reliefAnalysis.originIsCondominium);
 
-  let effectiveOriginStreet = originStreet;
-  if (origin && (effectiveOriginStreet == null || String(effectiveOriginStreet).trim() === '')) {
-    const road = await fetchRoadFromReverseGeocode(origin.lat, origin.lng);
-    if (road && road.trim() !== '') {
-      effectiveOriginStreet = normalizeStreetForRelief(road);
-    }
-  }
-
-  context.origin = origin;
-  context.originStreet = effectiveOriginStreet;
-  context.originIsCondominium = originIsCondominium;
-
-  if (origin && Array.isArray(neighbors) && neighbors.length > 0) {
-    const sampled = neighbors.slice(0, 8);
-    let routeMeters = [];
-    try {
-      routeMeters = await fetchOsrmFootDistanceRowMeters(
-        origin,
-        sampled.map((neighbor) => ({
-          lat: Number(neighbor.lat),
-          lng: Number(neighbor.lng),
-        })),
-      );
-    } catch (error) {
-      logger.warn('planning_assistant_neighbors_route_unavailable', { error });
-    }
-
-    context.neighborsSample = sampled.map((neighbor, index) => {
-      const neighborStreet = normalizeAssistantText(neighbor.street);
-      const sameStreet =
-        effectiveOriginStreet &&
-        neighborStreet &&
-        String(effectiveOriginStreet).trim().toLowerCase() === neighborStreet.trim().toLowerCase();
-      return {
-        code: normalizeAssistantText(neighbor.code),
-        title: normalizeAssistantText(neighbor.title),
-        street: neighborStreet,
-        outPorts: Number(neighbor.outPorts ?? 0),
-        busyCount: Number(neighbor.busyCount ?? 0),
-        straightMeters: Number(neighbor.distanceMeters ?? 0),
-        routeMeters:
-          routeMeters[index] == null ? null : Number(routeMeters[index]),
-        isCondominium: isCondominiumSplitterTitle(neighbor.title),
-        sameStreet,
-      };
-    });
+  if (reliefAnalysis.origin && Array.isArray(reliefAnalysis.analyzedNeighbors)) {
+    context.neighborsSample = reliefAnalysis.analyzedNeighbors.slice(0, 8).map((neighbor) => ({
+      code: normalizeAssistantText(neighbor.code),
+      title: normalizeAssistantText(neighbor.title),
+      street: normalizeAssistantText(neighbor.streetDisplay ?? neighbor.street ?? ''),
+      outPorts: Number(neighbor.outPorts ?? 0),
+      busyCount: Number(neighbor.busyCount ?? 0),
+      straightMeters: Number(neighbor.distanceMeters ?? 0),
+      routeMeters:
+        neighbor.routeMeters == null ? null : Math.round(Number(neighbor.routeMeters)),
+      isCondominium: Boolean(neighbor.isCondominium),
+      sameStreet: Boolean(neighbor.sameStreet),
+    }));
   }
 
   return context;
@@ -2656,6 +2645,20 @@ app.post('/api/isa/planning-assistant/chat', async (req, res) => {
   try {
     const message = normalizeAssistantText(req.body?.message);
     const splitterCode = normalizeAssistantText(req.body?.splitterCode);
+    const conversationHistory = Array.isArray(req.body?.conversationHistory)
+      ? req.body.conversationHistory
+          .slice(-20)
+          .map((turn) => ({
+            userPrompt: normalizeAssistantText(turn?.userPrompt),
+            assistantSummary: {
+              conclusao: normalizeAssistantText(turn?.assistantSummary?.conclusao),
+              decisao_operacional: normalizeAssistantText(turn?.assistantSummary?.decisao_operacional),
+              acao_prioritaria: normalizeAssistantText(turn?.assistantSummary?.acao_prioritaria),
+              recomendacao: normalizeAssistantText(turn?.assistantSummary?.recomendacao),
+            },
+          }))
+          .filter((turn) => turn.userPrompt !== '')
+      : [];
     const straightRadiusMeters = coercePositiveInt(
       req.body?.straightRadiusMeters,
       500,
@@ -2679,12 +2682,14 @@ app.post('/api/isa/planning-assistant/chat', async (req, res) => {
       });
     }
 
-    const context = await buildPlanningAssistantContext({
-      splitterCode,
-      straightRadiusMeters,
-      maxRouteMeters,
-    });
-    const promptConfig = await readIsaPromptConfig();
+    const [context, promptConfig] = await Promise.all([
+      buildPlanningAssistantContext({
+        splitterCode,
+        straightRadiusMeters,
+        maxRouteMeters,
+      }),
+      readIsaPromptConfig(),
+    ]);
 
     const result = await askPlanningAssistant({
       question: message,
@@ -2696,6 +2701,7 @@ app.post('/api/isa/planning-assistant/chat', async (req, res) => {
         source: promptConfig?.source,
         version: promptConfig?.version,
       },
+      conversationHistory,
     });
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');

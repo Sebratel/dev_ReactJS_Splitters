@@ -310,12 +310,20 @@ export async function fetchOsrmFootDistanceRowMeters(origin, destinations) {
   }
 }
 
+function trimNullable(value) {
+  const text = String(value ?? '').trim();
+  return text === '' ? null : text;
+}
+
 /**
+ * Consolida alvo, vizinhos, distâncias por rota e fallback de rua por reverse geocode.
+ * A ISA pode reutilizar este resultado sem repetir query de vizinhos + OSRM.
+ *
  * @param {import('pg').Pool} pool
  * @param {string} code
  * @param {{ straightRadiusMeters: number, maxRouteMeters: number }} opts
  */
-export async function evaluateReliefForSplitter(pool, code, opts) {
+export async function analyzeStreetReliefContext(pool, code, opts) {
   const { straightRadiusMeters, maxRouteMeters } = opts;
 
   const tgtLatSql = normalizeNumericSql('COALESCE(nba.latitude, t.lat)');
@@ -340,69 +348,70 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
     `,
     [code],
   );
+
   const targetTitle = targetRowRes.rows?.[0]?.title ?? '';
-  let targetStreet = normalizeStreetForRelief(targetRowRes.rows?.[0]?.street);
+  let targetStreetDisplay = trimNullable(targetRowRes.rows?.[0]?.street);
+  let targetStreetNormalized = normalizeStreetForRelief(targetStreetDisplay);
   const targetLat = Number(targetRowRes.rows?.[0]?.lat);
   const targetLng = Number(targetRowRes.rows?.[0]?.lng);
   if (
-    targetStreet == null &&
+    targetStreetNormalized == null &&
     !isReverseGeocodeDisabled() &&
     Number.isFinite(targetLat) &&
     Number.isFinite(targetLng)
   ) {
     const road = await fetchRoadFromReverseGeocode(targetLat, targetLng);
-    if (road && String(road).trim() !== '') {
-      targetStreet = normalizeStreetForRelief(String(road).trim());
+    const roadText = trimNullable(road);
+    if (roadText) {
+      targetStreetDisplay = roadText;
+      targetStreetNormalized = normalizeStreetForRelief(roadText);
     }
   }
-  const targetIsCondominium = isCondominiumSplitterTitle(targetTitle);
 
+  const targetIsCondominium = isCondominiumSplitterTitle(targetTitle);
   const condominiumRelief = await hasIntraCondominiumFreePortSibling(pool, code);
-  if (targetIsCondominium && condominiumRelief) {
-    return {
-      hasReliefWithinRoute: true,
-      routingOk: true,
-      straightNeighborsCount: 0,
-      condominiumRelief: true,
-      reliefNeighborCode: null,
-      reliefNeighborTitle: null,
-      reliefNeighborRouteMeters: null,
-    };
-  }
   if (targetIsCondominium) {
     return {
-      hasReliefWithinRoute: false,
+      origin: null,
+      originIsCondominium: true,
+      targetStreetDisplay,
+      targetStreetNormalized,
       routingOk: true,
+      condominiumRelief,
       straightNeighborsCount: 0,
-      condominiumRelief: false,
-      reliefNeighborCode: null,
-      reliefNeighborTitle: null,
-      reliefNeighborRouteMeters: null,
+      analyzedNeighbors: [],
+      reliefMatch: null,
     };
   }
 
-  const { origin, neighbors } = await querySplitterNeighborsWithOrigin(
+  const { origin, neighbors, originIsCondominium } = await querySplitterNeighborsWithOrigin(
     pool,
     code,
     straightRadiusMeters,
   );
 
-  const streetNeighbors = neighbors.filter(
-    (n) => !isCondominiumSplitterTitle(n.title),
-  );
-
-  if (!origin || streetNeighbors.length === 0) {
+  const capped = Array.isArray(neighbors) ? neighbors.slice(0, 80) : [];
+  if (!origin || capped.length === 0) {
     return {
-      hasReliefWithinRoute: false,
+      origin,
+      originIsCondominium: Boolean(originIsCondominium),
+      targetStreetDisplay,
+      targetStreetNormalized,
       routingOk: true,
-      straightNeighborsCount: streetNeighbors.length,
-      reliefNeighborCode: null,
-      reliefNeighborTitle: null,
-      reliefNeighborRouteMeters: null,
+      condominiumRelief: false,
+      straightNeighborsCount: capped.filter((n) => !isCondominiumSplitterTitle(n?.title)).length,
+      analyzedNeighbors: capped.map((neighbor) => ({
+        ...neighbor,
+        isCondominium: isCondominiumSplitterTitle(neighbor?.title),
+        routeMeters: null,
+        streetDisplay: trimNullable(neighbor?.street),
+        streetNormalized: normalizeStreetForRelief(neighbor?.street),
+        sameStreet: false,
+      })),
+      reliefMatch: null,
     };
   }
 
-  const capped = streetNeighbors.slice(0, 80);
   let routeMeters;
   try {
     routeMeters = await fetchOsrmFootDistanceRowMeters(
@@ -411,42 +420,74 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
     );
   } catch {
     return {
-      hasReliefWithinRoute: false,
+      origin,
+      originIsCondominium: Boolean(originIsCondominium),
+      targetStreetDisplay,
+      targetStreetNormalized,
       routingOk: false,
-      straightNeighborsCount: capped.length,
-      reliefNeighborCode: null,
-      reliefNeighborTitle: null,
-      reliefNeighborRouteMeters: null,
+      condominiumRelief: false,
+      straightNeighborsCount: capped.filter((n) => !isCondominiumSplitterTitle(n?.title)).length,
+      analyzedNeighbors: capped.map((neighbor) => ({
+        ...neighbor,
+        isCondominium: isCondominiumSplitterTitle(neighbor?.title),
+        routeMeters: null,
+        streetDisplay: trimNullable(neighbor?.street),
+        streetNormalized: normalizeStreetForRelief(neighbor?.street),
+        sameStreet: false,
+      })),
+      reliefMatch: null,
     };
   }
 
-  /** Mesma ideia do mapa / `enrichNeighborStreetsForMap`: via sem cadastro ainda conta para “mesma rua”. */
-  const neighborStreetNorm = capped.map((n) => normalizeStreetForRelief(n.street));
+  const analyzedNeighbors = capped.map((neighbor, index) => ({
+    ...neighbor,
+    isCondominium: isCondominiumSplitterTitle(neighbor?.title),
+    routeMeters: routeMeters[index] ?? null,
+    streetDisplay: trimNullable(neighbor?.street),
+    streetNormalized: normalizeStreetForRelief(neighbor?.street),
+    sameStreet: false,
+  }));
+
   if (!isReverseGeocodeDisabled()) {
     const delayMs = Math.max(
       0,
-      Math.trunc(Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_DELAY_MS ?? ''), 10) || 1100),
+      Math.trunc(
+        Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_DELAY_MS ?? ''), 10) ||
+          1100,
+      ),
     );
     const maxNbr = Math.min(
-      Math.max(Math.trunc(Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_MAX ?? ''), 10) || 6), 0),
+      Math.max(
+        Math.trunc(
+          Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_MAX ?? ''), 10) || 6,
+        ),
+        0,
+      ),
       12,
     );
     if (maxNbr > 0) {
-      const idxs = capped
-        .map((_, i) => i)
-        .filter((i) => {
-          if (neighborStreetNorm[i] != null) return false;
-          const rm = routeMeters[i];
+      const idxs = analyzedNeighbors
+        .map((neighbor, index) => ({ neighbor, index }))
+        .filter(({ neighbor }) => {
+          if (neighbor.isCondominium) return false;
+          if (neighbor.streetNormalized != null) return false;
+          const rm = neighbor.routeMeters;
           if (rm == null || rm > maxRouteMeters) return false;
-          return Number.isFinite(Number(capped[i].lat)) && Number.isFinite(Number(capped[i].lng));
+          return Number.isFinite(Number(neighbor.lat)) && Number.isFinite(Number(neighbor.lng));
         })
-        .sort((i, j) => (Number(routeMeters[i]) || 1e9) - (Number(routeMeters[j]) || 1e9))
+        .sort((a, b) => (Number(a.neighbor.routeMeters) || 1e9) - (Number(b.neighbor.routeMeters) || 1e9))
         .slice(0, maxNbr);
+
       for (let j = 0; j < idxs.length; j += 1) {
-        const i = idxs[j];
-        const road = await fetchRoadFromReverseGeocode(Number(capped[i].lat), Number(capped[i].lng));
-        if (road && String(road).trim() !== '') {
-          neighborStreetNorm[i] = normalizeStreetForRelief(String(road).trim());
+        const { index } = idxs[j];
+        const road = await fetchRoadFromReverseGeocode(
+          Number(analyzedNeighbors[index].lat),
+          Number(analyzedNeighbors[index].lng),
+        );
+        const roadText = trimNullable(road);
+        if (roadText) {
+          analyzedNeighbors[index].streetDisplay = roadText;
+          analyzedNeighbors[index].streetNormalized = normalizeStreetForRelief(roadText);
         }
         if (j < idxs.length - 1 && delayMs > 0) {
           await new Promise((r) => {
@@ -457,42 +498,110 @@ export async function evaluateReliefForSplitter(pool, code, opts) {
     }
   }
 
-  for (let i = 0; i < capped.length; i++) {
-    const rm = routeMeters[i];
-    if (rm == null) continue;
-    const neighborStreet = neighborStreetNorm[i];
+  let reliefMatch = null;
+  for (const neighbor of analyzedNeighbors) {
+    const rm = neighbor.routeMeters;
+    if (neighbor.isCondominium || rm == null) continue;
     const sameStreet =
-      targetStreet !== null &&
-      neighborStreet !== null &&
-      targetStreet === neighborStreet;
-    /**
-     * Paridade com `findFirstStreetReliefNeighbor` no frontend (`splitterStreetRelief.ts`):
-     * mesma rua → limite completo por rota; caso contrário (ruas diferentes ou rua desconhecida) → travessia curta.
-     */
+      targetStreetNormalized !== null &&
+      neighbor.streetNormalized !== null &&
+      targetStreetNormalized === neighbor.streetNormalized;
+    neighbor.sameStreet = sameStreet;
     const routeLimit = sameStreet
       ? maxRouteMeters
       : Math.min(maxRouteMeters, CROSS_STREET_RELIEF_MAX_ROUTE_METERS);
     if (rm > routeLimit) continue;
-    const outPorts = Number(capped[i].outPorts ?? 0);
-    const busyCount = Number(capped[i].busyCount ?? 0);
+    const outPorts = Number(neighbor.outPorts ?? 0);
+    const busyCount = Number(neighbor.busyCount ?? 0);
     if (outPorts > 0 && busyCount < outPorts) {
-      const nCode = String(capped[i]?.code ?? '').trim();
-      const nTitle = String(capped[i]?.title ?? '').trim();
-      return {
-        hasReliefWithinRoute: true,
-        routingOk: true,
-        straightNeighborsCount: capped.length,
-        reliefNeighborCode: nCode || null,
-        reliefNeighborTitle: nTitle || null,
-        reliefNeighborRouteMeters: Math.round(Number(rm)),
-      };
+      reliefMatch = neighbor;
+      break;
     }
+  }
+
+  return {
+    origin,
+    originIsCondominium: Boolean(originIsCondominium),
+    targetStreetDisplay,
+    targetStreetNormalized,
+    routingOk: true,
+    condominiumRelief: false,
+    straightNeighborsCount: analyzedNeighbors.filter((n) => !n.isCondominium).length,
+    analyzedNeighbors,
+    reliefMatch,
+  };
+}
+
+/**
+ * @param {import('pg').Pool} pool
+ * @param {string} code
+ * @param {{ straightRadiusMeters: number, maxRouteMeters: number }} opts
+ */
+export async function evaluateReliefForSplitter(pool, code, opts) {
+  const analysis = await analyzeStreetReliefContext(pool, code, opts);
+
+  if (analysis.originIsCondominium && analysis.condominiumRelief) {
+    return {
+      hasReliefWithinRoute: true,
+      routingOk: true,
+      straightNeighborsCount: 0,
+      condominiumRelief: true,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
+    };
+  }
+  if (analysis.originIsCondominium) {
+    return {
+      hasReliefWithinRoute: false,
+      routingOk: true,
+      straightNeighborsCount: 0,
+      condominiumRelief: false,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
+    };
+  }
+  if (!analysis.origin || analysis.straightNeighborsCount === 0) {
+    return {
+      hasReliefWithinRoute: false,
+      routingOk: true,
+      straightNeighborsCount: analysis.straightNeighborsCount,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
+    };
+  }
+  if (!analysis.routingOk) {
+    return {
+      hasReliefWithinRoute: false,
+      routingOk: false,
+      straightNeighborsCount: analysis.straightNeighborsCount,
+      reliefNeighborCode: null,
+      reliefNeighborTitle: null,
+      reliefNeighborRouteMeters: null,
+    };
+  }
+  if (analysis.reliefMatch) {
+    const nCode = String(analysis.reliefMatch.code ?? '').trim();
+    const nTitle = String(analysis.reliefMatch.title ?? '').trim();
+    return {
+      hasReliefWithinRoute: true,
+      routingOk: true,
+      straightNeighborsCount: analysis.straightNeighborsCount,
+      reliefNeighborCode: nCode || null,
+      reliefNeighborTitle: nTitle || null,
+      reliefNeighborRouteMeters:
+        analysis.reliefMatch.routeMeters == null
+          ? null
+          : Math.round(Number(analysis.reliefMatch.routeMeters)),
+    };
   }
 
   return {
     hasReliefWithinRoute: false,
     routingOk: true,
-    straightNeighborsCount: capped.length,
+    straightNeighborsCount: analysis.straightNeighborsCount,
     reliefNeighborCode: null,
     reliefNeighborTitle: null,
     reliefNeighborRouteMeters: null,

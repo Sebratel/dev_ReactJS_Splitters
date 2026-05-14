@@ -75,6 +75,16 @@ export type PlanningAssistantReply = {
   }
 }
 
+export type PlanningAssistantConversationTurn = {
+  userPrompt: string
+  assistantSummary: {
+    conclusao: string
+    decisao_operacional: IsaDecisaoOperacional
+    acao_prioritaria: string
+    recomendacao: string
+  }
+}
+
 function toCleanString(value: unknown): string {
   return String(value ?? '').trim()
 }
@@ -324,6 +334,7 @@ export async function fetchPlanningAssistantReplyFromLocalDb(input: {
   splitterCode?: string
   straightRadiusMeters?: number
   maxRouteMeters?: number
+  conversationHistory?: PlanningAssistantConversationTurn[]
 }): Promise<PlanningAssistantReply> {
   const response = await fetchWithSessionAuth(
     `${env.localBffUrl}/api/isa/planning-assistant/chat`,
@@ -337,6 +348,19 @@ export async function fetchPlanningAssistantReplyFromLocalDb(input: {
         splitterCode: input.splitterCode?.trim() || undefined,
         straightRadiusMeters: input.straightRadiusMeters,
         maxRouteMeters: input.maxRouteMeters,
+        conversationHistory: Array.isArray(input.conversationHistory)
+          ? input.conversationHistory.map((turn) => ({
+              userPrompt: toCleanString(turn.userPrompt),
+              assistantSummary: {
+                conclusao: toCleanString(turn.assistantSummary?.conclusao),
+                decisao_operacional: normalizeIsaDecisaoOperacional(
+                  turn.assistantSummary?.decisao_operacional,
+                ),
+                acao_prioritaria: toCleanString(turn.assistantSummary?.acao_prioritaria),
+                recomendacao: toCleanString(turn.assistantSummary?.recomendacao),
+              },
+            }))
+          : undefined,
       }),
     },
   )

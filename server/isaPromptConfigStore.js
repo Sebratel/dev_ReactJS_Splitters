@@ -9,9 +9,12 @@ import {
 
 const ISA_PROMPT_SETTINGS_TABLE = 'isa_prompt_settings';
 const ISA_PROMPT_CONFIG_KEY = 'isa_planning_prompt';
+const ISA_PROMPT_CACHE_TTL_MS = 30_000;
 
 let readyPromise = null;
 let dataPool = null;
+let cachedPromptConfig = null;
+let cachedPromptConfigAt = 0;
 
 function toCleanString(value) {
   return String(value ?? '').trim();
@@ -102,6 +105,28 @@ function buildPromptConfigPayload({
   };
 }
 
+function readCachedPromptConfig() {
+  if (
+    cachedPromptConfig &&
+    cachedPromptConfigAt > 0 &&
+    Date.now() - cachedPromptConfigAt < ISA_PROMPT_CACHE_TTL_MS
+  ) {
+    return cachedPromptConfig;
+  }
+  return null;
+}
+
+function writePromptConfigCache(config) {
+  cachedPromptConfig = config;
+  cachedPromptConfigAt = Date.now();
+  return config;
+}
+
+function clearPromptConfigCache() {
+  cachedPromptConfig = null;
+  cachedPromptConfigAt = 0;
+}
+
 export async function ensureIsaPromptSettingsTable() {
   if (!isMysqlConfigured()) return;
   if (!isIsaPromptAutoCreateEnabled()) return;
@@ -129,12 +154,14 @@ export async function ensureIsaPromptSettingsTable() {
 
 export async function readIsaPromptConfig() {
   const fallbackSections = getDefaultIsaPromptSections();
+  const cached = readCachedPromptConfig();
+  if (cached) return cached;
 
   if (!isMysqlConfigured()) {
-    return buildPromptConfigPayload({
+    return writePromptConfigCache(buildPromptConfigPayload({
       source: 'fallback',
       sections: fallbackSections,
-    });
+    }));
   }
 
   try {
@@ -157,31 +184,31 @@ export async function readIsaPromptConfig() {
 
     const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
     if (!row) {
-      return buildPromptConfigPayload({
+      return writePromptConfigCache(buildPromptConfigPayload({
         source: 'fallback',
         sections: fallbackSections,
-      });
+      }));
     }
 
-    return buildPromptConfigPayload({
+    return writePromptConfigCache(buildPromptConfigPayload({
       source: 'db',
       sections: parseStoredSections(row.sections_json),
       version: row.version,
       updatedAt: row.updated_at,
       updatedByUid: row.updated_by_uid,
       updatedByEmail: row.updated_by_email,
-    });
+    }));
   } catch (error) {
     if (isMissingTableError(error)) {
-      return buildPromptConfigPayload({
+      return writePromptConfigCache(buildPromptConfigPayload({
         source: 'fallback',
         sections: fallbackSections,
-      });
+      }));
     }
-    return buildPromptConfigPayload({
+    return writePromptConfigCache(buildPromptConfigPayload({
       source: 'fallback',
       sections: fallbackSections,
-    });
+    }));
   }
 }
 
@@ -199,6 +226,7 @@ export async function saveIsaPromptConfig(input) {
   const updatedByEmail = toCleanString(input?.updatedByEmail);
   const serializedSections = JSON.stringify(sections);
   const pool = getMysqlPool();
+  clearPromptConfigCache();
 
   try {
     await pool.query(
@@ -266,6 +294,7 @@ export async function resetIsaPromptConfig() {
   }
 
   const pool = getMysqlPool();
+  clearPromptConfigCache();
   try {
     await pool.query(`DELETE FROM ${ISA_PROMPT_SETTINGS_TABLE} WHERE config_key = ?`, [
       ISA_PROMPT_CONFIG_KEY,
