@@ -27,6 +27,23 @@ import {
   askPlanningAssistant,
   isPlanningAssistantConfigured,
 } from './planningAssistant.js';
+import {
+  requireAuthenticatedSplittersUser,
+  requireIsaAdminAccess,
+  requireSplittersAdminAccess,
+} from './firebaseAdminAuth.js';
+import {
+  readIsaPromptConfig,
+  resetIsaPromptConfig,
+  saveIsaPromptConfig,
+} from './isaPromptConfigStore.js';
+import {
+  addPlatformSuggestionComment,
+  createPlatformSuggestion,
+  listPlatformSuggestions,
+  updatePlatformSuggestionStatus,
+  voteOnPlatformSuggestion,
+} from './platformSuggestionsStore.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -2437,6 +2454,204 @@ app.post('/api/splitters/network-relief-snapshot/capture', async (req, res) => {
   }
 });
 
+app.get('/api/admin/isa-config', async (req, res) => {
+  try {
+    await requireIsaAdminAccess(req);
+    const config = await readIsaPromptConfig();
+    return res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao carregar a configuracao da ISA.',
+    });
+  }
+});
+
+app.get('/api/platform-suggestions', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestions = await listPlatformSuggestions({
+      viewerUid: actor.profile.uid,
+      limit: req.query?.limit,
+    });
+    return res.json({
+      success: true,
+      data: suggestions,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao listar sugestoes da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await createPlatformSuggestion({
+      title: req.body?.title,
+      description: req.body?.description,
+      sector: req.body?.sector,
+      category: req.body?.category,
+      authorUid: actor.profile.uid,
+      authorEmail: actor.profile.email || actor.identity.email,
+      authorName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      authorPhotoURL: actor.profile.photoURL,
+    });
+    return res.status(201).json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao criar sugestao da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await voteOnPlatformSuggestion({
+      suggestionId: req.params?.suggestionId,
+      voteType: req.body?.voteType,
+      userUid: actor.profile.uid,
+      userEmail: actor.profile.email || actor.identity.email,
+      userName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      userPhotoURL: actor.profile.photoURL,
+    });
+    return res.json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao votar na sugestao da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await addPlatformSuggestionComment({
+      suggestionId: req.params?.suggestionId,
+      message: req.body?.message,
+      authorUid: actor.profile.uid,
+      authorEmail: actor.profile.email || actor.identity.email,
+      authorName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      authorPhotoURL: actor.profile.photoURL,
+      viewerUid: actor.profile.uid,
+    });
+    return res.status(201).json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao comentar na sugestao da plataforma.',
+    });
+  }
+});
+
+app.patch('/api/platform-suggestions/:suggestionId/status', async (req, res) => {
+  try {
+    const actor = await requireSplittersAdminAccess(
+      req,
+      'Somente administradores podem alterar o status das sugestoes.',
+    );
+    const suggestion = await updatePlatformSuggestionStatus({
+      suggestionId: req.params?.suggestionId,
+      status: req.body?.status,
+      viewerUid: actor.profile.uid,
+    });
+    return res.json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao atualizar o status da sugestao da plataforma.',
+    });
+  }
+});
+
+app.put('/api/admin/isa-config', async (req, res) => {
+  try {
+    const actor = await requireIsaAdminAccess(req);
+    const resetToDefault = req.body?.resetToDefault === true;
+
+    let config;
+    if (resetToDefault) {
+      config = await resetIsaPromptConfig();
+    } else {
+      const rawSections = req.body?.sections;
+      if (!rawSections || typeof rawSections !== 'object' || Array.isArray(rawSections)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Campo sections obrigatorio para salvar a configuracao da ISA.',
+        });
+      }
+
+      config = await saveIsaPromptConfig({
+        sections: rawSections,
+        updatedByUid: actor.profile.uid,
+        updatedByEmail: actor.profile.email || actor.identity.email,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao salvar a configuracao da ISA.',
+    });
+  }
+});
+
 app.post('/api/isa/planning-assistant/chat', async (req, res) => {
   try {
     const message = normalizeAssistantText(req.body?.message);
@@ -2469,10 +2684,18 @@ app.post('/api/isa/planning-assistant/chat', async (req, res) => {
       straightRadiusMeters,
       maxRouteMeters,
     });
+    const promptConfig = await readIsaPromptConfig();
 
     const result = await askPlanningAssistant({
       question: message,
       context,
+      promptSections: Object.fromEntries(
+        (promptConfig?.sections ?? []).map((section) => [section.key, section.value]),
+      ),
+      promptMeta: {
+        source: promptConfig?.source,
+        version: promptConfig?.version,
+      },
     });
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');

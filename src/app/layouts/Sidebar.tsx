@@ -5,6 +5,8 @@ import {
   LayoutDashboard,
   AlertTriangle,
   BarChart2,
+  Bot,
+  Lightbulb,
   Users,
   LogOut,
   X,
@@ -52,12 +54,16 @@ export function Sidebar({
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
     { label: 'Splitters', icon: Cpu, to: '/splitters' },
+    { label: 'Sugestões', icon: Lightbulb, to: '/sugestoes' },
     ...(canAccessIntelligence ? [{ label: 'Painel da rede', icon: BarChart2, to: '/intelligence' }] : []),
     ...(canAccessMassiva
       ? [{ label: 'Massivas', icon: AlertTriangle, to: '/massiva', accent: 'danger' as const }]
       : []),
     ...(isAdmin
-      ? [{ label: 'Usuários', icon: Users, to: '/usuarios' }]
+      ? [
+          { label: 'Usuários', icon: Users, to: '/usuarios' },
+          { label: 'Config. ISA', icon: Bot, to: '/isa-config' },
+        ]
       : []),
   ]
 

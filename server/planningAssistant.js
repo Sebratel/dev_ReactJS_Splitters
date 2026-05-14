@@ -1,7 +1,10 @@
 import { Buffer } from 'node:buffer';
 
 import logger from './logger.js';
-import { ISA_PLANNING_TEAM_INSTRUCTIONS } from './isaPlanningTeamInstructions.js';
+import {
+  ISA_PROMPT_RESPONSE_FORMAT_NOTE,
+  composeIsaPlanningTeamInstructions,
+} from './isaPlanningTeamInstructions.js';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
@@ -1219,10 +1222,11 @@ function buildCompactPlanningContext(context) {
   };
 }
 
-function buildUserPrompt({ question, context, responseMode = 'json' }) {
+function buildUserPrompt({ question, context, responseMode = 'json', promptSections = null }) {
   const compactContext = buildCompactPlanningContext(context);
   const contextJson = JSON.stringify(compactContext, null, 2);
-  const basePrompt = ISA_PLANNING_TEAM_INSTRUCTIONS.trim().split('\n');
+  const basePrompt = composeIsaPlanningTeamInstructions(promptSections).trim().split('\n');
+  const responseFormatNote = ISA_PROMPT_RESPONSE_FORMAT_NOTE.trim().split('\n');
 
   const formatPrompt =
     responseMode === 'text'
@@ -1332,6 +1336,8 @@ function buildUserPrompt({ question, context, responseMode = 'json' }) {
 
   return [
     ...basePrompt,
+    '',
+    ...responseFormatNote,
     ...formatPrompt,
     'Contexto estruturado do sistema:',
     contextJson,
@@ -1394,13 +1400,20 @@ function looksLikeTruncatedAnswer(structured, rawText, finishReason) {
   return hasOddQuotes || conclusionHasOpenQuoteOnly || seemsAbrupt;
 }
 
-async function requestGeminiAnswer({ apiKey, model, question, context, responseMode = 'json' }) {
+async function requestGeminiAnswer({
+  apiKey,
+  model,
+  question,
+  context,
+  responseMode = 'json',
+  promptSections = null,
+}) {
   const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
     contents: [
       {
         role: 'user',
-        parts: [{ text: buildUserPrompt({ question, context, responseMode }) }],
+        parts: [{ text: buildUserPrompt({ question, context, responseMode, promptSections }) }],
       },
     ],
     generationConfig: {
@@ -1443,7 +1456,7 @@ async function requestGeminiAnswer({ apiKey, model, question, context, responseM
   return { rawText, finishReason };
 }
 
-export async function askPlanningAssistant({ question, context }) {
+export async function askPlanningAssistant({ question, context, promptSections = null, promptMeta = null }) {
   const { apiKey, model } = getGeminiConfig();
   if (!apiKey) {
     const error = new Error('Assistente ISA nao configurado no servidor (GEMINI_API_KEY ausente).');
@@ -1460,6 +1473,7 @@ export async function askPlanningAssistant({ question, context }) {
       question,
       context,
       responseMode: 'json',
+      promptSections,
     });
     let structured = parseGeminiStructuredAnswer(rawJsonText);
     let responseMode = 'json';
@@ -1478,6 +1492,7 @@ export async function askPlanningAssistant({ question, context }) {
         question,
         context,
         responseMode: 'text',
+        promptSections,
       });
       structured = parseGeminiStructuredAnswer(rawTextMode);
       responseMode = 'text';
@@ -1492,6 +1507,11 @@ export async function askPlanningAssistant({ question, context }) {
     logger.info('planning_assistant_gemini_ok', {
       model,
       responseMode,
+      promptSource: toCleanString(promptMeta?.source) || 'fallback',
+      promptVersion:
+        promptMeta?.version == null || !Number.isFinite(Number(promptMeta.version))
+          ? null
+          : Math.round(Number(promptMeta.version)),
       durationMs: Date.now() - startedAt,
     });
 
