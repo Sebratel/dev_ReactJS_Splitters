@@ -44,6 +44,10 @@ import {
   updatePlatformSuggestionStatus,
   voteOnPlatformSuggestion,
 } from './platformSuggestionsStore.js';
+import {
+  normalizeMassivaRouteRowTituloPreferido,
+  rowMatchesMassivaOltRoute,
+} from './splitterTitleOltDerivation.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -1249,10 +1253,12 @@ app.get('/api/massiva/routes', async (req, res) => {
     `;
 
     const result = await pool.query(query);
+    const data = result.rows.map((row) => normalizeMassivaRouteRowTituloPreferido(row));
+
     res.json({
       success: true,
-      count: result.rowCount,
-      data: result.rows,
+      count: data.length,
+      data,
     });
   } catch (error) {
     console.error('Erro ao listar rotas para Massiva:', error);
@@ -1261,12 +1267,11 @@ app.get('/api/massiva/routes', async (req, res) => {
 });
 
 /**
- * Filtro opcional por AP/slot/porta/códigos.
- * Slot/porta: mesma expressão que GET `/api/massiva/routes` — com COALESCE(…,0);
- * senão, linhas com NULL em `SLOT[SPLT.SECUNDARIO]` não batem com `= 0` (NULL = 0 → false no Postgres)
- * e o batch fica vazio com o que o operador vê no catálogo.
+ * Filtro opcional por AP / códigos de splitter.
+ * Slot/porta na rota seguem a nomenclatura do título (`…-slot-porta/…`); o pareamento com linhas
+ * do catálogo faz-se em memória via `rowMatchesMassivaOltRoute` (mesma regra do detalhe splitter).
  */
-function buildMassivaConnectionsWhere({ apCode, slot, port, splitterCodes } = {}) {
+function buildMassivaConnectionsWhere({ apCode, splitterCodes } = {}) {
   const values = [];
   const where = ['base."ID CONEXAO[CLIENTE]" IS NOT NULL'];
   let p = 1;
@@ -1278,26 +1283,6 @@ function buildMassivaConnectionsWhere({ apCode, slot, port, splitterCodes } = {}
     );
     values.push(ap);
     p += 1;
-  }
-
-  if (slot != null) {
-    const slotN = typeof slot === 'number' ? slot : Number.parseInt(String(slot).trim(), 10);
-    if (Number.isFinite(slotN)) {
-      where.push(`COALESCE(base."SLOT[SPLT.SECUNDARIO]", 0) = $${p}`);
-      values.push(slotN);
-      p += 1;
-    }
-  }
-
-  if (port != null) {
-    const portN = typeof port === 'number' ? port : Number.parseInt(String(port).trim(), 10);
-    if (Number.isFinite(portN)) {
-      where.push(
-        `COALESCE(base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]", base."PORTA[SPLT.PRIMARIO]", 0) = $${p}`,
-      );
-      values.push(portN);
-      p += 1;
-    }
   }
 
   const clean = Array.isArray(splitterCodes)
@@ -1353,10 +1338,15 @@ app.get('/api/massiva/connections', async (req, res) => {
       .map((v) => v.trim())
       .filter((v) => v !== '');
 
+    const slotN =
+      slot == null ? null : Number.parseInt(String(slot).trim(), 10);
+    const portN =
+      port == null ? null : Number.parseInt(String(port).trim(), 10);
+    const slotPortFilter =
+      slotN != null && portN != null && Number.isFinite(slotN) && Number.isFinite(portN);
+
     const { where, values } = buildMassivaConnectionsWhere({
       apCode: apCode || undefined,
-      slot,
-      port,
       splitterCodes: splitterCodes.length > 0 ? splitterCodes : undefined,
     });
 
@@ -1364,10 +1354,14 @@ app.get('/api/massiva/connections', async (req, res) => {
       retries: 1,
       delayMs: 180,
     });
+    let rows = result.rows;
+    if (slotPortFilter) {
+      rows = rows.filter((row) => rowMatchesMassivaOltRoute(slotN, portN, row));
+    }
     res.json({
       success: true,
-      count: result.rowCount,
-      data: result.rows,
+      count: rows.length,
+      data: rows,
     });
   } catch (error) {
     console.error('Erro ao listar conexões para Massiva:', error);
@@ -1434,18 +1428,25 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
         chunk.map(async (route) => {
           const { where, values } = buildMassivaConnectionsWhere({
             apCode: route.apCode,
-            slot: route.slot,
-            port: route.port,
           });
-          return queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
-            retries: 1,
-            delayMs: 180,
-          });
+          const result = await queryWithTransientRetry(
+            massivaConnectionsSelectQuery(where),
+            values,
+            {
+              retries: 1,
+              delayMs: 180,
+            },
+          );
+          return {
+            rows: result.rows.filter((row) =>
+              rowMatchesMassivaOltRoute(route.slot, route.port, row),
+            ),
+          };
         }),
       );
 
-      for (const result of chunkResults) {
-        for (const row of result.rows) {
+      for (const pack of chunkResults) {
+        for (const row of pack.rows) {
           const dk = massivaRowDedupeKey(row);
           if (seenKeys.has(dk)) continue;
           seenKeys.add(dk);
@@ -2366,12 +2367,28 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
     const maxRouteRaw = Number.parseFloat(String(req.query.maxRouteMeters ?? '200'));
     const maxRouteMeters =
       Number.isFinite(maxRouteRaw) && maxRouteRaw > 0 ? maxRouteRaw : 200;
+    const oltSlot = (() => {
+      const raw = req.query.oltSlot;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    const oltPort = (() => {
+      const raw = req.query.oltPort;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    const usePonFilter = oltSlot !== null || oltPort !== null;
+
     let page = massivaHistoryStore.configured
       ? await massivaHistoryStore.getLatestNetworkReliefSnapshotPage({
           straightRadiusMeters: straightRadius,
           maxRouteMeters,
           limit,
           cursor,
+          oltSlot,
+          oltPort,
         })
       : null;
 
@@ -2385,6 +2402,8 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
         maxRouteMeters,
         limit,
         cursor,
+        oltSlot,
+        oltPort,
       });
     }
 
@@ -2395,8 +2414,15 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
       });
     }
 
-    const nextCursor =
-      cursor + limit < page.totalEntries ? cursor + limit : null;
+    const nextCursor = usePonFilter
+      ? page.ponFilterHasMore
+        ? page.ponFilterResumePosition
+        : null
+      : cursor + limit < page.totalEntries
+        ? cursor + limit
+        : null;
+
+    const hasMore = usePonFilter ? page.ponFilterHasMore : nextCursor !== null;
 
     res.json({
       success: true,
@@ -2404,12 +2430,13 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
       straightRadiusMeters: straightRadius,
       scannedCount: page.scannedCount,
       entries: page.entries,
-      hasMore: nextCursor !== null,
+      hasMore,
       nextCursor,
       totalEntries: page.totalEntries,
       generatedAt: page.generatedAt,
       snapshotRunId: page.snapshotRunId,
       cacheHit: false,
+      ponFilterActive: usePonFilter,
     });
   } catch (error) {
     console.error('Erro na fila de alívio de rede:', error);

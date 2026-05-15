@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { splitterLabelsMatchOptionalPonFilter } from './splitterTitleOltDerivation.js';
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -24,6 +25,13 @@ function normalizeDate(value) {
   if (value === null || value === undefined || value === '') return null;
   const d = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** @param {unknown} value */
+function optionalPonQueryInt(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number.parseInt(String(value), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 function uniqueSplitterEntries(entries) {
@@ -1004,6 +1012,10 @@ export function createMassivaHistoryStore(config) {
     const limit = Math.min(200, Math.max(1, normalizeNonNegativeInt(input?.limit, 20)));
     const cursor = Math.max(0, normalizeNonNegativeInt(input?.cursor, 0));
 
+    const ponSlotFilter = optionalPonQueryInt(input?.oltSlot);
+    const ponPortFilter = optionalPonQueryInt(input?.oltPort);
+    const usePonFilter = ponSlotFilter !== null || ponPortFilter !== null;
+
     const [runRows] = await dataPool.query(
       `
         SELECT
@@ -1029,8 +1041,37 @@ export function createMassivaHistoryStore(config) {
     const snapshotRunId = Number(run.id ?? 0);
     const totalEntries = Number(run.entryCount ?? 0);
 
-    const [entryRows] = await dataPool.query(
-      `
+    const generatedAtIso =
+      run.finishedAt instanceof Date
+        ? run.finishedAt.toISOString()
+        : normalizeDate(run.finishedAt)?.toISOString() ?? null;
+
+    const scannedCount = Number(run.scannedCount ?? 0);
+
+    /** @param {Record<string, unknown>} row */
+    function mapNetworkReliefEntryRow(row) {
+      return {
+        splitter: {
+          code: normalizeText(row.splitterCode),
+          title: normalizeText(row.splitterTitle),
+          outPorts: Number(row.outPorts ?? 0),
+          busyCount: Number(row.busyCount ?? 0),
+        },
+        neighborStraightRadiusScanned: Number(
+          row.neighborStraightRadiusScanned ?? straightRadiusMeters,
+        ),
+        maxRouteMeters: Number(row.maxRouteMeters ?? maxRouteMeters),
+        straightNeighborsSampled: Number(row.straightNeighborsSampled ?? 0),
+        ruleType:
+          normalizeText(row.ruleType).toUpperCase() === 'CONDOMINIUM'
+            ? 'CONDOMINIUM'
+            : 'STREET',
+      };
+    }
+
+    if (!usePonFilter) {
+      const [entryRows] = await dataPool.query(
+        `
         SELECT
           splitter_code AS splitterCode,
           splitter_title AS splitterTitle,
@@ -1046,32 +1087,129 @@ export function createMassivaHistoryStore(config) {
         LIMIT ?
         OFFSET ?
       `,
-      [snapshotRunId, limit, cursor],
-    );
+        [snapshotRunId, limit, cursor],
+      );
+
+      return {
+        snapshotRunId,
+        generatedAt: generatedAtIso,
+        scannedCount,
+        totalEntries,
+        entries: Array.isArray(entryRows) ? entryRows.map((row) => mapNetworkReliefEntryRow(row)) : [],
+        ponFilterActive: false,
+        ponFilterResumePosition: null,
+        ponFilterHasMore: false,
+      };
+    }
+
+    let lastScanned = cursor;
+    const collected = [];
+    const chunk = Math.min(150, Math.max(limit * 5, 50));
+
+    while (collected.length < limit) {
+      const [entryRows] = await dataPool.query(
+        `
+        SELECT
+          position,
+          splitter_code AS splitterCode,
+          splitter_title AS splitterTitle,
+          out_ports AS outPorts,
+          busy_count AS busyCount,
+          straight_neighbors_sampled AS straightNeighborsSampled,
+          neighbor_straight_radius_scanned AS neighborStraightRadiusScanned,
+          max_route_meters AS maxRouteMeters,
+          rule_type AS ruleType
+        FROM splitter_network_relief_snapshot_entries
+        WHERE snapshot_run_id = ?
+          AND position > ?
+        ORDER BY position ASC
+        LIMIT ?
+      `,
+        [snapshotRunId, lastScanned, chunk],
+      );
+
+      const rows = Array.isArray(entryRows) ? entryRows : [];
+
+      if (rows.length === 0) {
+        return {
+          snapshotRunId,
+          generatedAt: generatedAtIso,
+          scannedCount,
+          totalEntries,
+          entries: collected,
+          ponFilterActive: true,
+          ponFilterResumePosition: lastScanned,
+          ponFilterHasMore: false,
+        };
+      }
+
+      for (const row of rows) {
+        const pos = Number(row.position ?? 0);
+        lastScanned = pos;
+
+        if (
+          splitterLabelsMatchOptionalPonFilter(
+            row.splitterTitle,
+            row.splitterCode,
+            ponSlotFilter,
+            ponPortFilter,
+          )
+        ) {
+          collected.push(mapNetworkReliefEntryRow(row));
+          if (collected.length >= limit) {
+            break;
+          }
+        }
+      }
+
+      if (collected.length >= limit) {
+        const [moreProbe] = await dataPool.query(
+          `
+          SELECT 1 AS ok
+          FROM splitter_network_relief_snapshot_entries
+          WHERE snapshot_run_id = ?
+            AND position > ?
+          LIMIT 1
+        `,
+          [snapshotRunId, lastScanned],
+        );
+        const moreRows = Array.isArray(moreProbe) ? moreProbe : [];
+        const hasMore = moreRows.length > 0;
+        return {
+          snapshotRunId,
+          generatedAt: generatedAtIso,
+          scannedCount,
+          totalEntries,
+          entries: collected,
+          ponFilterActive: true,
+          ponFilterResumePosition: lastScanned,
+          ponFilterHasMore: hasMore,
+        };
+      }
+
+      if (rows.length < chunk) {
+        return {
+          snapshotRunId,
+          generatedAt: generatedAtIso,
+          scannedCount,
+          totalEntries,
+          entries: collected,
+          ponFilterActive: true,
+          ponFilterResumePosition: lastScanned,
+          ponFilterHasMore: false,
+        };
+      }
+    }
 
     return {
       snapshotRunId,
-      generatedAt:
-        run.finishedAt instanceof Date
-          ? run.finishedAt.toISOString()
-          : normalizeDate(run.finishedAt)?.toISOString() ?? null,
-      scannedCount: Number(run.scannedCount ?? 0),
+      generatedAt: generatedAtIso,
+      scannedCount,
       totalEntries,
-      entries: entryRows.map((row) => ({
-        splitter: {
-          code: normalizeText(row.splitterCode),
-          title: normalizeText(row.splitterTitle),
-          outPorts: Number(row.outPorts ?? 0),
-          busyCount: Number(row.busyCount ?? 0),
-        },
-        neighborStraightRadiusScanned: Number(row.neighborStraightRadiusScanned ?? straightRadiusMeters),
-        maxRouteMeters: Number(row.maxRouteMeters ?? maxRouteMeters),
-        straightNeighborsSampled: Number(row.straightNeighborsSampled ?? 0),
-        ruleType:
-          normalizeText(row.ruleType).toUpperCase() === 'CONDOMINIUM'
-            ? 'CONDOMINIUM'
-            : 'STREET',
-      })),
+      entries: collected,
+      ponFilterActive: true,
+      ponFilterResumePosition: lastScanned,
+      ponFilterHasMore: false,
     };
   }
 
