@@ -25,6 +25,9 @@ export type SplittersFetchParams = {
   corporateClientFilter?: 'all' | 'with-corporate' | 'without-corporate'
   withMaintenance?: boolean
   maintenanceSplitterCodes?: string[]
+  /** Filtro por slot OLT derivado do título/código (+ fallback só no servidor). */
+  oltSlot?: number | null
+  oltPort?: number | null
 }
 
 function toNumber(value: unknown, fallback = 0): number {
@@ -85,6 +88,8 @@ export async function fetchSplittersFromLocalDb({
   corporateClientFilter = 'all',
   withMaintenance,
   maintenanceSplitterCodes = [],
+  oltSlot = null,
+  oltPort = null,
 }: SplittersFetchParams = {}): Promise<SplittersFetchResult> {
   const queryParams = new URLSearchParams({
     page: String(page),
@@ -118,6 +123,12 @@ export async function fetchSplittersFromLocalDb({
   }
   if (maintenanceSplitterCodes.length > 0) {
     queryParams.append('maintenanceSplitterCodes', maintenanceSplitterCodes.join(','))
+  }
+  if (oltSlot != null && Number.isFinite(oltSlot)) {
+    queryParams.append('oltSlot', String(Math.trunc(oltSlot)))
+  }
+  if (oltPort != null && Number.isFinite(oltPort)) {
+    queryParams.append('oltPort', String(Math.trunc(oltPort)))
   }
 
   const url = `${env.localBffUrl}/api/splitters?${queryParams.toString()}`

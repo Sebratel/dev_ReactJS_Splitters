@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useReducedMotion } from 'framer-motion'
+import { useOutletContext } from 'react-router-dom'
 import { KeyRound, Loader2, RefreshCw, Send, X } from 'lucide-react'
 import {
   createSplittersAccessRequest,
@@ -17,6 +19,7 @@ import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
 import { resolveAccessRequestFabImageSrc } from '@/shared/lib/accessRequestFabImage'
 import { FabAttentionMotion } from '@/shared/ui/FabAttentionMotion'
 import { FabHintBalloon } from '@/shared/ui/FabHintBalloon'
+import { useShellFabLayout } from '@/shared/hooks/useShellFabLayout'
 
 export function DashboardAccessRequestSection() {
   const user = useAccessAuthStore((s) => s.user)
@@ -24,6 +27,17 @@ export function DashboardAccessRequestSection() {
   const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
   const refreshProfile = useAccessAuthStore((s) => s.refreshProfile)
   const queryClient = useQueryClient()
+
+  const outletContext = useOutletContext<{
+    sidebarCollapsed?: boolean
+    mobileNavOpen?: boolean
+  }>()
+  const sidebarCollapsed = outletContext?.sidebarCollapsed ?? false
+  const mobileNavOpen = outletContext?.mobileNavOpen ?? false
+  const { fabPositionStyle, isDockedOnSidebar, isDesktopLayout } = useShellFabLayout(sidebarCollapsed, {
+    translateUpPx: 16,
+  })
+  const reduceMotion = useReducedMotion()
 
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
@@ -40,6 +54,17 @@ export function DashboardAccessRequestSection() {
     [profile?.permissions],
   )
   const allowedModuleIds = useMemo(() => new Set(moduleOptions.map((o) => o.id)), [moduleOptions])
+
+  const showAccessCompleteMessage =
+    isAdmin || (profile !== null && moduleOptions.length === 0)
+
+  const fabHintLabel = useMemo(
+    () =>
+      showAccessCompleteMessage
+        ? 'Oi! ✨ Você já está com acesso a tudo por aqui — pode usar a plataforma tranquilo(a).'
+        : 'Oi — quando faltar alguma tela no seu perfil, me chama por aqui. Eu preparo o pedido de acesso e encaminho para o time analisar.',
+    [showAccessCompleteMessage],
+  )
 
   const mineQuery = useQuery({
     queryKey: accessRequestQueryKeys.mine(uid ?? ''),
@@ -97,16 +122,19 @@ export function DashboardAccessRequestSection() {
     setFabImgBroken(false)
   }, [fabImageSrc])
 
-  const showPhotoFab = Boolean(uid && !isAdmin && fabImageSrc && !fabImgBroken)
+  const showPhotoFab = Boolean(uid && fabImageSrc && !fabImgBroken)
   const { fabImageDecoded, onFabPhotoLoad, onFabPhotoError } = useFabPhotoDecodedGate(
     showPhotoFab,
     fabImageSrc,
   )
   const fabChromeVisible = !showPhotoFab || fabImageDecoded
 
-  if (isAdmin || !uid) return null
+  if (!uid) return null
 
-  const showForm = !pending && !mineQuery.isLoading && moduleOptions.length > 0
+  if (mobileNavOpen) return null
+
+  const showForm =
+    !showAccessCompleteMessage && !pending && !mineQuery.isLoading && moduleOptions.length > 0
 
   const toggleModule = (id: SplittersAccessRequestModuleId) => {
     setSelected((prev) => {
@@ -127,11 +155,20 @@ export function DashboardAccessRequestSection() {
         />
       ) : null}
 
-      <div className="fixed z-[60] flex w-[min(calc(100vw-2rem),20.5rem)] max-w-[calc(100vw-2rem)] flex-col items-end gap-2.5 bottom-[max(5.25rem,calc(env(safe-area-inset-bottom)+3.75rem))] right-[max(1.25rem,env(safe-area-inset-right))]">
+      <div
+        className={cn(
+          'pointer-events-none fixed z-[60] flex max-w-[calc(100vw-2rem)] flex-col gap-2.5 motion-safe:transition-[max-width,width] motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none',
+          isDockedOnSidebar
+            ? 'w-[min(calc(100vw-2rem),20rem)] items-center'
+            : 'w-[min(calc(100vw-2rem),20.5rem)]',
+          !isDockedOnSidebar && (isDesktopLayout ? 'items-start' : 'items-end'),
+        )}
+        style={fabPositionStyle}
+      >
         {open ? (
           <div
             id="access-request-fab-panel"
-            className="w-full overflow-hidden rounded-2xl border border-neutral-200/95 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-neutral-950/[0.04]"
+            className="pointer-events-auto w-full overflow-hidden rounded-2xl border border-neutral-200/95 bg-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-neutral-950/[0.04]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="access-fab-panel-title"
@@ -206,6 +243,19 @@ export function DashboardAccessRequestSection() {
                   {latestResolved.adminNote ? (
                     <p className="mt-0.5 leading-relaxed">{latestResolved.adminNote}</p>
                   ) : null}
+                </div>
+              ) : null}
+
+              {showAccessCompleteMessage && !pending && !mineQuery.isLoading ? (
+                <div className="rounded-lg border border-emerald-200/85 bg-gradient-to-br from-emerald-50/95 to-sky-50/60 px-2.5 py-3 text-[11px] leading-relaxed text-emerald-950 shadow-sm">
+                  <p className="text-[12px] font-semibold tracking-tight">
+                    {isAdmin ? '✨ Acesso completo' : '🎉 Tudo certo por aqui!'}
+                  </p>
+                  <p className="mt-2 text-emerald-950/[0.92]">
+                    {isAdmin
+                      ? 'Como administrador(a), você já dispõe de todos os módulos da plataforma — explore e gerencie à vontade.'
+                      : 'Você já possui todos os módulos liberados para o seu perfil na plataforma. Aproveita e, se pintar algo fora da rotina, o time de apoio tá por perto também. 🙂'}
+                  </p>
                 </div>
               ) : null}
 
@@ -312,12 +362,6 @@ export function DashboardAccessRequestSection() {
                   Carregando…
                 </div>
               ) : null}
-
-              {!showForm && !mineQuery.isLoading && moduleOptions.length === 0 ? (
-                <p className="text-[11px] leading-relaxed text-neutral-500">
-                  Não há telas adicionais para solicitar com o seu perfil atual.
-                </p>
-              ) : null}
             </div>
           </div>
         ) : null}
@@ -340,22 +384,24 @@ export function DashboardAccessRequestSection() {
         ) : null}
 
         {fabChromeVisible ? (
-          <div className="relative">
+          <div className="pointer-events-auto relative">
           {pending ? (
             <span
-              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-neutral-50 bg-amber-500 shadow-sm"
+              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-amber-500 shadow-sm"
               aria-hidden
             />
           ) : latestResolved?.status === 'rejected' ? (
             <span
-              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-neutral-50 bg-rose-400 shadow-sm"
+              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-rose-400 shadow-sm"
               aria-hidden
             />
           ) : null}
           <FabHintBalloon
-            label="Oi — quando faltar alguma tela no seu perfil, me chama por aqui. Eu preparo o pedido de acesso e encaminho para o time analisar."
+            label={fabHintLabel}
             gateReady={fabImageDecoded}
             suppress={open}
+            reduceMotion={reduceMotion}
+            placement="right"
           >
             <FabAttentionMotion pause={open} className="rounded-full">
               <button
@@ -365,9 +411,9 @@ export function DashboardAccessRequestSection() {
                   setFormError(null)
                 }}
                 className={cn(
-                  'relative flex size-[4.5rem] shrink-0 items-center justify-center rounded-full transition',
+                  'relative flex size-[5rem] shrink-0 items-center justify-center overflow-hidden rounded-full transition',
                   showPhotoFab
-                    ? 'border-0 bg-transparent p-0 shadow-[0_10px_28px_-6px_rgba(15,23,42,0.35)] hover:opacity-95'
+                    ? 'border border-white/45 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
                     : cn(
                         'border border-neutral-200/95 bg-white text-neutral-700 shadow-lg',
                         'hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-950',
@@ -379,19 +425,39 @@ export function DashboardAccessRequestSection() {
                 aria-label={open ? 'Fechar solicitação de acesso' : 'Abrir solicitação de acesso'}
               >
                 {showPhotoFab ? (
-                  <img
-                    src={fabImageSrc}
-                    alt=""
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                    className="max-h-[4.25rem] max-w-[4.25rem] object-contain drop-shadow-md"
-                    onLoad={onFabPhotoLoad}
-                    onError={() => {
-                      setFabImgBroken(true)
-                      onFabPhotoError()
-                    }}
-                  />
+                  <>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-[6%] rounded-full border border-white/35 shadow-[inset_0_0_22px_rgba(255,255,255,0.32)]"
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute left-[14%] top-[8%] h-[24%] w-[44%] rounded-full bg-white/45 blur-[2px]"
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute bottom-[12%] right-[16%] h-[22%] w-[30%] rounded-full bg-sky-200/25 blur-[6px]"
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-[14%] rounded-full border border-sky-100/25"
+                    />
+                    <div className="relative z-[1] flex size-[4.15rem] items-center justify-center rounded-full bg-[radial-gradient(circle_at_50%_36%,rgba(255,255,255,0.22),rgba(170,203,255,0.08)_48%,rgba(255,255,255,0)_76%)]">
+                      <img
+                        src={fabImageSrc}
+                        alt=""
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority="high"
+                        className="max-h-[3.9rem] max-w-[3.9rem] object-contain drop-shadow-[0_6px_14px_rgba(64,85,140,0.22)]"
+                        onLoad={onFabPhotoLoad}
+                        onError={() => {
+                          setFabImgBroken(true)
+                          onFabPhotoError()
+                        }}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <KeyRound className="size-9" strokeWidth={1.75} aria-hidden />
                 )}

@@ -29,10 +29,12 @@ import { scoreToneClassName } from '@/features/splitters/ui/operationalScoreVisu
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
 import { resolveAccessRequestFabImageSrc } from '@/shared/lib/accessRequestFabImage'
 import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
+import { useShellFabLayout } from '@/shared/hooks/useShellFabLayout'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { cn } from '@/shared/lib/utils'
 import { FabAttentionMotion } from '@/shared/ui/FabAttentionMotion'
 import { FabHintBalloon } from '@/shared/ui/FabHintBalloon'
+import { useSplittersFiltersStore } from '@/features/splitters/store/useSplittersFiltersStore'
 
 const ISA_PRIORITY_IDLE_HINT =
   'Fico de olho na operação o tempo todo — já cruzei a base e separei quem mais precisa da sua atenção neste momento. Abra quando quiser revisar.'
@@ -480,11 +482,18 @@ export function SplittersOperationalPriorityFab({
   mobileNavOpen = false,
 }: Props) {
   const location = useLocation()
-  const isDesktopLayout = useMediaQuery(`(min-width: ${BREAKPOINT_PX.xl}px)`)
-  const isWideDesktop = useMediaQuery(`(min-width: ${BREAKPOINT_PX['2xl']}px)`)
-  const isTallAssistantViewport = useMediaQuery('(min-height: 860px)')
   const canUsePlanningAssistant = useAccessAuthStore((s) =>
     s.hasPermission('canUsePlanningAssistant'),
+  )
+  const reliefExportOltSlot = useSplittersFiltersStore((s) =>
+    typeof s.state.oltSlot === 'number' && Number.isFinite(s.state.oltSlot)
+      ? s.state.oltSlot
+      : null,
+  )
+  const reliefExportOltPort = useSplittersFiltersStore((s) =>
+    typeof s.state.oltPort === 'number' && Number.isFinite(s.state.oltPort)
+      ? s.state.oltPort
+      : null,
   )
   const [menuOpen, setMenuOpen] = useState(false)
   const [activePanel, setActivePanel] = useState<ActiveFabPanel | null>(null)
@@ -501,6 +510,33 @@ export function SplittersOperationalPriorityFab({
   >([])
   const [assistantSessionNotice, setAssistantSessionNotice] = useState<string | null>(null)
   const prevPriorityLoadingRef = useRef<boolean | null>(null)
+  const [assistantDockViewportW, setAssistantDockViewportW] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 0,
+  )
+
+  const isWideDesktop = useMediaQuery(`(min-width: ${BREAKPOINT_PX['2xl']}px)`)
+  const isTallAssistantViewport = useMediaQuery('(min-height: 860px)')
+
+  const assistantHasActivity =
+    activePanel === 'assistant' &&
+    (assistantLoading || assistantReply !== null || Boolean(assistantError))
+  const assistantUsesWideDesktopLayout =
+    activePanel === 'assistant' &&
+    isWideDesktop &&
+    isTallAssistantViewport &&
+    assistantHasActivity
+
+  const { fabPositionStyle, isDockedOnSidebar, isDesktopLayout, sidebarDockCenterX } =
+    useShellFabLayout(sidebarCollapsed)
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activePanel !== 'assistant' || !isDockedOnSidebar) return
+    const snap = () => setAssistantDockViewportW(window.innerWidth)
+    snap()
+    window.addEventListener('resize', snap)
+    return () => window.removeEventListener('resize', snap)
+  }, [activePanel, isDockedOnSidebar])
 
   const overlayOpen = menuOpen || activePanel !== null
 
@@ -581,82 +617,53 @@ export function SplittersOperationalPriorityFab({
     return 'Abrir menu de filas'
   })()
 
-  const shouldLowerFabForNotebookSidebar =
-    isDesktopLayout && !isWideDesktop && !sidebarCollapsed
-  const [sidebarDockMetrics, setSidebarDockMetrics] = useState<{
-    centerX: number
-    bottomOffset: number
-  } | null>(null)
-
-  useLayoutEffect(() => {
-    if (!shouldLowerFabForNotebookSidebar) {
-      setSidebarDockMetrics(null)
-      return
-    }
-
-    const measure = () => {
-      const dock = document.getElementById('splitters-sidebar-fab-dock')
-      if (!dock) {
-        setSidebarDockMetrics(null)
-        return
+  const fabShellWidthClass = (() => {
+    if (activePanel === 'assistant') {
+      if (assistantUsesWideDesktopLayout) return 'w-[min(calc(100vw-2rem),58rem)]'
+      if (isDesktopLayout) {
+        return assistantHasActivity
+          ? 'w-[min(calc(100vw-2rem),44rem)]'
+          : 'w-[min(calc(100vw-2rem),28rem)]'
       }
-
-      const rect = dock.getBoundingClientRect()
-      setSidebarDockMetrics({
-        centerX: rect.left + rect.width / 2,
-        bottomOffset: Math.max(12, window.innerHeight - rect.bottom),
-      })
+      return 'w-[min(calc(100vw-1rem),36rem)]'
     }
-
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [shouldLowerFabForNotebookSidebar])
-
-  if (!enabled || mobileNavOpen) return null
-
-  const isDockedOnSidebar = shouldLowerFabForNotebookSidebar && sidebarDockMetrics !== null
-  const assistantHasActivity =
-    activePanel === 'assistant' &&
-    (assistantLoading || assistantReply !== null || Boolean(assistantError))
-  const assistantUsesWideDesktopLayout =
-    activePanel === 'assistant' &&
-    isWideDesktop &&
-    isTallAssistantViewport &&
-    assistantHasActivity &&
-    !isDockedOnSidebar
-
-  const fabPositionStyle = (() => {
-    if (isDockedOnSidebar && sidebarDockMetrics) {
-      return {
-        left: `${sidebarDockMetrics.centerX}px`,
-        right: 'auto',
-        top: 'auto',
-        bottom: `${sidebarDockMetrics.bottomOffset}px`,
-        transform: 'translateX(-50%)',
-      }
-    }
-
-    if (isDesktopLayout) {
-      return {
-        left: sidebarCollapsed
-          ? 'max(2.15rem, calc(env(safe-area-inset-left) + 1rem))'
-          : 'max(8.15rem, calc(env(safe-area-inset-left) + 7rem))',
-        right: 'auto',
-        top: 'auto',
-        bottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 3.25rem))',
-        transform: 'translateY(0)',
-      }
-    }
-
-    return {
-      left: 'auto',
-      right: 'max(1rem, calc(env(safe-area-inset-right) + 0.85rem))',
-      top: 'auto',
-      bottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 3.25rem))',
-      transform: 'translateY(0)',
-    }
+    if (isDockedOnSidebar) return 'w-[min(calc(100vw-2rem),20rem)]'
+    return 'w-[min(calc(100vw-2rem),42rem)]'
   })()
+
+  const isaAssistantPanelDockTranslateXp = useMemo(() => {
+    if (
+      !isDockedOnSidebar ||
+      activePanel !== 'assistant' ||
+      sidebarDockCenterX == null
+    ) {
+      return 0
+    }
+    const vw = assistantDockViewportW
+    const pad = 20
+    const maxRem = assistantUsesWideDesktopLayout ? 58 : assistantHasActivity ? 44 : 28
+    const panelW = Math.min(vw - 32, maxRem * 16)
+    if (panelW < 24) return 0
+
+    const half = panelW / 2
+    const naturalLeft = sidebarDockCenterX - half
+    const naturalRight = sidebarDockCenterX + half
+    const minShift = pad - naturalLeft
+    const maxShift = vw - pad - naturalRight
+    if (minShift <= maxShift) {
+      if (minShift <= 0 && maxShift >= 0) return 0
+      if (minShift > 0) return Math.round(minShift)
+      return Math.round(maxShift)
+    }
+    return Math.round(minShift)
+  }, [
+    activePanel,
+    assistantDockViewportW,
+    assistantHasActivity,
+    assistantUsesWideDesktopLayout,
+    isDockedOnSidebar,
+    sidebarDockCenterX,
+  ])
 
   const handleFabPrimaryClick = () => {
     if (activePanel !== null) {
@@ -697,6 +704,8 @@ export function SplittersOperationalPriorityFab({
           cursor,
           straightRadiusMeters: reliefMeta?.straightRadiusMeters ?? 500,
           maxRouteMeters: reliefMeta?.maxRouteMeters ?? 200,
+          oltSlot: reliefExportOltSlot,
+          oltPort: reliefExportOltPort,
         })
         allEntries.push(...page.entries)
         hasMore = page.hasMore && page.nextCursor !== null
@@ -830,6 +839,8 @@ export function SplittersOperationalPriorityFab({
     }
   }
 
+  if (!enabled || mobileNavOpen) return null
+
   return (
     <>
       {overlayOpen ? (
@@ -845,19 +856,9 @@ export function SplittersOperationalPriorityFab({
 
         <div
           className={cn(
-          'pointer-events-none fixed z-[60] flex max-w-[calc(100vw-2rem)] flex-col gap-2.5 transition-[left,right,top,bottom,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-          isDockedOnSidebar
-            ? 'w-[min(calc(100vw-2rem),20rem)] items-center'
-            : activePanel === 'assistant'
-              ? assistantUsesWideDesktopLayout
-                ? 'w-[min(calc(100vw-2rem),58rem)]'
-                : isDesktopLayout
-                  ? assistantHasActivity
-                    ? 'w-[min(calc(100vw-2rem),44rem)]'
-                    : 'w-[min(calc(100vw-2rem),28rem)]'
-                  : 'w-[min(calc(100vw-1rem),36rem)]'
-              : 'w-[min(calc(100vw-2rem),42rem)]',
-          !isDockedOnSidebar && (isDesktopLayout ? 'items-start' : 'items-end'),
+          'pointer-events-none fixed z-[60] flex max-w-[calc(100vw-2rem)] flex-col gap-2.5 motion-safe:transition-[max-width,width] motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none',
+          fabShellWidthClass,
+          isDockedOnSidebar ? 'items-center' : isDesktopLayout ? 'items-start' : 'items-end',
           filtersDrawerOpen
             ? 'bottom-[max(10rem,calc(env(safe-area-inset-bottom)+8rem))]'
             : '',
@@ -1096,8 +1097,12 @@ export function SplittersOperationalPriorityFab({
               {reliefQueueQuery.isSuccess && hasReliefResults ? (
                 <div className="min-w-0 space-y-2">
                   <p className="text-[10px] leading-relaxed text-amber-900/80">
-                    Exibindo {reliefEntries.length} caso(s) sem alívio em {reliefPages.length} rodada(s),
-                    com {reliefScannedCount} candidato(s) avaliados no total. Não usa filtros da listagem.
+                    Exibindo {reliefEntries.length} caso(s) sem alívio em {reliefPages.length} rodada(s), com{' '}
+                    <span className="tabular-nums">{reliefMeta?.scannedCount ?? reliefScannedCount}</span>{' '}
+                    candidato(s) avaliados no snapshot global.
+                    {reliefMeta?.ponFilterActive
+                      ? ' Filtro de slot/porta OLT dos filtros da página aplicado aos casos da lista.'
+                      : ' Demais filtros da listagem (cidade, rua, OLT primário…) não entraram neste painel.'}
                   </p>
                   <div className="grid min-w-0 gap-2">
                     {reliefEntries.map((entry, index) => (
@@ -1191,6 +1196,11 @@ export function SplittersOperationalPriorityFab({
           <div
             id="splitters-assistant-fab-panel"
             className="pointer-events-auto w-full min-w-0 overflow-hidden rounded-2xl border border-sky-200/90 bg-gradient-to-b from-sky-50/98 to-white shadow-[0_12px_40px_-12px_rgba(15,23,42,0.22)] ring-1 ring-sky-950/[0.06]"
+            style={
+              isaAssistantPanelDockTranslateXp !== 0
+                ? { transform: `translateX(${isaAssistantPanelDockTranslateXp}px)` }
+                : undefined
+            }
             role="dialog"
             aria-modal="true"
             aria-labelledby="splitters-assistant-fab-title"

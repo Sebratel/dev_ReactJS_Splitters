@@ -7,6 +7,7 @@ import type {
 import type { SplittersListFilterState } from '@/features/splitters/model/splittersListFilters'
 import type { SplitterStatus } from '@/features/splitters/model/splitterStatus'
 import { resolveSplitterStatus } from '@/features/splitters/model/splitterStatus'
+import { resolveOltSlotPortFromSplitterTitleAndCode } from '@/features/splitters/lib/parseOltPonFromSplitterLabels'
 
 function buildRowContext(
   splitter: Splitter,
@@ -102,6 +103,33 @@ function matchesCondominium(
   return condominiumSelections.includes(name)
 }
 
+/**
+ * Slot/porta derivados do nome/código do splitter (sem fallback SQL no modelo `Splitter`).
+ * Sem dois números válidos no texto, não restringe no cliente.
+ */
+function matchesResolvedOltPon(
+  splitter: Splitter,
+  filters: SplittersListFilterState,
+): boolean {
+  const slotWant =
+    typeof filters.oltSlot === 'number' && Number.isFinite(filters.oltSlot)
+      ? Math.trunc(filters.oltSlot)
+      : null
+  const portWant =
+    typeof filters.oltPort === 'number' && Number.isFinite(filters.oltPort)
+      ? Math.trunc(filters.oltPort)
+      : null
+  if (slotWant === null && portWant === null) return true
+
+  const resolved = resolveOltSlotPortFromSplitterTitleAndCode(splitter.title, splitter.code)
+  const rSlot = resolved.slot
+  const rPort = resolved.port
+  if (rSlot === null || rPort === null) return true
+  if (slotWant !== null && rSlot !== slotWant) return false
+  if (portWant !== null && rPort !== portWant) return false
+  return true
+}
+
 function passesAllFilters(
   ctx: SplitterListFilterRowContext,
   oltSet: ReadonlySet<string> | null,
@@ -156,6 +184,7 @@ export function applySplittersListFilters(
       continue
     }
     if (!matchesCondominium(splitter, condominiumSelections)) continue
+    if (!matchesResolvedOltPon(splitter, filters)) continue
     out.push(splitter)
   }
   return out

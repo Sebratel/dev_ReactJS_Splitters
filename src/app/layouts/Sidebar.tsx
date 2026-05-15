@@ -69,6 +69,7 @@ export function Sidebar({
 
   return (
     <aside
+      id="splitters-app-sidebar"
       className={cn(
         'fixed z-50 flex flex-col overflow-hidden bg-white transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
         'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',

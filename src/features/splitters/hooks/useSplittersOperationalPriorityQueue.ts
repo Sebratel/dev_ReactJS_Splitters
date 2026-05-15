@@ -115,6 +115,8 @@ export function useSplittersOperationalPriorityQueue(options: {
       totalCount,
       maintenanceStatsByCode.size,
       state.maintenanceWindowDays,
+      state.oltSlot ?? null,
+      state.oltPort ?? null,
     ],
     queryFn: async (): Promise<OperationalPriorityQueueData> => {
       if (totalCount <= 0) {
@@ -143,6 +145,8 @@ export function useSplittersOperationalPriorityQueue(options: {
             ? undefined
             : state.maintenanceFilter === 'with-maintenance',
         maintenanceSplitterCodes,
+        oltSlot: state.oltSlot ?? null,
+        oltPort: state.oltPort ?? null,
       }
 
       const api = await fetchSplittersOperationalPriorityFromLocalDb(baseParams)

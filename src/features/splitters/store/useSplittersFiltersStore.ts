@@ -25,6 +25,8 @@ interface SplittersFiltersStore {
   setMaintenanceFilter: (
     value: SplittersListFilterState['maintenanceFilter'],
   ) => void
+  setOltSlot: (value: number | null) => void
+  setOltPort: (value: number | null) => void
   toggleOltCode: (oltCode: string) => void
   setOltCodes: (codes: string[]) => void
   togglePrimarySplitterTitle: (title: string) => void
@@ -88,6 +90,12 @@ export const useSplittersFiltersStore = create<SplittersFiltersStore>()(
 
   setMaintenanceFilter: (value) =>
     set((s) => ({ state: { ...s.state, maintenanceFilter: value } })),
+
+  setOltSlot: (value) =>
+    set((s) => ({ state: { ...s.state, oltSlot: value } })),
+
+  setOltPort: (value) =>
+    set((s) => ({ state: { ...s.state, oltPort: value } })),
 
   setOltCodes: (codes) =>
     set((s) => ({ state: { ...s.state, oltCodes: sortCodes(codes) } })),

@@ -105,6 +105,8 @@ export function SplittersPage() {
     setCorporateClientFilter,
     setMaintenanceFilter,
     clearAll,
+    setOltSlot,
+    setOltPort,
   } = useSplittersFiltersStore()
   const { data: accessPoints } = useAccessPointsForFilters()
   const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
@@ -220,6 +222,21 @@ export function SplittersPage() {
         onRemove: () => setMaintenanceFilter('all'),
       })
     }
+    const hasOltSlot = typeof state.oltSlot === 'number' && Number.isFinite(state.oltSlot)
+    const hasOltPort = typeof state.oltPort === 'number' && Number.isFinite(state.oltPort)
+    if (hasOltSlot || hasOltPort) {
+      const slotPart = hasOltSlot ? `slot ${state.oltSlot}` : null
+      const portPart = hasOltPort ? `porta ${state.oltPort}` : null
+      const ponLabel = [slotPart, portPart].filter(Boolean).join(' · ')
+      chips.push({
+        key: 'olt-pon',
+        label: `OLT PON: ${ponLabel}`,
+        onRemove: () => {
+          setOltSlot(null)
+          setOltPort(null)
+        },
+      })
+    }
     return chips
   }, [
     state.searchQuery,
@@ -243,6 +260,10 @@ export function SplittersPage() {
     setCorporateClientFilter,
     state.maintenanceFilter,
     state.maintenanceWindowDays,
+    state.oltSlot,
+    state.oltPort,
+    setOltSlot,
+    setOltPort,
   ])
 
   const activeFilterCount = countActiveSplittersFilters(state)
@@ -289,6 +310,8 @@ export function SplittersPage() {
     state.corporateClientFilter,
     state.maintenanceFilter,
     state.maintenanceWindowDays,
+    state.oltSlot,
+    state.oltPort,
   ])
 
   const maintenanceWindow = useMemo(() => {

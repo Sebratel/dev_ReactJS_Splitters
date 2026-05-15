@@ -25,6 +25,8 @@ export type NetworkReliefQueueData = {
   nextCursor: number | null
   totalEntries?: number
   generatedAt?: string | null
+  /** `true` quando a API aplicou slot/porta PON vindos dos filtros da listagem */
+  ponFilterActive?: boolean
 }
 
 export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
@@ -32,6 +34,8 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
   cursor?: number
   straightRadiusMeters?: number
   maxRouteMeters?: number
+  oltSlot?: number | null
+  oltPort?: number | null
 }): Promise<NetworkReliefQueueData> {
   const url = new URL(`${env.localBffUrl}/api/splitters/network-relief-queue`)
   if (options?.limit != null) url.searchParams.set('limit', String(options.limit))
@@ -41,6 +45,12 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
   }
   if (options?.maxRouteMeters != null) {
     url.searchParams.set('maxRouteMeters', String(options.maxRouteMeters))
+  }
+  if (options?.oltSlot != null && Number.isFinite(options.oltSlot)) {
+    url.searchParams.set('oltSlot', String(Math.trunc(options.oltSlot)))
+  }
+  if (options?.oltPort != null && Number.isFinite(options.oltPort)) {
+    url.searchParams.set('oltPort', String(Math.trunc(options.oltPort)))
   }
 
   const response = await fetchWithSessionAuth(url)
@@ -91,5 +101,6 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
       result.generatedAt === null || result.generatedAt === undefined
         ? null
         : String(result.generatedAt),
+    ponFilterActive: Boolean(result.ponFilterActive),
   }
 }

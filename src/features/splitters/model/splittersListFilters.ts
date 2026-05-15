@@ -52,6 +52,13 @@ export type SplittersListFilterState = {
   maintenanceWindowDays: 7 | 30 | 90
   /** Filtro de manutenção por splitter no período selecionado. */
   maintenanceFilter: 'all' | 'with-maintenance'
+  /**
+   * Filtro por slot da OLT derivado do título/código do splitter (regra PON: dois últimos
+   * grupos numéricos antes de `/`), com fallback às colunas SQL. `null` = sem filtro nessa dimensão.
+   */
+  oltSlot: number | null
+  /** Filtro por porta da OLT (mesma regra que `oltSlot`). */
+  oltPort: number | null
 }
 
 export const initialSplittersListFilters: SplittersListFilterState = {
@@ -66,6 +73,8 @@ export const initialSplittersListFilters: SplittersListFilterState = {
   corporateClientFilter: 'all',
   maintenanceWindowDays: 30,
   maintenanceFilter: 'all',
+  oltSlot: null,
+  oltPort: null,
 }
 
 export function countActiveSplittersFilters(state: SplittersListFilterState): number {
@@ -80,6 +89,9 @@ export function countActiveSplittersFilters(state: SplittersListFilterState): nu
   if (state.massivaOpenState !== 'all') n += 1
   if (state.corporateClientFilter !== 'all') n += 1
   if (state.maintenanceFilter !== 'all') n += 1
+  const hasOltSlot = typeof state.oltSlot === 'number' && Number.isFinite(state.oltSlot)
+  const hasOltPort = typeof state.oltPort === 'number' && Number.isFinite(state.oltPort)
+  if (hasOltSlot || hasOltPort) n += 1
   return n
 }
 

@@ -28,6 +28,8 @@ export function useFilteredSplitters(
   const corporateClientFilter = filters.corporateClientFilter
   const maintenanceWindowDays = filters.maintenanceWindowDays
   const maintenanceFilter = filters.maintenanceFilter
+  const oltSlot = filters.oltSlot ?? null
+  const oltPort = filters.oltPort ?? null
 
   return useMemo(() => {
     if (!splitters?.length) return []
@@ -43,6 +45,8 @@ export function useFilteredSplitters(
       corporateClientFilter,
       maintenanceWindowDays,
       maintenanceFilter,
+      oltSlot,
+      oltPort,
     }
     return applySplittersListFilters(splitters, filterSlice, {
       clientNamesIndex,
@@ -60,6 +64,10 @@ export function useFilteredSplitters(
     condominiumSelections,
     massivaOpenState,
     corporateClientFilter,
+    maintenanceWindowDays,
+    maintenanceFilter,
+    oltSlot,
+    oltPort,
     clientNamesIndex,
     occupancyCountBySplitterCode,
     streetBySplitterCode,

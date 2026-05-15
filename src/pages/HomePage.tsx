@@ -21,7 +21,6 @@ import {
 } from '@/features/dashboard/lib/dashboardNarrative'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
-import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
 import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
@@ -45,9 +44,6 @@ function statusBadgeClasses(status: MassivaStatus): string {
 
 export function HomePage() {
   const reduceMotion = useReducedMotion()
-  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
-  const accessUid = useAccessAuthStore((s) => s.user?.uid)
-  const showAccessFold = !isAdmin && Boolean(accessUid)
 
   const { data: networkStats, isLoading: isLoadingStats, dataUpdatedAt } = useNetworkStats()
   /** Dashboard é visível a todos: massivas aqui não dependem de `canViewMassiva` (a rota /massivas continua restrita). */
@@ -595,7 +591,7 @@ export function HomePage() {
 
     </div>
 
-    {showAccessFold ? <DashboardAccessRequestSection /> : null}
+    <DashboardAccessRequestSection />
     </>
   )
 }

@@ -40,6 +40,8 @@ export function SplittersFiltersDrawer({
     setMaintenanceWindowDays,
     setMaintenanceFilter,
     clearAll,
+    setOltSlot,
+    setOltPort,
   } = useSplittersFiltersStore()
 
   const { data: accessPoints } = useAccessPointsForFilters()
@@ -200,6 +202,66 @@ export function SplittersFiltersDrawer({
                   )
                 })}
               </ul>
+            </div>
+
+            <div className="space-y-2 border-t border-outline-variant/40 pt-6">
+              <SectionTitle>{'Slot e porta OLT (PON)'}</SectionTitle>
+              <p className="text-[11px] leading-snug text-on-surface-variant/75">
+                Mesma leitura do nome do splitter: dois últimos grupos numéricos antes da
+                primeira «/». Deixe em branco o que não quiser usar.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-semibold text-on-surface-variant/80">
+                    Slot
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    value={
+                      typeof state.oltSlot === 'number' ? state.oltSlot : ''
+                    }
+                    onChange={(e) => {
+                      const t = e.target.value.trim()
+                      if (t === '') {
+                        setOltSlot(null)
+                        return
+                      }
+                      const n = Number.parseInt(t, 10)
+                      setOltSlot(Number.isFinite(n) ? n : null)
+                    }}
+                    className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-sm tabular-nums focus:border-primary/40 focus:outline-none"
+                    placeholder="Qualquer"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-semibold text-on-surface-variant/80">
+                    Porta
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    value={
+                      typeof state.oltPort === 'number' ? state.oltPort : ''
+                    }
+                    onChange={(e) => {
+                      const t = e.target.value.trim()
+                      if (t === '') {
+                        setOltPort(null)
+                        return
+                      }
+                      const n = Number.parseInt(t, 10)
+                      setOltPort(Number.isFinite(n) ? n : null)
+                    }}
+                    className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-sm tabular-nums focus:border-primary/40 focus:outline-none"
+                    placeholder="Qualquer"
+                  />
+                </label>
+              </div>
             </div>
 
             <div className="space-y-2">
