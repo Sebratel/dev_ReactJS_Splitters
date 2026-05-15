@@ -20,6 +20,7 @@ import {
   formatMassivaStatusLabel,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'
+import { formatBrazilDayMonthDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { env } from '@/shared/config/env'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
@@ -53,7 +54,7 @@ function startOfDay(date: Date): Date {
 }
 
 function formatDayLabel(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+  return formatBrazilDayMonthDisplay(date)
 }
 
 function formatHoursLabel(hours: number | null): string {

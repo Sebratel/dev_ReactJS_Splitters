@@ -1,19 +1,10 @@
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
+
 /**
  * Exibição na tabela (pt-BR). Valores nulos viram "—".
  */
 export function formatMassivaListDateDisplay(date: Date | null): string {
-  if (date === null || Number.isNaN(date.getTime())) return '—'
-  try {
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date)
-  } catch {
-    return '—'
-  }
+  return formatBrazilDateTimeShortDisplay(date)
 }
 
 /**

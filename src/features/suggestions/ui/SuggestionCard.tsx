@@ -14,6 +14,7 @@ import {
   type PlatformSuggestionVoteType,
 } from '@/features/suggestions/api/platformSuggestions'
 import { SuggestionUserAvatar } from '@/features/suggestions/ui/SuggestionUserAvatar'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
 type SuggestionCardProps = {
@@ -36,20 +37,7 @@ const STATUS_OPTIONS: Array<{ value: PlatformSuggestionStatus; label: string }> 
 ]
 
 function formatSuggestionTimestamp(value: string | null): string {
-  if (!value) return 'Agora'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Agora'
-  try {
-    return date.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return 'Agora'
-  }
+  return formatBrazilDateTimeShortDisplay(value, 'Agora')
 }
 
 function statusMeta(status: PlatformSuggestionStatus): {

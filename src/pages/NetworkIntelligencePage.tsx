@@ -33,6 +33,11 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import {
+  formatBrazilDateDisplay,
+  formatBrazilDateTimeShortDisplay,
+  formatBrazilDayMonthDisplay,
+} from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import type { NetworkStats } from '@/shared/api/fetchNetworkStats'
 import {
@@ -49,7 +54,7 @@ const IntelligenceSaturationMap = lazy(async () => {
 })
 
 function formatDateLabel(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+  return formatBrazilDayMonthDisplay(date)
 }
 
 /** Ocupação da rede = portas ocupadas ÷ soma da capacidade (portas) no catálogo. */
@@ -2980,7 +2985,7 @@ export function NetworkIntelligencePage() {
                         </dl>
                         <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-snug text-slate-600">
                           <span className="font-semibold text-slate-500">Última</span>{' '}
-                          {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                          {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                         </p>
                       </article>
                     ))}
@@ -3017,7 +3022,7 @@ export function NetworkIntelligencePage() {
                             <td className="px-2 py-2 tabular-nums text-slate-700">{row.rompimentoCount.toLocaleString('pt-BR')}</td>
                             <td className="px-2 py-2 tabular-nums text-slate-700">{row.trocaFlatCount.toLocaleString('pt-BR')}</td>
                             <td className="px-2 py-2 text-[11px] text-slate-600">
-                              {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                              {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                             </td>
                           </tr>
                         ))}
@@ -3054,9 +3059,9 @@ export function NetworkIntelligencePage() {
                 <div className="rounded-xl bg-slate-50/90 px-3 py-2 ring-1 ring-slate-200/70">
                   <dt className="font-semibold text-slate-600">Janela analisada</dt>
                   <dd className="mt-0.5 text-[11px] font-semibold text-slate-800">
-                    {new Intl.DateTimeFormat('pt-BR').format(customStartDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))}
+                    {formatBrazilDateDisplay(customStartDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))}
                     {' '}até{' '}
-                    {new Intl.DateTimeFormat('pt-BR').format(customEndDate ?? new Date())}
+                    {formatBrazilDateDisplay(customEndDate ?? new Date())}
                   </dd>
                 </div>
               </dl>

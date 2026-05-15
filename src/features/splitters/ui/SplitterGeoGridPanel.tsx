@@ -1,4 +1,5 @@
 ﻿import type { GeogridReservaRow } from '@/features/splitters/model/geogridReservaRow'
+import { formatBrazilDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 
 type SplitterGeoGridPanelProps = {
   rows: GeogridReservaRow[]
@@ -13,11 +14,10 @@ function formatReservaLabel(row: GeogridReservaRow): string {
 
 function formatData(iso: string | null): string {
   if (!iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('pt-BR', {
+  return formatBrazilDateTimeDisplay(iso, {
     dateStyle: 'short',
     timeStyle: 'short',
+    fallback: iso,
   })
 }
 

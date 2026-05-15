@@ -31,6 +31,10 @@ import {
 import { SplittersUserAvatar } from '@/features/access/ui/SplittersUserAvatar'
 import { UserEditDrawer } from '@/features/access/ui/UserEditDrawer'
 import { AccessRequestsAdminPanel } from '@/features/access/ui/AccessRequestsAdminPanel'
+import {
+  formatBrazilDateDisplay,
+  formatBrazilDateTimeShortDisplay,
+} from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
 type UsersManagementWorkspaceProps = {
@@ -1109,7 +1113,7 @@ export function UsersManagementWorkspace({
                   <div className="flex items-center gap-1.5 text-xs text-neutral-600">
                     <LoginDot recency={rec} />
                     <span>
-                      {u.lastLoginAt ? u.lastLoginAt.toLocaleDateString('pt-BR') : 'Sem login'}
+                      {u.lastLoginAt ? formatBrazilDateDisplay(u.lastLoginAt) : 'Sem login'}
                     </span>
                   </div>
                 </div>
@@ -1216,7 +1220,7 @@ export function UsersManagementWorkspace({
                           <div className="mt-1 flex items-center gap-1.5 md:hidden">
                             <LoginDot recency={rec} />
                             <span className="text-[10px] text-neutral-500">
-                              {u.lastLoginAt ? u.lastLoginAt.toLocaleDateString('pt-BR') : 'Nunca'}
+                              {u.lastLoginAt ? formatBrazilDateDisplay(u.lastLoginAt) : 'Nunca'}
                             </span>
                           </div>
                         </div>
@@ -1226,7 +1230,7 @@ export function UsersManagementWorkspace({
                       <div className="flex items-center gap-2">
                         <LoginDot recency={rec} />
                         <span className="text-sm text-neutral-700">
-                          {u.lastLoginAt ? u.lastLoginAt.toLocaleString('pt-BR') : '—'}
+                          {u.lastLoginAt ? formatBrazilDateTimeShortDisplay(u.lastLoginAt) : '—'}
                         </span>
                       </div>
                       <p className="mt-0.5 text-[10px] text-neutral-400">

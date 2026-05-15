@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Database, RotateCcw, Save, Sparkles } from 'lucide-react'
 import type { IsaPromptConfig } from '@/features/access/api/isaPromptConfig'
 import { composeIsaPromptPreviewFromSections } from '@/features/access/api/isaPromptConfig'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
 type IsaSettingsWorkspaceProps = {
@@ -18,9 +19,7 @@ function buildDraftState(config: IsaPromptConfig): Record<string, string> {
 
 function formatDateTime(value: string | null): string {
   if (!value) return 'Ainda não salvo'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('pt-BR')
+  return formatBrazilDateTimeShortDisplay(value, value)
 }
 
 function sourceLabel(source: string): string {

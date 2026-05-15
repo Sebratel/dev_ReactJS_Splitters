@@ -23,22 +23,13 @@ import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
+import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import { resolveIsaHeroImageSrc } from '@/shared/lib/accessRequestFabImage'
 import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
 
 function formatTicketTimestamp(openedAt: Date | null): string {
-  if (openedAt == null) return 'detectado agora'
-  try {
-    return openedAt.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return 'detectado agora'
-  }
+  return formatBrazilCompactDateTimeDisplay(openedAt, 'detectado agora')
 }
 
 function statusBadgeClasses(status: MassivaStatus): string {

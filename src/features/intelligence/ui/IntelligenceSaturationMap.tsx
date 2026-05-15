@@ -13,6 +13,7 @@ import {
 } from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import type { IntelligenceSaturationCell } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
 const OSM_ATTR =
@@ -372,13 +373,7 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
             const title = cell.splitterTitle.trim()
             const captured =
               cell.capturedAt !== null
-                ? new Intl.DateTimeFormat('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }).format(cell.capturedAt)
+                ? formatBrazilDateTimeShortDisplay(cell.capturedAt)
                 : '—'
 
             const lat = cell.latitude as number
