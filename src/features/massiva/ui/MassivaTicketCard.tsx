@@ -35,6 +35,7 @@ import {
   preprocessOccurrenceTextForDisplay,
   splitOccurrenceIntoParagraphs,
 } from '@/features/massiva/lib/massivaOccurrenceText'
+import { isMassivaCatalogOutOfBand } from '@/features/massiva/lib/massivaCatalogTitle'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
@@ -327,13 +328,26 @@ export function MassivaTicketCard({
   const apKnown = ticket.apCode.trim() !== ''
   const splitterKnown = ticket.splitterCode.trim() !== ''
   const recordKind = classifyMassivaRecordKind(ticket)
+  const catalogOutOfBand = isMassivaCatalogOutOfBand(ticket.title)
 
   return (
     <article
-      className="h-full overflow-hidden rounded-2xl border border-neutral-200/85 bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1"
+      className={cn(
+        'h-full overflow-hidden rounded-2xl border bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1',
+        catalogOutOfBand
+          ? 'border-amber-400/80 ring-amber-400/35'
+          : 'border-neutral-200/85',
+      )}
       aria-label={`Massiva protocolo ${protocolLabel}`}
     >
-      <div className="flex flex-col gap-2.5 border-b border-neutral-100/90 bg-gradient-to-r from-white to-neutral-50/40 p-3 sm:flex-row sm:items-start sm:justify-between">
+      <div
+        className={cn(
+          'flex flex-col gap-2.5 border-b p-3 sm:flex-row sm:items-start sm:justify-between',
+          catalogOutOfBand
+            ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 to-orange-50/40'
+            : 'border-neutral-100/90 bg-gradient-to-r from-white to-neutral-50/40',
+        )}
+      >
         <div className="flex min-w-0 flex-1 gap-3">
           <div
             className={cn(
@@ -371,6 +385,14 @@ export function MassivaTicketCard({
               >
                 {statusLabel}
               </span>
+              {catalogOutOfBand ? (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-700/35 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950"
+                  title="Título diferente dos catálogos esperados (Registro Evento Massivo ou Registro Incidente de Rede)."
+                >
+                  Fora do catálogo esperado
+                </span>
+              ) : null}
               {ticket.usedFallback ? (
                 <span
                   className="rounded-md border border-neutral-200 bg-neutral-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-600"
