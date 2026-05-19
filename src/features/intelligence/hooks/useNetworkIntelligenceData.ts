@@ -14,6 +14,7 @@ import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplitte
 import { fetchMassivaPeriodSplitterLinksFromLocalDb } from '@/features/massiva/api/fetchMassivaPeriodSplitterLinksFromLocalDb'
 import { fetchMassivaDayShiftRecurrenceFromLocalDb } from '@/features/massiva/api/fetchMassivaDayShiftRecurrenceFromLocalDb'
 import type { MassivaDayShiftRecurrenceCell } from '@/features/intelligence/lib/massivaDayShiftRecurrence'
+import { buildTopStreetsByNormalizedStreet } from '@/features/intelligence/lib/geoStreetAggregation'
 import {
   countDistinctMassivasByLifecycleBucket,
   toLifecycleBucket,
@@ -172,7 +173,12 @@ export type IntelligenceOltDrilldownRow = {
 export type IntelligenceGeoDrilldown = {
   tipoLocal: Array<{ key: 'CONDOMÍNIO' | 'UNIDADE' | 'SEM_CLASSIFICACAO'; count: number }>
   topCondominios: Array<{ nome: string; splitters: number; massivaTickets: number }>
-  topStreets: Array<{ nome: string; splitters: number; criticalSplitters: number }>
+  topStreets: Array<{
+    streetKey: string
+    nome: string
+    splitters: number
+    criticalSplitters: number
+  }>
 }
 
 export type { LifecycleBucketKey } from '@/features/massiva/lib/lifecycleMassivaBuckets'
@@ -1201,7 +1207,6 @@ export function useNetworkIntelligenceData(
       ['SEM_CLASSIFICACAO', 0],
     ])
     const condos = new Map<string, { nome: string; splitters: number; massivaTickets: number }>()
-    const streets = new Map<string, { nome: string; splitters: number; criticalSplitters: number }>()
     for (const row of riskRanking) {
       const tipo = row.tipoLocal ?? 'SEM_CLASSIFICACAO'
       tipoCounts.set(tipo, (tipoCounts.get(tipo) ?? 0) + 1)
@@ -1212,14 +1217,6 @@ export function useNetworkIntelligenceData(
         c.splitters += 1
         c.massivaTickets += row.totalTickets
         condos.set(condoName, c)
-      }
-
-      const streetName = row.street?.trim() ?? ''
-      if (streetName !== '') {
-        const s = streets.get(streetName) ?? { nome: streetName, splitters: 0, criticalSplitters: 0 }
-        s.splitters += 1
-        if (row.currentUsagePercent >= 95) s.criticalSplitters += 1
-        streets.set(streetName, s)
       }
     }
 
@@ -1232,9 +1229,7 @@ export function useNetworkIntelligenceData(
       topCondominios: [...condos.values()]
         .sort((a, b) => b.massivaTickets - a.massivaTickets || b.splitters - a.splitters)
         .slice(0, 6),
-      topStreets: [...streets.values()]
-        .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.splitters - a.splitters)
-        .slice(0, 6),
+      topStreets: buildTopStreetsByNormalizedStreet(riskRanking),
     }
   }, [riskRanking])
 

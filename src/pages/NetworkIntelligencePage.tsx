@@ -54,6 +54,7 @@ import {
   formatDeltaPp,
   PP_TOOLTIP_DELTA_PERIOD,
 } from '@/features/intelligence/lib/percentagePointsHelp'
+import { buildTopStreetsByNormalizedStreet } from '@/features/intelligence/lib/geoStreetAggregation'
 
 const IntelligenceSaturationMap = lazy(async () => {
   const m = await import('@/features/intelligence/ui/IntelligenceSaturationMap')
@@ -784,7 +785,6 @@ export function NetworkIntelligencePage() {
       ['SEM_CLASSIFICACAO', 0],
     ])
     const condos = new Map<string, { nome: string; splitters: number; massivaTickets: number }>()
-    const streets = new Map<string, { nome: string; splitters: number; criticalSplitters: number }>()
     for (const row of contextualRiskRanking) {
       const tipo = row.tipoLocal ?? 'SEM_CLASSIFICACAO'
       tipoCounts.set(tipo, (tipoCounts.get(tipo) ?? 0) + 1)
@@ -794,13 +794,6 @@ export function NetworkIntelligencePage() {
         c.splitters += 1
         c.massivaTickets += row.totalTickets
         condos.set(condoName, c)
-      }
-      const streetName = row.street?.trim() ?? ''
-      if (streetName !== '') {
-        const s = streets.get(streetName) ?? { nome: streetName, splitters: 0, criticalSplitters: 0 }
-        s.splitters += 1
-        if (row.currentUsagePercent >= 95) s.criticalSplitters += 1
-        streets.set(streetName, s)
       }
     }
     return {
@@ -812,9 +805,7 @@ export function NetworkIntelligencePage() {
       topCondominios: [...condos.values()]
         .sort((a, b) => b.massivaTickets - a.massivaTickets || b.splitters - a.splitters)
         .slice(0, 6),
-      topStreets: [...streets.values()]
-        .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.splitters - a.splitters)
-        .slice(0, 6),
+      topStreets: buildTopStreetsByNormalizedStreet(contextualRiskRanking),
     }
   }, [contextualRiskRanking])
 
@@ -2442,7 +2433,8 @@ export function NetworkIntelligencePage() {
           <h2 className="text-sm font-bold text-slate-800">Geo e contexto local</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
             Resumo do mesmo conjunto filtrado: tipo de local (condomínio/unidade), condomínios com mais vínculos a
-            massivas no período (Σ por splitter) e ruas com mais equipamentos em uso crítico (≥95%).
+            massivas no período (Σ por splitter) e ruas com mais equipamentos em uso crítico (≥95%). Ruas
+            agrupadas com a mesma normalização do mapa (cadastro/caixa; ex.: Av. = Avenida).
           </p>
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -2569,7 +2561,7 @@ export function NetworkIntelligencePage() {
                           Top ruas com criticidade
                         </p>
                         <p className="text-[11px] text-slate-600">
-                          Mais splitters em uso crítico (≥95%)
+                          Mais splitters em uso crítico (≥95%) — mesma regra de “mesma rua” do mapa
                         </p>
                       </div>
                     </div>
@@ -2580,7 +2572,7 @@ export function NetworkIntelligencePage() {
                   <ul className="mt-2 space-y-2">
                     {contextualGeoDrilldown.topStreets.map((item, idx) => (
                       <li
-                        key={item.nome}
+                        key={item.streetKey}
                         className="rounded-xl bg-white/80 px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200/70"
                       >
                         <div className="flex items-start gap-2">
