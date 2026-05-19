@@ -1,11 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -28,7 +26,6 @@ import {
   MoonStar,
   Sun,
   Sunrise,
-  Ticket,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -41,12 +38,22 @@ import {
 import { cn } from '@/shared/lib/utils'
 import type { NetworkStats } from '@/shared/api/fetchNetworkStats'
 import {
+  countDistinctMassivasByLifecycleBucket,
+  toLifecycleBucket,
+} from '@/features/massiva/lib/lifecycleMassivaBuckets'
+import {
   useNetworkIntelligenceData,
-  type IntelligenceBarPoint,
   type IntelligenceDateRangePreset,
   type IntelligenceRiskRankingRow,
   type TrendLabel,
 } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
+import { MassivaRecurrencePanel } from '@/features/intelligence/ui/MassivaRecurrencePanel'
+import { TrendStatusCapacityPanel } from '@/features/intelligence/ui/TrendStatusCapacityPanel'
+import { OccupancyCapacityCharts } from '@/features/intelligence/ui/OccupancyCapacityCharts'
+import {
+  formatDeltaPp,
+  PP_TOOLTIP_DELTA_PERIOD,
+} from '@/features/intelligence/lib/percentagePointsHelp'
 
 const IntelligenceSaturationMap = lazy(async () => {
   const m = await import('@/features/intelligence/ui/IntelligenceSaturationMap')
@@ -576,13 +583,14 @@ export function NetworkIntelligencePage() {
     kpis,
     trends,
     areaPoints,
-    barPoints,
+    massivaRecurrenceInsights,
     recurrenceCells,
     saturationCells,
     decisionKpis,
     riskRanking,
     impactUrgencyMatrix,
     massivaRollup,
+    massivaPeriodLinks,
     deltaReferenceLabel,
     lifecycleCohorts,
     lifecycleAlerts,
@@ -634,11 +642,12 @@ export function NetworkIntelligencePage() {
       if (!topDelta || currentDelta > topDeltaValue) topDelta = t
     }
 
-    const topMassiva = barPoints[0]
+    const topRanked = massivaRecurrenceInsights.ranking[0]
+    const topMassiva = topRanked
       ? {
-          code: barPoints[0].splitterCode,
-          title: barPoints[0].splitterTitle,
-          totalTickets: barPoints[0].totalTickets,
+          code: topRanked.splitterCode,
+          title: topRanked.splitterTitle,
+          totalTickets: topRanked.distinctMassivas,
         }
       : null
 
@@ -661,7 +670,7 @@ export function NetworkIntelligencePage() {
       geoWithCoords,
       geoWithoutCoords,
     }
-  }, [trends, massivaRollup, barPoints, deltaReferenceLabel])
+  }, [trends, massivaRollup, massivaRecurrenceInsights, deltaReferenceLabel])
 
   const mapGeoSnapshot = useMemo(() => {
     const sliceTotal = saturationCells.length
@@ -673,17 +682,15 @@ export function NetworkIntelligencePage() {
 
   const maxRecurrence = Math.max(1, ...recurrenceCells.map((cell) => cell.count))
 
-  /** Narrativa e metadados para o gráfico “Massivas por splitter”. */
-  const massivaBarNarrative = useMemo(() => {
-    if (barPoints.length === 0) return null
-    const leader = barPoints[0]
-    const periodLabel =
+  const intelligencePeriodLabel = useMemo(
+    () =>
       preset === 'custom' && customStart.trim() !== '' && customEnd.trim() !== ''
         ? `${customStart} → ${customEnd}`
-        : presetButtonLabel(preset)
-    const ticketsInTop10 = barPoints.reduce((s, p) => s + p.totalTickets, 0)
-    return { leader, periodLabel, ticketsInTop10 }
-  }, [barPoints, preset, customStart, customEnd])
+        : presetButtonLabel(preset),
+    [preset, customStart, customEnd],
+  )
+
+  const trendDeltaReference = deltaReferenceLabel === 'Δ30d' ? '30d' : '7d'
 
   const contextualRiskRanking = useMemo(() => {
     let rows = riskRanking
@@ -940,6 +947,13 @@ export function NetworkIntelligencePage() {
 
   const contextualLifecycle = useMemo(() => {
     const rows = contextualRiskRanking
+    const codeToBucket = new Map(
+      rows.map((row) => [row.splitterCode, toLifecycleBucket(row.ageYears)] as const),
+    )
+    const distinctMassivasByBucket = countDistinctMassivasByLifecycleBucket(
+      massivaPeriodLinks,
+      codeToBucket,
+    )
     const kpis = {
       avgAgeYears:
         rows.length > 0
@@ -977,7 +991,8 @@ export function NetworkIntelligencePage() {
           scoped.length > 0
             ? Number((scoped.reduce((sum, row) => sum + row.selectedDelta, 0) / scoped.length).toFixed(2))
             : 0,
-        massivaTickets: scoped.reduce((sum, row) => sum + row.totalTickets, 0),
+        massivaLinkages: scoped.reduce((sum, row) => sum + row.totalTickets, 0),
+        distinctMassivas: distinctMassivasByBucket[bucket] ?? 0,
       }
     })
 
@@ -1006,7 +1021,7 @@ export function NetworkIntelligencePage() {
     )
 
     return { kpis, buckets, heatmap }
-  }, [contextualRiskRanking])
+  }, [contextualRiskRanking, massivaPeriodLinks])
 
   const contextualMaintenanceRows = useMemo(() => {
     const term = splitterSearch.trim().toLowerCase()
@@ -1461,12 +1476,12 @@ export function NetworkIntelligencePage() {
                         : intelligenceSnapshot.topDelta.delta30d) >= 0
                         ? '+'
                         : ''}
-                      {(
+                      {formatDeltaPp(
                         deltaReferenceLabel === 'Δ7d'
                           ? intelligenceSnapshot.topDelta.delta7d
-                          : intelligenceSnapshot.topDelta.delta30d
-                      ).toFixed(2)}
-                      % no período
+                          : intelligenceSnapshot.topDelta.delta30d,
+                      )}{' '}
+                      no período
                     </p>
                     <Link
                       to={`/splitters/${encodeURIComponent(intelligenceSnapshot.topDelta.splitterCode)}`}
@@ -1667,8 +1682,8 @@ export function NetworkIntelligencePage() {
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
                   <p><span className="font-semibold">Uso:</span> {row.currentUsagePercent.toFixed(1)}%</p>
                   <p>
-                    <span className="font-semibold">{deltaReferenceLabel}:</span> {row.selectedDelta >= 0 ? '+' : ''}
-                    {row.selectedDelta.toFixed(2)}%
+                    <span className="font-semibold">{deltaReferenceLabel}:</span>{' '}
+                    <span title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>{formatDeltaPp(row.selectedDelta)}</span>
                   </p>
                   <p><span className="font-semibold">Massivas:</span> {row.openTickets}/{row.totalTickets}</p>
                 </div>
@@ -1686,8 +1701,11 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2" title="Percentual de portas de saída em uso neste splitter">
                     Uso
                   </th>
-                  <th className="px-2 py-2" title={`Variação de ocupação no período de referência (${deltaReferenceLabel})`}>
-                    {deltaReferenceLabel}
+                  <th
+                    className="px-2 py-2"
+                    title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}
+                  >
+                    {deltaReferenceLabel} (pp)
                   </th>
                   <th className="px-2 py-2" title="Tickets abertos no período / total histórico considerado">
                     Massivas
@@ -1716,9 +1734,11 @@ export function NetworkIntelligencePage() {
                       </span>
                     </td>
                     <td className="px-2 py-2 font-semibold tabular-nums text-slate-800">{row.currentUsagePercent.toFixed(1)}%</td>
-                    <td className="px-2 py-2 font-semibold tabular-nums text-slate-800">
-                      {row.selectedDelta >= 0 ? '+' : ''}
-                      {row.selectedDelta.toFixed(2)}%
+                    <td
+                      className="px-2 py-2 font-semibold tabular-nums text-slate-800"
+                      title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}
+                    >
+                      {formatDeltaPp(row.selectedDelta)}
                     </td>
                     <td className="px-2 py-2 tabular-nums text-slate-700">{row.openTickets}/{row.totalTickets}</td>
                   </tr>
@@ -1838,7 +1858,9 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Score ciclo</th>
                   <th className="px-2 py-2">Idade</th>
                   <th className="px-2 py-2">Uso</th>
-                  <th className="px-2 py-2">{deltaReferenceLabel}</th>
+                  <th className="px-2 py-2" title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>
+                    {deltaReferenceLabel} (pp)
+                  </th>
                   <th className="px-2 py-2" title="Projeção linear simplificada: dias até 95% de ocupação se o ritmo recente se mantiver">
                     ETA 95%
                   </th>
@@ -1854,7 +1876,9 @@ export function NetworkIntelligencePage() {
                     <td className="px-2 py-2 tabular-nums font-semibold">{row.riskScore.toFixed(1)}</td>
                     <td className="px-2 py-2 tabular-nums">{row.ageYears.toFixed(2)} anos</td>
                     <td className="px-2 py-2 tabular-nums">{row.currentUsagePercent.toFixed(1)}%</td>
-                    <td className="px-2 py-2 tabular-nums">{row.selectedDelta >= 0 ? '+' : ''}{row.selectedDelta.toFixed(2)}%</td>
+                    <td className="px-2 py-2 tabular-nums" title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>
+                      {formatDeltaPp(row.selectedDelta)}
+                    </td>
                     <td className="px-2 py-2 tabular-nums" title={row.etaTo95Days == null ? undefined : `Projeção: ~${row.etaTo95Days} dias para 95% ao ritmo atual`}>{row.etaTo95Days == null ? '—' : `${row.etaTo95Days} dias`}</td>
                   </tr>
                 ))}
@@ -1896,18 +1920,21 @@ export function NetworkIntelligencePage() {
         >
           <h2 className="text-sm font-bold text-slate-800">Curva de envelhecimento por faixa</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-            Linhas da tabela = faixas de idade do equipamento. Tickets = massivas associadas a splitters naquela faixa no
-            período.
+            Linhas = faixa de idade do equipamento no recorte.{' '}
+            <span className="font-semibold text-slate-700">Massivas (ún.)</span> = ocorrências distintas com splitter na
+            faixa; <span className="font-semibold text-slate-700">Vínculos</span> = soma massiva × splitter (a mesma
+            massiva pode contar mais de uma vez).
           </p>
           <div className="mt-3 overflow-auto">
-            <table className="w-full min-w-[680px] text-left text-xs">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-2 py-2">Faixa (anos)</th>
                   <th className="px-2 py-2">Splitters</th>
                   <th className="px-2 py-2">Uso médio</th>
                   <th className="px-2 py-2">{deltaReferenceLabel} médio</th>
-                  <th className="px-2 py-2">Tickets</th>
+                  <th className="px-2 py-2">Massivas (ún.)</th>
+                  <th className="px-2 py-2">Vínculos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1917,7 +1944,8 @@ export function NetworkIntelligencePage() {
                     <td className="px-2 py-2 tabular-nums">{row.splitters}</td>
                     <td className="px-2 py-2 tabular-nums">{row.avgUsagePercent.toFixed(1)}%</td>
                     <td className="px-2 py-2 tabular-nums">{row.avgDeltaReference >= 0 ? '+' : ''}{row.avgDeltaReference.toFixed(2)}%</td>
-                    <td className="px-2 py-2 tabular-nums">{row.massivaTickets.toLocaleString('pt-BR')}</td>
+                    <td className="px-2 py-2 tabular-nums">{row.distinctMassivas.toLocaleString('pt-BR')}</td>
+                    <td className="px-2 py-2 tabular-nums">{row.massivaLinkages.toLocaleString('pt-BR')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2026,6 +2054,12 @@ export function NetworkIntelligencePage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <OccupancyCapacityCharts
+            trends={trends}
+            formatDateLabel={formatDateLabel}
+            deltaReferenceLabel={deltaReferenceLabel}
+            trendDeltaReference={trendDeltaReference}
+          />
         </motion.article>
 
         <motion.article
@@ -2038,214 +2072,35 @@ export function NetworkIntelligencePage() {
             <AlertTriangle size={16} className="text-amber-600" />
             <h2 className="text-sm font-bold text-slate-800">Status por splitter</h2>
           </div>
-          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-            Lista dos primeiros splitters com tendência no período. O selo colorido repete a mesma classificação da pizza
-            de tendências. &quot;Variação 7d&quot; é quanto a ocupação mudou em uma semana (em pontos percentuais).
+          <p className="mb-3 text-[11px] leading-relaxed text-slate-600">
+            Gatilhos de <span className="font-semibold">capacidade</span> (ocupação de portas). Variações em{' '}
+            <span className="font-semibold">pp</span> (pontos percentuais) — veja o quadro abaixo. O Δ usa snapshots — só
+            grava quando a ocupação muda. Massivas, score de risco e campeões de uso/Δ ficam nos cards acima e no ranking.
           </p>
-          <ul className="space-y-2">
-            {trends.slice(0, 8).map((row) => (
-              <li key={row.splitterCode} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50/80 px-2.5 py-2">
-                <div className="min-w-0 flex-1">
-                  {row.splitterTitle.trim() !== '' ? (
-                    <>
-                      <p className="truncate text-xs font-bold text-slate-800" title={row.splitterTitle.trim()}>
-                        {row.splitterTitle.trim()}
-                      </p>
-                      <p className="font-mono text-[10px] font-semibold text-slate-500">{row.splitterCode}</p>
-                    </>
-                  ) : (
-                    <p className="text-xs font-bold text-slate-700">{row.splitterCode}</p>
-                  )}
-                  <p className="text-[11px] text-slate-500">Variação 7d: {row.delta7d >= 0 ? "+" : ""}{row.delta7d.toFixed(2)} pp</p>
-                </div>
-                <span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', trendBadgeClass(row.label))}>
-                  {row.label}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <TrendStatusCapacityPanel
+            trends={trends}
+            deltaReferenceLabel={deltaReferenceLabel}
+            trendDeltaReference={trendDeltaReference}
+            trendBadgeClass={trendBadgeClass}
+          />
         </motion.article>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <motion.article
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.12 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2"
         >
-          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Ticket size={16} className="shrink-0 text-amber-600" />
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Onde as massivas mais aparecem</h2>
-                <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                  Top 10 por quantidade de massivas distintas ligadas a cada equipamento no período (valor real por
-                  splitter).
-                </p>
-              </div>
-            </div>
-            {massivaBarNarrative ? (
-              <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 ring-1 ring-amber-200/80">
-                Período: {massivaBarNarrative.periodLabel}
-              </span>
-            ) : null}
-          </div>
+          <MassivaRecurrencePanel
+            insights={massivaRecurrenceInsights}
+            periodLabel={intelligencePeriodLabel}
+            deltaReferenceLabel={deltaReferenceLabel}
+            distinctMassivaCountInPeriod={massivaRollup.distinctMassivaCount}
+          />
+        </motion.div>
 
-          <ol className="mb-3 grid list-none gap-2 sm:grid-cols-3">
-            {[
-              {
-                step: '1',
-                title: 'Ordem das colunas',
-                body: 'Da esquerda para a direita: equipamentos com mais vínculos a massivas distintas no período (1º = líder).',
-              },
-              {
-                step: '2',
-                title: 'O que a barra mostra',
-                body: (
-                  <>
-                    Altura = número de <span className="font-semibold text-amber-800">massivas distintas</span> em que
-                    esse splitter entra. Não é “clientes naquele poste”: isso não existe por equipamento no cadastro.
-                  </>
-                ),
-              },
-              {
-                step: '3',
-                title: 'Total de afetados',
-                body: (
-                  <>
-                    Clientes impactados vêm no cartão &quot;Massivas no período&quot; e na frase abaixo: total único por
-                    ocorrência na rede, sem repetir por splitter.
-                  </>
-                ),
-              },
-            ].map((item) => (
-              <li
-                key={item.step}
-                className="flex gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-2.5 py-2 ring-1 ring-slate-100/80"
-              >
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-white shadow-sm">
-                  {item.step}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-600">{item.title}</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-slate-700">{item.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-
-          {massivaBarNarrative ? (
-            <div className="mb-3 rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50/90 to-white px-3 py-2.5 ring-1 ring-amber-100/80">
-              <p className="text-[10px] font-extrabold uppercase tracking-wide text-amber-900/80">Em uma frase</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-800">
-                <span className="font-semibold text-amber-950">{massivaBarNarrative.leader.splitterTitle}</span> aparece
-                em mais massivas distintas neste top 10 (
-                <span className="font-bold tabular-nums text-amber-950">
-                  {massivaBarNarrative.leader.totalTickets.toLocaleString('pt-BR')}
-                </span>{' '}
-                vínculos). No período inteiro, o cadastro registra{' '}
-                <span className="font-bold tabular-nums text-amber-950">
-                  {massivaRollup.affectedClientsDistinctSum.toLocaleString('pt-BR')}
-                </span>{' '}
-                clientes afetados no total das ocorrências (uma vez por massiva, não por splitter). Os 10 da lista somam{' '}
-                <span className="font-bold tabular-nums text-amber-950">
-                  {massivaBarNarrative.ticketsInTop10.toLocaleString('pt-BR')}
-                </span>{' '}
-                vínculos massiva × equipamento (pode haver repetição da mesma massiva em vários splitters).
-              </p>
-            </div>
-          ) : null}
-
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-600">
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/90 px-2 py-1 ring-1 ring-slate-200/80">
-              <span className="size-2.5 rounded-sm bg-[#d97706]" aria-hidden />
-              Massivas distintas por splitter
-            </span>
-          </div>
-
-          <div className="h-[min(400px,52vh)] min-h-[320px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barPoints}
-                margin={{ bottom: 4, left: 6, right: 10, top: 10 }}
-                barCategoryGap="18%"
-              >
-                <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" vertical={false} />
-                <XAxis
-                  dataKey="splitterTitle"
-                  interval={0}
-                  angle={-36}
-                  textAnchor="end"
-                  height={92}
-                  tick={{ fontSize: 10, fill: '#475569' }}
-                  tickFormatter={(v) => {
-                    const s = String(v ?? '')
-                    return s.length > 22 ? `${s.slice(0, 20)}…` : s
-                  }}
-                  stroke="#94a3b8"
-                />
-                <YAxis
-                  orientation="left"
-                  stroke="#b45309"
-                  tick={{ fontSize: 10, fill: '#9a3412' }}
-                  allowDecimals={false}
-                  width={36}
-                  label={{
-                    value: 'Massivas',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { fontSize: 10, fill: '#9a3412', fontWeight: 700 },
-                  }}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload as IntelligenceBarPoint
-                    return (
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs shadow-lg">
-                        <p className="max-w-[260px] font-bold leading-snug text-slate-900">{d.splitterTitle}</p>
-                        <p className="mt-0.5 font-mono text-[10px] font-semibold text-slate-500">{d.splitterCode}</p>
-                        <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
-                          Quantidade de massivas distintas ligadas a este splitter no período.
-                        </p>
-                        <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
-                          {payload.map((entry) => (
-                            <p
-                              key={String(entry.name)}
-                              className="tabular-nums"
-                              style={{ color: entry.color ?? '#334155' }}
-                            >
-                              <span className="font-semibold">{String(entry.name)}</span>
-                              {' : '}
-                              {Number(entry.value ?? 0).toLocaleString('pt-BR')}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: 4 }}
-                  formatter={(value) => <span className="text-slate-700">{String(value)}</span>}
-                />
-                <Bar
-                  dataKey="totalTickets"
-                  name="Massivas (distintas)"
-                  fill="#d97706"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={36}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-            Nomes no eixo X vêm do cadastro; passe o mouse para ver o código e os valores exatos. Se vários splitters
-            listam o mesmo número, tendem a estar nas mesmas massivas — o total de clientes está no cartão do período,
-            não na altura da barra.
-          </p>
-        </motion.article>
 
         <motion.article
           initial={{ opacity: 0, y: 20 }}
@@ -2258,9 +2113,10 @@ export function NetworkIntelligencePage() {
             <h2 className="text-sm font-bold text-slate-800">Recorrência dia × turno</h2>
           </div>
           <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-            Cada célula soma quantas massivas tiveram <span className="font-semibold">última abertura</span> naquele dia da
-            semana e faixa de horário (madrugada &lt;6h, manhã 6–12h, tarde 12–18h, noite 18–24h — horário do servidor).
-            Quanto mais escura a célula, maior o volume — ajuda a planejar plantão e capacidade.
+            Cada célula conta <span className="font-semibold">massivas distintas</span> cuja{' '}
+            <span className="font-semibold">abertura</span> caiu naquele dia da semana e faixa de horário (madrugada
+            &lt;6h, manhã 6–12h, tarde 12–18h, noite 18–24h — fuso do servidor). Não repete por splitter: uma
+            ocorrência com muitos equipamentos entra uma vez. Quanto mais escura, maior o volume.
           </p>
           <div className="grid grid-cols-4 gap-1.5">
             {recurrenceCells.map((cell) => {

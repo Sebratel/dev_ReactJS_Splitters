@@ -11,6 +11,15 @@ import {
   type NetworkStats,
 } from '@/shared/api/fetchNetworkStats'
 import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
+import { fetchMassivaPeriodSplitterLinksFromLocalDb } from '@/features/massiva/api/fetchMassivaPeriodSplitterLinksFromLocalDb'
+import { fetchMassivaDayShiftRecurrenceFromLocalDb } from '@/features/massiva/api/fetchMassivaDayShiftRecurrenceFromLocalDb'
+import type { MassivaDayShiftRecurrenceCell } from '@/features/intelligence/lib/massivaDayShiftRecurrence'
+import {
+  countDistinctMassivasByLifecycleBucket,
+  toLifecycleBucket,
+  type LifecycleBucketKey,
+  type MassivaPeriodSplitterLink,
+} from '@/features/massiva/lib/lifecycleMassivaBuckets'
 import {
   fetchMassivaPeriodRollupFromLocalDb,
   type IntelligenceMassivaPeriodRollup,
@@ -21,6 +30,10 @@ import {
   type MaintenanceBySplitterRow,
   type MaintenanceBySplitterTotals,
 } from '@/features/intelligence/api/fetchMaintenanceBySplitter'
+import {
+  computeMassivaRecurrenceInsights,
+  type MassivaRecurrenceInsights,
+} from '@/features/intelligence/lib/massivaRecurrenceInsights'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
@@ -162,7 +175,7 @@ export type IntelligenceGeoDrilldown = {
   topStreets: Array<{ nome: string; splitters: number; criticalSplitters: number }>
 }
 
-export type LifecycleBucketKey = '0-1' | '1-3' | '3-5' | '5+'
+export type { LifecycleBucketKey } from '@/features/massiva/lib/lifecycleMassivaBuckets'
 
 export type IntelligenceLifecycleKpis = {
   avgAgeYears: number
@@ -176,7 +189,10 @@ export type IntelligenceLifecycleBucketRow = {
   splitters: number
   avgUsagePercent: number
   avgDeltaReference: number
-  massivaTickets: number
+  /** Soma de vínculos massiva × splitter (pode repetir a mesma massiva). */
+  massivaLinkages: number
+  /** Massivas distintas com ao menos um splitter da faixa no período. */
+  distinctMassivas: number
 }
 
 export type IntelligenceLifecycleHeatmapCell = {
@@ -220,6 +236,8 @@ export type IntelligenceDataset = {
   splittersMeta: Splitter[]
   source: 'live' | 'mock'
   massivaRollup: IntelligenceMassivaPeriodRollup
+  massivaPeriodLinks: MassivaPeriodSplitterLink[]
+  massivaDayShiftRecurrence: MassivaDayShiftRecurrenceCell[]
 }
 
 const EMPTY_MASSIVA_ROLLUP: IntelligenceMassivaPeriodRollup = {
@@ -255,13 +273,6 @@ function computeMapAttentionScore(
 function diffDays(a: Date, b: Date): number {
   const ms = Math.max(0, b.getTime() - a.getTime())
   return ms / (24 * 60 * 60 * 1000)
-}
-
-function toLifecycleBucket(ageYears: number): LifecycleBucketKey {
-  if (ageYears < 1) return '0-1'
-  if (ageYears < 3) return '1-3'
-  if (ageYears < 5) return '3-5'
-  return '5+'
 }
 
 function asTrendLabel(label: string): TrendLabel {
@@ -584,6 +595,8 @@ function makeMockDataset(): IntelligenceDataset {
       openMassivasCount: 14,
       closedMassivasCount: 172,
     },
+    massivaPeriodLinks: [],
+    massivaDayShiftRecurrence: [],
   }
 }
 
@@ -625,13 +638,40 @@ async function fetchLiveDataset(
         })
       : fetchSplitterInsightsBatched(codes, massivaOpenedRange)
 
-  const rollupPromise =
-    codes.length === 0
-      ? Promise.resolve(EMPTY_MASSIVA_ROLLUP)
-      : fetchMassivaPeriodRollupFromLocalDb(codes, massivaOpenedRange).catch(() => EMPTY_MASSIVA_ROLLUP)
+  const rollupPromise = fetchMassivaPeriodRollupFromLocalDb([], massivaOpenedRange, {
+    scope: 'all_linked',
+  }).catch((error) => {
+    console.warn('[network-intelligence] Falha ao agregar massivas do período:', error)
+    return EMPTY_MASSIVA_ROLLUP
+  })
 
-  const [networkStatsRaw, { trends: trendsByCode, massiva: statsByCode }, massivaRollup] =
-    await Promise.all([statsPromise, insightsPromise, rollupPromise])
+  const linksPromise = fetchMassivaPeriodSplitterLinksFromLocalDb(massivaOpenedRange).catch(
+    (error) => {
+      console.warn('[network-intelligence] Falha ao listar vínculos de massivas do período:', error)
+      return [] as MassivaPeriodSplitterLink[]
+    },
+  )
+
+  const recurrencePromise = fetchMassivaDayShiftRecurrenceFromLocalDb(massivaOpenedRange).catch(
+    (error) => {
+      console.warn('[network-intelligence] Falha na recorrência dia×turno:', error)
+      return [] as MassivaDayShiftRecurrenceCell[]
+    },
+  )
+
+  const [
+    networkStatsRaw,
+    { trends: trendsByCode, massiva: statsByCode },
+    massivaRollup,
+    massivaPeriodLinks,
+    massivaDayShiftRecurrence,
+  ] = await Promise.all([
+    statsPromise,
+    insightsPromise,
+    rollupPromise,
+    linksPromise,
+    recurrencePromise,
+  ])
 
   const networkStats: NetworkStats = networkStatsRaw ?? EMPTY_NETWORK_STATS
 
@@ -694,6 +734,8 @@ async function fetchLiveDataset(
     splittersMeta: splitters.items,
     source: 'live',
     massivaRollup,
+    massivaPeriodLinks,
+    massivaDayShiftRecurrence,
   }
 }
 
@@ -925,33 +967,12 @@ export function useNetworkIntelligenceData(
   }, [filtered, splittersMetaByCode])
 
   const recurrenceCells = useMemo<IntelligenceRecurrenceCell[]>(() => {
-    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
-    const shifts = ['Madrugada', 'Manha', 'Tarde', 'Noite']
-
-    const base: IntelligenceRecurrenceCell[] = []
-    for (const weekday of weekdays) {
-      for (const shift of shifts) {
-        base.push({ weekday, shift, count: 0 })
-      }
-    }
-    if (!filtered) return base
-
-    const index = new Map<string, IntelligenceRecurrenceCell>()
-    for (const item of base) {
-      index.set(`${item.weekday}-${item.shift}`, item)
-    }
-
-    for (const row of filtered.massivaStats) {
-      if (!row.latestOpenedAt) continue
-      const weekday = weekdays[row.latestOpenedAt.getDay()] ?? 'Dom'
-      const hour = row.latestOpenedAt.getHours()
-      const shift = hour < 6 ? 'Madrugada' : hour < 12 ? 'Manha' : hour < 18 ? 'Tarde' : 'Noite'
-      const key = `${weekday}-${shift}`
-      const cell = index.get(key)
-      if (cell) cell.count += 1
-    }
-
-    return base
+    if (!filtered) return []
+    return filtered.massivaDayShiftRecurrence.map((cell) => ({
+      weekday: cell.weekday,
+      shift: cell.shift,
+      count: cell.count,
+    }))
   }, [filtered])
 
   const corporateSplitterCodes = useMemo(() => {
@@ -1064,6 +1085,11 @@ export function useNetworkIntelligenceData(
       })
       .sort((a, b) => b.riskScore - a.riskScore)
   }, [filtered, splittersMetaByCode, deltaReference])
+
+  const massivaRecurrenceInsights = useMemo<MassivaRecurrenceInsights>(
+    () => computeMassivaRecurrenceInsights(riskRanking),
+    [riskRanking],
+  )
 
   const decisionKpis = useMemo<IntelligenceDecisionKpis>(() => {
     const totalSplittersInWindow = riskRanking.length
@@ -1249,8 +1275,18 @@ export function useNetworkIntelligenceData(
       splitters: number
       sumUsage: number
       sumDelta: number
-      massivaTickets: number
-    }>(bucketOrder.map((bucket) => [bucket, { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }]))
+      massivaLinkages: number
+    }>(bucketOrder.map((bucket) => [bucket, { splitters: 0, sumUsage: 0, sumDelta: 0, massivaLinkages: 0 }]))
+
+    const codeToBucket = new Map<string, LifecycleBucketKey>()
+    for (const row of rows) {
+      codeToBucket.set(row.splitterCode, toLifecycleBucket(row.ageYears))
+    }
+
+    const distinctByBucket = countDistinctMassivasByLifecycleBucket(
+      filtered?.massivaPeriodLinks ?? [],
+      codeToBucket,
+    )
 
     for (const row of rows) {
       const bucket = toLifecycleBucket(row.ageYears)
@@ -1259,16 +1295,17 @@ export function useNetworkIntelligenceData(
       current.splitters += 1
       current.sumUsage += row.currentUsagePercent
       current.sumDelta += row.selectedDelta
-      current.massivaTickets += row.totalTickets
+      current.massivaLinkages += row.totalTickets
     }
     const lifecycleBuckets: IntelligenceLifecycleBucketRow[] = bucketOrder.map((bucket) => {
-      const current = bucketMap.get(bucket) ?? { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }
+      const current = bucketMap.get(bucket) ?? { splitters: 0, sumUsage: 0, sumDelta: 0, massivaLinkages: 0 }
       return {
         bucket,
         splitters: current.splitters,
         avgUsagePercent: Number((current.sumUsage / Math.max(1, current.splitters)).toFixed(1)),
         avgDeltaReference: Number((current.sumDelta / Math.max(1, current.splitters)).toFixed(2)),
-        massivaTickets: current.massivaTickets,
+        massivaLinkages: current.massivaLinkages,
+        distinctMassivas: distinctByBucket[bucket] ?? 0,
       }
     })
 
@@ -1341,7 +1378,7 @@ export function useNetworkIntelligenceData(
       lifecycleCohorts,
       lifecycleAlerts,
     }
-  }, [riskRanking, splittersMetaByCode, deltaReference, deltaReferenceLabel])
+  }, [riskRanking, splittersMetaByCode, deltaReference, deltaReferenceLabel, filtered?.massivaPeriodLinks])
 
   return {
     query,
@@ -1354,6 +1391,7 @@ export function useNetworkIntelligenceData(
     massivaStats: filtered?.massivaStats ?? [],
     areaPoints,
     barPoints,
+    massivaRecurrenceInsights,
     recurrenceCells,
     saturationCells,
     decisionKpis,
@@ -1372,6 +1410,7 @@ export function useNetworkIntelligenceData(
       unmappedMaintenances: 0,
     },
     massivaRollup: filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP,
+    massivaPeriodLinks: filtered?.massivaPeriodLinks ?? [],
     deltaReference,
     deltaReferenceLabel,
     dateWindow: window,
