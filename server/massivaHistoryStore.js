@@ -76,6 +76,12 @@ export function createMassivaHistoryStore(config) {
           closedMassivasCount: 0,
         };
       },
+      async getMassivaSplitterLinksInPeriod() {
+        return [];
+      },
+      async getMassivaRecurrenceByDayShift() {
+        return [];
+      },
       async getOpenSplitterCodes() {
         return [];
       },
@@ -403,29 +409,7 @@ export function createMassivaHistoryStore(config) {
     return byCode;
   }
 
-  /**
-   * Uma linha por massiva distinta ligada a algum splitter da lista: soma `affected_clients` sem repetir por equipamento.
-   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
-   */
-  async function getMassivaPeriodRollup(splitterCodes, range) {
-    await ensureReady();
-
-    const normalizedCodes = [...new Set(
-      (Array.isArray(splitterCodes) ? splitterCodes : [])
-        .map((code) => normalizeText(code))
-        .filter((code) => code !== ''),
-    )];
-
-    if (normalizedCodes.length === 0) {
-      return {
-        distinctMassivaCount: 0,
-        affectedClientsDistinctSum: 0,
-        openMassivasCount: 0,
-        closedMassivasCount: 0,
-      };
-    }
-
-    const placeholders = normalizedCodes.map(() => '?').join(', ');
+  function buildMassivaPeriodRollupRangeClause(range) {
     const openedAtFrom = range?.openedAtFrom instanceof Date && !Number.isNaN(range.openedAtFrom.getTime())
       ? range.openedAtFrom
       : null;
@@ -444,6 +428,67 @@ export function createMassivaHistoryStore(config) {
       extraParams.push(openedAtTo);
     }
     const rangeSql = whereExtra.length > 0 ? ` AND ${whereExtra.join(' AND ')}` : '';
+    return { rangeSql, extraParams };
+  }
+
+  function mapMassivaPeriodRollupRow(rows) {
+    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : {};
+    return {
+      distinctMassivaCount: Number(row.distinctMassivaCount ?? 0),
+      affectedClientsDistinctSum: Math.round(Number(row.affectedClientsDistinctSum ?? 0)),
+      openMassivasCount: Number(row.openMassivasCount ?? 0),
+      closedMassivasCount: Number(row.closedMassivasCount ?? 0),
+    };
+  }
+
+  /**
+   * Uma linha por massiva distinta ligada a splitter(s): soma `affected_clients` sem repetir por equipamento.
+   * @param {string[]} splitterCodes
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
+   * @param {{ scope?: 'by_codes' | 'all_linked' }} [options]
+   */
+  async function getMassivaPeriodRollup(splitterCodes, range, options = {}) {
+    await ensureReady();
+
+    const scope = options?.scope === 'all_linked' ? 'all_linked' : 'by_codes';
+    const { rangeSql, extraParams } = buildMassivaPeriodRollupRangeClause(range);
+
+    if (scope === 'all_linked') {
+      const [rows] = await dataPool.query(
+        `
+          SELECT
+            COUNT(*) AS distinctMassivaCount,
+            COALESCE(SUM(h.affected_clients), 0) AS affectedClientsDistinctSum,
+            SUM(CASE WHEN h.status = 'aberta' THEN 1 ELSE 0 END) AS openMassivasCount,
+            SUM(CASE WHEN h.status = 'encerrada' THEN 1 ELSE 0 END) AS closedMassivasCount
+          FROM massiva_history h
+          INNER JOIN (
+            SELECT DISTINCT massiva_history_id
+            FROM massiva_history_splitters
+          ) hs ON hs.massiva_history_id = h.id
+          WHERE 1 = 1${rangeSql}
+        `,
+        extraParams,
+      );
+      return mapMassivaPeriodRollupRow(rows);
+    }
+
+    const normalizedCodes = [...new Set(
+      (Array.isArray(splitterCodes) ? splitterCodes : [])
+        .map((code) => normalizeText(code))
+        .filter((code) => code !== ''),
+    )];
+
+    if (normalizedCodes.length === 0) {
+      return {
+        distinctMassivaCount: 0,
+        affectedClientsDistinctSum: 0,
+        openMassivasCount: 0,
+        closedMassivasCount: 0,
+      };
+    }
+
+    const placeholders = normalizedCodes.map(() => '?').join(', ');
 
     const [rows] = await dataPool.query(
       `
@@ -463,13 +508,97 @@ export function createMassivaHistoryStore(config) {
       [...normalizedCodes, ...extraParams],
     );
 
-    const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : {};
-    return {
-      distinctMassivaCount: Number(row.distinctMassivaCount ?? 0),
-      affectedClientsDistinctSum: Math.round(Number(row.affectedClientsDistinctSum ?? 0)),
-      openMassivasCount: Number(row.openMassivasCount ?? 0),
-      closedMassivasCount: Number(row.closedMassivasCount ?? 0),
-    };
+    return mapMassivaPeriodRollupRow(rows);
+  }
+
+  /**
+   * Massivas do período com códigos de splitter vinculados (para agregar por faixa etária sem IN gigante).
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
+   */
+  async function getMassivaSplitterLinksInPeriod(range) {
+    await ensureReady();
+
+    const { rangeSql, extraParams } = buildMassivaPeriodRollupRangeClause(range);
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          h.id AS massivaHistoryId,
+          hs.splitter_code AS splitterCode
+        FROM massiva_history h
+        INNER JOIN massiva_history_splitters hs
+          ON hs.massiva_history_id = h.id
+        WHERE 1 = 1${rangeSql}
+        ORDER BY h.id ASC, hs.splitter_code ASC
+      `,
+      extraParams,
+    );
+
+    const byMassiva = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const massivaHistoryId = Number(row.massivaHistoryId);
+      if (!Number.isFinite(massivaHistoryId) || massivaHistoryId <= 0) continue;
+      const splitterCode = normalizeText(row.splitterCode);
+      if (splitterCode === '') continue;
+      const current = byMassiva.get(massivaHistoryId) ?? [];
+      if (!current.includes(splitterCode)) current.push(splitterCode);
+      byMassiva.set(massivaHistoryId, current);
+    }
+
+    return [...byMassiva.entries()].map(([massivaHistoryId, splitterCodes]) => ({
+      massivaHistoryId,
+      splitterCodes,
+    }));
+  }
+
+  /**
+   * Massivas distintas por dia da semana × turno (hora de abertura no fuso do servidor Node).
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
+   */
+  async function getMassivaRecurrenceByDayShift(range) {
+    await ensureReady();
+
+    const { rangeSql, extraParams } = buildMassivaPeriodRollupRangeClause(range);
+    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT h.opened_at AS openedAt
+        FROM massiva_history h
+        WHERE h.opened_at IS NOT NULL${rangeSql}
+      `,
+      extraParams,
+    );
+
+    const counts = new Map();
+    for (const weekday of weekdays) {
+      for (const shift of ['Madrugada', 'Manha', 'Tarde', 'Noite']) {
+        counts.set(`${weekday}-${shift}`, 0);
+      }
+    }
+
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const openedAt = normalizeDate(row.openedAt);
+      if (!openedAt) continue;
+      const weekday = weekdays[openedAt.getDay()] ?? 'Dom';
+      const hour = openedAt.getHours();
+      const shift =
+        hour < 6 ? 'Madrugada' : hour < 12 ? 'Manha' : hour < 18 ? 'Tarde' : 'Noite';
+      const key = `${weekday}-${shift}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const out = [];
+    for (const weekday of weekdays) {
+      for (const shift of ['Madrugada', 'Manha', 'Tarde', 'Noite']) {
+        out.push({
+          weekday,
+          shift,
+          count: counts.get(`${weekday}-${shift}`) ?? 0,
+        });
+      }
+    }
+    return out;
   }
 
   async function getOpenSplitterCodes() {
@@ -1294,6 +1423,8 @@ export function createMassivaHistoryStore(config) {
     registerClose,
     getSplitterStats,
     getMassivaPeriodRollup,
+    getMassivaSplitterLinksInPeriod,
+    getMassivaRecurrenceByDayShift,
     getOpenSplitterCodes,
     upsertSplitterSnapshots,
     getSplitterTrends,

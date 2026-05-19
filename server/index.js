@@ -75,7 +75,7 @@ const hubBaseUrl = (
   'https://sebratel-hub.web.app'
 ).replace(/\/+$/, '');
 app.use(cors()); // Permite qualquer origem em desenvolvimento local
-app.use(express.json());
+app.use(express.json({ limit: '512kb' }));
 
 app.use((req, res, next) => {
   const startAt = Date.now();
@@ -1556,6 +1556,9 @@ app.post('/api/massiva/history/period-rollup', async (req, res) => {
       });
     }
 
+    const scope =
+      String(req.body?.scope ?? '').trim() === 'all_linked' ? 'all_linked' : 'by_codes';
+
     const splitterCodes = Array.isArray(req.body?.splitterCodes)
       ? req.body.splitterCodes
           .map((value) => String(value ?? '').trim())
@@ -1574,7 +1577,11 @@ app.post('/api/massiva/history/period-rollup', async (req, res) => {
         ? { openedAtFrom, openedAtTo }
         : undefined;
 
-    const data = await massivaHistoryStore.getMassivaPeriodRollup(splitterCodes, massivaRange);
+    const data = await massivaHistoryStore.getMassivaPeriodRollup(
+      splitterCodes,
+      massivaRange,
+      { scope },
+    );
 
     res.json({
       success: true,
@@ -1585,6 +1592,80 @@ app.post('/api/massiva/history/period-rollup', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao agregar massivas do período.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Massivas do período com splitters vinculados (payload leve) — ex.: curva de envelhecimento.
+ */
+app.post('/api/massiva/history/period-links', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaSplitterLinksInPeriod(massivaRange);
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao listar vínculos de massivas do período:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao listar vínculos de massivas do período.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Recorrência dia × turno: massivas distintas por data/hora de abertura (não por equipamento).
+ */
+app.post('/api/massiva/history/day-shift-recurrence', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaRecurrenceByDayShift(massivaRange);
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao agregar recorrência dia×turno:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao agregar recorrência dia×turno.',
       error: error.message,
     });
   }
