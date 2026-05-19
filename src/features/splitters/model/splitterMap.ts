@@ -13,11 +13,17 @@ export type SplitterNeighborOccupancyBand = 'critical' | 'warning' | 'ok' | 'unk
 export type SplitterMapNeighbor = {
   code: string
   title: string
+  isCondominium?: boolean
+  street?: string | null
   lat: number
   lng: number
   outPorts: number
   busyCount: number
   occupancyBand: SplitterNeighborOccupancyBand
+  /** Distância geográfica (Haversine) até o splitter central em metros. */
+  straightMeters?: number
+  /** Distância aproximada por rede viária (OSRM foot), metros — pode ser null se o roteamento falhar. */
+  routeMeters?: number | null
 }
 
 export type SplitterMapCenter = {
@@ -50,7 +56,21 @@ export type SplitterMapSuccessPayload = {
   /** Splitter central (detalhe atual) — para tooltip. */
   currentSplitterCode: string
   currentSplitterTitle: string
+  currentStreet?: string | null
+  /**
+   * Nome da via vindo de reverse geocode (BFF) quando cadastro/caixa não têm rua — preferir para exibição.
+   */
+  originStreetRaw?: string | null
   neighbors: SplitterMapNeighbor[]
   oltPoint: SplitterMapOltPoint | null
   clientPoints: SplitterMapClientPoint[]
+  /** OSRM indisponível: só há distância em linha reta. */
+  routingUnavailable?: boolean
+  /** Classificação do splitter atual pelo título (RES./COND./ED. => condomínio). */
+  isCondominium?: boolean
+  /**
+   * Outro splitter secundário no mesmo condomínio (título RES./COND./ED. com mesma chave normalizada)
+   * possui porta livre — alívio sem depender de vizinhança geográfica/OSRM.
+   */
+  condominiumReliefAvailable?: boolean
 }

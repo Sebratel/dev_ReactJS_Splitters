@@ -11,6 +11,8 @@ import { NetworkIntelligencePage } from '@/pages/NetworkIntelligencePage'
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { UsersManagementPage } from '@/pages/UsersManagementPage'
+import { IsaSettingsPage } from '@/pages/IsaSettingsPage'
+import { PlatformSuggestionsPage } from '@/pages/PlatformSuggestionsPage'
 
 export const router = createBrowserRouter([
   {
@@ -30,6 +32,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <HomePage /> },
           { path: 'splitters', element: <SplittersPage /> },
+          { path: 'sugestoes', element: <PlatformSuggestionsPage /> },
           {
             path: 'splitters/:code',
             element: <SplitterDetailPage />,
@@ -65,6 +68,17 @@ export const router = createBrowserRouter([
                 description="Somente administradores podem acessar a gestão de usuários."
               >
                 <UsersManagementPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'isa-config',
+            element: (
+              <PermissionGuard
+                permission="isAdmin"
+                description="Somente administradores podem acessar a configuração da ISA."
+              >
+                <IsaSettingsPage />
               </PermissionGuard>
             ),
           },

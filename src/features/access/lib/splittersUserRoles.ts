@@ -15,24 +15,23 @@ export const SPLITTERS_ROLE_LABEL: Record<SplittersRoleId, string> = {
   personalizado: 'Personalizado',
 }
 
-export const SPLITTERS_ROLE_DESCRIPTION: Record<Exclude<SplittersRoleId, 'personalizado'>, string> = {
-  admin: 'Acesso total ao sistema e à gestão de usuários.',
+export const SPLITTERS_ROLE_DESCRIPTION: Record<
+  Exclude<SplittersRoleId, 'personalizado'>,
+  string
+> = {
+  admin: 'Acesso total ao sistema, gestao de usuarios e assistente ISA.',
   operador:
-    'Painel da rede (inteligência), splitters e massivas (inclui abrir ocorrências), sem administração.',
+    'Painel da rede, splitters, massivas e assistente ISA de planejamento, sem administracao.',
   operador_massivas:
-    'Splitters e massivas (inclui abrir ocorrências), sem painel de inteligência.',
-  leitura: 'Visualização de splitters, massivas e inteligência; sem abertura de massiva.',
+    'Splitters e massivas (inclui abrir ocorrencias), sem painel de inteligencia nem assistente ISA.',
+  leitura: 'Somente splitters (leitura). Nao inclui massivas, inteligencia nem assistente ISA.',
 }
 
-/** Presets fixos (exceto personalizado), ordem usada em selects administrativos. */
-export const SPLITTERS_PRESET_ROLE_IDS: readonly Exclude<SplittersRoleId, 'personalizado'>[] = [
-  'admin',
-  'operador',
-  'operador_massivas',
-  'leitura',
-]
+export const SPLITTERS_PRESET_ROLE_IDS: readonly Exclude<
+  SplittersRoleId,
+  'personalizado'
+>[] = ['admin', 'operador', 'operador_massivas', 'leitura']
 
-/** Presets canônicos (comparação bit a bit para inferir “personalizado”). */
 export const SPLITTERS_ROLE_PRESETS: Record<
   Exclude<SplittersRoleId, 'personalizado'>,
   SplittersPermissionSet
@@ -42,6 +41,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewMassiva: true,
     canOpenMassiva: true,
     canViewIntelligence: true,
+    canUsePlanningAssistant: true,
     isAdmin: true,
   },
   operador: {
@@ -49,6 +49,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewMassiva: true,
     canOpenMassiva: true,
     canViewIntelligence: true,
+    canUsePlanningAssistant: true,
     isAdmin: false,
   },
   operador_massivas: {
@@ -56,13 +57,15 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewMassiva: true,
     canOpenMassiva: true,
     canViewIntelligence: false,
+    canUsePlanningAssistant: false,
     isAdmin: false,
   },
   leitura: {
     canViewSplitters: true,
-    canViewMassiva: true,
+    canViewMassiva: false,
     canOpenMassiva: false,
-    canViewIntelligence: true,
+    canViewIntelligence: false,
+    canUsePlanningAssistant: false,
     isAdmin: false,
   },
 }
@@ -73,6 +76,7 @@ function permissionsEqual(a: SplittersPermissionSet, b: SplittersPermissionSet):
     a.canViewMassiva === b.canViewMassiva &&
     a.canOpenMassiva === b.canOpenMassiva &&
     a.canViewIntelligence === b.canViewIntelligence &&
+    a.canUsePlanningAssistant === b.canUsePlanningAssistant &&
     a.isAdmin === b.isAdmin
   )
 }
@@ -85,7 +89,9 @@ export function inferSplittersUserRole(permissions: SplittersPermissionSet): Spl
   return 'personalizado'
 }
 
-export function applySplittersRolePreset(role: Exclude<SplittersRoleId, 'personalizado'>): SplittersPermissionSet {
+export function applySplittersRolePreset(
+  role: Exclude<SplittersRoleId, 'personalizado'>,
+): SplittersPermissionSet {
   return { ...SPLITTERS_ROLE_PRESETS[role] }
 }
 

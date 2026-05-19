@@ -7,6 +7,7 @@ import {
   SPLITTERS_ROLE_LABEL,
   type SplittersRoleId,
 } from '@/features/access/lib/splittersUserRoles'
+import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
 type ApproveRole = Exclude<SplittersRoleId, 'personalizado'>
@@ -22,17 +23,7 @@ type AccessRequestsAdminPanelProps = {
 }
 
 function formatWhen(d: Date | null): string {
-  if (!d) return '—'
-  try {
-    return d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return '—'
-  }
+  return formatBrazilCompactDateTimeDisplay(d)
 }
 
 export function AccessRequestsAdminPanel({

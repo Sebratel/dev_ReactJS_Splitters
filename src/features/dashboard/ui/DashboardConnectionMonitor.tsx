@@ -1,5 +1,6 @@
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { formatBrazilDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import { Activity, RefreshCw } from 'lucide-react'
 
@@ -10,17 +11,13 @@ const MASSIVA_REFETCH_MS = 5 * 60 * 1000
 
 function formatUpdatedAt(ts: number): string {
   if (ts <= 0) return '—'
-  try {
-    return new Date(ts).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-  } catch {
-    return '—'
-  }
+  return formatBrazilDateTimeDisplay(ts, {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 function formatRefetchEvery(ms: number): string {

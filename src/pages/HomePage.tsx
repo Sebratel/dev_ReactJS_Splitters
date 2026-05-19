@@ -9,7 +9,6 @@ import {
   Zap,
   Server,
   RadioTower,
-  ChevronDown,
   Sparkles,
 } from 'lucide-react'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
@@ -22,24 +21,14 @@ import {
 } from '@/features/dashboard/lib/dashboardNarrative'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
-import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
+import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import { resolveIsaHeroImageSrc } from '@/shared/lib/accessRequestFabImage'
 import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
 
 function formatTicketTimestamp(openedAt: Date | null): string {
-  if (openedAt == null) return 'detectado agora'
-  try {
-    return openedAt.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return 'detectado agora'
-  }
+  return formatBrazilCompactDateTimeDisplay(openedAt, 'detectado agora')
 }
 
 function statusBadgeClasses(status: MassivaStatus): string {
@@ -55,9 +44,6 @@ function statusBadgeClasses(status: MassivaStatus): string {
 
 export function HomePage() {
   const reduceMotion = useReducedMotion()
-  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
-  const accessUid = useAccessAuthStore((s) => s.user?.uid)
-  const showAccessFold = !isAdmin && Boolean(accessUid)
 
   const { data: networkStats, isLoading: isLoadingStats, dataUpdatedAt } = useNetworkStats()
   /** Dashboard é visível a todos: massivas aqui não dependem de `canViewMassiva` (a rota /massivas continua restrita). */
@@ -605,7 +591,7 @@ export function HomePage() {
 
     </div>
 
-    {showAccessFold ? <DashboardAccessRequestSection /> : null}
+    <DashboardAccessRequestSection />
     </>
   )
 }

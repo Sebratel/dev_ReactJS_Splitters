@@ -1,4 +1,5 @@
 import type { MassivaOpeningBasis } from '@/features/massiva/model/massivaOpeningBasis'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 
 export const MASSIVA_SOLICITATION_TYPE_LABEL = 'Registro Massivas'
 
@@ -60,13 +61,7 @@ function formatPtLocalDateTimeFromParts(
   const instant = new Date(combined)
   if (Number.isNaN(instant.getTime())) return '-'
 
-  return instant.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatBrazilDateTimeShortDisplay(instant)
 }
 
 function formatNormalizationDeadline(

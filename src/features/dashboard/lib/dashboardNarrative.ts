@@ -1,3 +1,5 @@
+import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
+
 /** Chaves alinhadas aos KPIs do dashboard — microcopy para tendências diárias (`vs. última captura`). */
 export type DashboardTrendKey =
   | 'occupiedPorts'
@@ -98,17 +100,9 @@ export function buildDashboardStatusLine(input: DashboardStatusLineInput): strin
 /** Nota curta com horário da última resposta bem-sucedida do React Query para `/api/stats`. */
 export function formatNetworkStatsRefreshNote(dataUpdatedAt: number | undefined): string | null {
   if (dataUpdatedAt == null || dataUpdatedAt <= 0) return null
-  try {
-    const d = new Date(dataUpdatedAt)
-    return `Dados agregados da rede atualizados às ${d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })}.`
-  } catch {
-    return null
-  }
+  const formatted = formatBrazilCompactDateTimeDisplay(dataUpdatedAt, '')
+  if (!formatted) return null
+  return `Dados agregados da rede atualizados às ${formatted}.`
 }
 
 export type HeroChipAccent = 'live' | 'warn' | 'calm' | 'meta'
@@ -172,15 +166,7 @@ export function buildDashboardHeroChips(input: DashboardStatusLineInput): Dashbo
 /** Uma linha discreta só com data/hora da última atualização dos dados agregados. */
 export function formatRefreshChipShort(dataUpdatedAt: number | undefined): string | null {
   if (dataUpdatedAt == null || dataUpdatedAt <= 0) return null
-  try {
-    const d = new Date(dataUpdatedAt)
-    return `Atualizado ${d.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })}`
-  } catch {
-    return null
-  }
+  const formatted = formatBrazilCompactDateTimeDisplay(dataUpdatedAt, '')
+  if (!formatted) return null
+  return `Atualizado ${formatted}`
 }

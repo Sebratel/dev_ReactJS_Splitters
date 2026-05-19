@@ -11,12 +11,29 @@ import {
   type NetworkStats,
 } from '@/shared/api/fetchNetworkStats'
 import { fetchSplittersFromLocalDb } from '@/features/splitters/api/fetchSplittersFromLocalDb'
+import { fetchMassivaPeriodSplitterLinksFromLocalDb } from '@/features/massiva/api/fetchMassivaPeriodSplitterLinksFromLocalDb'
+import { fetchMassivaDayShiftRecurrenceFromLocalDb } from '@/features/massiva/api/fetchMassivaDayShiftRecurrenceFromLocalDb'
+import type { MassivaDayShiftRecurrenceCell } from '@/features/intelligence/lib/massivaDayShiftRecurrence'
+import {
+  countDistinctMassivasByLifecycleBucket,
+  toLifecycleBucket,
+  type LifecycleBucketKey,
+  type MassivaPeriodSplitterLink,
+} from '@/features/massiva/lib/lifecycleMassivaBuckets'
+import {
+  fetchMassivaPeriodRollupFromLocalDb,
+  type IntelligenceMassivaPeriodRollup,
+} from '@/features/splitters/api/fetchMassivaPeriodRollupFromLocalDb'
 import { fetchSplitterIntelligenceBatchFromLocalDb } from '@/features/splitters/api/fetchSplitterIntelligenceBatchFromLocalDb'
 import {
   fetchMaintenanceBySplitter,
   type MaintenanceBySplitterRow,
   type MaintenanceBySplitterTotals,
 } from '@/features/intelligence/api/fetchMaintenanceBySplitter'
+import {
+  computeMassivaRecurrenceInsights,
+  type MassivaRecurrenceInsights,
+} from '@/features/intelligence/lib/massivaRecurrenceInsights'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterTrend } from '@/features/splitters/model/splitterTrend'
@@ -63,6 +80,8 @@ export type IntelligenceAreaPoint = {
 
 export type IntelligenceBarPoint = {
   splitterCode: string
+  /** Nome do equipamento (cadastro / tendência); útil para eixo e tooltip. */
+  splitterTitle: string
   totalTickets: number
   affectedClientsTotal: number
 }
@@ -87,6 +106,8 @@ export type IntelligenceSaturationCell = {
   attentionScore: number
   hasCorporateClients: boolean
   openTickets: number
+  /** Massivas distintas ligadas ao splitter no período (efeito visual no halo). */
+  totalTickets: number
   affectedClientsTotal: number
 }
 
@@ -96,7 +117,8 @@ export type IntelligenceDecisionKpis = {
   growthSplitters: number
   openMassivas: number
   affectedClientsTotal: number
-  highRiskAffectedClients: number
+  /** Σ tickets de massiva nos splitters em faixa de risco alto/crítico (mesma massiva pode aparecer em mais de um). */
+  highRiskMassivaTickets: number
   attentionSharePercent: number
 }
 
@@ -149,11 +171,11 @@ export type IntelligenceOltDrilldownRow = {
 
 export type IntelligenceGeoDrilldown = {
   tipoLocal: Array<{ key: 'CONDOMÍNIO' | 'UNIDADE' | 'SEM_CLASSIFICACAO'; count: number }>
-  topCondominios: Array<{ nome: string; splitters: number; affectedClientsTotal: number }>
+  topCondominios: Array<{ nome: string; splitters: number; massivaTickets: number }>
   topStreets: Array<{ nome: string; splitters: number; criticalSplitters: number }>
 }
 
-export type LifecycleBucketKey = '0-1' | '1-3' | '3-5' | '5+'
+export type { LifecycleBucketKey } from '@/features/massiva/lib/lifecycleMassivaBuckets'
 
 export type IntelligenceLifecycleKpis = {
   avgAgeYears: number
@@ -167,7 +189,10 @@ export type IntelligenceLifecycleBucketRow = {
   splitters: number
   avgUsagePercent: number
   avgDeltaReference: number
-  massivaTickets: number
+  /** Soma de vínculos massiva × splitter (pode repetir a mesma massiva). */
+  massivaLinkages: number
+  /** Massivas distintas com ao menos um splitter da faixa no período. */
+  distinctMassivas: number
 }
 
 export type IntelligenceLifecycleHeatmapCell = {
@@ -210,6 +235,16 @@ export type IntelligenceDataset = {
   kpis: IntelligenceKpis
   splittersMeta: Splitter[]
   source: 'live' | 'mock'
+  massivaRollup: IntelligenceMassivaPeriodRollup
+  massivaPeriodLinks: MassivaPeriodSplitterLink[]
+  massivaDayShiftRecurrence: MassivaDayShiftRecurrenceCell[]
+}
+
+const EMPTY_MASSIVA_ROLLUP: IntelligenceMassivaPeriodRollup = {
+  distinctMassivaCount: 0,
+  affectedClientsDistinctSum: 0,
+  openMassivasCount: 0,
+  closedMassivasCount: 0,
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -220,12 +255,16 @@ function clamp(value: number, min: number, max: number): number {
 function computeMapAttentionScore(
   usagePercent: number,
   openTickets: number,
-  affectedClientsTotal: number,
+  totalMassivaTickets: number,
   delta7d: number,
   delta30d: number,
 ): number {
   const growthSignal = Math.max(0, delta7d, delta30d * 0.35)
-  const massivaSignal = clamp(openTickets * 14 + Math.log10(affectedClientsTotal + 1) * 18, 0, 46)
+  const massivaSignal = clamp(
+    openTickets * 14 + Math.log10(totalMassivaTickets + 1) * 16,
+    0,
+    46,
+  )
   const usageSignal = usagePercent * 0.52
   const growthContribution = clamp(growthSignal * 3.4, 0, 28)
   return Number(clamp(usageSignal + massivaSignal + growthContribution, 0, 100).toFixed(1))
@@ -234,13 +273,6 @@ function computeMapAttentionScore(
 function diffDays(a: Date, b: Date): number {
   const ms = Math.max(0, b.getTime() - a.getTime())
   return ms / (24 * 60 * 60 * 1000)
-}
-
-function toLifecycleBucket(ageYears: number): LifecycleBucketKey {
-  if (ageYears < 1) return '0-1'
-  if (ageYears < 3) return '1-3'
-  if (ageYears < 5) return '3-5'
-  return '5+'
 }
 
 function asTrendLabel(label: string): TrendLabel {
@@ -279,6 +311,7 @@ function chunkBy<T>(items: readonly T[], size: number): T[][] {
 async function mergeInsightsFromConcurrentChunks(
   chunks: string[][],
   concurrency: number,
+  massivaOpenedRange?: { start: Date; end: Date },
 ): Promise<{ trends: Map<string, SplitterTrend>; massiva: Map<string, SplitterMassivaStats> }> {
   const trends = new Map<string, SplitterTrend>()
   const massiva = new Map<string, SplitterMassivaStats>()
@@ -288,7 +321,7 @@ async function mergeInsightsFromConcurrentChunks(
     for (;;) {
       const chunk = queue.shift()
       if (!chunk) break
-      const part = await fetchSplitterIntelligenceBatchFromLocalDb(chunk)
+      const part = await fetchSplitterIntelligenceBatchFromLocalDb(chunk, massivaOpenedRange)
       for (const [k, v] of part.trends) trends.set(k, v)
       for (const [k, v] of part.massiva) massiva.set(k, v)
     }
@@ -299,12 +332,15 @@ async function mergeInsightsFromConcurrentChunks(
   return { trends, massiva }
 }
 
-async function fetchSplitterInsightsBatched(splitterCodes: readonly string[]): Promise<{
+async function fetchSplitterInsightsBatched(
+  splitterCodes: readonly string[],
+  massivaOpenedRange?: { start: Date; end: Date },
+): Promise<{
   trends: Map<string, SplitterTrend>
   massiva: Map<string, SplitterMassivaStats>
 }> {
   const chunks = chunkBy(splitterCodes, INTELLIGENCE_CODE_QUERY_CHUNK)
-  return mergeInsightsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY)
+  return mergeInsightsFromConcurrentChunks(chunks, INTELLIGENCE_HTTP_CONCURRENCY, massivaOpenedRange)
 }
 
 async function fetchAllSplittersCatalogForIntelligence(): Promise<{
@@ -496,13 +532,12 @@ function makeMockDataset(): IntelligenceDataset {
     latestOpenedAt.setHours((i * 3) % 24, 5, 0, 0)
 
     const totalTickets = 3 + (i % 12)
-    const affectedClientsTotal = 15 + ((i * 17) % 460)
     massivaStats.push({
       splitterCode,
       totalTickets,
       openTickets: i % 4 === 0 ? 1 : 0,
       closedTickets: totalTickets - (i % 4 === 0 ? 1 : 0),
-      affectedClientsTotal,
+      affectedClientsTotal: 0,
       latestOpenedAt,
     })
 
@@ -548,7 +583,21 @@ function makeMockDataset(): IntelligenceDataset {
     oltCount: 214,
   }
 
-  return { trends, massivaStats, splittersMeta, kpis, source: 'mock' }
+  return {
+    trends,
+    massivaStats,
+    splittersMeta,
+    kpis,
+    source: 'mock',
+    massivaRollup: {
+      distinctMassivaCount: 186,
+      affectedClientsDistinctSum: 42150,
+      openMassivasCount: 14,
+      closedMassivasCount: 172,
+    },
+    massivaPeriodLinks: [],
+    massivaDayShiftRecurrence: [],
+  }
 }
 
 const NETWORK_STATS_STALE_MS = 3 * 60_000
@@ -569,6 +618,7 @@ async function fetchLiveDataset(
   splitters: { items: Splitter[]; totalCount: number },
   /** Quando já obtido em paralelo ao catálogo no `queryFn` do dataset. */
   prefetchedNetworkStats?: NetworkStats,
+  massivaOpenedRange?: { start: Date; end: Date },
 ): Promise<IntelligenceDataset> {
   const codes = splitters.items.map((item) => item.code).filter((value) => value.trim() !== '')
 
@@ -586,11 +636,41 @@ async function fetchLiveDataset(
           trends: new Map<string, SplitterTrend>(),
           massiva: new Map<string, SplitterMassivaStats>(),
         })
-      : fetchSplitterInsightsBatched(codes)
+      : fetchSplitterInsightsBatched(codes, massivaOpenedRange)
 
-  const [networkStatsRaw, { trends: trendsByCode, massiva: statsByCode }] = await Promise.all([
+  const rollupPromise = fetchMassivaPeriodRollupFromLocalDb([], massivaOpenedRange, {
+    scope: 'all_linked',
+  }).catch((error) => {
+    console.warn('[network-intelligence] Falha ao agregar massivas do período:', error)
+    return EMPTY_MASSIVA_ROLLUP
+  })
+
+  const linksPromise = fetchMassivaPeriodSplitterLinksFromLocalDb(massivaOpenedRange).catch(
+    (error) => {
+      console.warn('[network-intelligence] Falha ao listar vínculos de massivas do período:', error)
+      return [] as MassivaPeriodSplitterLink[]
+    },
+  )
+
+  const recurrencePromise = fetchMassivaDayShiftRecurrenceFromLocalDb(massivaOpenedRange).catch(
+    (error) => {
+      console.warn('[network-intelligence] Falha na recorrência dia×turno:', error)
+      return [] as MassivaDayShiftRecurrenceCell[]
+    },
+  )
+
+  const [
+    networkStatsRaw,
+    { trends: trendsByCode, massiva: statsByCode },
+    massivaRollup,
+    massivaPeriodLinks,
+    massivaDayShiftRecurrence,
+  ] = await Promise.all([
     statsPromise,
     insightsPromise,
+    rollupPromise,
+    linksPromise,
+    recurrencePromise,
   ])
 
   const networkStats: NetworkStats = networkStatsRaw ?? EMPTY_NETWORK_STATS
@@ -653,6 +733,9 @@ async function fetchLiveDataset(
     },
     splittersMeta: splitters.items,
     source: 'live',
+    massivaRollup,
+    massivaPeriodLinks,
+    massivaDayShiftRecurrence,
   }
 }
 
@@ -660,9 +743,10 @@ async function fetchIntelligenceDataset(
   queryClient: QueryClient,
   splitters: { items: Splitter[]; totalCount: number },
   prefetchedNetworkStats?: NetworkStats,
+  massivaOpenedRange?: { start: Date; end: Date },
 ): Promise<IntelligenceDataset> {
   try {
-    return await fetchLiveDataset(queryClient, splitters, prefetchedNetworkStats)
+    return await fetchLiveDataset(queryClient, splitters, prefetchedNetworkStats, massivaOpenedRange)
   } catch {
     return makeMockDataset()
   }
@@ -737,8 +821,19 @@ export function useNetworkIntelligenceData(
     refetchInterval: false,
   })
 
+  const window = useMemo(
+    () => buildDateWindow(preset, customStart, customEnd),
+    [preset, customStart, customEnd],
+  )
+
   const query = useQuery({
-    queryKey: ['network-intelligence', 'dataset'],
+    queryKey: [
+      'network-intelligence',
+      'dataset',
+      preset,
+      customStart?.toISOString() ?? null,
+      customEnd?.toISOString() ?? null,
+    ],
     queryFn: async () => {
       const catalogPromise =
         splittersCatalogQuery.data !== undefined
@@ -756,8 +851,9 @@ export function useNetworkIntelligenceData(
       })
 
       const [splitters, networkStats] = await Promise.all([catalogPromise, statsPromise])
+      const massivaOpenedRange = buildDateWindow(preset, customStart, customEnd)
 
-      return fetchIntelligenceDataset(queryClient, splitters, networkStats)
+      return fetchIntelligenceDataset(queryClient, splitters, networkStats, massivaOpenedRange)
     },
     placeholderData: keepPreviousData,
     /** Dataset é pesado; cache longo. Sem polling automático (evita reexecutar centenas de requests). */
@@ -765,11 +861,6 @@ export function useNetworkIntelligenceData(
     gcTime: 60 * 60_000,
     refetchInterval: false,
   })
-
-  const window = useMemo(
-    () => buildDateWindow(preset, customStart, customEnd),
-    [preset, customStart, customEnd],
-  )
 
   const maintenanceQuery = useQuery({
     queryKey: [
@@ -854,44 +945,34 @@ export function useNetworkIntelligenceData(
 
   const barPoints = useMemo<IntelligenceBarPoint[]>(() => {
     if (!filtered) return []
+    const titleByTrend = new Map(
+      filtered.trends.map((t) => [t.splitterCode, t.splitterTitle.trim()] as const),
+    )
     return [...filtered.massivaStats]
       .sort((a, b) => b.totalTickets - a.totalTickets)
       .slice(0, 10)
-      .map((row) => ({
-        splitterCode: row.splitterCode,
-        totalTickets: row.totalTickets,
-        affectedClientsTotal: row.affectedClientsTotal,
-      }))
-  }, [filtered])
+      .map((row) => {
+        const meta = splittersMetaByCode.get(row.splitterCode)
+        const fromMeta = (meta?.title ?? '').trim()
+        const fromTrend = titleByTrend.get(row.splitterCode) ?? ''
+        const splitterTitle =
+          fromMeta !== '' ? fromMeta : fromTrend !== '' ? fromTrend : row.splitterCode
+        return {
+          splitterCode: row.splitterCode,
+          splitterTitle,
+          totalTickets: row.totalTickets,
+          affectedClientsTotal: row.affectedClientsTotal,
+        }
+      })
+  }, [filtered, splittersMetaByCode])
 
   const recurrenceCells = useMemo<IntelligenceRecurrenceCell[]>(() => {
-    const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
-    const shifts = ['Madrugada', 'Manha', 'Tarde', 'Noite']
-
-    const base: IntelligenceRecurrenceCell[] = []
-    for (const weekday of weekdays) {
-      for (const shift of shifts) {
-        base.push({ weekday, shift, count: 0 })
-      }
-    }
-    if (!filtered) return base
-
-    const index = new Map<string, IntelligenceRecurrenceCell>()
-    for (const item of base) {
-      index.set(`${item.weekday}-${item.shift}`, item)
-    }
-
-    for (const row of filtered.massivaStats) {
-      if (!row.latestOpenedAt) continue
-      const weekday = weekdays[row.latestOpenedAt.getDay()] ?? 'Dom'
-      const hour = row.latestOpenedAt.getHours()
-      const shift = hour < 6 ? 'Madrugada' : hour < 12 ? 'Manha' : hour < 18 ? 'Tarde' : 'Noite'
-      const key = `${weekday}-${shift}`
-      const cell = index.get(key)
-      if (cell) cell.count += 1
-    }
-
-    return base
+    if (!filtered) return []
+    return filtered.massivaDayShiftRecurrence.map((cell) => ({
+      weekday: cell.weekday,
+      shift: cell.shift,
+      count: cell.count,
+    }))
   }, [filtered])
 
   const corporateSplitterCodes = useMemo(() => {
@@ -918,12 +999,13 @@ export function useNetworkIntelligenceData(
       const massiva = massivaByCode.get(row.splitterCode)
       const meta = splittersMetaByCode.get(row.splitterCode)
       const openTickets = massiva?.openTickets ?? 0
+      const totalMassivaTickets = massiva?.totalTickets ?? 0
       const affectedClientsTotal = massiva?.affectedClientsTotal ?? 0
       const hasCorporateClients = meta?.hasCorporateClients === true
       const attentionScore = computeMapAttentionScore(
         row.currentUsagePercent,
         openTickets,
-        affectedClientsTotal,
+        totalMassivaTickets,
         row.delta7d,
         row.delta30d,
       )
@@ -940,6 +1022,7 @@ export function useNetworkIntelligenceData(
         attentionScore,
         hasCorporateClients,
         openTickets,
+        totalTickets: massiva?.totalTickets ?? 0,
         affectedClientsTotal,
       }
     })
@@ -970,7 +1053,7 @@ export function useNetworkIntelligenceData(
         const usageScore = clamp(trend.currentUsagePercent, 0, 100)
         const growthScore = clamp(selectedDelta * 4, -20, 40)
         const openMassivaScore = clamp((massiva?.openTickets ?? 0) * 8, 0, 24)
-        const affectedScore = clamp(Math.log10((massiva?.affectedClientsTotal ?? 0) + 1) * 12, 0, 36)
+        const affectedScore = clamp(Math.log10((massiva?.totalTickets ?? 0) + 1) * 12, 0, 36)
         const score = clamp(usageScore + growthScore + openMassivaScore + affectedScore, 0, 200)
         const riskBand: IntelligenceRiskRankingRow['riskBand'] =
           score >= 120 ? 'critico' : score >= 90 ? 'alto' : score >= 60 ? 'moderado' : 'baixo'
@@ -1003,15 +1086,21 @@ export function useNetworkIntelligenceData(
       .sort((a, b) => b.riskScore - a.riskScore)
   }, [filtered, splittersMetaByCode, deltaReference])
 
+  const massivaRecurrenceInsights = useMemo<MassivaRecurrenceInsights>(
+    () => computeMassivaRecurrenceInsights(riskRanking),
+    [riskRanking],
+  )
+
   const decisionKpis = useMemo<IntelligenceDecisionKpis>(() => {
     const totalSplittersInWindow = riskRanking.length
     const criticalSplitters = riskRanking.filter((row) => row.currentUsagePercent >= 95).length
     const growthSplitters = riskRanking.filter((row) => row.selectedDelta >= 5).length
-    const openMassivas = riskRanking.reduce((sum, row) => sum + row.openTickets, 0)
-    const affectedClientsTotal = riskRanking.reduce((sum, row) => sum + row.affectedClientsTotal, 0)
-    const highRiskAffectedClients = riskRanking
+    const rollup = filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP
+    const openMassivas = rollup.openMassivasCount
+    const affectedClientsTotal = rollup.affectedClientsDistinctSum
+    const highRiskMassivaTickets = riskRanking
       .filter((row) => row.riskBand === 'critico' || row.riskBand === 'alto')
-      .reduce((sum, row) => sum + row.affectedClientsTotal, 0)
+      .reduce((sum, row) => sum + row.totalTickets, 0)
     const attentionSharePercent =
       totalSplittersInWindow > 0
         ? Number((((criticalSplitters + growthSplitters) / totalSplittersInWindow) * 100).toFixed(1))
@@ -1023,10 +1112,10 @@ export function useNetworkIntelligenceData(
       growthSplitters,
       openMassivas,
       affectedClientsTotal,
-      highRiskAffectedClients,
+      highRiskMassivaTickets,
       attentionSharePercent,
     }
-  }, [riskRanking])
+  }, [riskRanking, filtered])
 
   const impactUrgencyMatrix = useMemo<IntelligenceImpactUrgencyCell[]>(() => {
     const quadrants: IntelligenceImpactUrgencyCell[] = [
@@ -1037,7 +1126,7 @@ export function useNetworkIntelligenceData(
     ]
     const index = new Map(quadrants.map((q) => [q.key, q]))
     for (const row of riskRanking) {
-      const highImpact = row.affectedClientsTotal >= 50 || row.totalTickets >= 4
+      const highImpact = row.totalTickets >= 4 || row.openTickets > 0
       const highUrgency = row.currentUsagePercent >= 85 || row.selectedDelta >= 5 || row.openTickets > 0
       const key: IntelligenceImpactUrgencyCell['key'] = highImpact
         ? highUrgency
@@ -1111,7 +1200,7 @@ export function useNetworkIntelligenceData(
       ['UNIDADE', 0],
       ['SEM_CLASSIFICACAO', 0],
     ])
-    const condos = new Map<string, { nome: string; splitters: number; affectedClientsTotal: number }>()
+    const condos = new Map<string, { nome: string; splitters: number; massivaTickets: number }>()
     const streets = new Map<string, { nome: string; splitters: number; criticalSplitters: number }>()
     for (const row of riskRanking) {
       const tipo = row.tipoLocal ?? 'SEM_CLASSIFICACAO'
@@ -1119,9 +1208,9 @@ export function useNetworkIntelligenceData(
 
       const condoName = row.nomeCondominio?.trim() ?? ''
       if (condoName !== '') {
-        const c = condos.get(condoName) ?? { nome: condoName, splitters: 0, affectedClientsTotal: 0 }
+        const c = condos.get(condoName) ?? { nome: condoName, splitters: 0, massivaTickets: 0 }
         c.splitters += 1
-        c.affectedClientsTotal += row.affectedClientsTotal
+        c.massivaTickets += row.totalTickets
         condos.set(condoName, c)
       }
 
@@ -1141,7 +1230,7 @@ export function useNetworkIntelligenceData(
         { key: 'SEM_CLASSIFICACAO', count: tipoCounts.get('SEM_CLASSIFICACAO') ?? 0 },
       ],
       topCondominios: [...condos.values()]
-        .sort((a, b) => b.affectedClientsTotal - a.affectedClientsTotal || b.splitters - a.splitters)
+        .sort((a, b) => b.massivaTickets - a.massivaTickets || b.splitters - a.splitters)
         .slice(0, 6),
       topStreets: [...streets.values()]
         .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.splitters - a.splitters)
@@ -1186,8 +1275,18 @@ export function useNetworkIntelligenceData(
       splitters: number
       sumUsage: number
       sumDelta: number
-      massivaTickets: number
-    }>(bucketOrder.map((bucket) => [bucket, { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }]))
+      massivaLinkages: number
+    }>(bucketOrder.map((bucket) => [bucket, { splitters: 0, sumUsage: 0, sumDelta: 0, massivaLinkages: 0 }]))
+
+    const codeToBucket = new Map<string, LifecycleBucketKey>()
+    for (const row of rows) {
+      codeToBucket.set(row.splitterCode, toLifecycleBucket(row.ageYears))
+    }
+
+    const distinctByBucket = countDistinctMassivasByLifecycleBucket(
+      filtered?.massivaPeriodLinks ?? [],
+      codeToBucket,
+    )
 
     for (const row of rows) {
       const bucket = toLifecycleBucket(row.ageYears)
@@ -1196,16 +1295,17 @@ export function useNetworkIntelligenceData(
       current.splitters += 1
       current.sumUsage += row.currentUsagePercent
       current.sumDelta += row.selectedDelta
-      current.massivaTickets += row.totalTickets
+      current.massivaLinkages += row.totalTickets
     }
     const lifecycleBuckets: IntelligenceLifecycleBucketRow[] = bucketOrder.map((bucket) => {
-      const current = bucketMap.get(bucket) ?? { splitters: 0, sumUsage: 0, sumDelta: 0, massivaTickets: 0 }
+      const current = bucketMap.get(bucket) ?? { splitters: 0, sumUsage: 0, sumDelta: 0, massivaLinkages: 0 }
       return {
         bucket,
         splitters: current.splitters,
         avgUsagePercent: Number((current.sumUsage / Math.max(1, current.splitters)).toFixed(1)),
         avgDeltaReference: Number((current.sumDelta / Math.max(1, current.splitters)).toFixed(2)),
-        massivaTickets: current.massivaTickets,
+        massivaLinkages: current.massivaLinkages,
+        distinctMassivas: distinctByBucket[bucket] ?? 0,
       }
     })
 
@@ -1278,7 +1378,7 @@ export function useNetworkIntelligenceData(
       lifecycleCohorts,
       lifecycleAlerts,
     }
-  }, [riskRanking, splittersMetaByCode, deltaReference, deltaReferenceLabel])
+  }, [riskRanking, splittersMetaByCode, deltaReference, deltaReferenceLabel, filtered?.massivaPeriodLinks])
 
   return {
     query,
@@ -1291,6 +1391,7 @@ export function useNetworkIntelligenceData(
     massivaStats: filtered?.massivaStats ?? [],
     areaPoints,
     barPoints,
+    massivaRecurrenceInsights,
     recurrenceCells,
     saturationCells,
     decisionKpis,
@@ -1308,6 +1409,8 @@ export function useNetworkIntelligenceData(
       splittersWithMaintenances: 0,
       unmappedMaintenances: 0,
     },
+    massivaRollup: filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP,
+    massivaPeriodLinks: filtered?.massivaPeriodLinks ?? [],
     deltaReference,
     deltaReferenceLabel,
     dateWindow: window,

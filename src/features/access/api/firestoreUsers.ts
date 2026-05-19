@@ -33,6 +33,8 @@ export function parsePermissions(value: unknown): SplittersPermissionSet {
     canViewMassiva: raw.canViewMassiva ?? defaultSplittersPermissions.canViewMassiva,
     canOpenMassiva: raw.canOpenMassiva ?? defaultSplittersPermissions.canOpenMassiva,
     canViewIntelligence: raw.canViewIntelligence ?? defaultSplittersPermissions.canViewIntelligence,
+    canUsePlanningAssistant:
+      raw.canUsePlanningAssistant ?? defaultSplittersPermissions.canUsePlanningAssistant,
     isAdmin: raw.isAdmin ?? defaultSplittersPermissions.isAdmin,
   }
 }
@@ -84,6 +86,7 @@ export async function ensureSplittersUserProfile(input: {
           canViewMassiva: true,
           canOpenMassiva: true,
           canViewIntelligence: true,
+          canUsePlanningAssistant: true,
           isAdmin: true,
         }
       : defaultSplittersPermissions

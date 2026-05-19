@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { useAppUiStore } from '@/shared/store/appUiStore'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
@@ -14,8 +14,21 @@ export function RootLayout() {
   const setGlobalError = useAppUiStore((s) => s.setGlobalError)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const { pathname } = useLocation()
 
   const isDesktopLayout = useMediaQuery(`(min-width: ${BREAKPOINT_PX.xl}px)`)
+
+  /**
+   * Leaflet (arrasto do mapa) pode deixar `leaflet-dragging` / `pointer-events` no body.
+   * Isso intercepta cliques em toda a app (sidebar, links, voltar). Limpa a cada mudança de rota.
+   */
+  useLayoutEffect(() => {
+    document.body.classList.remove('leaflet-dragging')
+    document.body.style.removeProperty('pointer-events')
+    document.querySelectorAll('.leaflet-drag-target').forEach((el) => {
+      el.classList.remove('leaflet-drag-target')
+    })
+  }, [pathname])
 
   useEffect(() => {
     if (isDesktopLayout) setMobileNavOpen(false)
@@ -94,7 +107,7 @@ export function RootLayout() {
               />
             </div>
           )}
-          <Outlet />
+          <Outlet context={{ sidebarCollapsed, mobileNavOpen }} />
         </main>
       </div>
     </div>

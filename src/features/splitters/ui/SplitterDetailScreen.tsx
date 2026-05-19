@@ -1,5 +1,6 @@
 ﻿import { useLocation, useParams } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { SplitterMapReliefInsight } from '@/features/splitters/lib/splitterStreetRelief'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
@@ -28,9 +29,16 @@ export function SplitterDetailScreen() {
   const localMassivaStatsQuery = useSplitterMassivaStatsFromLocalDb(
     state.status === 'ready' ? [state.splitter.code] : [],
   )
+  const rawListHref =
+    location.state && typeof location.state === 'object' && 'splittersListHref' in location.state
+      ? (location.state as { splittersListHref?: unknown }).splittersListHref
+      : undefined
   const backTo =
-    typeof location.state?.splittersListHref === 'string'
-      ? location.state.splittersListHref
+    typeof rawListHref === 'string' &&
+    rawListHref.trim() !== '' &&
+    rawListHref.trim().startsWith('/') &&
+    !rawListHref.trim().startsWith('//')
+      ? rawListHref.trim()
       : '/splitters'
   const massivaStatsByMatcher = useMemo(
     () =>
@@ -80,8 +88,17 @@ export function SplitterDetailScreen() {
     void refetch()
   }
 
+  const [mapReliefInsight, setMapReliefInsight] = useState<SplitterMapReliefInsight>({
+    evaluationSettled: false,
+    streetReliefNeighbor: null,
+  })
+  const mapReliefResetKey = state.status === 'ready' ? state.splitter.code : null
+  useEffect(() => {
+    setMapReliefInsight({ evaluationSettled: false, streetReliefNeighbor: null })
+  }, [mapReliefResetKey])
+
   return (
-    <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <>
       <AppPageHeader
         icon={Database}
         badge="Equipamento"
@@ -94,10 +111,11 @@ export function SplitterDetailScreen() {
         primaryAction={{
           to: backTo,
           label: 'Voltar à lista',
-          state: location.state,
+          state: { splittersListHref: backTo },
         }}
       />
 
+      <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {state.status === 'invalid-param' ? (
         <EmptyState
           title="Código inválido"
@@ -134,6 +152,7 @@ export function SplitterDetailScreen() {
             onRefreshNow={refreshDetailNow}
             isRefreshing={isRefreshingDetail}
             lastUpdatedAtMs={lastUpdatedAtMs}
+            mapReliefInsight={mapReliefInsight}
           />
 
           <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
@@ -145,7 +164,7 @@ export function SplitterDetailScreen() {
             <SplitterOltSection oltCode={state.splitter.oltCode} />
           </div>
 
-          <SplitterMapSection splitter={state.splitter} />
+          <SplitterMapSection splitter={state.splitter} onMapReliefInsightChange={setMapReliefInsight} />
 
           <SplitterClientesSection
             splitterCode={state.splitter.code}
@@ -172,7 +191,8 @@ export function SplitterDetailScreen() {
           </section>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

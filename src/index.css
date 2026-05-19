@@ -136,3 +136,15 @@
     @apply bg-surface text-on-surface font-sans;
   }
 }
+
+/* Mapa splitters (Leaflet): isola stacking; popup com scroll vertical explícito. */
+.splitter-map-leaflet-host.leaflet-container {
+  isolation: isolate;
+  max-width: 100%;
+}
+.splitter-map-leaflet-host .leaflet-popup-content.leaflet-popup-scrolled {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

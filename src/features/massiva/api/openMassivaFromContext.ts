@@ -24,6 +24,32 @@ import type { SplitterCliente } from '@/features/splitters/model/splitterCliente
 
 const AUTO_CLOSE_NO_CLIENTS = 'Não foi acionado nenhum cliente na abertura.'
 
+const LOCAL_HISTORY_WARNING =
+  'A massiva foi aberta, mas o historico local por splitter nao foi registrado. O painel da rede e os indicadores locais podem ficar inconsistentes ate corrigir essa gravacao.'
+
+function appendFollowUpWarning(
+  payload: MassivaOpenMutationSuccessPayload,
+  warning: string,
+): MassivaOpenMutationSuccessPayload {
+  const normalized = warning.trim()
+  if (normalized === '') return payload
+
+  const current = payload.followUpWarning?.trim() ?? ''
+  if (current === '') {
+    return {
+      ...payload,
+      followUpWarning: normalized,
+    }
+  }
+
+  if (current.includes(normalized)) return payload
+
+  return {
+    ...payload,
+    followUpWarning: `${current}\n${normalized}`,
+  }
+}
+
 function closePathConfigured(): boolean {
   return env.massivaClosePath.trim() !== ''
 }
@@ -138,11 +164,12 @@ export async function openMassivaFromContext(
           protocol: ids.protocol,
           closeDescription: AUTO_CLOSE_NO_CLIENTS,
         })
-        const payload = { ...base, autoClosedWithoutClients: true }
+        let payload: MassivaOpenMutationSuccessPayload = { ...base, autoClosedWithoutClients: true }
         try {
           await registerOpenedMassivaHistoryInLocalDb(context, payload)
         } catch (localError) {
-          console.warn('[Massiva] Falha ao registrar histórico local após autoencerramento.', localError)
+          console.warn('[Massiva] Falha ao registrar hist??rico local ap??s autoencerramento.', localError)
+          payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
         }
         return payload
       } catch (e) {
@@ -159,14 +186,15 @@ export async function openMassivaFromContext(
           ? ''
           : 'Nenhum cliente com PPPoE e contrato na seleção. Defina VITE_MASSIVA_CLOSE_PATH para permitir encerramento automático do protocolo.'
 
-    const payload = followUpWarning !== ''
+    let payload = followUpWarning !== ''
       ? { ...base, followUpWarning }
       : base
 
     try {
       await registerOpenedMassivaHistoryInLocalDb(context, payload)
     } catch (localError) {
-      console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
+      console.warn('[Massiva] Falha ao registrar hist??rico local ap??s abertura.', localError)
+      payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
     }
 
     return payload
@@ -201,7 +229,7 @@ export async function openMassivaFromContext(
     afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
   }
 
-  const payload = {
+  let payload: MassivaOpenMutationSuccessPayload = {
     ...base,
     afetadosPostedCount,
   }
@@ -209,7 +237,8 @@ export async function openMassivaFromContext(
   try {
     await registerOpenedMassivaHistoryInLocalDb(context, payload)
   } catch (localError) {
-    console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
+    console.warn('[Massiva] Falha ao registrar hist??rico local ap??s abertura.', localError)
+    payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
   }
 
   return payload

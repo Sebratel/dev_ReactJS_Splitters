@@ -5,6 +5,61 @@
  * @param {import('express').Request} req
  * @param {string} splittersBaseQuery SQL embebido (constante SPLITTERS_BASE_QUERY do index).
  */
+function parseOptionalIntQuery(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number.parseInt(String(value), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Grupos numéricos antes da primeira `/` — espelho da regra na UI/massiva.
+ *
+ * @param {string} baseAlias
+ * @param {string} columnDoubleQuoted ex.: `"SPLT.SECUNDARIO"`
+ */
+function buildDigitGroupsBeforeSlashSql(baseAlias, columnDoubleQuoted) {
+  return `(
+    SELECT array_agg(m[1] ORDER BY ord)
+    FROM regexp_matches(
+      split_part(trim(COALESCE(${baseAlias}.${columnDoubleQuoted}, '')::text), '/', 1),
+      '[0-9]+',
+      'g'
+    ) WITH ORDINALITY AS dt(m, ord)
+  )`;
+}
+
+/**
+ * @param {string} [baseAlias]
+ */
+function buildResolvedOltPonExpressions(baseAlias = 'base') {
+  const titleArr = buildDigitGroupsBeforeSlashSql(baseAlias, '"SPLT.SECUNDARIO"');
+  const codeArr = buildDigitGroupsBeforeSlashSql(baseAlias, '"CÓDIGO[SPLT.SECUNDARIO]"');
+  const titleCard = `COALESCE(cardinality(${titleArr}), 0)`;
+  const codeCard = `COALESCE(cardinality(${codeArr}), 0)`;
+
+  const slotExpr = `(
+    CASE
+      WHEN ${titleCard} >= 2 THEN (${titleArr}[cardinality(${titleArr}) - 1])::int
+      WHEN ${codeCard} >= 2 THEN (${codeArr}[cardinality(${codeArr}) - 1])::int
+      ELSE COALESCE(${baseAlias}."SLOT[SPLT.SECUNDARIO]"::int, 0)
+    END
+  )`;
+
+  const portExpr = `(
+    CASE
+      WHEN ${titleCard} >= 2 THEN (${titleArr}[cardinality(${titleArr})])::int
+      WHEN ${codeCard} >= 2 THEN (${codeArr}[cardinality(${codeArr})])::int
+      ELSE COALESCE(
+        ${baseAlias}."PORTA EXTRAÍDA[SPLT.SECUNDARIO]"::int,
+        ${baseAlias}."PORTA[SPLT.PRIMARIO]"::int,
+        0
+      )
+    END
+  )`;
+
+  return { slotExpr, portExpr };
+}
+
 export function buildSplittersFilterContext(req, splittersBaseQuery) {
   const search = req.query.search || '';
   const oltCodes = req.query.olts ? req.query.olts.split(',') : [];
@@ -28,6 +83,9 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
   const primarySplitters = req.query.primarySplitters
     ? req.query.primarySplitters.split(',')
     : [];
+
+  const oltSlotFilter = parseOptionalIntQuery(req.query.oltSlot);
+  const oltPortFilter = parseOptionalIntQuery(req.query.oltPort);
 
   const values = [];
   let currentParam = 1;
@@ -97,6 +155,20 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
     whereClauses.push(`TRIM(base."NOME CONDOMÍNIO") = ANY($${currentParam})`);
     values.push(normalizedCondominiumSelections);
     currentParam++;
+  }
+
+  if (oltSlotFilter !== null || oltPortFilter !== null) {
+    const { slotExpr, portExpr } = buildResolvedOltPonExpressions('base');
+    if (oltSlotFilter !== null) {
+      whereClauses.push(`${slotExpr} = $${currentParam}`);
+      values.push(oltSlotFilter);
+      currentParam++;
+    }
+    if (oltPortFilter !== null) {
+      whereClauses.push(`${portExpr} = $${currentParam}`);
+      values.push(oltPortFilter);
+      currentParam++;
+    }
   }
 
   const normalizedOpenMassivaSplitterCodes = openMassivaSplitterCodes

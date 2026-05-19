@@ -41,6 +41,8 @@ export function useSplittersList(
       openMassivaSplitterCodes,
       state.maintenanceFilter,
       maintenanceSplitterCodes,
+      state.oltSlot ?? null,
+      state.oltPort ?? null,
     ],
     queryFn: () => fetchSplittersFromLocalDb({
       page,
@@ -60,6 +62,8 @@ export function useSplittersList(
           ? undefined
           : state.maintenanceFilter === 'with-maintenance',
       maintenanceSplitterCodes,
+      oltSlot: state.oltSlot ?? null,
+      oltPort: state.oltPort ?? null,
     }),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
     placeholderData: keepPreviousData,

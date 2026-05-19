@@ -69,6 +69,12 @@ export async function fetchSplittersOperationalPriorityFromLocalDb(
   if (maintenanceSplitterCodes.length > 0) {
     queryParams.append('maintenanceSplitterCodes', maintenanceSplitterCodes.join(','))
   }
+  if (params.oltSlot != null && Number.isFinite(params.oltSlot)) {
+    queryParams.append('oltSlot', String(Math.trunc(params.oltSlot)))
+  }
+  if (params.oltPort != null && Number.isFinite(params.oltPort)) {
+    queryParams.append('oltPort', String(Math.trunc(params.oltPort)))
+  }
 
   const url = `${env.localBffUrl}/api/splitters/operational-priority?${queryParams.toString()}`
   const response = await fetchWithSessionAuth(url)

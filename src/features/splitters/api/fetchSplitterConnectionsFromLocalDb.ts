@@ -156,25 +156,47 @@ export function mapConnectionRowsToSplitterBundle(
 
     const rowRecord = row as Record<string, unknown>
     const splitterTitle = row['SPLT.SECUNDARIO']
-    const parsedRoute = extractSlotAndPortFromSplitterTitle(splitterTitle)
-    let slotOlt = toInt(
-      pickRowValue(row, ['SLOT[SPLT.SECUNDARIO]', 'SLOT OLT', 'SLOT[OLT]']) ??
-        parsedRoute.slot ??
-        0,
-      0,
-    )
-    let portOlt = toInt(
-      pickRowValue(row, ['PORTA EXTRAÍDA[SPLT.SECUNDARIO]', 'PORTA OLT', 'PORTA[OLT]']) ??
-        parsedRoute.port ??
-        0,
-      0,
-    )
-
-    if (slotOlt <= 0 && parsedRoute.slot != null && parsedRoute.slot > 0) {
-      slotOlt = parsedRoute.slot
+    const splitterCodeRow = pickRowValue(row, [
+      'CÓDIGO[SPLT.SECUNDARIO]',
+      'CÃ“DIGO[SPLT.SECUNDARIO]',
+    ])
+    let parsedRoute = extractSlotAndPortFromSplitterTitle(splitterTitle)
+    if (
+      parsedRoute.slot == null ||
+      parsedRoute.port == null ||
+      parsedRoute.slot <= 0 ||
+      parsedRoute.port <= 0
+    ) {
+      parsedRoute = extractSlotAndPortFromSplitterTitle(splitterCodeRow)
     }
-    if (portOlt <= 0 && parsedRoute.port != null && parsedRoute.port > 0) {
-      portOlt = parsedRoute.port
+
+    const hasParsedPon =
+      parsedRoute.slot != null &&
+      parsedRoute.port != null &&
+      parsedRoute.slot > 0 &&
+      parsedRoute.port > 0
+
+    let slotOlt: number
+    let portOlt: number
+    if (hasParsedPon) {
+      slotOlt = parsedRoute.slot as number
+      portOlt = parsedRoute.port as number
+    } else {
+      slotOlt = toInt(
+        pickRowValue(row, ['SLOT[SPLT.SECUNDARIO]', 'SLOT OLT', 'SLOT[OLT]']) ?? 0,
+        0,
+      )
+      const extraPort = pickRowValue(row, [
+        'PORTA EXTRAÍDA[SPLT.SECUNDARIO]',
+        'PORTA OLT',
+        'PORTA[OLT]',
+      ])
+      const primaryPort = pickRowValue(row, ['PORTA[SPLT.PRIMARIO]'])
+      const chosen =
+        extraPort !== undefined && extraPort !== null && String(extraPort).trim() !== ''
+          ? extraPort
+          : primaryPort
+      portOlt = toInt(chosen ?? pickRowValue(row, ['PORTA OLT', 'PORTA[OLT]']) ?? 0, 0)
     }
 
     const accessPointCode = String(

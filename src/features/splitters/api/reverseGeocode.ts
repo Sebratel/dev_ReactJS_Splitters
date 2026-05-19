@@ -26,6 +26,8 @@ function buildReverseUrl(lat: number, lng: number): string {
   u.searchParams.set('lat', String(lat))
   u.searchParams.set('lon', String(lng))
   u.searchParams.set('addressdetails', '1')
+  u.searchParams.set('zoom', '18')
+  u.searchParams.set('accept-language', 'pt-BR,pt,en')
   return u.toString()
 }
 

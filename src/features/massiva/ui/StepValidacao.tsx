@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import {
   AlertCircle,
@@ -33,6 +33,7 @@ type StepValidacaoProps = {
 }
 
 const EXPANDED_PAGE_SIZE = 200
+const MASSIVA_VALIDATION_UI_STATE_KEY = 'nexaview.massiva.validation.ui.v1'
 
 const t = {
   validacao: 'Valida\u00e7\u00e3o',
@@ -199,15 +200,42 @@ function downloadCsv(filename: string, content: string): void {
   URL.revokeObjectURL(url)
 }
 
+function readMassivaValidationUiState(): { clienteFilterQuery: string } {
+  if (typeof window === 'undefined') {
+    return { clienteFilterQuery: '' }
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(MASSIVA_VALIDATION_UI_STATE_KEY)
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<{ clienteFilterQuery: string }>
+    return {
+      clienteFilterQuery:
+        typeof parsed.clienteFilterQuery === 'string' ? parsed.clienteFilterQuery : '',
+    }
+  } catch {
+    return { clienteFilterQuery: '' }
+  }
+}
+
 export function StepValidacao({
   view,
   openingPreparation,
   onRetryConnections,
 }: StepValidacaoProps) {
+  const [validationUiState, setValidationUiState] = useState(readMassivaValidationUiState)
   const [isExpandedOpen, setExpandedOpen] = useState(false)
   const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false)
   const [expandedVisibleCount, setExpandedVisibleCount] = useState(EXPANDED_PAGE_SIZE)
-  const [clienteFilterQuery, setClienteFilterQuery] = useState('')
+  const { clienteFilterQuery } = validationUiState
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      MASSIVA_VALIDATION_UI_STATE_KEY,
+      JSON.stringify(validationUiState),
+    )
+  }, [validationUiState])
 
   const sampleClientes = useMemo(
     () => (view.status === 'success' ? view.sampleClientes : []),
@@ -383,7 +411,7 @@ export function StepValidacao({
                   <input
                     type="search"
                     value={clienteFilterQuery}
-                    onChange={(e) => setClienteFilterQuery(e.target.value)}
+                    onChange={(e) => setValidationUiState({ clienteFilterQuery: e.target.value })}
                     placeholder={'Buscar cliente, PPPoE ou splitter\u2026'}
                     className="w-full rounded-lg border border-neutral-200 bg-white py-1.5 pl-8 pr-3 text-sm text-neutral-800 shadow-sm ring-0 transition placeholder:text-neutral-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200/60"
                     aria-label="Filtrar clientes na tabela"
@@ -391,7 +419,7 @@ export function StepValidacao({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setClienteFilterQuery('')}
+                  onClick={() => setValidationUiState({ clienteFilterQuery: '' })}
                   className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
                 >
                   <ListFilter className="h-3.5 w-3.5" aria-hidden />
@@ -697,3 +725,4 @@ export function StepValidacao({
     </>
   )
 }
+

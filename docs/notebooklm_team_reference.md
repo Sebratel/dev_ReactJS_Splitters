@@ -7,13 +7,14 @@ Se alguem novo entrar no projeto, este e o caminho mais seguro para entender a a
 ## Ordem recomendada de estudo
 
 1. `README.md`
-2. `architecture.md`
-3. `src/app/router.tsx`
-4. `src/shared/config/env.ts`
-5. `src/pages/`
-6. `src/features/splitters/`
-7. `src/features/massiva/`
-8. `server/index.js`
+2. `docs/gestao-permissoes-usuarios.md` (se o foco for **TI / gestão de acessos**)
+3. `architecture.md`
+4. `src/app/router.tsx`
+5. `src/shared/config/env.ts`
+6. `src/pages/`
+7. `src/features/splitters/`
+8. `src/features/massiva/`
+9. `server/index.js`
 
 ## O que a aplicacao faz em linguagem de produto
 
@@ -87,6 +88,11 @@ Ele faz o trabalho pesado de:
 - `src/app/router.tsx`
 - `src/app/providers/AppProviders.tsx`
 - `src/shared/config/env.ts`
+
+### Gestao de permissoes e usuarios (operacao TI)
+
+- `docs/gestao-permissoes-usuarios.md` — **guia principal**: presets (Analista de rede, Operador massivas, Leitura, Admin), pedidos de acesso, aprovacao, `/usuarios`
+- `docs/firestore-access-control.md` — formato do documento `splitters_users` e regras Firestore sugeridas
 
 ### Sessao e autenticacao
 
@@ -224,6 +230,7 @@ Leia nesta ordem:
 Atualize este arquivo quando houver mudanca em qualquer um destes pontos:
 
 - nova rota principal
+- mudanca em presets / permissoes / fluxo de pedidos de acesso (manter em paralelo `docs/gestao-permissoes-usuarios.md`)
 - troca de estrategia de auth
 - novo modulo em `features`
 - mudanca de responsabilidade do BFF local

@@ -6,18 +6,55 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import {
+  analyzeStreetReliefContext,
+  evaluateReliefForSplitter,
+  fetchOsrmFootDistanceRowMeters,
+  hasIntraCondominiumFreePortSibling,
+  isCondominiumSplitterTitle,
+  normalizeStreetForRelief,
+  queryFullOccupancySplitterCandidates,
+  querySplitterNeighborsWithOrigin,
+  splitterIdentifierMatchSql,
+  SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+} from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
 } from './splittersOperationalScore.js';
+import {
+  askPlanningAssistant,
+  isPlanningAssistantConfigured,
+} from './planningAssistant.js';
+import {
+  requireAuthenticatedSplittersUser,
+  requireIsaAdminAccess,
+  requireSplittersAdminAccess,
+} from './firebaseAdminAuth.js';
+import {
+  readIsaPromptConfig,
+  resetIsaPromptConfig,
+  saveIsaPromptConfig,
+} from './isaPromptConfigStore.js';
+import {
+  addPlatformSuggestionComment,
+  createPlatformSuggestion,
+  listPlatformSuggestions,
+  updatePlatformSuggestionStatus,
+  voteOnPlatformSuggestion,
+} from './platformSuggestionsStore.js';
+import {
+  normalizeMassivaRouteRowTituloPreferido,
+  rowMatchesMassivaOltRoute,
+} from './splitterTitleOltDerivation.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), override: true });
 
 captureConsole();
 
@@ -37,9 +74,8 @@ const hubBaseUrl = (
   process.env.VITE_HUB_ORIGIN ||
   'https://sebratel-hub.web.app'
 ).replace(/\/+$/, '');
-
 app.use(cors()); // Permite qualquer origem em desenvolvimento local
-app.use(express.json());
+app.use(express.json({ limit: '512kb' }));
 
 app.use((req, res, next) => {
   const startAt = Date.now();
@@ -155,6 +191,213 @@ async function queryWithTransientRetry(queryText, values = [], options = {}) {
   throw lastError;
 }
 
+function coercePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeAssistantText(value) {
+  return String(value ?? '').trim();
+}
+
+const EMPTY_ASSISTANT_MASSIVA_STATS = {
+  totalTickets: 0,
+  openTickets: 0,
+  closedTickets: 0,
+  affectedClientsTotal: 0,
+  latestOpenedAt: null,
+};
+
+const EMPTY_ASSISTANT_TREND = {
+  label: 'Sem historico',
+  currentUsagePercent: 0,
+  delta7d: 0,
+  delta30d: 0,
+  capturedAt: null,
+};
+
+async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeters, maxRouteMeters }) {
+  /** Alívio e badge "Apoio" do mapa usam 200 m em linha reta; pedidos maiores são limitados aqui. */
+  const neighborStraightRadiusMeters = Math.min(
+    Math.max(Number(straightRadiusMeters) || SPLITTER_MAP_STRAIGHT_RADIUS_METERS, 1),
+    SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+  );
+  /** A ISA deve seguir a mesma régua operacional da fila de alívio: até 200 m pela rota. */
+  const effectiveMaxRouteMeters = Math.min(Math.max(Number(maxRouteMeters) || 200, 1), 200);
+
+  const context = {
+    generatedAt: new Date().toISOString(),
+    reliefRule: {
+      straightRadiusMeters: neighborStraightRadiusMeters,
+      straightRadiusMetersSolicitado:
+        Number(straightRadiusMeters) > neighborStraightRadiusMeters
+          ? Number(straightRadiusMeters)
+          : null,
+      maxRouteMeters: effectiveMaxRouteMeters,
+      crossStreetMaxRouteMeters: 30,
+      sameStreetOnlyForFullRouteLimit: true,
+    },
+    splitter: null,
+    networkContext: null,
+    trendSummary: null,
+    recentSnapshots: [],
+    massivaSummary: null,
+    recentMassivaHistory: [],
+    operationalPriority: null,
+    neighborsSample: [],
+    reliefEvaluation: null,
+  };
+
+  const normalizedCode = normalizeAssistantText(splitterCode);
+  if (normalizedCode === '') return context;
+
+  const splitterResult = await queryWithTransientRetry(
+    `
+      SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
+        base."ID[SPLT.SECUNDARIO]" AS id,
+        base."CÓDIGO[SPLT.SECUNDARIO]" AS code,
+        base."SPLT.SECUNDARIO" AS title,
+        base."CAPACIDADE[SPLT.SECUNDARIO]" AS "outPorts",
+        base."BUSY_COUNT" AS "busyCount",
+        base."SPLT.PRIMARIO" AS "primarySplitterTitle",
+        base."PORTA[SPLT.PRIMARIO]" AS "primarySplitterPort",
+        base."PONTO DE ACESSO CODE" AS "accessPointCode",
+        base."PONTO DE ACESSO" AS "accessPointTitle",
+        base."CONCENTRADOR_CODE" AS "concentratorCode",
+        base."CONCENTRADOR" AS "concentratorTitle",
+        base."SLOT[SPLT.SECUNDARIO]" AS slot,
+        base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]" AS "ponPort",
+        base."RUA[SPLT.SECUNDARIO]" AS street,
+        base."BAIRRO[SPLT.SECUNDARIO]" AS neighborhood,
+        base."CIDADE[SPLT.SECUNDARIO]" AS city,
+        base."TIPO LOCAL" AS "tipoLocal",
+        base."NOME CONDOMÍNIO" AS "nomeCondominio",
+        base."TEM_CORPORATIVO_SPLITTER" AS "hasCorporateClients"
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE (
+        TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) = TRIM($1::text)
+        OR TRIM(base."SPLT.SECUNDARIO"::text) = TRIM($1::text)
+      )
+      ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
+      LIMIT 1
+    `,
+    [normalizedCode],
+    { retries: 1, delayMs: 180 },
+  );
+
+  const splitterRow = splitterResult.rows?.[0] ?? null;
+  if (!splitterRow) {
+    context.splitter = {
+      code: normalizedCode,
+      found: false,
+    };
+    return context;
+  }
+
+  context.splitter = {
+    found: true,
+    id: Number(splitterRow.id ?? 0),
+    code: normalizeAssistantText(splitterRow.code),
+    title: normalizeAssistantText(splitterRow.title),
+    outPorts: Number(splitterRow.outPorts ?? 0),
+    busyCount: Number(splitterRow.busyCount ?? 0),
+    street: normalizeAssistantText(splitterRow.street),
+    neighborhood: normalizeAssistantText(splitterRow.neighborhood),
+    city: normalizeAssistantText(splitterRow.city),
+    tipoLocal: normalizeAssistantText(splitterRow.tipoLocal),
+    nomeCondominio: normalizeAssistantText(splitterRow.nomeCondominio),
+    hasCorporateClients: Boolean(splitterRow.hasCorporateClients),
+    isCondominium: isCondominiumSplitterTitle(splitterRow.title),
+  };
+
+  context.networkContext = {
+    primarySplitterTitle: normalizeAssistantText(splitterRow.primarySplitterTitle),
+    primarySplitterPort: Number(splitterRow.primarySplitterPort ?? 0),
+    accessPointCode: normalizeAssistantText(splitterRow.accessPointCode),
+    accessPointTitle: normalizeAssistantText(splitterRow.accessPointTitle),
+    concentratorCode: normalizeAssistantText(splitterRow.concentratorCode),
+    concentratorTitle: normalizeAssistantText(splitterRow.concentratorTitle),
+    slot: Number(splitterRow.slot ?? 0),
+    ponPort: Number(splitterRow.ponPort ?? 0),
+  };
+
+  const [
+    trendMap,
+    massivaStatsMap,
+    massivaRollup,
+    recentSnapshots,
+    recentMassivaHistory,
+  ] = await Promise.all([
+    massivaHistoryStore.getSplitterTrends([normalizedCode]),
+    massivaHistoryStore.getSplitterStats([normalizedCode]),
+    massivaHistoryStore.getMassivaPeriodRollup([normalizedCode]),
+    massivaHistoryStore.getRecentSplitterSnapshots(normalizedCode, 6),
+    massivaHistoryStore.getRecentHistoryBySplitter(normalizedCode, 5),
+  ]);
+
+  const massivaStats =
+    massivaStatsMap.get(normalizedCode) ?? EMPTY_ASSISTANT_MASSIVA_STATS;
+  const trendSummary = trendMap.get(normalizedCode) ?? EMPTY_ASSISTANT_TREND;
+
+  context.trendSummary = trendSummary;
+  context.recentSnapshots = recentSnapshots;
+  context.massivaSummary = {
+    stats: massivaStats,
+    rollup: massivaRollup,
+  };
+  context.recentMassivaHistory = recentMassivaHistory;
+  context.operationalPriority = {
+    ...buildSplitterOperationalScore(context.splitter, massivaStats),
+    massivaStats,
+  };
+
+  const reliefAnalysis = await analyzeStreetReliefContext(pool, normalizedCode, {
+    straightRadiusMeters: neighborStraightRadiusMeters,
+    maxRouteMeters: effectiveMaxRouteMeters,
+  });
+  context.reliefEvaluation = {
+    hasReliefWithinRoute: Boolean(
+      reliefAnalysis.reliefMatch || reliefAnalysis.condominiumRelief,
+    ),
+    routingOk: Boolean(reliefAnalysis.routingOk),
+    straightNeighborsCount: Number(reliefAnalysis.straightNeighborsCount ?? 0),
+    condominiumRelief: Boolean(reliefAnalysis.condominiumRelief),
+    reliefNeighborCode: reliefAnalysis.reliefMatch
+      ? normalizeAssistantText(reliefAnalysis.reliefMatch.code)
+      : null,
+    reliefNeighborTitle: reliefAnalysis.reliefMatch
+      ? normalizeAssistantText(reliefAnalysis.reliefMatch.title)
+      : null,
+    reliefNeighborRouteMeters:
+      reliefAnalysis.reliefMatch?.routeMeters == null
+        ? null
+        : Math.round(Number(reliefAnalysis.reliefMatch.routeMeters)),
+  };
+
+  context.origin = reliefAnalysis.origin;
+  context.originStreet = normalizeAssistantText(
+    reliefAnalysis.targetStreetDisplay ?? reliefAnalysis.targetStreetNormalized ?? '',
+  );
+  context.originIsCondominium = Boolean(reliefAnalysis.originIsCondominium);
+
+  if (reliefAnalysis.origin && Array.isArray(reliefAnalysis.analyzedNeighbors)) {
+    context.neighborsSample = reliefAnalysis.analyzedNeighbors.slice(0, 8).map((neighbor) => ({
+      code: normalizeAssistantText(neighbor.code),
+      title: normalizeAssistantText(neighbor.title),
+      street: normalizeAssistantText(neighbor.streetDisplay ?? neighbor.street ?? ''),
+      outPorts: Number(neighbor.outPorts ?? 0),
+      busyCount: Number(neighbor.busyCount ?? 0),
+      straightMeters: Number(neighbor.distanceMeters ?? 0),
+      routeMeters:
+        neighbor.routeMeters == null ? null : Math.round(Number(neighbor.routeMeters)),
+      isCondominium: Boolean(neighbor.isCondominium),
+      sameStreet: Boolean(neighbor.sameStreet),
+    }));
+  }
+
+  return context;
+}
+
 const massivaHistoryStore = createMassivaHistoryStore({
   host: process.env.MASSIVA_MYSQL_HOST,
   port: process.env.MASSIVA_MYSQL_PORT,
@@ -242,14 +485,19 @@ secondary_splitters AS (
         ss.lat,
         ss.lng,
         ss.type,
+        ss.network_box_id,
+        parts.parts,
+        parts.parts_count,
         CASE
-            WHEN regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$') IS NOT NULL
-            THEN (regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$'))[1]::int
+            WHEN parts.parts_count >= 3
+                 AND parts.parts[parts.parts_count - 2] ~ '^\\d+$'
+            THEN parts.parts[parts.parts_count - 2]::int
             ELSE NULL
         END AS slot,
         CASE
-            WHEN regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$') IS NOT NULL
-            THEN (regexp_match(split_part(ss.title, '/', 1), '(\\d+)\\D+(\\d+)$'))[2]::int
+            WHEN parts.parts_count >= 2
+                 AND parts.parts[parts.parts_count - 1] ~ '^\\d+$'
+            THEN parts.parts[parts.parts_count - 1]::int
             ELSE NULL
         END AS porta_extraida,
         CASE
@@ -263,6 +511,11 @@ secondary_splitters AS (
             ELSE NULL
         END AS nome_condominio
     FROM authentication_splitters ss
+    CROSS JOIN LATERAL (
+        SELECT
+            string_to_array(ss.title, '-') AS parts,
+            array_length(string_to_array(ss.title, '-'), 1) AS parts_count
+    ) parts
 ),
 splitter_corporate AS (
     SELECT
@@ -317,12 +570,13 @@ SELECT
     contract.v_status                 AS "STATUS[CONTRATO]",
     auth_contract.id                  AS "ID CONEXAO[CLIENTE]",
     auth_contract.integration_code    AS "CODIGO_INTEGRACAO",
-    auth_contract.lat                 AS "LATITUDE_CLIENTE",
-    auth_contract.lng                 AS "LONGITUDE_CLIENTE",
+    insig.title                       AS "INSIGNIA_CLIENTE",
     client.id                         AS "ID[CLIENTE]",
     client.id                         AS "ID CLIENTE",
-    auth_contract.user                AS "USUÁRIO[CLIENTE]",
     client.name                       AS "NOME CLIENTE",
+    auth_contract.lat                 AS "LATITUDE_CLIENTE",
+    auth_contract.lng                 AS "LONGITUDE_CLIENTE",
+    auth_contract.user                AS "USUÁRIO[CLIENTE]",
     client.neighborhood               AS "BAIRRO",
     client.street                     AS "RUA",
     client."number"                   AS "NUMERO",
@@ -331,7 +585,6 @@ SELECT
     client.city                       AS "CIDADE CLIENTE",
     client.state                      AS "UF",
     client.email                      AS "EMAIL",
-    insig.title                       AS "INSIGNIA_CLIENTE",
     (
       LOWER(TRIM(COALESCE(insig.title, ''))) IN (
         'contrato corporativo',
@@ -339,14 +592,20 @@ SELECT
       )
     ) AS "CORPORATIVO",
     ss.out_ports                      AS "CAPACIDADE[SPLT.SECUNDARIO]",
-    ss.street                         AS "RUA[SPLT.SECUNDARIO]",
+    COALESCE(
+      NULLIF(TRIM(ss.street::text), ''),
+      NULLIF(TRIM(nba.street::text), '')
+    )                                 AS "RUA[SPLT.SECUNDARIO]",
     ss."number"                       AS "NÚMERO[SPLT.SECUNDARIO]",
     ss.neighborhood                   AS "BAIRRO[SPLT.SECUNDARIO]",
     ss.city                           AS "CIDADE[SPLT.SECUNDARIO]",
-    ss.lat                            AS "LATITUDE[SPLT.SECUNDARIO]",
-    ss.lng                            AS "LONGITUDE[SPLT.SECUNDARIO]",
+    COALESCE(nba.latitude, ss.lat)    AS "LATITUDE[SPLT.SECUNDARIO]",
+    COALESCE(nba.longitude, ss.lng)   AS "LONGITUDE[SPLT.SECUNDARIO]",
+    nba.latitude                      AS "LATITUDE_CAIXADEREDE",
+    nba.longitude                     AS "LONGITUDE_CAIXADEREDE",
     ss.type                           AS "TIPO EQUIPAMENTO[SPLT.SECUNDARIO]",
     ssp.busy                          AS "OCUPADO:[SPLT.SECUNDARIO]",
+    nb.title                          AS "CAIXA_DE_REDE",
     ss.tipo_local                     AS "TIPO LOCAL",
     ss.nome_condominio                AS "NOME CONDOMÍNIO",
     COALESCE(scorp.has_corporate, FALSE) AS "TEM_CORPORATIVO_SPLITTER",
@@ -377,6 +636,10 @@ LEFT JOIN authentication_concentrators concentrator
     ON concentrator.id = access_point.authentication_concentrator_id
 LEFT JOIN authentication_sites site
     ON site.id = access_point.authentication_site_id
+LEFT JOIN network_boxes nb
+    ON nb.id = ss.network_box_id
+LEFT JOIN network_box_addresses nba
+    ON nba.id = nb.network_box_address_id
 `;
 
 /** Data “operacional” no fuso de São Paulo (alinhada à captura diária). */
@@ -990,10 +1253,12 @@ app.get('/api/massiva/routes', async (req, res) => {
     `;
 
     const result = await pool.query(query);
+    const data = result.rows.map((row) => normalizeMassivaRouteRowTituloPreferido(row));
+
     res.json({
       success: true,
-      count: result.rowCount,
-      data: result.rows,
+      count: data.length,
+      data,
     });
   } catch (error) {
     console.error('Erro ao listar rotas para Massiva:', error);
@@ -1002,12 +1267,11 @@ app.get('/api/massiva/routes', async (req, res) => {
 });
 
 /**
- * Filtro opcional por AP/slot/porta/códigos.
- * Slot/porta: mesma expressão que GET `/api/massiva/routes` — com COALESCE(…,0);
- * senão, linhas com NULL em `SLOT[SPLT.SECUNDARIO]` não batem com `= 0` (NULL = 0 → false no Postgres)
- * e o batch fica vazio com o que o operador vê no catálogo.
+ * Filtro opcional por AP / códigos de splitter.
+ * Slot/porta na rota seguem a nomenclatura do título (`…-slot-porta/…`); o pareamento com linhas
+ * do catálogo faz-se em memória via `rowMatchesMassivaOltRoute` (mesma regra do detalhe splitter).
  */
-function buildMassivaConnectionsWhere({ apCode, slot, port, splitterCodes } = {}) {
+function buildMassivaConnectionsWhere({ apCode, splitterCodes } = {}) {
   const values = [];
   const where = ['base."ID CONEXAO[CLIENTE]" IS NOT NULL'];
   let p = 1;
@@ -1019,26 +1283,6 @@ function buildMassivaConnectionsWhere({ apCode, slot, port, splitterCodes } = {}
     );
     values.push(ap);
     p += 1;
-  }
-
-  if (slot != null) {
-    const slotN = typeof slot === 'number' ? slot : Number.parseInt(String(slot).trim(), 10);
-    if (Number.isFinite(slotN)) {
-      where.push(`COALESCE(base."SLOT[SPLT.SECUNDARIO]", 0) = $${p}`);
-      values.push(slotN);
-      p += 1;
-    }
-  }
-
-  if (port != null) {
-    const portN = typeof port === 'number' ? port : Number.parseInt(String(port).trim(), 10);
-    if (Number.isFinite(portN)) {
-      where.push(
-        `COALESCE(base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]", base."PORTA[SPLT.PRIMARIO]", 0) = $${p}`,
-      );
-      values.push(portN);
-      p += 1;
-    }
   }
 
   const clean = Array.isArray(splitterCodes)
@@ -1094,10 +1338,15 @@ app.get('/api/massiva/connections', async (req, res) => {
       .map((v) => v.trim())
       .filter((v) => v !== '');
 
+    const slotN =
+      slot == null ? null : Number.parseInt(String(slot).trim(), 10);
+    const portN =
+      port == null ? null : Number.parseInt(String(port).trim(), 10);
+    const slotPortFilter =
+      slotN != null && portN != null && Number.isFinite(slotN) && Number.isFinite(portN);
+
     const { where, values } = buildMassivaConnectionsWhere({
       apCode: apCode || undefined,
-      slot,
-      port,
       splitterCodes: splitterCodes.length > 0 ? splitterCodes : undefined,
     });
 
@@ -1105,10 +1354,14 @@ app.get('/api/massiva/connections', async (req, res) => {
       retries: 1,
       delayMs: 180,
     });
+    let rows = result.rows;
+    if (slotPortFilter) {
+      rows = rows.filter((row) => rowMatchesMassivaOltRoute(slotN, portN, row));
+    }
     res.json({
       success: true,
-      count: result.rowCount,
-      data: result.rows,
+      count: rows.length,
+      data: rows,
     });
   } catch (error) {
     console.error('Erro ao listar conexões para Massiva:', error);
@@ -1175,18 +1428,25 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
         chunk.map(async (route) => {
           const { where, values } = buildMassivaConnectionsWhere({
             apCode: route.apCode,
-            slot: route.slot,
-            port: route.port,
           });
-          return queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
-            retries: 1,
-            delayMs: 180,
-          });
+          const result = await queryWithTransientRetry(
+            massivaConnectionsSelectQuery(where),
+            values,
+            {
+              retries: 1,
+              delayMs: 180,
+            },
+          );
+          return {
+            rows: result.rows.filter((row) =>
+              rowMatchesMassivaOltRoute(route.slot, route.port, row),
+            ),
+          };
         }),
       );
 
-      for (const result of chunkResults) {
-        for (const row of result.rows) {
+      for (const pack of chunkResults) {
+        for (const row of pack.rows) {
           const dk = massivaRowDedupeKey(row);
           if (seenKeys.has(dk)) continue;
           seenKeys.add(dk);
@@ -1274,6 +1534,138 @@ app.post('/api/massiva/history/close', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao registrar encerramento local de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Total do período sem repetir afetados por splitter (uma soma por massiva distinta).
+ */
+app.post('/api/massiva/history/period-rollup', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({
+        success: true,
+        data: {
+          distinctMassivaCount: 0,
+          affectedClientsDistinctSum: 0,
+          openMassivasCount: 0,
+          closedMassivasCount: 0,
+        },
+      });
+    }
+
+    const scope =
+      String(req.body?.scope ?? '').trim() === 'all_linked' ? 'all_linked' : 'by_codes';
+
+    const splitterCodes = Array.isArray(req.body?.splitterCodes)
+      ? req.body.splitterCodes
+          .map((value) => String(value ?? '').trim())
+          .filter((value) => value !== '')
+      : [];
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaPeriodRollup(
+      splitterCodes,
+      massivaRange,
+      { scope },
+    );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao agregar massivas do período:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao agregar massivas do período.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Massivas do período com splitters vinculados (payload leve) — ex.: curva de envelhecimento.
+ */
+app.post('/api/massiva/history/period-links', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaSplitterLinksInPeriod(massivaRange);
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao listar vínculos de massivas do período:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao listar vínculos de massivas do período.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Recorrência dia × turno: massivas distintas por data/hora de abertura (não por equipamento).
+ */
+app.post('/api/massiva/history/day-shift-recurrence', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.body?.openedAtFrom);
+    const openedAtTo = parseOptionalIsoDate(req.body?.openedAtTo);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
+    const data = await massivaHistoryStore.getMassivaRecurrenceByDayShift(massivaRange);
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Erro ao agregar recorrência dia×turno:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao agregar recorrência dia×turno.',
       error: error.message,
     });
   }
@@ -1472,9 +1864,21 @@ app.get('/api/splitters/intelligence-batch', async (req, res) => {
       });
     }
 
+    const parseOptionalIsoDate = (value) => {
+      if (value == null || String(value).trim() === '') return null;
+      const d = new Date(String(value));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const openedAtFrom = parseOptionalIsoDate(req.query.from);
+    const openedAtTo = parseOptionalIsoDate(req.query.to);
+    const massivaRange =
+      openedAtFrom !== null || openedAtTo !== null
+        ? { openedAtFrom, openedAtTo }
+        : undefined;
+
     const [trendsMap, statsMap] = await Promise.all([
       massivaHistoryStore.getSplitterTrends(splitterCodes),
-      massivaHistoryStore.getSplitterStats(splitterCodes),
+      massivaHistoryStore.getSplitterStats(splitterCodes, massivaRange),
     ]);
 
     const trends = splitterCodes.map((code) => ({
@@ -1779,7 +2183,7 @@ app.get(['/api/splitters/:code/neighbors', '/api/splitters/neighbors'], async (r
         LEFT JOIN authentication_splitters as4
           ON as4.id = asp.children_authentication_splitter_id
         WHERE
-          as4.code = $1
+          ${splitterIdentifierMatchSql('as4')}
           AND as2.active IS TRUE
           AND as2.deleted IS FALSE
           AND asp.deleted IS FALSE
@@ -1865,6 +2269,573 @@ app.get(['/api/splitters/:code/neighbors', '/api/splitters/neighbors'], async (r
   }
 });
 
+/** Vizinhos com distância em linha reta + distância por rede viária (OSRM foot); inclui alívio intra-condomínio (titulo). */
+app.get('/api/splitters/neighbors-routed', async (req, res) => {
+  try {
+    const code = resolveSplitterCodeParam(req);
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Parametro code obrigatorio.' });
+    }
+
+    const straightRaw = Number.parseFloat(String(req.query.straightRadius ?? '200'));
+    const straightRadius =
+      Number.isFinite(straightRaw) && straightRaw > 0 ? straightRaw : 200;
+
+    const [{ origin, neighbors, originIsCondominium, originStreet }, condominiumReliefAvailable] = await Promise.all([
+      querySplitterNeighborsWithOrigin(pool, code, straightRadius),
+      hasIntraCondominiumFreePortSibling(pool, code),
+    ]);
+
+    /**
+     * Reverse geocode da origem e ruas dos vizinhos ficam no browser (`resolveGeocodedAddressForSplitter` /
+     * `useNeighborStreetsReverseGeocode`) para esta rota responder só com PG + OSRM e o mapa sair do loading rápido.
+     */
+    const originStreetRaw = null;
+
+    if (!origin) {
+      return res.json({
+        success: true,
+        straightRadiusMeters: straightRadius,
+        routingProfile: 'foot',
+        routingUnavailable: false,
+        isCondominium: originIsCondominium,
+        condominiumReliefAvailable,
+        originStreet,
+        originStreetRaw,
+        origin: null,
+        neighbors: [],
+      });
+    }
+
+    const capped = neighbors.slice(0, 80);
+    let routeMeters = [];
+    let routingUnavailable = false;
+    try {
+      routeMeters = await fetchOsrmFootDistanceRowMeters(
+        origin,
+        capped.map((n) => ({ lat: Number(n.lat), lng: Number(n.lng) })),
+      );
+    } catch (err) {
+      routingUnavailable = true;
+      routeMeters = capped.map(() => null);
+      logger.warn('OSRM neighbors-routed indisponivel', { error: String(err?.message ?? err) });
+    }
+
+    const data = capped.map((n, i) => ({
+      code: String(n.code ?? '').trim(),
+      title: String(n.title ?? '').trim(),
+      street: String(n.street ?? '').trim(),
+      outPorts: Number(n.outPorts ?? 0),
+      busyCount: Number(n.busyCount ?? 0),
+      lat: Number(n.lat),
+      lng: Number(n.lng),
+      straightMeters: Math.round(Number(n.distanceMeters ?? 0)),
+      routeMeters: routeMeters[i] ?? null,
+      isCondominium: isCondominiumSplitterTitle(n.title),
+    }));
+
+    res.json({
+      success: true,
+      straightRadiusMeters: straightRadius,
+      routingProfile: 'foot',
+      routingUnavailable,
+      isCondominium: originIsCondominium,
+      condominiumReliefAvailable,
+      originStreet,
+      originStreetRaw,
+      origin,
+      neighbors: data,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar vizinhos roteados:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+async function computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRouteMeters }) {
+  const entries = [];
+  let scannedCount = 0;
+  let offset = 0;
+  const batchSize = 40;
+  const maxCandidatesToScan = 400;
+  let reachedEnd = false;
+
+  while (scannedCount < maxCandidatesToScan) {
+    const candidates = await queryFullOccupancySplitterCandidates(pool, batchSize, offset);
+    if (candidates.length === 0) {
+      reachedEnd = true;
+      break;
+    }
+
+    for (const row of candidates) {
+      const splitterCode = String(row.code ?? '').trim();
+      if (!splitterCode) continue;
+
+      const relief = await evaluateReliefForSplitter(pool, splitterCode, {
+        straightRadiusMeters,
+        maxRouteMeters,
+      });
+      scannedCount += 1;
+
+      if (relief.routingOk && !relief.hasReliefWithinRoute) {
+        entries.push({
+          splitter: {
+            code: splitterCode,
+            title: String(row.title ?? '').trim() || splitterCode,
+            outPorts: Number(row.outPorts ?? 0),
+            busyCount: Number(row.busyCount ?? 0),
+          },
+          neighborStraightRadiusScanned: straightRadiusMeters,
+          maxRouteMeters,
+          straightNeighborsSampled: relief.straightNeighborsCount,
+          ruleType: isCondominiumSplitterTitle(row.title) ? 'CONDOMINIUM' : 'STREET',
+        });
+      }
+
+      if (scannedCount >= maxCandidatesToScan) {
+        break;
+      }
+    }
+
+    offset += candidates.length;
+    if (candidates.length < batchSize) {
+      reachedEnd = true;
+      break;
+    }
+  }
+
+  return {
+    straightRadiusMeters,
+    maxRouteMeters,
+    scannedCount,
+    entries,
+    totalEntries: entries.length,
+    sourceHasMoreCandidates: !reachedEnd && scannedCount < maxCandidatesToScan,
+  };
+}
+
+async function captureNetworkReliefSnapshot({ straightRadiusMeters, maxRouteMeters }) {
+  if (!massivaHistoryStore.configured) {
+    return { configured: false, snapshotRunId: null, entryCount: 0, scannedCount: 0 };
+  }
+
+  const data = await computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRouteMeters });
+  const persisted = await massivaHistoryStore.replaceNetworkReliefSnapshot(data);
+  return {
+    configured: true,
+    snapshotRunId: persisted.snapshotRunId,
+    entryCount: persisted.entryCount,
+    scannedCount: persisted.scannedCount,
+    totalEntries: data.totalEntries,
+  };
+}
+
+/**
+ * Splitters secundários (filhos de primário type=2) 100% ocupados sem porta livre em vizinho
+ * dentro de maxRouteMeters (OSRM foot). Pesado: varredura sequencial; limit baixo.
+ */
+app.get('/api/splitters/network-relief-queue', async (req, res) => {
+  try {
+    const limitRaw = Number.parseInt(String(req.query.limit ?? '20'), 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 20, 1), 40);
+    const cursorRaw = Number.parseInt(String(req.query.cursor ?? '0'), 10);
+    const cursor = Math.max(Number.isFinite(cursorRaw) ? cursorRaw : 0, 0);
+
+    const straightPre = Number.parseFloat(String(req.query.straightRadius ?? '500'));
+    const straightRadius =
+      Number.isFinite(straightPre) && straightPre > 0 ? straightPre : 500;
+
+    const maxRouteRaw = Number.parseFloat(String(req.query.maxRouteMeters ?? '200'));
+    const maxRouteMeters =
+      Number.isFinite(maxRouteRaw) && maxRouteRaw > 0 ? maxRouteRaw : 200;
+    const oltSlot = (() => {
+      const raw = req.query.oltSlot;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    const oltPort = (() => {
+      const raw = req.query.oltPort;
+      if (raw === undefined || raw === null || raw === '') return null;
+      const n = Number.parseInt(String(raw), 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    const usePonFilter = oltSlot !== null || oltPort !== null;
+
+    let page = massivaHistoryStore.configured
+      ? await massivaHistoryStore.getLatestNetworkReliefSnapshotPage({
+          straightRadiusMeters: straightRadius,
+          maxRouteMeters,
+          limit,
+          cursor,
+          oltSlot,
+          oltPort,
+        })
+      : null;
+
+    if (!page) {
+      await captureNetworkReliefSnapshot({
+        straightRadiusMeters: straightRadius,
+        maxRouteMeters,
+      });
+      page = await massivaHistoryStore.getLatestNetworkReliefSnapshotPage({
+        straightRadiusMeters: straightRadius,
+        maxRouteMeters,
+        limit,
+        cursor,
+        oltSlot,
+        oltPort,
+      });
+    }
+
+    if (!page) {
+      return res.status(503).json({
+        success: false,
+        message: 'Snapshot de planejamento de rede indisponível.',
+      });
+    }
+
+    const nextCursor = usePonFilter
+      ? page.ponFilterHasMore
+        ? page.ponFilterResumePosition
+        : null
+      : cursor + limit < page.totalEntries
+        ? cursor + limit
+        : null;
+
+    const hasMore = usePonFilter ? page.ponFilterHasMore : nextCursor !== null;
+
+    res.json({
+      success: true,
+      maxRouteMeters,
+      straightRadiusMeters: straightRadius,
+      scannedCount: page.scannedCount,
+      entries: page.entries,
+      hasMore,
+      nextCursor,
+      totalEntries: page.totalEntries,
+      generatedAt: page.generatedAt,
+      snapshotRunId: page.snapshotRunId,
+      cacheHit: false,
+      ponFilterActive: usePonFilter,
+    });
+  } catch (error) {
+    console.error('Erro na fila de alívio de rede:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/splitters/network-relief-snapshot/capture', async (req, res) => {
+  try {
+    const straightPre = Number.parseFloat(String(req.body?.straightRadius ?? req.query.straightRadius ?? '500'));
+    const straightRadius =
+      Number.isFinite(straightPre) && straightPre > 0 ? straightPre : 500;
+    const maxRouteRaw = Number.parseFloat(String(req.body?.maxRouteMeters ?? req.query.maxRouteMeters ?? '200'));
+    const maxRouteMeters =
+      Number.isFinite(maxRouteRaw) && maxRouteRaw > 0 ? maxRouteRaw : 200;
+
+    const data = await captureNetworkReliefSnapshot({
+      straightRadiusMeters: straightRadius,
+      maxRouteMeters,
+    });
+
+    res.json({
+      success: true,
+      ...data,
+      straightRadiusMeters: straightRadius,
+      maxRouteMeters,
+    });
+  } catch (error) {
+    console.error('Erro ao capturar snapshot da fila de alívio de rede:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/admin/isa-config', async (req, res) => {
+  try {
+    await requireIsaAdminAccess(req);
+    const config = await readIsaPromptConfig();
+    return res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao carregar a configuracao da ISA.',
+    });
+  }
+});
+
+app.get('/api/platform-suggestions', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestions = await listPlatformSuggestions({
+      viewerUid: actor.profile.uid,
+      limit: req.query?.limit,
+    });
+    return res.json({
+      success: true,
+      data: suggestions,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao listar sugestoes da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await createPlatformSuggestion({
+      title: req.body?.title,
+      description: req.body?.description,
+      sector: req.body?.sector,
+      category: req.body?.category,
+      authorUid: actor.profile.uid,
+      authorEmail: actor.profile.email || actor.identity.email,
+      authorName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      authorPhotoURL: actor.profile.photoURL,
+    });
+    return res.status(201).json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao criar sugestao da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await voteOnPlatformSuggestion({
+      suggestionId: req.params?.suggestionId,
+      voteType: req.body?.voteType,
+      userUid: actor.profile.uid,
+      userEmail: actor.profile.email || actor.identity.email,
+      userName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      userPhotoURL: actor.profile.photoURL,
+    });
+    return res.json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao votar na sugestao da plataforma.',
+    });
+  }
+});
+
+app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const suggestion = await addPlatformSuggestionComment({
+      suggestionId: req.params?.suggestionId,
+      message: req.body?.message,
+      authorUid: actor.profile.uid,
+      authorEmail: actor.profile.email || actor.identity.email,
+      authorName:
+        actor.profile.displayName ||
+        actor.identity.name ||
+        actor.profile.email ||
+        actor.identity.email,
+      authorPhotoURL: actor.profile.photoURL,
+      viewerUid: actor.profile.uid,
+    });
+    return res.status(201).json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : 'Falha ao comentar na sugestao da plataforma.',
+    });
+  }
+});
+
+app.patch('/api/platform-suggestions/:suggestionId/status', async (req, res) => {
+  try {
+    const actor = await requireSplittersAdminAccess(
+      req,
+      'Somente administradores podem alterar o status das sugestoes.',
+    );
+    const suggestion = await updatePlatformSuggestionStatus({
+      suggestionId: req.params?.suggestionId,
+      status: req.body?.status,
+      viewerUid: actor.profile.uid,
+    });
+    return res.json({
+      success: true,
+      data: suggestion,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao atualizar o status da sugestao da plataforma.',
+    });
+  }
+});
+
+app.put('/api/admin/isa-config', async (req, res) => {
+  try {
+    const actor = await requireIsaAdminAccess(req);
+    const resetToDefault = req.body?.resetToDefault === true;
+
+    let config;
+    if (resetToDefault) {
+      config = await resetIsaPromptConfig();
+    } else {
+      const rawSections = req.body?.sections;
+      if (!rawSections || typeof rawSections !== 'object' || Array.isArray(rawSections)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Campo sections obrigatorio para salvar a configuracao da ISA.',
+        });
+      }
+
+      config = await saveIsaPromptConfig({
+        sections: rawSections,
+        updatedByUid: actor.profile.uid,
+        updatedByEmail: actor.profile.email || actor.identity.email,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: config,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao salvar a configuracao da ISA.',
+    });
+  }
+});
+
+app.post('/api/isa/planning-assistant/chat', async (req, res) => {
+  try {
+    const message = normalizeAssistantText(req.body?.message);
+    const splitterCode = normalizeAssistantText(req.body?.splitterCode);
+    const conversationHistory = Array.isArray(req.body?.conversationHistory)
+      ? req.body.conversationHistory
+          .slice(-20)
+          .map((turn) => ({
+            userPrompt: normalizeAssistantText(turn?.userPrompt),
+            assistantSummary: {
+              conclusao: normalizeAssistantText(turn?.assistantSummary?.conclusao),
+              decisao_operacional: normalizeAssistantText(turn?.assistantSummary?.decisao_operacional),
+              acao_prioritaria: normalizeAssistantText(turn?.assistantSummary?.acao_prioritaria),
+              recomendacao: normalizeAssistantText(turn?.assistantSummary?.recomendacao),
+            },
+          }))
+          .filter((turn) => turn.userPrompt !== '')
+      : [];
+    const straightRadiusMeters = coercePositiveInt(
+      req.body?.straightRadiusMeters,
+      500,
+    );
+    const maxRouteMeters = coercePositiveInt(
+      req.body?.maxRouteMeters,
+      200,
+    );
+
+    if (message === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Campo message obrigatorio.',
+      });
+    }
+
+    if (!isPlanningAssistantConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Assistente ISA nao configurado no servidor.',
+      });
+    }
+
+    const [context, promptConfig] = await Promise.all([
+      buildPlanningAssistantContext({
+        splitterCode,
+        straightRadiusMeters,
+        maxRouteMeters,
+      }),
+      readIsaPromptConfig(),
+    ]);
+
+    const result = await askPlanningAssistant({
+      question: message,
+      context,
+      promptSections: Object.fromEntries(
+        (promptConfig?.sections ?? []).map((section) => [section.key, section.value]),
+      ),
+      promptMeta: {
+        source: promptConfig?.source,
+        version: promptConfig?.version,
+      },
+      conversationHistory,
+    });
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.json({
+      success: true,
+      structuredAnswer: result.structured,
+      model: result.model,
+      contextPreview: {
+        splitterCode: context?.splitter?.code ?? splitterCode,
+        splitterTitle: context?.splitter?.title ?? null,
+        found: context?.splitter?.found ?? splitterCode === '',
+      },
+    });
+  } catch (error) {
+    logger.error('planning_assistant_chat_error', { error });
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Falha ao consultar o assistente ISA.',
+    });
+  }
+});
+
 app.get(['/api/splitters-by-code/:code', '/api/splitters-by-code'], async (req, res) => {
   try {
     const code = resolveSplitterCodeParam(req);
@@ -1876,7 +2847,10 @@ app.get(['/api/splitters-by-code/:code', '/api/splitters-by-code'], async (req, 
       SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
           base.*
       FROM (${SPLITTERS_BASE_QUERY}) base
-      WHERE base."CÓDIGO[SPLT.SECUNDARIO]" = $1
+      WHERE (
+        TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) = TRIM($1::text)
+        OR TRIM(base."SPLT.SECUNDARIO"::text) = TRIM($1::text)
+      )
       ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
       LIMIT 1;
     `;
@@ -1908,7 +2882,10 @@ app.get(['/api/splitters/:code/connections', '/api/splitters/connections'], asyn
     const query = `
       SELECT base.*
       FROM (${SPLITTERS_BASE_QUERY}) base
-      WHERE base."CÓDIGO[SPLT.SECUNDARIO]" = $1
+      WHERE (
+        TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) = TRIM($1::text)
+        OR TRIM(base."SPLT.SECUNDARIO"::text) = TRIM($1::text)
+      )
       ORDER BY base."PORTA SPLITTER[SPLT.SECUNDARIO]" ASC;
     `;
     
@@ -2148,6 +3125,36 @@ async function startServer() {
   } else {
     logger.info('[splitter-snapshot] Cron desativado (SPLITTER_SNAPSHOT_CRON_DISABLED=true).');
   }
+
+  const networkReliefSnapshotCronDisabled =
+    String(process.env.NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED ?? '').toLowerCase() === 'true';
+  const networkReliefSnapshotCronExpr = (process.env.NETWORK_RELIEF_SNAPSHOT_CRON ?? '*/10 * * * *').trim();
+  if (!massivaHistoryStore.configured) {
+    logger.info('[network-relief-snapshot] Cron não registrado (MySQL não configurado).');
+  } else if (!networkReliefSnapshotCronDisabled) {
+    cron.schedule(
+      networkReliefSnapshotCronExpr,
+      async () => {
+        try {
+          const data = await captureNetworkReliefSnapshot({
+            straightRadiusMeters: 500,
+            maxRouteMeters: 200,
+          });
+          logger.info(
+            `[network-relief-snapshot] Snapshot agendado OK (${data.entryCount} casos sem alívio, ${data.scannedCount} avaliados).`,
+          );
+        } catch (error) {
+          logger.error('[network-relief-snapshot] Falha na captura agendada:', { error });
+        }
+      },
+      { timezone: 'America/Sao_Paulo' },
+    );
+    logger.info(
+      `[network-relief-snapshot] Cron ativo: "${networkReliefSnapshotCronExpr}" America/Sao_Paulo (padrão a cada 10 min). Desative com NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED=true.`,
+    );
+  } else {
+    logger.info('[network-relief-snapshot] Cron desativado (NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED=true).');
+  }
 }
 
 process.on('uncaughtException', (error) => {
@@ -2177,3 +3184,10 @@ startServer().catch((error) => {
   logger.fatal('Falha ao iniciar o BFF Local:', { error });
   process.exit(1);
 });
+
+
+
+
+
+
+

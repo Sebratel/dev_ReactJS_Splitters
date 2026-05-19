@@ -1,5 +1,9 @@
 name: nexaview
 
+# Stack: backend + frontend sem Nginx de borda no compose.
+# O browser acede ao frontend em FRONTEND_PORT (predefinido 3177) e opcionalmente ao backend em BACKEND_PORT.
+# Dentro da imagem do frontend o Nginx serve o SPA na porta 3177. HTTPS na borda: Traefik, Cloudflare ou LB à parte.
+
 services:
   backend:
     build:
@@ -29,6 +33,8 @@ services:
       MASSIVA_MYSQL_DATABASE: ${MASSIVA_MYSQL_DATABASE}
       MASSIVA_MYSQL_USER: ${MASSIVA_MYSQL_USER}
       MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD}
+      ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE: ${ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE:-false}
+      PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE: ${PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE:-false}
       # APIs externas
       HUB_BASE_URL: ${HUB_BASE_URL}
       GEOGRID_BASE_URL: ${GEOGRID_BASE_URL}
@@ -36,10 +42,29 @@ services:
       # AutoISP
       AUTOISP_EVENTS_ENDPOINT: ${AUTOISP_EVENTS_ENDPOINT}
       AUTOISP_AUTH_ENDPOINT: ${AUTOISP_AUTH_ENDPOINT}
-      AUTOISP_USERNAME: ${AUTOISP_USERNAME:-api@sebratel.com.br}
-      AUTOISP_PASSWORD: ${AUTOISP_PASSWORD:-nqy!jzk7gwx_BUQ!qug}
+      AUTOISP_USERNAME: ${AUTOISP_USERNAME}
+      AUTOISP_PASSWORD: ${AUTOISP_PASSWORD}
+      # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+      FIREBASE_ADMIN_PROJECT_ID: ${FIREBASE_ADMIN_PROJECT_ID:-}
+      FIREBASE_ADMIN_CLIENT_EMAIL: ${FIREBASE_ADMIN_CLIENT_EMAIL:-}
+      FIREBASE_ADMIN_PRIVATE_KEY: ${FIREBASE_ADMIN_PRIVATE_KEY:-}
+      FIREBASE_ADMIN_PRIVATE_KEY_BASE64: ${FIREBASE_ADMIN_PRIVATE_KEY_BASE64:-}
+      VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:-}
+      REVERSE_GEOCODE_USER_AGENT: ${REVERSE_GEOCODE_USER_AGENT:-}
+      REVERSE_GEOCODE_ENDPOINT: ${REVERSE_GEOCODE_ENDPOINT:-}
+      REVERSE_GEOCODE_DISABLED: ${REVERSE_GEOCODE_DISABLED:-}
+      REVERSE_GEOCODE_TIMEOUT_MS: ${REVERSE_GEOCODE_TIMEOUT_MS:-}
+      REVERSE_GEOCODE_NEIGHBORS_MAX: ${REVERSE_GEOCODE_NEIGHBORS_MAX:-}
+      REVERSE_GEOCODE_NEIGHBORS_DELAY_MS: ${REVERSE_GEOCODE_NEIGHBORS_DELAY_MS:-}
     ports:
-      - "3031:3001"
+      - "${BACKEND_PORT:-3001}:3001"
+    expose:
+      - "3001"
     networks:
       - nexaview-network
     healthcheck:
@@ -84,8 +109,10 @@ services:
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
+    expose:
+      - "3177"
     ports:
-      - "5173:80"
+      - "${FRONTEND_PORT:-3177}:3177"
     depends_on:
       backend:
         condition: service_healthy

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bar,
@@ -17,9 +17,14 @@ import {
   formatPrevisaoEncerramentoDisplay,
 } from '@/features/massiva/lib/formatMassivaListDate'
 import {
+  isExpectedMassivaCatalogTitle,
+  isMassivaCatalogOutOfBand,
+} from '@/features/massiva/lib/massivaCatalogTitle'
+import {
   formatMassivaStatusLabel,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'
+import { formatBrazilDayMonthDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { env } from '@/shared/config/env'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
@@ -32,6 +37,7 @@ import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 
 /** Texto de encerramento não pode ser vazio; mínimo curto para não bloquear descrições objetivas. */
 const CLOSE_DESCRIPTION_MIN_LEN = 3
+const MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX = 'nexaview.massiva.tickets.ui'
 
 function ticketKey(t: MassivaTicket, index: number): string {
   return `${t.protocol}-${t.assignmentId ?? 'x'}-${index}`
@@ -41,6 +47,7 @@ type ImpactRange = 'all' | 'none' | 'low' | 'medium' | 'high'
 type MassivaListScope = 'abertas' | 'encerradas' | 'todas'
 type PeriodPreset = '7d' | '30d' | '90d'
 type MassivaRecordTypeFilter = 'all' | 'incidente' | 'evento'
+type MassivaCatalogFilter = 'all' | 'catalogo_esperado' | 'fora_catalogo'
 const MASSIVA_PAGE_SIZE = 30
 
 function normalizeText(value: string): string {
@@ -52,7 +59,7 @@ function startOfDay(date: Date): Date {
 }
 
 function formatDayLabel(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+  return formatBrazilDayMonthDisplay(date)
 }
 
 function formatHoursLabel(hours: number | null): string {
@@ -83,6 +90,15 @@ function matchesRecordType(ticket: MassivaTicket, typeFilter: MassivaRecordTypeF
   return classifyMassivaRecordType(ticket) === typeFilter
 }
 
+function matchesMassivaCatalogFilter(
+  ticket: MassivaTicket,
+  catalogFilter: MassivaCatalogFilter,
+): boolean {
+  if (catalogFilter === 'all') return true
+  if (catalogFilter === 'catalogo_esperado') return isExpectedMassivaCatalogTitle(ticket.title)
+  return isMassivaCatalogOutOfBand(ticket.title)
+}
+
 function escapeCsvCell(value: string): string {
   const needsQuotes = value.includes(',') || value.includes('"') || value.includes('\n')
   const escaped = value.replaceAll('"', '""')
@@ -94,6 +110,8 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
     'protocolo',
     'assignment_id',
     'status',
+    'titulo_catalogo_nv',
+    'catalogo_nv_esperado',
     'abertura',
     'previsao_encerramento',
     'ap',
@@ -108,6 +126,8 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
     String(row.protocol > 0 ? row.protocol : ''),
     row.assignmentId !== null ? String(row.assignmentId) : '',
     formatMassivaStatusLabel(row.status),
+    row.title.trim(),
+    isExpectedMassivaCatalogTitle(row.title) ? 'SIM' : 'NAO',
     formatMassivaListDateDisplay(row.openedAt),
     formatPrevisaoEncerramentoDisplay(
       row.expectedCloseAt,
@@ -125,10 +145,69 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
 }
 
 export type MassivaTicketsSectionLayout = 'default' | 'embedded'
-
 type MassivaTicketsSectionProps = {
-  /** `embedded`: sem borda dupla; cabeçalho da lista fica no painel pai; rolagem vertical = página (só overflow-x na tabela se necessário). */
+  /** embedded: sem borda dupla; cabecalho da lista fica no painel pai; rolagem vertical = pagina (so overflow-x na tabela se necessario). */
   layout?: MassivaTicketsSectionLayout
+}
+function massivaTicketsUiStateKey(layout: MassivaTicketsSectionLayout): string {
+  return `${MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX}.${layout}.v1`
+}
+function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
+  query: string
+  scope: MassivaListScope
+  periodPreset: PeriodPreset
+  impactRange: ImpactRange
+  recordTypeFilter: MassivaRecordTypeFilter
+  catalogFilter: MassivaCatalogFilter
+  visibleCount: number
+} {
+  const initialState = {
+    query: '',
+    scope: 'abertas' as MassivaListScope,
+    periodPreset: '30d' as PeriodPreset,
+    impactRange: 'all' as ImpactRange,
+    recordTypeFilter: 'all' as MassivaRecordTypeFilter,
+    catalogFilter: 'all' as MassivaCatalogFilter,
+    visibleCount: MASSIVA_PAGE_SIZE,
+  }
+  if (typeof window === 'undefined') return initialState
+  try {
+    const raw = window.sessionStorage.getItem(massivaTicketsUiStateKey(layout))
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<typeof initialState>
+    return {
+      query: typeof parsed.query === 'string' ? parsed.query : initialState.query,
+      scope:
+        parsed.scope === 'encerradas' || parsed.scope === 'todas'
+          ? parsed.scope
+          : initialState.scope,
+      periodPreset:
+        parsed.periodPreset === '7d' || parsed.periodPreset === '90d'
+          ? parsed.periodPreset
+          : initialState.periodPreset,
+      impactRange:
+        parsed.impactRange === 'none' ||
+        parsed.impactRange === 'low' ||
+        parsed.impactRange === 'medium' ||
+        parsed.impactRange === 'high'
+          ? parsed.impactRange
+          : initialState.impactRange,
+      recordTypeFilter:
+        parsed.recordTypeFilter === 'incidente' || parsed.recordTypeFilter === 'evento'
+          ? parsed.recordTypeFilter
+          : initialState.recordTypeFilter,
+      catalogFilter:
+        parsed.catalogFilter === 'catalogo_esperado' || parsed.catalogFilter === 'fora_catalogo'
+          ? parsed.catalogFilter
+          : initialState.catalogFilter,
+      visibleCount:
+        typeof parsed.visibleCount === 'number' && parsed.visibleCount >= MASSIVA_PAGE_SIZE
+          ? Math.trunc(parsed.visibleCount)
+          : initialState.visibleCount,
+    }
+  } catch {
+    return initialState
+  }
 }
 
 export function MassivaTicketsSection({
@@ -137,12 +216,17 @@ export function MassivaTicketsSection({
   const embedded = layout === 'embedded'
   const { view, refetch, isRefreshing } = useMassivaTickets()
   const queryClient = useQueryClient()
-  const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<MassivaListScope>('abertas')
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('30d')
-  const [impactRange, setImpactRange] = useState<ImpactRange>('all')
-  const [recordTypeFilter, setRecordTypeFilter] = useState<MassivaRecordTypeFilter>('all')
-  const [visibleCount, setVisibleCount] = useState(MASSIVA_PAGE_SIZE)
+  const [uiState, setUiState] = useState(() => readMassivaTicketsUiState(layout))
+  const {
+    query,
+    scope,
+    periodPreset,
+    impactRange,
+    recordTypeFilter,
+    catalogFilter,
+    visibleCount,
+  } = uiState
+  const didRestoreVisibleCountRef = useRef(false)
   const [csvCopied, setCsvCopied] = useState(false)
   const [closingProtocol, setClosingProtocol] = useState<number | null>(null)
   const [closeDescription, setCloseDescription] = useState('')
@@ -236,9 +320,16 @@ export function MassivaTicketsSection({
     [effectiveScopedTicketsInWindow, recordTypeFilter],
   )
 
+  const catalogScopedTicketsInWindow = useMemo(
+    () => typeScopedTicketsInWindow.filter((ticket) =>
+      matchesMassivaCatalogFilter(ticket, catalogFilter),
+    ),
+    [typeScopedTicketsInWindow, catalogFilter],
+  )
+
   const filteredTickets = useMemo(() => {
     const text = normalizeText(query)
-    return typeScopedTicketsInWindow.filter((ticket) => {
+    return catalogScopedTicketsInWindow.filter((ticket) => {
       if (!matchesImpactRange(ticket, impactRange)) return false
       if (text === '') return true
       const haystack = normalizeText(
@@ -253,7 +344,7 @@ export function MassivaTicketsSection({
       )
       return haystack.includes(text)
     })
-  }, [typeScopedTicketsInWindow, query, impactRange])
+  }, [catalogScopedTicketsInWindow, query, impactRange])
 
   const chartSeries = useMemo(() => {
     const byDay = new Map<string, {
@@ -268,7 +359,7 @@ export function MassivaTicketsSection({
       protocols: number
     }>()
 
-    for (const ticket of typeScopedTicketsInWindow) {
+    for (const ticket of catalogScopedTicketsInWindow) {
       if (!ticket.openedAt) continue
       const day = startOfDay(ticket.openedAt)
       const key = day.toISOString().slice(0, 10)
@@ -296,7 +387,7 @@ export function MassivaTicketsSection({
     }
 
     return [...byDay.values()].sort((a, b) => a.at.getTime() - b.at.getTime())
-  }, [typeScopedTicketsInWindow])
+  }, [catalogScopedTicketsInWindow])
 
   const chartTotalAffected = useMemo(
     () => chartSeries.reduce((sum, day) => sum + day.affectedTotal, 0),
@@ -307,9 +398,9 @@ export function MassivaTicketsSection({
     [chartSeries],
   )
   const periodKpis = useMemo(() => {
-    const openNow = typeScopedTicketsInWindow.filter((t) => t.status === 'aberta').length
-    const closedNow = typeScopedTicketsInWindow.filter((t) => t.status === 'encerrada').length
-    const totalProtocols = typeScopedTicketsInWindow.length
+    const openNow = catalogScopedTicketsInWindow.filter((t) => t.status === 'aberta').length
+    const closedNow = catalogScopedTicketsInWindow.filter((t) => t.status === 'encerrada').length
+    const totalProtocols = catalogScopedTicketsInWindow.length
     const affectedAvg =
       totalProtocols > 0
         ? chartTotalAffected / totalProtocols
@@ -323,7 +414,7 @@ export function MassivaTicketsSection({
       },
       null,
     )
-    const closedWithCycle = scopedTicketsInWindow.filter(
+    const closedWithCycle = catalogScopedTicketsInWindow.filter(
       (t) => t.status === 'encerrada' && t.openedAt && t.closedAt,
     )
     const avgClosureHours =
@@ -341,11 +432,23 @@ export function MassivaTicketsSection({
       topDay,
       avgClosureHours,
     }
-  }, [typeScopedTicketsInWindow, chartTotalAffected, chartSeries])
+  }, [catalogScopedTicketsInWindow, chartTotalAffected, chartSeries])
 
   useEffect(() => {
-    setVisibleCount(MASSIVA_PAGE_SIZE)
-  }, [scope, periodPreset, query, impactRange, recordTypeFilter])
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      massivaTicketsUiStateKey(layout),
+      JSON.stringify(uiState),
+    )
+  }, [layout, uiState])
+
+  useEffect(() => {
+    if (!didRestoreVisibleCountRef.current) {
+      didRestoreVisibleCountRef.current = true
+      return
+    }
+    setUiState((prev) => ({ ...prev, visibleCount: MASSIVA_PAGE_SIZE }))
+  }, [scope, periodPreset, query, impactRange, recordTypeFilter, catalogFilter])
 
   const visibleTickets = useMemo(
     () => filteredTickets.slice(0, visibleCount),
@@ -445,7 +548,7 @@ export function MassivaTicketsSection({
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setScope(opt.id)}
+                onClick={() => setUiState((prev) => ({ ...prev, scope: opt.id }))}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
                   scope === opt.id
                     ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
@@ -458,7 +561,7 @@ export function MassivaTicketsSection({
           </div>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, query: e.target.value }))}
             placeholder="Pesquisar…"
             className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
@@ -471,7 +574,7 @@ export function MassivaTicketsSection({
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setPeriodPreset(opt.id)}
+                onClick={() => setUiState((prev) => ({ ...prev, periodPreset: opt.id }))}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
                   periodPreset === opt.id
                     ? 'bg-neutral-900 text-white'
@@ -484,7 +587,7 @@ export function MassivaTicketsSection({
           </div>
           <select
             value={impactRange}
-            onChange={(e) => setImpactRange(e.target.value as ImpactRange)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, impactRange: e.target.value as ImpactRange }))}
             className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Impacto: todos</option>
@@ -495,12 +598,25 @@ export function MassivaTicketsSection({
           </select>
           <select
             value={recordTypeFilter}
-            onChange={(e) => setRecordTypeFilter(e.target.value as MassivaRecordTypeFilter)}
+            onChange={(e) => setUiState((prev) => ({ ...prev, recordTypeFilter: e.target.value as MassivaRecordTypeFilter }))}
             className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Tipo: todos</option>
             <option value="incidente">Tipo: incidente massivo</option>
             <option value="evento">Tipo: evento massivo</option>
+          </select>
+          <select
+            value={catalogFilter}
+            onChange={(e) =>
+              setUiState((prev) => ({
+                ...prev,
+                catalogFilter: e.target.value as MassivaCatalogFilter,
+              }))}
+            className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : ''}`}
+          >
+            <option value="all">Catálogo: todos</option>
+            <option value="catalogo_esperado">Catálogo: só esperados</option>
+            <option value="fora_catalogo">Catálogo: fora do padrão (monitorar)</option>
           </select>
         </div>
         <div className={`flex flex-wrap items-center gap-2 ${embedded ? 'mt-2' : 'mt-3'}`}>
@@ -521,7 +637,7 @@ export function MassivaTicketsSection({
             CSV
           </button>
           <span className="text-[11px] text-neutral-500">
-            {filteredTickets.length}/{typeScopedTicketsInWindow.length} no período
+            {filteredTickets.length}/{catalogScopedTicketsInWindow.length} no período
           </span>
           {historyQuery.isFetching ? (
             <span className="text-[11px] text-neutral-500">sincronizando histórico…</span>
@@ -647,7 +763,7 @@ export function MassivaTicketsSection({
               <div className="mt-4 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => prev + MASSIVA_PAGE_SIZE)}
+                  onClick={() => setUiState((prev) => ({ ...prev, visibleCount: prev.visibleCount + MASSIVA_PAGE_SIZE }))}
                   className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
                 >
                   Carregar mais ({visibleTickets.length}/{filteredTickets.length})
@@ -745,3 +861,5 @@ export function MassivaTicketsSection({
     </section>
   )
 }
+
+

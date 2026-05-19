@@ -1,11 +1,9 @@
-import { lazy, Suspense, useMemo, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -28,19 +26,34 @@ import {
   MoonStar,
   Sun,
   Sunrise,
-  Ticket,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import {
+  formatBrazilDateDisplay,
+  formatBrazilDateTimeShortDisplay,
+  formatBrazilDayMonthDisplay,
+} from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import type { NetworkStats } from '@/shared/api/fetchNetworkStats'
+import {
+  countDistinctMassivasByLifecycleBucket,
+  toLifecycleBucket,
+} from '@/features/massiva/lib/lifecycleMassivaBuckets'
 import {
   useNetworkIntelligenceData,
   type IntelligenceDateRangePreset,
   type IntelligenceRiskRankingRow,
   type TrendLabel,
 } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
+import { MassivaRecurrencePanel } from '@/features/intelligence/ui/MassivaRecurrencePanel'
+import { TrendStatusCapacityPanel } from '@/features/intelligence/ui/TrendStatusCapacityPanel'
+import { OccupancyCapacityCharts } from '@/features/intelligence/ui/OccupancyCapacityCharts'
+import {
+  formatDeltaPp,
+  PP_TOOLTIP_DELTA_PERIOD,
+} from '@/features/intelligence/lib/percentagePointsHelp'
 
 const IntelligenceSaturationMap = lazy(async () => {
   const m = await import('@/features/intelligence/ui/IntelligenceSaturationMap')
@@ -48,7 +61,7 @@ const IntelligenceSaturationMap = lazy(async () => {
 })
 
 function formatDateLabel(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date)
+  return formatBrazilDayMonthDisplay(date)
 }
 
 /** Ocupação da rede = portas ocupadas ÷ soma da capacidade (portas) no catálogo. */
@@ -225,6 +238,100 @@ const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: str
   { id: 'manutencao', label: 'Manutenções ERP' },
 ]
 
+const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
+
+function readNetworkIntelligenceUiState(): {
+  preset: IntelligenceDateRangePreset
+  customStart: string
+  customEnd: string
+  activeWindow: IntelligenceWindow
+  riskBandFilter: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo'
+  ageFilter: AgeFilter
+  splitterSearch: string
+  geoTab: 'condominios' | 'ruas'
+  selectedMatrixKey:
+    | 'altoImpactoAltaUrgencia'
+    | 'altoImpactoBaixaUrgencia'
+    | 'baixoImpactoAltaUrgencia'
+    | 'baixoImpactoBaixaUrgencia'
+    | null
+  mapCorporateOnly: boolean
+} {
+  if (typeof window === 'undefined') {
+    return {
+      preset: '30d',
+      customStart: '',
+      customEnd: '',
+      activeWindow: 'visao-geral',
+      riskBandFilter: 'all',
+      ageFilter: 'all',
+      splitterSearch: '',
+      geoTab: 'condominios',
+      selectedMatrixKey: null,
+      mapCorporateOnly: false,
+    }
+  }
+  try {
+    const raw = window.sessionStorage.getItem(NETWORK_INTELLIGENCE_UI_STATE_KEY)
+    if (!raw) throw new Error('empty')
+    const parsed = JSON.parse(raw) as Partial<ReturnType<typeof readNetworkIntelligenceUiState>>
+    return {
+      preset:
+        parsed.preset === '7d' || parsed.preset === '30d' || parsed.preset === '90d' || parsed.preset === 'custom'
+          ? parsed.preset
+          : '30d',
+      customStart: typeof parsed.customStart === 'string' ? parsed.customStart : '',
+      customEnd: typeof parsed.customEnd === 'string' ? parsed.customEnd : '',
+      activeWindow:
+        parsed.activeWindow === 'visao-geral' ||
+        parsed.activeWindow === 'risco' ||
+        parsed.activeWindow === 'operacao' ||
+        parsed.activeWindow === 'geografico' ||
+        parsed.activeWindow === 'ciclo-vida' ||
+        parsed.activeWindow === 'manutencao'
+          ? parsed.activeWindow
+          : 'visao-geral',
+      riskBandFilter:
+        parsed.riskBandFilter === 'critico' ||
+        parsed.riskBandFilter === 'alto' ||
+        parsed.riskBandFilter === 'moderado' ||
+        parsed.riskBandFilter === 'baixo'
+          ? parsed.riskBandFilter
+          : 'all',
+      ageFilter:
+        parsed.ageFilter === '0-1' ||
+        parsed.ageFilter === '1-3' ||
+        parsed.ageFilter === '3-5' ||
+        parsed.ageFilter === '5+'
+          ? parsed.ageFilter
+          : 'all',
+      splitterSearch: typeof parsed.splitterSearch === 'string' ? parsed.splitterSearch : '',
+      geoTab: parsed.geoTab === 'ruas' ? 'ruas' : 'condominios',
+      selectedMatrixKey:
+        parsed.selectedMatrixKey === 'altoImpactoAltaUrgencia' ||
+        parsed.selectedMatrixKey === 'altoImpactoBaixaUrgencia' ||
+        parsed.selectedMatrixKey === 'baixoImpactoAltaUrgencia' ||
+        parsed.selectedMatrixKey === 'baixoImpactoBaixaUrgencia'
+          ? parsed.selectedMatrixKey
+          : null,
+      mapCorporateOnly: parsed.mapCorporateOnly === true,
+    }
+  } catch {
+    return {
+      preset: '30d',
+      customStart: '',
+      customEnd: '',
+      activeWindow: 'visao-geral',
+      riskBandFilter: 'all',
+      ageFilter: 'all',
+      splitterSearch: '',
+      geoTab: 'condominios',
+      selectedMatrixKey: null,
+      mapCorporateOnly: false,
+    }
+  }
+}
+
 const TAB_INTRO: Record<IntelligenceWindow, string> = {
   'visao-geral':
     'Panorama da rede no período: ocupação global, como os splitters estão classificados por tendência, massivas e indicadores para decisão rápida.',
@@ -305,7 +412,7 @@ type AgeFilter = 'all' | '0-1' | '1-3' | '3-5' | '5+'
 function matrixKeyForRiskRow(
   row: IntelligenceRiskRankingRow,
 ): 'altoImpactoAltaUrgencia' | 'altoImpactoBaixaUrgencia' | 'baixoImpactoAltaUrgencia' | 'baixoImpactoBaixaUrgencia' {
-  const highImpact = row.affectedClientsTotal >= 50 || row.totalTickets >= 4
+  const highImpact = row.totalTickets >= 4 || row.openTickets > 0
   const highUrgency = row.currentUsagePercent >= 85 || row.selectedDelta >= 5 || row.openTickets > 0
   if (highImpact && highUrgency) return 'altoImpactoAltaUrgencia'
   if (highImpact && !highUrgency) return 'altoImpactoBaixaUrgencia'
@@ -320,7 +427,8 @@ type RegionalInsightRow = {
   avgUsagePercent: number
   avgDeltaReference: number
   openTickets: number
-  affectedClientsTotal: number
+  /** Σ de massivas (por splitter) no recorte — não é total distinto da rede. */
+  massivaTicketsTotal: number
   splittersWithCorporate: number
   directive: string
 }
@@ -331,7 +439,7 @@ function regionalInsightDirective(args: {
   avgUsagePercent: number
   avgDeltaReference: number
   openTickets: number
-  affectedClientsTotal: number
+  massivaTicketsTotal: number
   splittersWithCorporate: number
 }): string {
   const n = args.splitters
@@ -348,8 +456,8 @@ function regionalInsightDirective(args: {
   if (args.openTickets >= 3) {
     parts.push('Várias massivas abertas — investigar causa raiz e plantão.')
   }
-  if (args.affectedClientsTotal >= 120) {
-    parts.push('Alto volume de clientes afetados por incidentes — reforçar comunicação e SLA.')
+  if (args.massivaTicketsTotal >= 25) {
+    parts.push('Alto envolvimento com massivas no recorte — reforçar comunicação e priorização operacional.')
   }
   if (args.splittersWithCorporate >= 1 && args.criticalSplitters >= 1) {
     parts.push('Corporativo em zona sensível — dar peso a SLA comercial.')
@@ -369,7 +477,7 @@ function corporateRegionalInsightDirective(args: {
   criticalAmongCorporate: number
   avgUsageAmongCorporate: number
   openMassivasAmongCorporate: number
-  affectedAmongCorporate: number
+  corporateMassivaTickets: number
 }): string {
   if (args.splittersTotal === 0) {
     return 'Sem equipamentos no recorte filtrado.'
@@ -394,17 +502,75 @@ function corporateRegionalInsightDirective(args: {
 }
 
 export function NetworkIntelligencePage() {
-  const [preset, setPreset] = useState<IntelligenceDateRangePreset>('30d')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
-  const [activeWindow, setActiveWindow] = useState<IntelligenceWindow>('visao-geral')
-  const [riskBandFilter, setRiskBandFilter] = useState<'all' | 'critico' | 'alto' | 'moderado' | 'baixo'>('all')
-  const [ageFilter, setAgeFilter] = useState<AgeFilter>('all')
-  const [splitterSearch, setSplitterSearch] = useState('')
-  const [selectedMatrixKey, setSelectedMatrixKey] = useState<
-    'altoImpactoAltaUrgencia' | 'altoImpactoBaixaUrgencia' | 'baixoImpactoAltaUrgencia' | 'baixoImpactoBaixaUrgencia' | null
-  >(null)
-  const [mapCorporateOnly, setMapCorporateOnly] = useState(false)
+  const [uiState, setUiState] = useState(readNetworkIntelligenceUiState)
+  const {
+    preset,
+    customStart,
+    customEnd,
+    activeWindow,
+    riskBandFilter,
+    ageFilter,
+    splitterSearch,
+    geoTab,
+    selectedMatrixKey,
+    mapCorporateOnly,
+  } = uiState
+  const setPreset = (value: IntelligenceDateRangePreset) =>
+    setUiState((prev) => ({ ...prev, preset: value }))
+  const setCustomStart = (value: string) =>
+    setUiState((prev) => ({ ...prev, customStart: value }))
+  const setCustomEnd = (value: string) =>
+    setUiState((prev) => ({ ...prev, customEnd: value }))
+  const setActiveWindow = (value: IntelligenceWindow) =>
+    setUiState((prev) => ({ ...prev, activeWindow: value }))
+  const setRiskBandFilter = (value: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo') =>
+    setUiState((prev) => ({ ...prev, riskBandFilter: value }))
+  const setAgeFilter = (value: AgeFilter) =>
+    setUiState((prev) => ({ ...prev, ageFilter: value }))
+  const setSplitterSearch = (value: string) =>
+    setUiState((prev) => ({ ...prev, splitterSearch: value }))
+  const setGeoTab = (value: 'condominios' | 'ruas') =>
+    setUiState((prev) => ({ ...prev, geoTab: value }))
+  const setSelectedMatrixKey = (
+    value:
+      | 'altoImpactoAltaUrgencia'
+      | 'altoImpactoBaixaUrgencia'
+      | 'baixoImpactoAltaUrgencia'
+      | 'baixoImpactoBaixaUrgencia'
+      | null
+      | ((
+          prev:
+            | 'altoImpactoAltaUrgencia'
+            | 'altoImpactoBaixaUrgencia'
+            | 'baixoImpactoAltaUrgencia'
+            | 'baixoImpactoBaixaUrgencia'
+            | null,
+        ) =>
+          | 'altoImpactoAltaUrgencia'
+          | 'altoImpactoBaixaUrgencia'
+          | 'baixoImpactoAltaUrgencia'
+          | 'baixoImpactoBaixaUrgencia'
+          | null),
+  ) =>
+    setUiState((prev) => ({
+      ...prev,
+      selectedMatrixKey:
+        typeof value === 'function' ? value(prev.selectedMatrixKey) : value,
+    }))
+  const setMapCorporateOnly = (value: boolean | ((prev: boolean) => boolean)) =>
+    setUiState((prev) => ({
+      ...prev,
+      mapCorporateOnly:
+        typeof value === 'function' ? value(prev.mapCorporateOnly) : value,
+    }))
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(
+      NETWORK_INTELLIGENCE_UI_STATE_KEY,
+      JSON.stringify(uiState),
+    )
+  }, [uiState])
 
   const customStartDate = customStart ? new Date(`${customStart}T00:00:00`) : null
   const customEndDate = customEnd ? new Date(`${customEnd}T23:59:59`) : null
@@ -416,14 +582,15 @@ export function NetworkIntelligencePage() {
     source,
     kpis,
     trends,
-    massivaStats,
     areaPoints,
-    barPoints,
+    massivaRecurrenceInsights,
     recurrenceCells,
     saturationCells,
     decisionKpis,
     riskRanking,
     impactUrgencyMatrix,
+    massivaRollup,
+    massivaPeriodLinks,
     deltaReferenceLabel,
     lifecycleCohorts,
     lifecycleAlerts,
@@ -459,15 +626,12 @@ export function NetworkIntelligencePage() {
       value: labelCounts.get(key) ?? 0,
     })).filter((d) => d.value > 0)
 
-    const massivaAgg = massivaStats.reduce(
-      (acc, r) => ({
-        totalTickets: acc.totalTickets + r.totalTickets,
-        openTickets: acc.openTickets + r.openTickets,
-        closedTickets: acc.closedTickets + r.closedTickets,
-        affectedClientsTotal: acc.affectedClientsTotal + r.affectedClientsTotal,
-      }),
-      { totalTickets: 0, openTickets: 0, closedTickets: 0, affectedClientsTotal: 0 },
-    )
+    const massivaAgg = {
+      totalTickets: massivaRollup.distinctMassivaCount,
+      openTickets: massivaRollup.openMassivasCount,
+      closedTickets: massivaRollup.closedMassivasCount,
+      affectedClientsTotal: massivaRollup.affectedClientsDistinctSum,
+    }
 
     let topUsage: (typeof trends)[number] | null = null
     let topDelta: (typeof trends)[number] | null = null
@@ -478,13 +642,12 @@ export function NetworkIntelligencePage() {
       if (!topDelta || currentDelta > topDeltaValue) topDelta = t
     }
 
-    const titleByCode = new Map(trends.map((t) => [t.splitterCode, t.splitterTitle.trim()]))
-
-    const topMassiva = barPoints[0]
+    const topRanked = massivaRecurrenceInsights.ranking[0]
+    const topMassiva = topRanked
       ? {
-          code: barPoints[0].splitterCode,
-          title: titleByCode.get(barPoints[0].splitterCode) ?? '',
-          totalTickets: barPoints[0].totalTickets,
+          code: topRanked.splitterCode,
+          title: topRanked.splitterTitle,
+          totalTickets: topRanked.distinctMassivas,
         }
       : null
 
@@ -507,7 +670,7 @@ export function NetworkIntelligencePage() {
       geoWithCoords,
       geoWithoutCoords,
     }
-  }, [trends, massivaStats, barPoints, deltaReferenceLabel])
+  }, [trends, massivaRollup, massivaRecurrenceInsights, deltaReferenceLabel])
 
   const mapGeoSnapshot = useMemo(() => {
     const sliceTotal = saturationCells.length
@@ -518,6 +681,16 @@ export function NetworkIntelligencePage() {
   }, [saturationCells])
 
   const maxRecurrence = Math.max(1, ...recurrenceCells.map((cell) => cell.count))
+
+  const intelligencePeriodLabel = useMemo(
+    () =>
+      preset === 'custom' && customStart.trim() !== '' && customEnd.trim() !== ''
+        ? `${customStart} → ${customEnd}`
+        : presetButtonLabel(preset),
+    [preset, customStart, customEnd],
+  )
+
+  const trendDeltaReference = deltaReferenceLabel === 'Δ30d' ? '30d' : '7d'
 
   const contextualRiskRanking = useMemo(() => {
     let rows = riskRanking
@@ -610,16 +783,16 @@ export function NetworkIntelligencePage() {
       ['UNIDADE', 0],
       ['SEM_CLASSIFICACAO', 0],
     ])
-    const condos = new Map<string, { nome: string; splitters: number; affectedClientsTotal: number }>()
+    const condos = new Map<string, { nome: string; splitters: number; massivaTickets: number }>()
     const streets = new Map<string, { nome: string; splitters: number; criticalSplitters: number }>()
     for (const row of contextualRiskRanking) {
       const tipo = row.tipoLocal ?? 'SEM_CLASSIFICACAO'
       tipoCounts.set(tipo, (tipoCounts.get(tipo) ?? 0) + 1)
       const condoName = row.nomeCondominio?.trim() ?? ''
       if (condoName !== '') {
-        const c = condos.get(condoName) ?? { nome: condoName, splitters: 0, affectedClientsTotal: 0 }
+        const c = condos.get(condoName) ?? { nome: condoName, splitters: 0, massivaTickets: 0 }
         c.splitters += 1
-        c.affectedClientsTotal += row.affectedClientsTotal
+        c.massivaTickets += row.totalTickets
         condos.set(condoName, c)
       }
       const streetName = row.street?.trim() ?? ''
@@ -637,7 +810,7 @@ export function NetworkIntelligencePage() {
         { key: 'SEM_CLASSIFICACAO', count: tipoCounts.get('SEM_CLASSIFICACAO') ?? 0 },
       ],
       topCondominios: [...condos.values()]
-        .sort((a, b) => b.affectedClientsTotal - a.affectedClientsTotal || b.splitters - a.splitters)
+        .sort((a, b) => b.massivaTickets - a.massivaTickets || b.splitters - a.splitters)
         .slice(0, 6),
       topStreets: [...streets.values()]
         .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.splitters - a.splitters)
@@ -652,7 +825,7 @@ export function NetworkIntelligencePage() {
       sumUsage: number
       sumDelta: number
       openTickets: number
-      affectedClientsTotal: number
+      massivaTicketsTotal: number
       corporateCodes: Set<string>
     }
     const mk = (): Agg => ({
@@ -661,7 +834,7 @@ export function NetworkIntelligencePage() {
       sumUsage: 0,
       sumDelta: 0,
       openTickets: 0,
-      affectedClientsTotal: 0,
+      massivaTicketsTotal: 0,
       corporateCodes: new Set<string>(),
     })
     const bump = (agg: Agg, row: IntelligenceRiskRankingRow) => {
@@ -670,7 +843,7 @@ export function NetworkIntelligencePage() {
       agg.sumUsage += row.currentUsagePercent
       agg.sumDelta += row.selectedDelta
       agg.openTickets += row.openTickets
-      agg.affectedClientsTotal += row.affectedClientsTotal
+      agg.massivaTicketsTotal += row.totalTickets
       if (row.hasCorporateClients) agg.corporateCodes.add(row.splitterCode)
     }
     const finalize = (label: string, agg: Agg): RegionalInsightRow => {
@@ -682,7 +855,7 @@ export function NetworkIntelligencePage() {
         avgUsagePercent: Number((agg.sumUsage / Math.max(1, n)).toFixed(1)),
         avgDeltaReference: Number((agg.sumDelta / Math.max(1, n)).toFixed(2)),
         openTickets: agg.openTickets,
-        affectedClientsTotal: agg.affectedClientsTotal,
+        massivaTicketsTotal: agg.massivaTicketsTotal,
         splittersWithCorporate: agg.corporateCodes.size,
         directive: regionalInsightDirective({
           splitters: n,
@@ -690,7 +863,7 @@ export function NetworkIntelligencePage() {
           avgUsagePercent: Number((agg.sumUsage / Math.max(1, n)).toFixed(1)),
           avgDeltaReference: Number((agg.sumDelta / Math.max(1, n)).toFixed(2)),
           openTickets: agg.openTickets,
-          affectedClientsTotal: agg.affectedClientsTotal,
+          massivaTicketsTotal: agg.massivaTicketsTotal,
           splittersWithCorporate: agg.corporateCodes.size,
         }),
       }
@@ -732,7 +905,7 @@ export function NetworkIntelligencePage() {
       .sort(
         (a, b) =>
           b.criticalSplitters - a.criticalSplitters ||
-          b.affectedClientsTotal - a.affectedClientsTotal ||
+          b.massivaTicketsTotal - a.massivaTicketsTotal ||
           b.splitters - a.splitters,
       )
       .slice(0, 12)
@@ -748,7 +921,7 @@ export function NetworkIntelligencePage() {
           )
         : 0
     const openMassivasAmongCorporate = corpRows.reduce((s, r) => s + r.openTickets, 0)
-    const affectedAmongCorporate = corpRows.reduce((s, r) => s + r.affectedClientsTotal, 0)
+    const corporateMassivaTickets = corpRows.reduce((s, r) => s + r.totalTickets, 0)
 
     return {
       topCidades,
@@ -759,14 +932,14 @@ export function NetworkIntelligencePage() {
         criticalAmongCorporate,
         avgUsageAmongCorporate,
         openMassivasAmongCorporate,
-        affectedAmongCorporate,
+        corporateMassivaTickets,
         directive: corporateRegionalInsightDirective({
           splittersTotal,
           splittersWithCorporate,
           criticalAmongCorporate,
           avgUsageAmongCorporate,
           openMassivasAmongCorporate,
-          affectedAmongCorporate,
+          corporateMassivaTickets,
         }),
       },
     }
@@ -774,6 +947,13 @@ export function NetworkIntelligencePage() {
 
   const contextualLifecycle = useMemo(() => {
     const rows = contextualRiskRanking
+    const codeToBucket = new Map(
+      rows.map((row) => [row.splitterCode, toLifecycleBucket(row.ageYears)] as const),
+    )
+    const distinctMassivasByBucket = countDistinctMassivasByLifecycleBucket(
+      massivaPeriodLinks,
+      codeToBucket,
+    )
     const kpis = {
       avgAgeYears:
         rows.length > 0
@@ -811,7 +991,8 @@ export function NetworkIntelligencePage() {
           scoped.length > 0
             ? Number((scoped.reduce((sum, row) => sum + row.selectedDelta, 0) / scoped.length).toFixed(2))
             : 0,
-        massivaTickets: scoped.reduce((sum, row) => sum + row.totalTickets, 0),
+        massivaLinkages: scoped.reduce((sum, row) => sum + row.totalTickets, 0),
+        distinctMassivas: distinctMassivasByBucket[bucket] ?? 0,
       }
     })
 
@@ -840,7 +1021,7 @@ export function NetworkIntelligencePage() {
     )
 
     return { kpis, buckets, heatmap }
-  }, [contextualRiskRanking])
+  }, [contextualRiskRanking, massivaPeriodLinks])
 
   const contextualMaintenanceRows = useMemo(() => {
     const term = splitterSearch.trim().toLowerCase()
@@ -879,12 +1060,23 @@ export function NetworkIntelligencePage() {
         title="Painel da rede"
         description="Cruza ocupação de portas, tendência por splitter, massivas e, nas outras abas, risco, geografia e manutenções. Escolha o período abaixo e use busca e filtros para focar OLT, faixa de risco ou idade; os números respondem sempre à mesma janela."
         trailing={
-          showBackgroundRefresh ? (
-            <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-amber-200/80 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-sm">
-              <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-700" aria-hidden />
-              <span className="text-[10px] font-bold normal-case text-neutral-600">Atualizando dados…</span>
-            </span>
-          ) : null
+          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+            {showBackgroundRefresh ? (
+              <span className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-amber-200/80 bg-white/90 px-3 py-1.5 text-[11px] font-semibold text-neutral-800 shadow-sm">
+                <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-700" aria-hidden />
+                <span className="text-[10px] font-bold normal-case text-neutral-600">Atualizando dados...</span>
+              </span>
+            ) : (
+              <span />
+            )}
+            <div className="relative hidden h-[8.5rem] w-[17rem] self-center overflow-hidden xl:block">
+              <div
+                aria-hidden
+                className="absolute right-[-5%] top-[-8%] h-[120%] w-[110%] bg-contain bg-right bg-no-repeat opacity-100 saturate-105"
+                style={{ backgroundImage: "url('/isa-network-header.png')" }}
+              />
+            </div>
+          </div>
         }
       />
 
@@ -1009,8 +1201,8 @@ export function NetworkIntelligencePage() {
           </p>
           <p>
             Score, deltas das tabelas e séries temporais usam a mesma janela do seletor de datas. Na matriz impacto ×
-            urgência: <span className="font-semibold">impacto alto</span> = ≥50 clientes afetados ou ≥4 tickets de
-            massiva; <span className="font-semibold">urgência alta</span> = ocupação ≥85%, ou {deltaReferenceLabel} ≥5
+            urgência: <span className="font-semibold">impacto alto</span> = ≥4 massivas ligadas ao splitter ou alguma
+            massiva ainda aberta; <span className="font-semibold">urgência alta</span> = ocupação ≥85%, ou {deltaReferenceLabel} ≥5
             pontos percentuais, ou massivas ainda abertas.
           </p>
         </div>
@@ -1206,13 +1398,14 @@ export function NetworkIntelligencePage() {
           <div className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Massivas no período</p>
             <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-              Agregado de todos os splitters cuja última movimentação de massiva caiu neste intervalo.{" "}
-              <span className="font-semibold text-slate-700">Afetados</span> soma clientes únicos impactados conforme o
-              cadastro da massiva (pode repetir cliente em vários tickets).
+              Contagem <span className="font-semibold text-slate-700">distinta</span> de ocorrências (massivas) com
+              vínculo a algum splitter do cadastro, após o filtro de data por abertura.{" "}
+              <span className="font-semibold text-slate-700">Afetados</span> é o total informado no cadastro da massiva,
+              somado uma vez por ocorrência — não por equipamento.
             </p>
             <dl className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-slate-50/90 px-3 py-2.5 ring-1 ring-slate-200/80">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Tickets</dt>
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Massivas (ún.)</dt>
                 <dd className="mt-0.5 text-xl font-black tabular-nums text-slate-900">
                   {intelligenceSnapshot.massivaAgg.totalTickets.toLocaleString('pt-BR')}
                 </dd>
@@ -1283,12 +1476,12 @@ export function NetworkIntelligencePage() {
                         : intelligenceSnapshot.topDelta.delta30d) >= 0
                         ? '+'
                         : ''}
-                      {(
+                      {formatDeltaPp(
                         deltaReferenceLabel === 'Δ7d'
                           ? intelligenceSnapshot.topDelta.delta7d
-                          : intelligenceSnapshot.topDelta.delta30d
-                      ).toFixed(2)}
-                      % no período
+                          : intelligenceSnapshot.topDelta.delta30d,
+                      )}{' '}
+                      no período
                     </p>
                     <Link
                       to={`/splitters/${encodeURIComponent(intelligenceSnapshot.topDelta.splitterCode)}`}
@@ -1395,12 +1588,13 @@ export function NetworkIntelligencePage() {
                 </p>
               </div>
               <div className="rounded-2xl border border-violet-200/80 bg-violet-50/80 px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-violet-800">Impacto em risco alto</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-violet-800">Massivas em risco alto</p>
                 <p className="mt-1 text-2xl font-black tabular-nums text-violet-900">
-                  {decisionKpis.highRiskAffectedClients.toLocaleString('pt-BR')}
+                  {decisionKpis.highRiskMassivaTickets.toLocaleString('pt-BR')}
                 </p>
                 <p className="text-[11px] leading-snug text-violet-800/90">
-                  Soma de clientes afetados por massiva apenas nos splitters classificados como risco alto ou crítico.
+                  Soma de vínculos “massiva × splitter” (tickets) nos equipamentos em risco alto ou crítico; a mesma
+                  massiva pode contar em mais de um splitter.
                 </p>
               </div>
               <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-3 py-3">
@@ -1447,7 +1641,7 @@ export function NetworkIntelligencePage() {
               <h2 className="text-sm font-bold text-slate-800">Ranking de risco por splitter</h2>
               <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-600">
                 Ordenação pelo score composto (maior = mais prioridade). Colunas: uso atual de portas;{" "}
-                {deltaReferenceLabel} (quanto a ocupação mudou); massivas abertas vs total no período; clientes afetados
+                {deltaReferenceLabel} (quanto a ocupação mudou); massivas abertas vs total no período (por splitter)
                 somados nas massivas. Clique na matriz ao lado para filtrar este quadro por quadrante.
               </p>
             </div>
@@ -1488,11 +1682,10 @@ export function NetworkIntelligencePage() {
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-700">
                   <p><span className="font-semibold">Uso:</span> {row.currentUsagePercent.toFixed(1)}%</p>
                   <p>
-                    <span className="font-semibold">{deltaReferenceLabel}:</span> {row.selectedDelta >= 0 ? '+' : ''}
-                    {row.selectedDelta.toFixed(2)}%
+                    <span className="font-semibold">{deltaReferenceLabel}:</span>{' '}
+                    <span title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>{formatDeltaPp(row.selectedDelta)}</span>
                   </p>
                   <p><span className="font-semibold">Massivas:</span> {row.openTickets}/{row.totalTickets}</p>
-                  <p><span className="font-semibold">Afetados:</span> {row.affectedClientsTotal.toLocaleString('pt-BR')}</p>
                 </div>
               </article>
             ))}
@@ -1508,14 +1701,14 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2" title="Percentual de portas de saída em uso neste splitter">
                     Uso
                   </th>
-                  <th className="px-2 py-2" title={`Variação de ocupação no período de referência (${deltaReferenceLabel})`}>
-                    {deltaReferenceLabel}
+                  <th
+                    className="px-2 py-2"
+                    title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}
+                  >
+                    {deltaReferenceLabel} (pp)
                   </th>
                   <th className="px-2 py-2" title="Tickets abertos no período / total histórico considerado">
                     Massivas
-                  </th>
-                  <th className="px-2 py-2" title="Soma de clientes impactados nas massivas deste splitter">
-                    Afetados
                   </th>
                 </tr>
               </thead>
@@ -1541,12 +1734,13 @@ export function NetworkIntelligencePage() {
                       </span>
                     </td>
                     <td className="px-2 py-2 font-semibold tabular-nums text-slate-800">{row.currentUsagePercent.toFixed(1)}%</td>
-                    <td className="px-2 py-2 font-semibold tabular-nums text-slate-800">
-                      {row.selectedDelta >= 0 ? '+' : ''}
-                      {row.selectedDelta.toFixed(2)}%
+                    <td
+                      className="px-2 py-2 font-semibold tabular-nums text-slate-800"
+                      title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}
+                    >
+                      {formatDeltaPp(row.selectedDelta)}
                     </td>
                     <td className="px-2 py-2 tabular-nums text-slate-700">{row.openTickets}/{row.totalTickets}</td>
-                    <td className="px-2 py-2 tabular-nums text-slate-700">{row.affectedClientsTotal.toLocaleString('pt-BR')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1562,9 +1756,9 @@ export function NetworkIntelligencePage() {
         >
           <h2 className="text-sm font-bold text-slate-800">Matriz impacto × urgência</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-            Cada quadrante conta splitters no filtro atual. Combinação de alto impacto (muitos afetados ou vários
-            tickets) com alta urgência (uso elevado, delta forte ou massivas abertas) aparece no quadrante superior
-            esquerdo da grade — costuma ser o primeiro a tratar.
+            Cada quadrante conta splitters no filtro atual. Alto impacto: várias massivas ligadas ao equipamento ou
+            massiva ainda aberta. Alta urgência: uso elevado, forte variação de ocupação ou massivas abertas. O quadrante
+            superior esquerdo costuma ser o primeiro a tratar.
           </p>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {impactUrgencyMatrix.map((cell) => (
@@ -1664,7 +1858,9 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Score ciclo</th>
                   <th className="px-2 py-2">Idade</th>
                   <th className="px-2 py-2">Uso</th>
-                  <th className="px-2 py-2">{deltaReferenceLabel}</th>
+                  <th className="px-2 py-2" title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>
+                    {deltaReferenceLabel} (pp)
+                  </th>
                   <th className="px-2 py-2" title="Projeção linear simplificada: dias até 95% de ocupação se o ritmo recente se mantiver">
                     ETA 95%
                   </th>
@@ -1680,7 +1876,9 @@ export function NetworkIntelligencePage() {
                     <td className="px-2 py-2 tabular-nums font-semibold">{row.riskScore.toFixed(1)}</td>
                     <td className="px-2 py-2 tabular-nums">{row.ageYears.toFixed(2)} anos</td>
                     <td className="px-2 py-2 tabular-nums">{row.currentUsagePercent.toFixed(1)}%</td>
-                    <td className="px-2 py-2 tabular-nums">{row.selectedDelta >= 0 ? '+' : ''}{row.selectedDelta.toFixed(2)}%</td>
+                    <td className="px-2 py-2 tabular-nums" title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>
+                      {formatDeltaPp(row.selectedDelta)}
+                    </td>
                     <td className="px-2 py-2 tabular-nums" title={row.etaTo95Days == null ? undefined : `Projeção: ~${row.etaTo95Days} dias para 95% ao ritmo atual`}>{row.etaTo95Days == null ? '—' : `${row.etaTo95Days} dias`}</td>
                   </tr>
                 ))}
@@ -1722,18 +1920,21 @@ export function NetworkIntelligencePage() {
         >
           <h2 className="text-sm font-bold text-slate-800">Curva de envelhecimento por faixa</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-            Linhas da tabela = faixas de idade do equipamento. Tickets = massivas associadas a splitters naquela faixa no
-            período.
+            Linhas = faixa de idade do equipamento no recorte.{' '}
+            <span className="font-semibold text-slate-700">Massivas (ún.)</span> = ocorrências distintas com splitter na
+            faixa; <span className="font-semibold text-slate-700">Vínculos</span> = soma massiva × splitter (a mesma
+            massiva pode contar mais de uma vez).
           </p>
           <div className="mt-3 overflow-auto">
-            <table className="w-full min-w-[680px] text-left text-xs">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="border-b border-slate-200/80 text-[10px] uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-2 py-2">Faixa (anos)</th>
                   <th className="px-2 py-2">Splitters</th>
                   <th className="px-2 py-2">Uso médio</th>
                   <th className="px-2 py-2">{deltaReferenceLabel} médio</th>
-                  <th className="px-2 py-2">Tickets</th>
+                  <th className="px-2 py-2">Massivas (ún.)</th>
+                  <th className="px-2 py-2">Vínculos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1743,7 +1944,8 @@ export function NetworkIntelligencePage() {
                     <td className="px-2 py-2 tabular-nums">{row.splitters}</td>
                     <td className="px-2 py-2 tabular-nums">{row.avgUsagePercent.toFixed(1)}%</td>
                     <td className="px-2 py-2 tabular-nums">{row.avgDeltaReference >= 0 ? '+' : ''}{row.avgDeltaReference.toFixed(2)}%</td>
-                    <td className="px-2 py-2 tabular-nums">{row.massivaTickets.toLocaleString('pt-BR')}</td>
+                    <td className="px-2 py-2 tabular-nums">{row.distinctMassivas.toLocaleString('pt-BR')}</td>
+                    <td className="px-2 py-2 tabular-nums">{row.massivaLinkages.toLocaleString('pt-BR')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1852,6 +2054,12 @@ export function NetworkIntelligencePage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <OccupancyCapacityCharts
+            trends={trends}
+            formatDateLabel={formatDateLabel}
+            deltaReferenceLabel={deltaReferenceLabel}
+            trendDeltaReference={trendDeltaReference}
+          />
         </motion.article>
 
         <motion.article
@@ -1864,71 +2072,35 @@ export function NetworkIntelligencePage() {
             <AlertTriangle size={16} className="text-amber-600" />
             <h2 className="text-sm font-bold text-slate-800">Status por splitter</h2>
           </div>
-          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-            Lista dos primeiros splitters com tendência no período. O selo colorido repete a mesma classificação da pizza
-            de tendências. &quot;Variação 7d&quot; é quanto a ocupação mudou em uma semana (em pontos percentuais).
+          <p className="mb-3 text-[11px] leading-relaxed text-slate-600">
+            Gatilhos de <span className="font-semibold">capacidade</span> (ocupação de portas). Variações em{' '}
+            <span className="font-semibold">pp</span> (pontos percentuais) — veja o quadro abaixo. O Δ usa snapshots — só
+            grava quando a ocupação muda. Massivas, score de risco e campeões de uso/Δ ficam nos cards acima e no ranking.
           </p>
-          <ul className="space-y-2">
-            {trends.slice(0, 8).map((row) => (
-              <li key={row.splitterCode} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50/80 px-2.5 py-2">
-                <div className="min-w-0 flex-1">
-                  {row.splitterTitle.trim() !== '' ? (
-                    <>
-                      <p className="truncate text-xs font-bold text-slate-800" title={row.splitterTitle.trim()}>
-                        {row.splitterTitle.trim()}
-                      </p>
-                      <p className="font-mono text-[10px] font-semibold text-slate-500">{row.splitterCode}</p>
-                    </>
-                  ) : (
-                    <p className="text-xs font-bold text-slate-700">{row.splitterCode}</p>
-                  )}
-                  <p className="text-[11px] text-slate-500">Variação 7d: {row.delta7d >= 0 ? "+" : ""}{row.delta7d.toFixed(2)} pp</p>
-                </div>
-                <span className={cn('rounded-full border px-2 py-1 text-[10px] font-bold', trendBadgeClass(row.label))}>
-                  {row.label}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <TrendStatusCapacityPanel
+            trends={trends}
+            deltaReferenceLabel={deltaReferenceLabel}
+            trendDeltaReference={trendDeltaReference}
+            trendBadgeClass={trendBadgeClass}
+          />
         </motion.article>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <motion.article
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.12 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2"
         >
-          <div className="mb-3 flex items-center gap-2">
-            <Ticket size={16} className="text-amber-600" />
-            <h2 className="text-sm font-bold text-slate-800">Massivas por splitter (top 10)</h2>
-          </div>
-          <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-            Barras lado a lado por código: <span className="font-semibold text-amber-800">âmbar escuro</span> = quantidade
-            de tickets de massiva no período; <span className="font-semibold text-amber-700">âmbar claro</span> = total de
-            clientes afetados somados nos registros (escalas diferentes — compare pelo tooltip).
-          </p>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barPoints}>
-                <CartesianGrid strokeDasharray="4 4" stroke="#e2e8f0" />
-                <XAxis dataKey="splitterCode" hide />
-                <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, borderColor: '#e2e8f0' }}
-                  formatter={(value: unknown, name: unknown) => [
-                    Number(value ?? 0).toLocaleString('pt-BR'),
-                    String(name ?? ''),
-                  ]}
-                />
-                <Legend wrapperStyle={{ fontSize: "11px", paddingTop: 8 }} />
-                <Bar dataKey="totalTickets" name="Tickets de massiva" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="affectedClientsTotal" name="Clientes afetados (soma)" fill="#fbbf24" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.article>
+          <MassivaRecurrencePanel
+            insights={massivaRecurrenceInsights}
+            periodLabel={intelligencePeriodLabel}
+            deltaReferenceLabel={deltaReferenceLabel}
+            distinctMassivaCountInPeriod={massivaRollup.distinctMassivaCount}
+          />
+        </motion.div>
+
 
         <motion.article
           initial={{ opacity: 0, y: 20 }}
@@ -1941,9 +2113,10 @@ export function NetworkIntelligencePage() {
             <h2 className="text-sm font-bold text-slate-800">Recorrência dia × turno</h2>
           </div>
           <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
-            Cada célula soma quantas massivas tiveram <span className="font-semibold">última abertura</span> naquele dia da
-            semana e faixa de horário (madrugada &lt;6h, manhã 6–12h, tarde 12–18h, noite 18–24h — horário do servidor).
-            Quanto mais escura a célula, maior o volume — ajuda a planejar plantão e capacidade.
+            Cada célula conta <span className="font-semibold">massivas distintas</span> cuja{' '}
+            <span className="font-semibold">abertura</span> caiu naquele dia da semana e faixa de horário (madrugada
+            &lt;6h, manhã 6–12h, tarde 12–18h, noite 18–24h — fuso do servidor). Não repete por splitter: uma
+            ocorrência com muitos equipamentos entra uma vez. Quanto mais escura, maior o volume.
           </p>
           <div className="grid grid-cols-4 gap-1.5">
             {recurrenceCells.map((cell) => {
@@ -2053,9 +2226,9 @@ export function NetworkIntelligencePage() {
                     {contextualRegionalInsights.corporateSnapshot.openMassivasAmongCorporate.toLocaleString('pt-BR')}
                   </span>
                   {' · '}
-                  Afetados (soma):{' '}
+                  Tickets massiva (Σ PJ):{' '}
                   <span className="font-bold tabular-nums text-[#4c1d95]">
-                    {contextualRegionalInsights.corporateSnapshot.affectedAmongCorporate.toLocaleString('pt-BR')}
+                    {contextualRegionalInsights.corporateSnapshot.corporateMassivaTickets.toLocaleString('pt-BR')}
                   </span>
                 </p>
               </article>
@@ -2082,7 +2255,9 @@ export function NetworkIntelligencePage() {
                         <th className="px-1.5 py-1.5">Uso ∅</th>
                         <th className="px-1.5 py-1.5">{deltaReferenceLabel} ∅</th>
                         <th className="px-1.5 py-1.5">M.ab.</th>
-                        <th className="px-1.5 py-1.5">Afet.</th>
+                        <th className="px-1.5 py-1.5" title="Σ vínculos massiva × splitter no recorte">
+                          Mtickets Σ
+                        </th>
                         <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
                       </tr>
                     </thead>
@@ -2099,7 +2274,7 @@ export function NetworkIntelligencePage() {
                           </td>
                           <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.openTickets}</td>
                           <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
-                            {row.affectedClientsTotal.toLocaleString('pt-BR')}
+                            {row.massivaTicketsTotal.toLocaleString('pt-BR')}
                           </td>
                           <td
                             className={cn(
@@ -2140,7 +2315,9 @@ export function NetworkIntelligencePage() {
                         <th className="px-1.5 py-1.5">Uso ∅</th>
                         <th className="px-1.5 py-1.5">{deltaReferenceLabel} ∅</th>
                         <th className="px-1.5 py-1.5">M.ab.</th>
-                        <th className="px-1.5 py-1.5">Afet.</th>
+                        <th className="px-1.5 py-1.5" title="Σ vínculos massiva × splitter no recorte">
+                          Mtickets Σ
+                        </th>
                         <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
                       </tr>
                     </thead>
@@ -2159,7 +2336,7 @@ export function NetworkIntelligencePage() {
                           </td>
                           <td className="px-1.5 py-1.5 tabular-nums text-slate-700">{row.openTickets}</td>
                           <td className="px-1.5 py-1.5 tabular-nums text-slate-700">
-                            {row.affectedClientsTotal.toLocaleString('pt-BR')}
+                            {row.massivaTicketsTotal.toLocaleString('pt-BR')}
                           </td>
                           <td
                             className={cn(
@@ -2216,7 +2393,6 @@ export function NetworkIntelligencePage() {
                     {row.avgDeltaReference.toFixed(2)}%
                   </p>
                   <p><span className="font-semibold">Massivas:</span> {row.openTickets}/{row.totalTickets}</p>
-                  <p><span className="font-semibold">Afetados:</span> {row.affectedClientsTotal.toLocaleString('pt-BR')}</p>
                 </div>
               </article>
             ))}
@@ -2232,7 +2408,6 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Uso médio</th>
                   <th className="px-2 py-2">{deltaReferenceLabel} médio</th>
                   <th className="px-2 py-2">Massivas</th>
-                  <th className="px-2 py-2">Afetados</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2251,7 +2426,6 @@ export function NetworkIntelligencePage() {
                       {row.avgDeltaReference.toFixed(2)}%
                     </td>
                     <td className="px-2 py-2 tabular-nums">{row.openTickets}/{row.totalTickets}</td>
-                    <td className="px-2 py-2 tabular-nums">{row.affectedClientsTotal.toLocaleString('pt-BR')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -2267,8 +2441,8 @@ export function NetworkIntelligencePage() {
         >
           <h2 className="text-sm font-bold text-slate-800">Geo e contexto local</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
-            Resumo textual do mesmo conjunto filtrado: tipo de local (condomínio/unidade), condomínios com mais clientes
-            afetados por massiva e ruas com mais splitters em uso crítico (≥95%).
+            Resumo do mesmo conjunto filtrado: tipo de local (condomínio/unidade), condomínios com mais vínculos a
+            massivas no período (Σ por splitter) e ruas com mais equipamentos em uso crítico (≥95%).
           </p>
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -2279,27 +2453,170 @@ export function NetworkIntelligencePage() {
                 </div>
               ))}
             </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Top condomínios por impacto</p>
-              <ul className="mt-1.5 space-y-1.5">
-                {contextualGeoDrilldown.topCondominios.map((item) => (
-                  <li key={item.nome} className="rounded-lg bg-slate-50/80 px-2 py-1.5 text-[11px] text-slate-700">
-                    <p className="truncate font-semibold">{item.nome}</p>
-                    <p>{item.splitters} splitters · {item.affectedClientsTotal.toLocaleString('pt-BR')} afetados</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Top ruas com criticidade</p>
-              <ul className="mt-1.5 space-y-1.5">
-                {contextualGeoDrilldown.topStreets.map((item) => (
-                  <li key={item.nome} className="rounded-lg bg-slate-50/80 px-2 py-1.5 text-[11px] text-slate-700">
-                    <p className="truncate font-semibold">{item.nome}</p>
-                    <p>{item.splitters} splitters · {item.criticalSplitters} críticos</p>
-                  </li>
-                ))}
-              </ul>
+            <div className="rounded-2xl bg-white/50 p-2 ring-1 ring-slate-200/70">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    Destaques do recorte
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-slate-600">
+                    Use para achar concentração de impacto (condomínios) e pressão operacional (ruas com críticos).
+                  </p>
+                </div>
+                {/* Mobile tabs */}
+                <div className="flex items-center gap-1 rounded-full bg-slate-50 p-1 ring-1 ring-slate-200/80 sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setGeoTab('condominios')}
+                    className={cn(
+                      'inline-flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold transition',
+                      geoTab === 'condominios'
+                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80'
+                        : 'text-slate-600 hover:text-slate-900',
+                    )}
+                  >
+                    <Building2 className="size-3.5" aria-hidden />
+                    Condomínios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeoTab('ruas')}
+                    className={cn(
+                      'inline-flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold transition',
+                      geoTab === 'ruas'
+                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80'
+                        : 'text-slate-600 hover:text-slate-900',
+                    )}
+                  >
+                    <MapPin className="size-3.5" aria-hidden />
+                    Ruas críticas
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* Top condomínios */}
+                <section className={cn('min-w-0 rounded-xl bg-slate-50/70 p-2.5 ring-1 ring-slate-200/70', geoTab !== 'condominios' ? 'hidden sm:block' : '')}>
+                  <header className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-amber-100 text-amber-900 ring-1 ring-amber-200/70">
+                        <Building2 className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                          Top condomínios por impacto
+                        </p>
+                        <p className="text-[11px] text-slate-600">
+                          Ordenado por Σ massivas (por splitter) no período
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200/70">
+                      Top {contextualGeoDrilldown.topCondominios.length}
+                    </span>
+                  </header>
+                  <ul className="mt-2 space-y-2">
+                    {contextualGeoDrilldown.topCondominios.map((item, idx) => (
+                      <li
+                        key={item.nome}
+                        className="rounded-xl bg-white/80 px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200/70"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-50 text-[10px] font-black text-amber-800 ring-1 ring-amber-200/70">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className="font-bold leading-snug text-slate-900 break-words [overflow-wrap:anywhere]"
+                              title={item.nome}
+                            >
+                              {item.nome}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                              <p className="text-slate-600">
+                                {item.splitters} splitter{item.splitters === 1 ? '' : 's'}
+                              </p>
+                              <div className="shrink-0 text-right">
+                                <p className="tabular-nums font-black text-slate-900">
+                                  {item.massivaTickets.toLocaleString('pt-BR')}
+                                </p>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                  Σ massivas
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                    {contextualGeoDrilldown.topCondominios.length === 0 ? (
+                      <li className="rounded-xl bg-white/70 px-3 py-2 text-[11px] text-slate-600 ring-1 ring-slate-200/70">
+                        Sem dados de condomínio no recorte atual.
+                      </li>
+                    ) : null}
+                  </ul>
+                </section>
+
+                {/* Top ruas críticas */}
+                <section className={cn('min-w-0 rounded-xl bg-slate-50/70 p-2.5 ring-1 ring-slate-200/70', geoTab !== 'ruas' ? 'hidden sm:block' : '')}>
+                  <header className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-rose-100 text-rose-900 ring-1 ring-rose-200/70">
+                        <MapPin className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-600">
+                          Top ruas com criticidade
+                        </p>
+                        <p className="text-[11px] text-slate-600">
+                          Mais splitters em uso crítico (≥95%)
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-700 ring-1 ring-slate-200/70">
+                      Top {contextualGeoDrilldown.topStreets.length}
+                    </span>
+                  </header>
+                  <ul className="mt-2 space-y-2">
+                    {contextualGeoDrilldown.topStreets.map((item, idx) => (
+                      <li
+                        key={item.nome}
+                        className="rounded-xl bg-white/80 px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200/70"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-rose-50 text-[10px] font-black text-rose-800 ring-1 ring-rose-200/70">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className="font-bold leading-snug text-slate-900 break-words [overflow-wrap:anywhere]"
+                              title={item.nome}
+                            >
+                              {item.nome}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                              <p className="text-slate-600">
+                                {item.splitters} splitter{item.splitters === 1 ? '' : 's'}
+                              </p>
+                              <div className="shrink-0 text-right">
+                                <p className="tabular-nums font-black text-slate-900">{item.criticalSplitters}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                                  críticos
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                    {contextualGeoDrilldown.topStreets.length === 0 ? (
+                      <li className="rounded-xl bg-white/70 px-3 py-2 text-[11px] text-slate-600 ring-1 ring-slate-200/70">
+                        Sem dados de rua no recorte atual.
+                      </li>
+                    ) : null}
+                  </ul>
+                </section>
+              </div>
             </div>
           </div>
         </motion.article>
@@ -2315,7 +2632,7 @@ export function NetworkIntelligencePage() {
         <p className="mb-3 text-xs leading-relaxed text-slate-600">
           Até 80 splitters em amostra estratificada. Além do calor regional, cada ponto combina{' '}
           <span className="font-semibold text-slate-800">tamanho</span> (índice de atenção: uso + massivas + tendência),{' '}
-          <span className="font-semibold text-slate-800">halo</span> (volume de clientes afetados em massivas no período) e{' '}
+          <span className="font-semibold text-slate-800">halo</span> (volume de vínculos com massivas distintas no período) e{' '}
           <span className="font-semibold text-[#7c3aed]">destaque roxo</span> para equipamentos com cliente corporativo.
           Com o filtro abaixo você vê <span className="font-semibold text-slate-800">apenas splitters com PJ</span>; desligado,
           a amostra mistura toda a base (crítico / atenção / folga), e o <span className="font-semibold text-[#7c3aed]">roxo</span>{' '}
@@ -2524,7 +2841,7 @@ export function NetworkIntelligencePage() {
                         </dl>
                         <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-snug text-slate-600">
                           <span className="font-semibold text-slate-500">Última</span>{' '}
-                          {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                          {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                         </p>
                       </article>
                     ))}
@@ -2561,7 +2878,7 @@ export function NetworkIntelligencePage() {
                             <td className="px-2 py-2 tabular-nums text-slate-700">{row.rompimentoCount.toLocaleString('pt-BR')}</td>
                             <td className="px-2 py-2 tabular-nums text-slate-700">{row.trocaFlatCount.toLocaleString('pt-BR')}</td>
                             <td className="px-2 py-2 text-[11px] text-slate-600">
-                              {row.latestCreatedAt ? row.latestCreatedAt.toLocaleString('pt-BR') : '—'}
+                              {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                             </td>
                           </tr>
                         ))}
@@ -2598,9 +2915,9 @@ export function NetworkIntelligencePage() {
                 <div className="rounded-xl bg-slate-50/90 px-3 py-2 ring-1 ring-slate-200/70">
                   <dt className="font-semibold text-slate-600">Janela analisada</dt>
                   <dd className="mt-0.5 text-[11px] font-semibold text-slate-800">
-                    {new Intl.DateTimeFormat('pt-BR').format(customStartDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))}
+                    {formatBrazilDateDisplay(customStartDate ?? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))}
                     {' '}até{' '}
-                    {new Intl.DateTimeFormat('pt-BR').format(customEndDate ?? new Date())}
+                    {formatBrazilDateDisplay(customEndDate ?? new Date())}
                   </dd>
                 </div>
               </dl>
