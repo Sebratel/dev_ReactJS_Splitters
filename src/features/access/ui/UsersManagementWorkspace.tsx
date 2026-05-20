@@ -296,8 +296,9 @@ function StatCard({
         ? 'stroke-violet-400/80'
         : 'stroke-amber-400/90'
 
-  const trendTone =
-    trendLabel?.trim().startsWith('-')
+  const trendTone = trendLabel?.includes('da base')
+    ? 'bg-neutral-100 text-neutral-700 ring-neutral-200/80'
+    : trendLabel?.trim().startsWith('-')
       ? 'bg-rose-50 text-rose-700 ring-rose-200/70'
       : 'bg-emerald-50 text-emerald-700 ring-emerald-200/70'
 
@@ -309,20 +310,29 @@ function StatCard({
 
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-1">
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-neutral-500">
               {label}
             </p>
-            {trendLabel ? (
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ring-1',
-                  trendTone,
-                )}
-              >
-                {trendLabel}
-              </span>
-            ) : null}
+            <div className="flex min-h-[20px] items-center">
+              {trendLabel ? (
+                <span
+                  className={cn(
+                    'inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide ring-1',
+                    trendTone,
+                  )}
+                >
+                  {trendLabel}
+                </span>
+              ) : (
+                <span
+                  className="inline-flex min-h-[18px] w-fit opacity-0"
+                  aria-hidden
+                >
+                  —
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="mt-2 flex items-baseline gap-2">
@@ -638,6 +648,9 @@ export function UsersManagementWorkspace({
 
     const activeSpark = Array.from({ length: sparkDays }, () => active)
 
+    const activeShareLabel =
+      total > 0 ? `${Math.round((active / total) * 100)}% da base` : null
+
     return {
       total,
       active,
@@ -645,6 +658,7 @@ export function UsersManagementWorkspace({
       createdPrevMonth,
       createdToday,
       monthDeltaLabel,
+      activeShareLabel,
       totalSpark,
       activeSpark,
       createdSpark,
@@ -829,6 +843,7 @@ export function UsersManagementWorkspace({
           label="Ativos"
           value={stats.active}
           sublabel="Baseado em isActive"
+          trendLabel={stats.activeShareLabel ?? undefined}
           spark={stats.activeSpark}
           icon={<Shield className="size-5" aria-hidden />}
           tint="emerald"
