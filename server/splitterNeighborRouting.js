@@ -10,11 +10,89 @@ function normalizeNumericSql(expression) {
 }
 
 const CONDOMINIUM_TITLE_PREFIX_REGEX = /\b(?:RES|COND|ED)\./i;
-const STREET_RELIEF_MAX_ROUTE_METERS = 200;
+export const STREET_RELIEF_MAX_ROUTE_METERS = 200;
 const CROSS_STREET_RELIEF_MAX_ROUTE_METERS = 30;
 
 /** Mesmo raio em linha reta do mapa do detalhe (`SPLITTER_MAP_NEIGHBOR_RADIUS_METERS` no frontend). */
 export const SPLITTER_MAP_STRAIGHT_RADIUS_METERS = 200;
+
+/** Paridade com `NEIGHBOR_CLIENT_GEOCODE_MAX` no hook do mapa. */
+export const RELIEF_NEIGHBOR_GEOCODE_MAX = 14;
+
+/**
+ * Índices dos vizinhos sem rua no cadastro a geocodificar — mesma ordem do mapa
+ * (`useNeighborStreetsReverseGeocode.sortNeighborTargetsForStreet`).
+ * @param {Array<{ isCondominium?: boolean, streetNormalized?: string | null, routeMeters?: number | null, distanceMeters?: number, lat?: number, lng?: number, outPorts?: number, busyCount?: number }>} analyzedNeighbors
+ * @param {number} maxPick
+ * @returns {number[]}
+ */
+export function pickNeighborIndexesForReliefStreetGeocode(analyzedNeighbors, maxPick) {
+  const cap = Math.min(Math.max(Math.trunc(maxPick), 0), RELIEF_NEIGHBOR_GEOCODE_MAX);
+  if (cap === 0) return [];
+
+  const empty = analyzedNeighbors
+    .map((neighbor, index) => ({ neighbor, index }))
+    .filter(({ neighbor }) => {
+      if (neighbor.isCondominium) return false;
+      if (neighbor.streetNormalized != null) return false;
+      return Number.isFinite(Number(neighbor.lat)) && Number.isFinite(Number(neighbor.lng));
+    });
+
+  const routeDist = ({ neighbor }) => {
+    const rm = neighbor.routeMeters;
+    if (rm != null && Number.isFinite(Number(rm))) return Number(rm);
+    return Number(neighbor.distanceMeters ?? 1e9);
+  };
+
+  const hasFreePort = ({ neighbor }) => {
+    const outPorts = Number(neighbor.outPorts ?? 0);
+    const busyCount = Number(neighbor.busyCount ?? 0);
+    return outPorts > 0 && busyCount < outPorts;
+  };
+
+  const tier = ({ neighbor }) => (neighbor.isCondominium ? 2 : hasFreePort({ neighbor }) ? 0 : 1);
+
+  return empty
+    .sort((a, b) => {
+      const d = routeDist(a) - routeDist(b);
+      if (d !== 0) return d;
+      return tier(a) - tier(b);
+    })
+    .slice(0, cap)
+    .map(({ index }) => index);
+}
+
+/**
+ * Mesma regra do mapa (`findFirstStreetReliefNeighbor` no frontend).
+ * @param {Array<{ isCondominium?: boolean, streetNormalized?: string | null, routeMeters?: number | null, outPorts?: number, busyCount?: number }>} analyzedNeighbors
+ * @param {string | null} targetStreetNormalized
+ * @param {number} maxRouteMeters
+ * @returns {typeof analyzedNeighbors[number] | null}
+ */
+export function findFirstReliefMatchFromAnalyzed(
+  analyzedNeighbors,
+  targetStreetNormalized,
+  maxRouteMeters,
+) {
+  for (const neighbor of analyzedNeighbors) {
+    const rm = neighbor.routeMeters;
+    if (neighbor.isCondominium || rm == null) continue;
+    const sameStreet =
+      targetStreetNormalized !== null &&
+      neighbor.streetNormalized !== null &&
+      targetStreetNormalized === neighbor.streetNormalized;
+    const routeLimit = sameStreet
+      ? maxRouteMeters
+      : Math.min(maxRouteMeters, CROSS_STREET_RELIEF_MAX_ROUTE_METERS);
+    if (Number(rm) > routeLimit) continue;
+    const outPorts = Number(neighbor.outPorts ?? 0);
+    const busyCount = Number(neighbor.busyCount ?? 0);
+    if (outPorts > 0 && busyCount < outPorts) {
+      return neighbor;
+    }
+  }
+  return null;
+}
 
 /**
  * Mesmo critério do SPLITTERS_BASE_QUERY para classificar condomínio pelo título.
@@ -321,10 +399,20 @@ function trimNullable(value) {
  *
  * @param {import('pg').Pool} pool
  * @param {string} code
- * @param {{ straightRadiusMeters: number, maxRouteMeters: number }} opts
+ * @param {{ straightRadiusMeters: number, maxRouteMeters: number, reliefGeocodeNeighborMax?: number }} opts
  */
 export async function analyzeStreetReliefContext(pool, code, opts) {
   const { straightRadiusMeters, maxRouteMeters } = opts;
+  const geocodeCapFromOpts =
+    opts.reliefGeocodeNeighborMax == null
+      ? null
+      : Math.min(
+          Math.max(Math.trunc(Number(opts.reliefGeocodeNeighborMax)), 0),
+          RELIEF_NEIGHBOR_GEOCODE_MAX,
+        );
+  /** Captura em massa / paridade com `neighbors-routed`: só PG + OSRM, sem Nominatim no servidor. */
+  const skipAllReverseGeocode =
+    opts.skipReliefReverseGeocode === true || geocodeCapFromOpts === 0;
 
   const tgtLatSql = normalizeNumericSql('COALESCE(nba.latitude, t.lat)');
   const tgtLngSql = normalizeNumericSql('COALESCE(nba.longitude, t.lng)');
@@ -355,6 +443,7 @@ export async function analyzeStreetReliefContext(pool, code, opts) {
   const targetLat = Number(targetRowRes.rows?.[0]?.lat);
   const targetLng = Number(targetRowRes.rows?.[0]?.lng);
   if (
+    !skipAllReverseGeocode &&
     targetStreetNormalized == null &&
     !isReverseGeocodeDisabled() &&
     Number.isFinite(targetLat) &&
@@ -441,6 +530,7 @@ export async function analyzeStreetReliefContext(pool, code, opts) {
 
   const analyzedNeighbors = capped.map((neighbor, index) => ({
     ...neighbor,
+    distanceMeters: Number(neighbor.distanceMeters ?? 0),
     isCondominium: isCondominiumSplitterTitle(neighbor?.title),
     routeMeters: routeMeters[index] ?? null,
     streetDisplay: trimNullable(neighbor?.street),
@@ -448,75 +538,60 @@ export async function analyzeStreetReliefContext(pool, code, opts) {
     sameStreet: false,
   }));
 
-  if (!isReverseGeocodeDisabled()) {
+  if (!skipAllReverseGeocode && !isReverseGeocodeDisabled()) {
     const delayMs = Math.max(
       0,
       Math.trunc(
         Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_DELAY_MS ?? ''), 10) ||
-          1100,
+          0,
       ),
     );
-    const maxNbr = Math.min(
-      Math.max(
-        Math.trunc(
-          Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_MAX ?? ''), 10) || 6,
+    const maxNbr =
+      geocodeCapFromOpts ??
+      Math.min(
+        Math.max(
+          Math.trunc(
+            Number.parseInt(String(process.env.REVERSE_GEOCODE_RELIEF_NEIGHBORS_MAX ?? ''), 10) ||
+              0,
+          ),
+          0,
         ),
-        0,
-      ),
-      12,
+        RELIEF_NEIGHBOR_GEOCODE_MAX,
+      );
+    const geocodeIndexes = pickNeighborIndexesForReliefStreetGeocode(
+      analyzedNeighbors,
+      maxNbr,
     );
-    if (maxNbr > 0) {
-      const idxs = analyzedNeighbors
-        .map((neighbor, index) => ({ neighbor, index }))
-        .filter(({ neighbor }) => {
-          if (neighbor.isCondominium) return false;
-          if (neighbor.streetNormalized != null) return false;
-          const rm = neighbor.routeMeters;
-          if (rm == null || rm > maxRouteMeters) return false;
-          return Number.isFinite(Number(neighbor.lat)) && Number.isFinite(Number(neighbor.lng));
-        })
-        .sort((a, b) => (Number(a.neighbor.routeMeters) || 1e9) - (Number(b.neighbor.routeMeters) || 1e9))
-        .slice(0, maxNbr);
 
-      for (let j = 0; j < idxs.length; j += 1) {
-        const { index } = idxs[j];
-        const road = await fetchRoadFromReverseGeocode(
-          Number(analyzedNeighbors[index].lat),
-          Number(analyzedNeighbors[index].lng),
-        );
-        const roadText = trimNullable(road);
-        if (roadText) {
-          analyzedNeighbors[index].streetDisplay = roadText;
-          analyzedNeighbors[index].streetNormalized = normalizeStreetForRelief(roadText);
-        }
-        if (j < idxs.length - 1 && delayMs > 0) {
-          await new Promise((r) => {
-            setTimeout(r, delayMs);
-          });
-        }
+    for (let j = 0; j < geocodeIndexes.length; j += 1) {
+      const index = geocodeIndexes[j];
+      const road = await fetchRoadFromReverseGeocode(
+        Number(analyzedNeighbors[index].lat),
+        Number(analyzedNeighbors[index].lng),
+      );
+      const roadText = trimNullable(road);
+      if (roadText) {
+        analyzedNeighbors[index].streetDisplay = roadText;
+        analyzedNeighbors[index].streetNormalized = normalizeStreetForRelief(roadText);
+      }
+      if (j < geocodeIndexes.length - 1 && delayMs > 0) {
+        await new Promise((r) => {
+          setTimeout(r, delayMs);
+        });
       }
     }
   }
 
-  let reliefMatch = null;
-  for (const neighbor of analyzedNeighbors) {
-    const rm = neighbor.routeMeters;
-    if (neighbor.isCondominium || rm == null) continue;
-    const sameStreet =
+  const reliefMatch = findFirstReliefMatchFromAnalyzed(
+    analyzedNeighbors,
+    targetStreetNormalized,
+    maxRouteMeters,
+  );
+  if (reliefMatch) {
+    reliefMatch.sameStreet =
       targetStreetNormalized !== null &&
-      neighbor.streetNormalized !== null &&
-      targetStreetNormalized === neighbor.streetNormalized;
-    neighbor.sameStreet = sameStreet;
-    const routeLimit = sameStreet
-      ? maxRouteMeters
-      : Math.min(maxRouteMeters, CROSS_STREET_RELIEF_MAX_ROUTE_METERS);
-    if (rm > routeLimit) continue;
-    const outPorts = Number(neighbor.outPorts ?? 0);
-    const busyCount = Number(neighbor.busyCount ?? 0);
-    if (outPorts > 0 && busyCount < outPorts) {
-      reliefMatch = neighbor;
-      break;
-    }
+      reliefMatch.streetNormalized !== null &&
+      targetStreetNormalized === reliefMatch.streetNormalized;
   }
 
   return {
@@ -537,8 +612,26 @@ export async function analyzeStreetReliefContext(pool, code, opts) {
  * @param {string} code
  * @param {{ straightRadiusMeters: number, maxRouteMeters: number }} opts
  */
+/**
+ * Mesma avaliação do mapa do detalhe: OSRM 200 m + geocode origem/vizinhos (até 14) + 200/30 m por rua.
+ * Usado na captura da fila de planejamento para espelhar o alerta "sem alívio" do mapa.
+ */
+export async function evaluateReliefForMapMirror(pool, code, opts) {
+  return evaluateReliefForSplitter(pool, code, {
+    straightRadiusMeters: opts.straightRadiusMeters,
+    maxRouteMeters: opts.maxRouteMeters,
+    reliefGeocodeNeighborMax: RELIEF_NEIGHBOR_GEOCODE_MAX,
+    skipReliefReverseGeocode: false,
+  });
+}
+
 export async function evaluateReliefForSplitter(pool, code, opts) {
-  const analysis = await analyzeStreetReliefContext(pool, code, opts);
+  const analysis = await analyzeStreetReliefContext(pool, code, {
+    straightRadiusMeters: opts.straightRadiusMeters,
+    maxRouteMeters: opts.maxRouteMeters,
+    reliefGeocodeNeighborMax: opts.reliefGeocodeNeighborMax,
+    skipReliefReverseGeocode: opts.skipReliefReverseGeocode,
+  });
 
   if (analysis.originIsCondominium && analysis.condominiumRelief) {
     return {
