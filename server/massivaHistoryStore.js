@@ -103,6 +103,9 @@ export function createMassivaHistoryStore(config) {
       async replaceNetworkReliefSnapshot() {
         return { configured: false, snapshotRunId: null, entryCount: 0 };
       },
+      async hasCompletedNetworkReliefSnapshot() {
+        return false;
+      },
       async getLatestNetworkReliefSnapshotPage() {
         return null;
       },
@@ -992,7 +995,7 @@ export function createMassivaHistoryStore(config) {
   async function replaceNetworkReliefSnapshot(input = {}) {
     await ensureReady();
 
-    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 200);
     const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
     const scannedCount = normalizeNonNegativeInt(input?.scannedCount, 0);
     const cleanEntries = (Array.isArray(input?.entries) ? input.entries : [])
@@ -1133,10 +1136,31 @@ export function createMassivaHistoryStore(config) {
     }
   }
 
+  async function hasCompletedNetworkReliefSnapshot(straightRadiusMeters, maxRouteMeters) {
+    await ensureReady();
+
+    const straight = normalizeNonNegativeInt(straightRadiusMeters, 200);
+    const maxRoute = normalizeNonNegativeInt(maxRouteMeters, 200);
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT 1 AS ok
+        FROM splitter_network_relief_snapshot_runs
+        WHERE status = 'completed'
+          AND straight_radius_meters = ?
+          AND max_route_meters = ?
+        LIMIT 1
+      `,
+      [straight, maxRoute],
+    );
+
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
   async function getLatestNetworkReliefSnapshotPage(input = {}) {
     await ensureReady();
 
-    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 200);
     const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
     const limit = Math.min(200, Math.max(1, normalizeNonNegativeInt(input?.limit, 20)));
     const cursor = Math.max(0, normalizeNonNegativeInt(input?.cursor, 0));
@@ -1432,6 +1456,7 @@ export function createMassivaHistoryStore(config) {
     getRecentHistoryBySplitter,
     getOpenMassivaDashboardKpis,
     replaceNetworkReliefSnapshot,
+    hasCompletedNetworkReliefSnapshot,
     getLatestNetworkReliefSnapshotPage,
     getHistoryList,
     end,
