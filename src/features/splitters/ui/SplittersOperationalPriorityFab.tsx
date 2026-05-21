@@ -608,6 +608,9 @@ export function SplittersOperationalPriorityFab({
     0,
   )
   const hasReliefResults = reliefEntries.length > 0
+  const reliefSnapshotBuilding = reliefPages.some((page) => page.snapshotBuilding)
+  const reliefSnapshotMissing = reliefPages.some((page) => page.snapshotMissing)
+  const reliefSnapshotReady = Boolean(reliefMeta?.generatedAt)
 
   const fabAriaLabel = (() => {
     if (activePanel === 'operational') return 'Fechar fila de priorização operacional'
@@ -1048,7 +1051,8 @@ export function SplittersOperationalPriorityFab({
                 equipamento no <span className="font-semibold">mesmo condomínio</span> no cadastro (texto após
                 RES./COND./ED.) com porta livre, nem vizinho com porta livre a até{' '}
                 <span className="font-semibold">{reliefMeta?.maxRouteMeters ?? 200} m</span> por calçada (raio{' '}
-                <span className="font-semibold">{reliefMeta?.straightRadiusMeters ?? 500} m</span> em linha reta).
+                <span className="font-semibold">{reliefMeta?.straightRadiusMeters ?? 200} m</span> em linha reta —
+                mesma regra do mapa do splitter). A lista é espelho do alerta &quot;sem alívio&quot; do mapa (geocode + 200/30 m).
                 Indica onde vale planejar novo ponto ou remanejo — não mede fibra.
               </p>
 
@@ -1056,12 +1060,32 @@ export function SplittersOperationalPriorityFab({
                 <div className="flex items-start gap-2.5 rounded-xl border border-outline-variant/50 bg-white/90 px-3 py-2.5 text-[11px] text-on-surface shadow-sm">
                   <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden />
                   <div>
-                    <p className="font-semibold text-neutral-900">Carregando a lista…</p>
+                    <p className="font-semibold text-neutral-900">Lendo a tabela…</p>
                     <p className="mt-1 leading-relaxed text-neutral-600">
-                      Calcula distâncias no mapa; espere alguns segundos.
+                      Consulta rápida ao snapshot gravado no MySQL.
                     </p>
                   </div>
                 </div>
+              ) : null}
+
+              {reliefQueueQuery.isSuccess && reliefSnapshotBuilding ? (
+                <div className="flex items-start gap-2.5 rounded-xl border border-outline-variant/50 bg-white/90 px-3 py-2.5 text-[11px] text-on-surface shadow-sm">
+                  <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden />
+                  <div>
+                    <p className="font-semibold text-neutral-900">Gravando snapshot no servidor…</p>
+                    <p className="mt-1 leading-relaxed text-neutral-600">
+                      {reliefMeta?.message ??
+                        'Espelhando o mapa (OSRM + geocode de ruas + 200 m / 30 m). A captura em background pode levar mais tempo; a tela atualiza a cada poucos segundos.'}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {reliefQueueQuery.isSuccess && reliefSnapshotMissing && !reliefSnapshotBuilding ? (
+                <p className="rounded-xl border border-sky-200/90 bg-sky-50/95 px-3 py-2.5 text-[11px] leading-relaxed text-sky-950">
+                  {reliefMeta?.message ??
+                    'Ainda não há snapshot na tabela (200 m). O servidor grava em background ao subir ou no cron; a primeira gravação leva alguns minutos (só OSRM, sem Nominatim).'}
+                </p>
               ) : null}
 
               {reliefQueueQuery.isError ? (
@@ -1087,14 +1111,17 @@ export function SplittersOperationalPriorityFab({
                 </div>
               ) : null}
 
-              {reliefQueueQuery.isSuccess && !hasReliefResults ? (
+              {reliefQueueQuery.isSuccess &&
+              reliefSnapshotReady &&
+              !reliefSnapshotBuilding &&
+              !hasReliefResults ? (
                 <p className="rounded-xl border border-outline-variant/50 bg-surface-container-low/90 px-3 py-2.5 text-[11px] leading-relaxed text-on-surface-variant">
                   Lista vazia: entre os equipamentos analisados, todos têm alívio (mesmo condomínio ou vizinho com
                   porta livre) ou nenhum encaixou na amostra.
                 </p>
               ) : null}
 
-              {reliefQueueQuery.isSuccess && hasReliefResults ? (
+              {reliefQueueQuery.isSuccess && reliefSnapshotReady && !reliefSnapshotBuilding && hasReliefResults ? (
                 <div className="min-w-0 space-y-2">
                   <p className="text-[10px] leading-relaxed text-amber-900/80">
                     Exibindo {reliefEntries.length} caso(s) sem alívio em {reliefPages.length} rodada(s), com{' '}
