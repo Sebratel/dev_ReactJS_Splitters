@@ -1,6 +1,7 @@
 FROM node:22-alpine
 
-RUN apk add --no-cache wget
+RUN apk add --no-cache wget tzdata
+ENV TZ=America/Sao_Paulo
 
 WORKDIR /app
 

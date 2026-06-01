@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { openMassivaFromContext } from '@/features/massiva/api/openMassivaFromContext'
+import { massivaTicketsFromOpenSuccess } from '@/features/massiva/lib/massivaTicketsFromOpenSuccess'
+import {
+  appendRecentOpenTicketsToStorage,
+  readRecentOpenTicketsFromStorage,
+} from '@/features/massiva/lib/massivaRecentOpensStorage'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 import type {
@@ -26,9 +31,25 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     MassivaOpenFinalContext
   >({
     mutationFn: (context) => openMassivaFromContext(context),
-    onSuccess: () => {
+    onSuccess: (data, context) => {
       resetDraft()
+      const fresh = massivaTicketsFromOpenSuccess(data, context)
+      if (fresh.length > 0) {
+        appendRecentOpenTicketsToStorage(fresh)
+        queryClient.setQueryData(
+          massivaKeys.recentOpens(),
+          readRecentOpenTicketsFromStorage(),
+        )
+      }
+      void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
       void queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
+      void queryClient.invalidateQueries({ queryKey: massivaKeys.all })
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'massiva' &&
+          query.queryKey[1] === 'history-list',
+      })
       void queryClient.invalidateQueries({ queryKey: splittersKeys.all })
     },
   })

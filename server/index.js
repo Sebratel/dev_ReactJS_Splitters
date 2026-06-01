@@ -9,6 +9,7 @@ import { createMassivaHistoryStore } from './massivaHistoryStore.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
+  evaluateReliefForMapMirror,
   fetchOsrmFootDistanceRowMeters,
   hasIntraCondominiumFreePortSibling,
   isCondominiumSplitterTitle,
@@ -17,6 +18,8 @@ import {
   querySplitterNeighborsWithOrigin,
   splitterIdentifierMatchSql,
   SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+  STREET_RELIEF_MAX_ROUTE_METERS,
+  RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import {
@@ -55,6 +58,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), override: true });
+
+if (!String(process.env.REVERSE_GEOCODE_ENDPOINT ?? '').trim()) {
+  const viteReverse = String(process.env.VITE_REVERSE_GEOCODE_ENDPOINT ?? '').trim();
+  if (viteReverse !== '') {
+    process.env.REVERSE_GEOCODE_ENDPOINT = viteReverse;
+  }
+}
 
 captureConsole();
 
@@ -354,6 +364,7 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
   const reliefAnalysis = await analyzeStreetReliefContext(pool, normalizedCode, {
     straightRadiusMeters: neighborStraightRadiusMeters,
     maxRouteMeters: effectiveMaxRouteMeters,
+    reliefGeocodeNeighborMax: RELIEF_NEIGHBOR_GEOCODE_MAX,
   });
   context.reliefEvaluation = {
     hasReliefWithinRoute: Boolean(
@@ -1539,6 +1550,35 @@ app.post('/api/massiva/history/close', async (req, res) => {
   }
 });
 
+app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.markClosedByProtocols({
+      protocols: req.body?.protocols,
+      closeDescription: String(req.body?.closeDescription ?? '').trim(),
+      closedAt: req.body?.closedAt ?? null,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao sincronizar encerramentos locais de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao sincronizar encerramentos locais de massiva.',
+      error: error.message,
+    });
+  }
+});
+
 /**
  * Total do período sem repetir afetados por splitter (uma soma por massiva distinta).
  */
@@ -1730,6 +1770,80 @@ app.get('/api/massiva/history/open-splitter-codes', async (_req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao consultar códigos de splitters com massiva aberta.',
+      error: error.message,
+    });
+  }
+});
+
+function parseCsvQueryParam(raw) {
+  return String(raw ?? '')
+    .split(/[,;]+/)
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
+function parsePositiveIntCsvQueryParam(raw) {
+  const out = new Set();
+  for (const item of parseCsvQueryParam(raw)) {
+    const n = Number.parseInt(item, 10);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  }
+  return [...out];
+}
+
+async function querySplitterCodesByAccessPointCodes(accessPointCodes) {
+  const normalized = [...new Set(parseCsvQueryParam(accessPointCodes))];
+  if (normalized.length === 0) return [];
+
+  const result = await pool.query(
+    `
+      SELECT DISTINCT TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) AS "splitterCode"
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE COALESCE(
+        NULLIF(TRIM(base."PONTO DE ACESSO CODE"::text), ''),
+        TRIM(base."PONTO DE ACESSO"::text)
+      ) = ANY($1::text[])
+        AND TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) <> ''
+      ORDER BY "splitterCode" ASC
+    `,
+    [normalized],
+  );
+
+  return result.rows
+    .map((row) => String(row.splitterCode ?? '').trim())
+    .filter((code) => code !== '');
+}
+
+/**
+ * Códigos de splitter para o filtro “com massiva aberta” (Elleven + vínculos locais + AP).
+ * Query: protocols=1,2&apCodes=25903&ticketSplitterCodes=SPL-1
+ */
+app.get('/api/massiva/history/open-filter-splitter-codes', async (req, res) => {
+  try {
+    const protocols = parsePositiveIntCsvQueryParam(req.query.protocols);
+    const apCodes = parseCsvQueryParam(req.query.apCodes);
+    const ticketSplitterCodes = parseCsvQueryParam(req.query.ticketSplitterCodes);
+    const codes = new Set(ticketSplitterCodes);
+
+    if (massivaHistoryStore.configured && protocols.length > 0) {
+      const fromHistory = await massivaHistoryStore.getSplitterCodesForProtocols(protocols);
+      for (const code of fromHistory) codes.add(code);
+    }
+
+    if (apCodes.length > 0) {
+      const fromAp = await querySplitterCodesByAccessPointCodes(apCodes);
+      for (const code of fromAp) codes.add(code);
+    }
+
+    res.json({
+      success: true,
+      data: [...codes].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    });
+  } catch (error) {
+    console.error('Erro ao resolver splitters para filtro de massiva aberta:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao resolver splitters para filtro de massiva aberta.',
       error: error.message,
     });
   }
@@ -2352,6 +2466,92 @@ app.get('/api/splitters/neighbors-routed', async (req, res) => {
   }
 });
 
+function parseSnapshotReliefGeocodeMax() {
+  /** Padrão 14 = paridade com `NEIGHBOR_CLIENT_GEOCODE_MAX` no mapa. Use 0 só para debug rápido (não espelha o mapa). */
+  const raw = Number.parseInt(String(process.env.NETWORK_RELIEF_SNAPSHOT_GEOCODE_MAX ?? '14'), 10);
+  const parsed = Number.isFinite(raw) ? raw : RELIEF_NEIGHBOR_GEOCODE_MAX;
+  return Math.min(Math.max(parsed, 0), RELIEF_NEIGHBOR_GEOCODE_MAX);
+}
+
+/** @type {Map<string, Promise<unknown>>} */
+const networkReliefSnapshotCaptureInflight = new Map();
+
+function networkReliefSnapshotParamsKey(straightRadiusMeters, maxRouteMeters) {
+  return `${straightRadiusMeters}:${maxRouteMeters}`;
+}
+
+function isNetworkReliefSnapshotInflight(straightRadiusMeters, maxRouteMeters) {
+  return networkReliefSnapshotCaptureInflight.has(
+    networkReliefSnapshotParamsKey(straightRadiusMeters, maxRouteMeters),
+  );
+}
+
+function scheduleNetworkReliefSnapshotCapture(straightRadiusMeters, maxRouteMeters) {
+  const key = networkReliefSnapshotParamsKey(straightRadiusMeters, maxRouteMeters);
+  if (networkReliefSnapshotCaptureInflight.has(key)) return;
+
+  const promise = captureNetworkReliefSnapshot({ straightRadiusMeters, maxRouteMeters })
+    .then((result) => {
+      logger.info('[network-relief-snapshot] Captura em background concluída.', {
+        entryCount: result.entryCount,
+        scannedCount: result.scannedCount,
+      });
+      return result;
+    })
+    .catch((error) => {
+      logger.error('[network-relief-snapshot] Captura em background falhou.', {
+        error: String(error?.message ?? error),
+      });
+      throw error;
+    })
+    .finally(() => {
+      networkReliefSnapshotCaptureInflight.delete(key);
+    });
+
+  networkReliefSnapshotCaptureInflight.set(key, promise);
+}
+
+function reliefSnapshotUsesMapMirror() {
+  return String(process.env.NETWORK_RELIEF_SNAPSHOT_FAST_CAPTURE ?? '').toLowerCase() !== 'true';
+}
+
+function reliefSnapshotEvalConcurrency() {
+  /** Com Nominatim público, 1 por vez — geocode já passa por fila global, mas OSRM+geo por CTO em paralelo estourava 429. */
+  return reliefSnapshotUsesMapMirror() ? 1 : 6;
+}
+
+async function evaluateReliefSnapshotRow(row, straightRadiusMeters, maxRouteMeters) {
+  const splitterCode = String(row.code ?? '').trim();
+  if (!splitterCode) return null;
+
+  const relief = reliefSnapshotUsesMapMirror()
+    ? await evaluateReliefForMapMirror(pool, splitterCode, {
+        straightRadiusMeters,
+        maxRouteMeters,
+      })
+    : await evaluateReliefForSplitter(pool, splitterCode, {
+        straightRadiusMeters,
+        maxRouteMeters,
+        reliefGeocodeNeighborMax: 0,
+        skipReliefReverseGeocode: true,
+      });
+
+  if (!relief.routingOk || relief.hasReliefWithinRoute) return null;
+
+  return {
+    splitter: {
+      code: splitterCode,
+      title: String(row.title ?? '').trim() || splitterCode,
+      outPorts: Number(row.outPorts ?? 0),
+      busyCount: Number(row.busyCount ?? 0),
+    },
+    neighborStraightRadiusScanned: straightRadiusMeters,
+    maxRouteMeters,
+    straightNeighborsSampled: relief.straightNeighborsCount,
+    ruleType: isCondominiumSplitterTitle(row.title) ? 'CONDOMINIUM' : 'STREET',
+  };
+}
+
 async function computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRouteMeters }) {
   const entries = [];
   let scannedCount = 0;
@@ -2367,39 +2567,29 @@ async function computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRoute
       break;
     }
 
-    for (const row of candidates) {
-      const splitterCode = String(row.code ?? '').trim();
-      if (!splitterCode) continue;
+    const remaining = maxCandidatesToScan - scannedCount;
+    const slice = candidates.slice(0, remaining);
+    scannedCount += slice.length;
 
-      const relief = await evaluateReliefForSplitter(pool, splitterCode, {
-        straightRadiusMeters,
-        maxRouteMeters,
-      });
-      scannedCount += 1;
-
-      if (relief.routingOk && !relief.hasReliefWithinRoute) {
-        entries.push({
-          splitter: {
-            code: splitterCode,
-            title: String(row.title ?? '').trim() || splitterCode,
-            outPorts: Number(row.outPorts ?? 0),
-            busyCount: Number(row.busyCount ?? 0),
-          },
-          neighborStraightRadiusScanned: straightRadiusMeters,
-          maxRouteMeters,
-          straightNeighborsSampled: relief.straightNeighborsCount,
-          ruleType: isCondominiumSplitterTitle(row.title) ? 'CONDOMINIUM' : 'STREET',
-        });
-      }
-
-      if (scannedCount >= maxCandidatesToScan) {
-        break;
+    const evalConcurrency = reliefSnapshotEvalConcurrency();
+    for (let i = 0; i < slice.length; i += evalConcurrency) {
+      const chunk = slice.slice(i, i + evalConcurrency);
+      const chunkEntries = await Promise.all(
+        chunk.map((row) =>
+          evaluateReliefSnapshotRow(row, straightRadiusMeters, maxRouteMeters),
+        ),
+      );
+      for (const entry of chunkEntries) {
+        if (entry) entries.push(entry);
       }
     }
 
     offset += candidates.length;
     if (candidates.length < batchSize) {
       reachedEnd = true;
+      break;
+    }
+    if (scannedCount >= maxCandidatesToScan) {
       break;
     }
   }
@@ -2436,14 +2626,21 @@ async function captureNetworkReliefSnapshot({ straightRadiusMeters, maxRouteMete
  */
 app.get('/api/splitters/network-relief-queue', async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+
     const limitRaw = Number.parseInt(String(req.query.limit ?? '20'), 10);
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 20, 1), 40);
     const cursorRaw = Number.parseInt(String(req.query.cursor ?? '0'), 10);
     const cursor = Math.max(Number.isFinite(cursorRaw) ? cursorRaw : 0, 0);
 
-    const straightPre = Number.parseFloat(String(req.query.straightRadius ?? '500'));
+    const straightPre = Number.parseFloat(
+      String(req.query.straightRadius ?? String(SPLITTER_MAP_STRAIGHT_RADIUS_METERS)),
+    );
     const straightRadius =
-      Number.isFinite(straightPre) && straightPre > 0 ? straightPre : 500;
+      Number.isFinite(straightPre) && straightPre > 0
+        ? straightPre
+        : SPLITTER_MAP_STRAIGHT_RADIUS_METERS;
 
     const maxRouteRaw = Number.parseFloat(String(req.query.maxRouteMeters ?? '200'));
     const maxRouteMeters =
@@ -2474,24 +2671,25 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
       : null;
 
     if (!page) {
-      await captureNetworkReliefSnapshot({
-        straightRadiusMeters: straightRadius,
+      const building = isNetworkReliefSnapshotInflight(straightRadius, maxRouteMeters);
+      return res.json({
+        success: true,
+        snapshotMissing: !building,
+        snapshotBuilding: building,
         maxRouteMeters,
-      });
-      page = await massivaHistoryStore.getLatestNetworkReliefSnapshotPage({
         straightRadiusMeters: straightRadius,
-        maxRouteMeters,
-        limit,
-        cursor,
-        oltSlot,
-        oltPort,
-      });
-    }
-
-    if (!page) {
-      return res.status(503).json({
-        success: false,
-        message: 'Snapshot de planejamento de rede indisponível.',
+        scannedCount: 0,
+        entries: [],
+        hasMore: false,
+        nextCursor: null,
+        totalEntries: 0,
+        generatedAt: null,
+        snapshotRunId: null,
+        cacheHit: true,
+        ponFilterActive: usePonFilter,
+        message: building
+          ? 'Atualizando tabela de planejamento no servidor (regra do mapa, 200 m). Tente de novo em instantes.'
+          : 'Nenhum snapshot pronto na tabela. O cron do servidor grava os casos sem alívio; aguarde ou dispare a captura manual.',
       });
     }
 
@@ -2516,7 +2714,7 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
       totalEntries: page.totalEntries,
       generatedAt: page.generatedAt,
       snapshotRunId: page.snapshotRunId,
-      cacheHit: false,
+      cacheHit: true,
       ponFilterActive: usePonFilter,
     });
   } catch (error) {
@@ -2527,23 +2725,48 @@ app.get('/api/splitters/network-relief-queue', async (req, res) => {
 
 app.post('/api/splitters/network-relief-snapshot/capture', async (req, res) => {
   try {
-    const straightPre = Number.parseFloat(String(req.body?.straightRadius ?? req.query.straightRadius ?? '500'));
+    const straightPre = Number.parseFloat(
+      String(
+        req.body?.straightRadius ??
+          req.query.straightRadius ??
+          String(SPLITTER_MAP_STRAIGHT_RADIUS_METERS),
+      ),
+    );
     const straightRadius =
-      Number.isFinite(straightPre) && straightPre > 0 ? straightPre : 500;
+      Number.isFinite(straightPre) && straightPre > 0
+        ? straightPre
+        : SPLITTER_MAP_STRAIGHT_RADIUS_METERS;
     const maxRouteRaw = Number.parseFloat(String(req.body?.maxRouteMeters ?? req.query.maxRouteMeters ?? '200'));
     const maxRouteMeters =
-      Number.isFinite(maxRouteRaw) && maxRouteRaw > 0 ? maxRouteRaw : 200;
+      Number.isFinite(maxRouteRaw) && maxRouteRaw > 0 ? maxRouteRaw : STREET_RELIEF_MAX_ROUTE_METERS;
 
-    const data = await captureNetworkReliefSnapshot({
-      straightRadiusMeters: straightRadius,
-      maxRouteMeters,
-    });
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        error: 'MySQL de histórico não configurado; snapshot indisponível.',
+      });
+    }
+
+    if (isNetworkReliefSnapshotInflight(straightRadius, maxRouteMeters)) {
+      return res.json({
+        success: true,
+        scheduled: false,
+        snapshotBuilding: true,
+        straightRadiusMeters: straightRadius,
+        maxRouteMeters,
+        message: 'Captura já em andamento no servidor.',
+      });
+    }
+
+    scheduleNetworkReliefSnapshotCapture(straightRadius, maxRouteMeters);
 
     res.json({
       success: true,
-      ...data,
+      scheduled: true,
+      snapshotBuilding: true,
       straightRadiusMeters: straightRadius,
       maxRouteMeters,
+      message: 'Captura agendada em background; a fila passa a ler só da tabela quando terminar.',
     });
   } catch (error) {
     console.error('Erro ao capturar snapshot da fila de alívio de rede:', error);
@@ -3068,6 +3291,26 @@ async function startServer() {
     try {
       await massivaHistoryStore.ensureReady();
       logger.info('Histórico local de massivas (MySQL) pronto.');
+
+      const hasReliefSnapshot = await massivaHistoryStore.hasCompletedNetworkReliefSnapshot(
+        SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+        STREET_RELIEF_MAX_ROUTE_METERS,
+      );
+      if (
+        !hasReliefSnapshot &&
+        !isNetworkReliefSnapshotInflight(
+          SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+          STREET_RELIEF_MAX_ROUTE_METERS,
+        )
+      ) {
+        scheduleNetworkReliefSnapshotCapture(
+          SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+          STREET_RELIEF_MAX_ROUTE_METERS,
+        );
+        logger.info(
+          '[network-relief-snapshot] Snapshot 200 m ausente — captura em background iniciada (leitura da fila usa só a tabela).',
+        );
+      }
     } catch (error) {
       logger.error('Arranque: falha ao preparar MySQL (massiva).', { error });
     }
@@ -3137,8 +3380,8 @@ async function startServer() {
       async () => {
         try {
           const data = await captureNetworkReliefSnapshot({
-            straightRadiusMeters: 500,
-            maxRouteMeters: 200,
+            straightRadiusMeters: SPLITTER_MAP_STRAIGHT_RADIUS_METERS,
+            maxRouteMeters: STREET_RELIEF_MAX_ROUTE_METERS,
           });
           logger.info(
             `[network-relief-snapshot] Snapshot agendado OK (${data.entryCount} casos sem alívio, ${data.scannedCount} avaliados).`,

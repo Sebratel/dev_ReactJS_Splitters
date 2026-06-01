@@ -1,6 +1,8 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { fetchSplittersNetworkReliefQueueFromLocalDb } from '@/features/splitters/api/fetchSplittersNetworkReliefQueueFromLocalDb'
 import { SPLITTERS_LIST_STALE_TIME_MS } from '@/features/splitters/model/constants'
+import { SPLITTER_MAP_NEIGHBOR_RADIUS_METERS } from '@/features/splitters/model/splitterMap'
+import { SPLITTER_ROUTE_RELIEF_MAX_METERS } from '@/features/splitters/lib/splitterStreetRelief'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
 import { useSplittersFiltersStore } from '@/features/splitters/store/useSplittersFiltersStore'
 
@@ -32,8 +34,8 @@ export function useSplittersNetworkReliefQueue(options: { enabled: boolean }) {
       fetchSplittersNetworkReliefQueueFromLocalDb({
         limit: 20,
         cursor: Number(pageParam) || 0,
-        straightRadiusMeters: 500,
-        maxRouteMeters: 200,
+        straightRadiusMeters: SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
+        maxRouteMeters: SPLITTER_ROUTE_RELIEF_MAX_METERS,
         oltSlot,
         oltPort,
       }),
@@ -42,5 +44,10 @@ export function useSplittersNetworkReliefQueue(options: { enabled: boolean }) {
     enabled: options.enabled,
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
     gcTime: 15 * 60_000,
+    refetchInterval: (query) => {
+      const pages = query.state.data?.pages ?? []
+      const last = pages[pages.length - 1]
+      return last?.snapshotBuilding ? 5000 : false
+    },
   })
 }

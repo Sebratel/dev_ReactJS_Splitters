@@ -1,3 +1,5 @@
+import { SPLITTER_MAP_NEIGHBOR_RADIUS_METERS } from '@/features/splitters/model/splitterMap'
+import { SPLITTER_ROUTE_RELIEF_MAX_METERS } from '@/features/splitters/lib/splitterStreetRelief'
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 
@@ -27,6 +29,11 @@ export type NetworkReliefQueueData = {
   generatedAt?: string | null
   /** `true` quando a API aplicou slot/porta PON vindos dos filtros da listagem */
   ponFilterActive?: boolean
+  /** Snapshot global ainda em geração no servidor (não bloqueia o HTTP). */
+  snapshotBuilding?: boolean
+  /** Nenhuma linha na tabela para os parâmetros pedidos (200 m / 200 m). */
+  snapshotMissing?: boolean
+  message?: string | null
 }
 
 export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
@@ -53,7 +60,7 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
     url.searchParams.set('oltPort', String(Math.trunc(options.oltPort)))
   }
 
-  const response = await fetchWithSessionAuth(url)
+  const response = await fetchWithSessionAuth(url, { cache: 'no-store' })
   if (!response.ok) {
     throw new Error(`Erro ao consultar fila de alívio de rede: ${response.status}`)
   }
@@ -74,7 +81,7 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
         busyCount: Number(sp?.busyCount ?? 0),
       },
       neighborStraightRadiusScanned: Number(row.neighborStraightRadiusScanned ?? 0),
-      maxRouteMeters: Number(row.maxRouteMeters ?? 200),
+      maxRouteMeters: Number(row.maxRouteMeters ?? SPLITTER_ROUTE_RELIEF_MAX_METERS),
       straightNeighborsSampled: Number(row.straightNeighborsSampled ?? 0),
       ruleType:
         String(row.ruleType ?? '').trim().toUpperCase() === 'CONDOMINIUM'
@@ -86,8 +93,10 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
   return {
     entries,
     scannedCount: Number(result.scannedCount ?? 0),
-    maxRouteMeters: Number(result.maxRouteMeters ?? 200),
-    straightRadiusMeters: Number(result.straightRadiusMeters ?? 500),
+    maxRouteMeters: Number(result.maxRouteMeters ?? SPLITTER_ROUTE_RELIEF_MAX_METERS),
+    straightRadiusMeters: Number(
+      result.straightRadiusMeters ?? SPLITTER_MAP_NEIGHBOR_RADIUS_METERS,
+    ),
     hasMore: Boolean(result.hasMore),
     nextCursor:
       result.nextCursor === null || result.nextCursor === undefined
@@ -102,5 +111,11 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
         ? null
         : String(result.generatedAt),
     ponFilterActive: Boolean(result.ponFilterActive),
+    snapshotBuilding: Boolean(result.snapshotBuilding),
+    snapshotMissing: Boolean(result.snapshotMissing),
+    message:
+      result.message === null || result.message === undefined
+        ? null
+        : String(result.message),
   }
 }

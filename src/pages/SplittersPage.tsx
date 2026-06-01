@@ -3,15 +3,16 @@ import { useQuery } from '@tanstack/react-query'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
 import { Filter, Network, Search, X } from 'lucide-react'
-import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { useOperationalMassivaTickets } from '@/features/massiva/hooks/useOperationalMassivaTickets'
+import { useOpenMassivaSplitterCodesForFilter } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesForFilter'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
-import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
+import { findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
+import { mergeSplitterMassivaStats } from '@/features/splitters/lib/mergeSplitterMassivaStats'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
 import { useSplittersOperationalPriorityQueue } from '@/features/splitters/hooks/useSplittersOperationalPriorityQueue'
 import { useSplittersNetworkReliefQueue } from '@/features/splitters/hooks/useSplittersNetworkReliefQueue'
 import { useSplittersList } from '@/features/splitters/hooks/useSplittersList'
 import { useAccessPointsForFilters } from '@/features/splitters/hooks/useAccessPointsForFilters'
-import { useOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesFromLocalDb'
 import { useSplitterMassivaStatsFromLocalDb } from '@/features/splitters/hooks/useSplitterMassivaStatsFromLocalDb'
 import { useSplitterTrendsFromLocalDb } from '@/features/splitters/hooks/useSplitterTrendsFromLocalDb'
 import {
@@ -110,8 +111,7 @@ export function SplittersPage() {
   } = useSplittersFiltersStore()
   const { data: accessPoints } = useAccessPointsForFilters()
   const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
-  const { view: massivaView } = useMassivaTickets({ enabled: canViewMassiva })
-  const openMassivaSplitterCodesQuery = useOpenMassivaSplitterCodesFromLocalDb()
+  const operationalMassiva = useOperationalMassivaTickets({ enabled: canViewMassiva })
 
   const oltLabelByCode = useMemo(() => {
     const m = new Map<string, string>()
@@ -121,19 +121,13 @@ export function SplittersPage() {
     return m
   }, [accessPoints])
 
-  const openMassivaSplitterCodes = useMemo(() => {
-    if (Array.isArray(openMassivaSplitterCodesQuery.data)) {
-      return openMassivaSplitterCodesQuery.data
-    }
-    if (massivaView.status !== 'success') return []
-    const codes = new Set<string>()
-    for (const ticket of massivaView.tickets) {
-      if (ticket.status !== 'aberta') continue
-      const code = String(ticket.splitterCode ?? '').trim()
-      if (code !== '') codes.add(code)
-    }
-    return [...codes]
-  }, [massivaView, openMassivaSplitterCodesQuery.data])
+  const openMassivaFilter = useOpenMassivaSplitterCodesForFilter({
+    enabled: canViewMassiva,
+    massivaOpenState: state.massivaOpenState,
+    operationalMassiva,
+  })
+  const openMassivaSplitterCodes = openMassivaFilter.codes
+  const massivaOpenFilterReady = openMassivaFilter.ready
 
   const filterChips = useMemo(() => {
     const chips: { key: string; label: string; onRemove: () => void }[] = []
@@ -358,6 +352,7 @@ export function SplittersPage() {
     openMassivaSplitterCodes,
     maintenanceSplitterCodes:
       state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
+    enabled: massivaOpenFilterReady,
   })
 
   const splittersTotalCount = splittersQuery.data?.totalCount ?? 0
@@ -372,6 +367,7 @@ export function SplittersPage() {
       state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
     maintenanceStatsByCode,
     listReady: splittersListReadyForPriorityFab,
+    massivaFilterReady: massivaOpenFilterReady,
   })
 
   const networkReliefQueueQuery = useSplittersNetworkReliefQueue({
@@ -390,26 +386,16 @@ export function SplittersPage() {
   const localTrendsQuery = useSplitterTrendsFromLocalDb(
     items.map((splitter) => String(splitter.code ?? '')),
   )
-  const massivaStatsByMatcher = useMemo(
-    () =>
-      massivaView.status === 'success'
-        ? buildMassivaStatsBySplitter(massivaView.tickets)
-        : new Map(),
-    [massivaView],
-  )
-
   const entries = useMemo<SplitterListEntry[]>(() => {
     return items.map((splitter) => {
       const code = String(splitter.code ?? '')
       const localMassiva = localMassivaStatsQuery.data?.get(code)
-      const massivaStats =
-        localMassiva && localMassiva.totalTickets > 0
-          ? localMassiva
-          : findMassivaStatsForSplitter(
-              massivaStatsByMatcher,
-              code,
-              String(splitter.title ?? ''),
-            )
+      const fromTickets = findMassivaStatsForSplitter(
+        operationalMassiva.statsByMatcher,
+        code,
+        String(splitter.title ?? ''),
+      )
+      const massivaStats = mergeSplitterMassivaStats(localMassiva, fromTickets)
       const operationalScore = buildSplitterOperationalScore(splitter, massivaStats)
       const trendLabel =
         localTrendsQuery.data?.get(code)?.label ?? 'Estável'
@@ -429,7 +415,7 @@ export function SplittersPage() {
         trendLabel,
       }
     })
-  }, [items, localMassivaStatsQuery.data, localTrendsQuery.data, massivaStatsByMatcher, maintenanceStatsByCode])
+  }, [items, localMassivaStatsQuery.data, localTrendsQuery.data, operationalMassiva.statsByMatcher, maintenanceStatsByCode])
 
   const orderedEntries = useMemo(() => {
     const next = [...entries]

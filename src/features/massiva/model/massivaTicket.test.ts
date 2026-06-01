@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseMassivaTicketFromApi } from '@/features/massiva/model/massivaTicket'
+import {
+  parseMassivaTicketFromApi,
+  resolveMassivaStatusFromIncidentStatusId,
+} from '@/features/massiva/model/massivaTicket'
 
 describe('parseMassivaTicketFromApi (estimateTimeOfRestoration)', () => {
   it('lê ETR de `incident` mesmo com `atendimento` irmão preenchido', () => {
@@ -61,6 +64,30 @@ describe('parseMassivaTicketFromApi (estimateTimeOfRestoration)', () => {
     })
     expect(t.expectedCloseAt?.getHours()).toBe(20)
     expect(t.expectedCloseAt?.getMinutes()).toBe(0)
+  })
+
+  it('usa incidentStatusId do Elleven (1 aberta, 4 encerrada)', () => {
+    expect(resolveMassivaStatusFromIncidentStatusId(1)).toBe('aberta')
+    expect(resolveMassivaStatusFromIncidentStatusId(4)).toBe('encerrada')
+    expect(
+      parseMassivaTicketFromApi({
+        protocol: 20,
+        incidentStatusId: 4,
+        situation: 'Em andamento',
+      }).status,
+    ).toBe('encerrada')
+    expect(
+      parseMassivaTicketFromApi({
+        protocol: 21,
+        incidentStatus: { id: 4, title: 'Aberto' },
+      }).status,
+    ).toBe('encerrada')
+    expect(
+      parseMassivaTicketFromApi({
+        protocol: 21,
+        incidentStatus: { id: 4, title: 'Aberto' },
+      }).ellevenLifecycle,
+    ).toBe('closed')
   })
 
   it('interpreta expectedCloseAt em ISO com Z respeitando UTC', () => {

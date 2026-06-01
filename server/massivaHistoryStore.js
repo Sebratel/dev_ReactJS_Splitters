@@ -65,6 +65,9 @@ export function createMassivaHistoryStore(config) {
       async registerClose() {
         return { configured: false, updated: 0 };
       },
+      async markClosedByProtocols() {
+        return { configured: false, updated: 0 };
+      },
       async getSplitterStats() {
         return new Map();
       },
@@ -80,6 +83,9 @@ export function createMassivaHistoryStore(config) {
         return [];
       },
       async getMassivaRecurrenceByDayShift() {
+        return [];
+      },
+      async getSplitterCodesForProtocols() {
         return [];
       },
       async getOpenSplitterCodes() {
@@ -102,6 +108,9 @@ export function createMassivaHistoryStore(config) {
       },
       async replaceNetworkReliefSnapshot() {
         return { configured: false, snapshotRunId: null, entryCount: 0 };
+      },
+      async hasCompletedNetworkReliefSnapshot() {
+        return false;
       },
       async getLatestNetworkReliefSnapshotPage() {
         return null;
@@ -326,6 +335,40 @@ export function createMassivaHistoryStore(config) {
         WHERE id = ?
       `,
       [closedAt, closeDescription, existingId],
+    );
+
+    return {
+      configured: true,
+      updated: Number(result?.affectedRows ?? 0),
+    };
+  }
+
+  async function markClosedByProtocols(input) {
+    await ensureReady();
+
+    const protocols = (Array.isArray(input?.protocols) ? input.protocols : [])
+      .map((value) => normalizePositiveInt(value))
+      .filter((value) => value !== null);
+    if (protocols.length === 0) {
+      return { configured: true, updated: 0 };
+    }
+
+    const closeDescription = normalizeNullableText(input?.closeDescription);
+    const closedAt = normalizeDate(input?.closedAt) ?? new Date();
+    const placeholders = protocols.map(() => '?').join(', ');
+
+    const [result] = await dataPool.query(
+      `
+        UPDATE massiva_history
+        SET
+          status = 'encerrada',
+          closed_at = COALESCE(closed_at, ?),
+          close_description = COALESCE(?, close_description),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE protocol IN (${placeholders})
+          AND status = 'aberta'
+      `,
+      [closedAt, closeDescription, ...protocols],
     );
 
     return {
@@ -613,6 +656,33 @@ export function createMassivaHistoryStore(config) {
         WHERE h.status = 'aberta'
         ORDER BY hs.splitter_code ASC
       `,
+    );
+
+    return rows
+      .map((row) => String(row.splitterCode ?? '').trim())
+      .filter((code) => code !== '');
+  }
+
+  /** Splitters vinculados no NexaView aos protocolos informados (abertura local). */
+  async function getSplitterCodesForProtocols(protocols) {
+    await ensureReady();
+
+    const normalizedProtocols = (Array.isArray(protocols) ? protocols : [])
+      .map((value) => Number.parseInt(String(value ?? ''), 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (normalizedProtocols.length === 0) return [];
+
+    const placeholders = normalizedProtocols.map(() => '?').join(', ');
+    const [rows] = await dataPool.query(
+      `
+        SELECT DISTINCT hs.splitter_code AS splitterCode
+        FROM massiva_history_splitters hs
+        INNER JOIN massiva_history h
+          ON h.id = hs.massiva_history_id
+        WHERE h.protocol IN (${placeholders})
+        ORDER BY hs.splitter_code ASC
+      `,
+      normalizedProtocols,
     );
 
     return rows
@@ -992,7 +1062,7 @@ export function createMassivaHistoryStore(config) {
   async function replaceNetworkReliefSnapshot(input = {}) {
     await ensureReady();
 
-    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 200);
     const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
     const scannedCount = normalizeNonNegativeInt(input?.scannedCount, 0);
     const cleanEntries = (Array.isArray(input?.entries) ? input.entries : [])
@@ -1133,10 +1203,31 @@ export function createMassivaHistoryStore(config) {
     }
   }
 
+  async function hasCompletedNetworkReliefSnapshot(straightRadiusMeters, maxRouteMeters) {
+    await ensureReady();
+
+    const straight = normalizeNonNegativeInt(straightRadiusMeters, 200);
+    const maxRoute = normalizeNonNegativeInt(maxRouteMeters, 200);
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT 1 AS ok
+        FROM splitter_network_relief_snapshot_runs
+        WHERE status = 'completed'
+          AND straight_radius_meters = ?
+          AND max_route_meters = ?
+        LIMIT 1
+      `,
+      [straight, maxRoute],
+    );
+
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
   async function getLatestNetworkReliefSnapshotPage(input = {}) {
     await ensureReady();
 
-    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 500);
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 200);
     const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
     const limit = Math.min(200, Math.max(1, normalizeNonNegativeInt(input?.limit, 20)));
     const cursor = Math.max(0, normalizeNonNegativeInt(input?.cursor, 0));
@@ -1421,17 +1512,20 @@ export function createMassivaHistoryStore(config) {
     ensureReady,
     registerOpenBatch,
     registerClose,
+    markClosedByProtocols,
     getSplitterStats,
     getMassivaPeriodRollup,
     getMassivaSplitterLinksInPeriod,
     getMassivaRecurrenceByDayShift,
     getOpenSplitterCodes,
+    getSplitterCodesForProtocols,
     upsertSplitterSnapshots,
     getSplitterTrends,
     getRecentSplitterSnapshots,
     getRecentHistoryBySplitter,
     getOpenMassivaDashboardKpis,
     replaceNetworkReliefSnapshot,
+    hasCompletedNetworkReliefSnapshot,
     getLatestNetworkReliefSnapshotPage,
     getHistoryList,
     end,

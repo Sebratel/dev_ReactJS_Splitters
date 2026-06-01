@@ -14,6 +14,8 @@ function t(protocol: number, affected: number): MassivaTicket {
     createdBy: '',
     responsible: '',
     status: 'aberta',
+    ellevenLifecycle: 'open',
+    ellevenIncidentStatusId: null,
     openedAt: null,
     previsaoEncerramentoAtualizadaPor: '',
     expectedCloseAt: null,

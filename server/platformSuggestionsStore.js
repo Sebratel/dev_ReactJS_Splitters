@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { mysqlNaiveDateTimeToIso } from './mysqlBrazilDateTime.js';
 
 const SUGGESTIONS_TABLE = 'platform_suggestions';
 const VOTES_TABLE = 'platform_suggestion_votes';
@@ -208,8 +209,8 @@ function mapCommentRow(row) {
     suggestionId: Number(row.suggestion_id),
     author: mapPersonSummary(row, 'author'),
     message: toCleanString(row.message),
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: mysqlNaiveDateTimeToIso(row.created_at),
+    updatedAt: mysqlNaiveDateTimeToIso(row.updated_at),
   };
 }
 
@@ -235,8 +236,8 @@ function mapSuggestionRow(row, extras = {}) {
     viewerVote: toCleanString(row.viewer_vote) || null,
     supporters,
     comments,
-    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    createdAt: mysqlNaiveDateTimeToIso(row.created_at),
+    updatedAt: mysqlNaiveDateTimeToIso(row.updated_at),
   };
 }
 

@@ -1,3 +1,9 @@
+import {
+  isMassivaClosedForCounts,
+  isMassivaEligibleForDashboardCounts,
+  isMassivaOpenForGlobalDashboard,
+} from '@/features/massiva/lib/massivaDashboardEligibility'
+import { ticketOpenedInRange } from '@/features/massiva/lib/rollupMassivaPeriodFromTickets'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 import type { SplitterMassivaStats } from '@/features/splitters/model/splitterOperationalInsights'
 
@@ -46,10 +52,12 @@ function latestDate(a: Date | null, b: Date | null): Date | null {
 
 export function buildMassivaStatsBySplitter(
   tickets: readonly MassivaTicket[],
+  recentProtocols?: ReadonlySet<number>,
 ): Map<string, SplitterMassivaStats> {
   const byMatcher = new Map<string, SplitterMassivaStats>()
 
   for (const ticket of tickets) {
+    if (!isMassivaEligibleForDashboardCounts(ticket, recentProtocols)) continue
     const rawSplitter = ticket.splitterCode.trim()
     if (rawSplitter === '') continue
 
@@ -57,8 +65,8 @@ export function buildMassivaStatsBySplitter(
     for (const key of keys) {
       const current = byMatcher.get(key) ?? createEmptyStats()
       current.totalTickets += 1
-      if (ticket.status === 'aberta') current.openTickets += 1
-      if (ticket.status === 'encerrada') current.closedTickets += 1
+      if (isMassivaOpenForGlobalDashboard(ticket, recentProtocols)) current.openTickets += 1
+      if (isMassivaClosedForCounts(ticket, recentProtocols)) current.closedTickets += 1
       current.affectedClientsTotal += Math.max(0, ticket.affectedClients)
       current.latestOpenedAt = latestDate(current.latestOpenedAt, ticket.openedAt)
       byMatcher.set(key, current)
@@ -66,6 +74,15 @@ export function buildMassivaStatsBySplitter(
   }
 
   return byMatcher
+}
+
+export function buildMassivaStatsBySplitterInPeriod(
+  tickets: readonly MassivaTicket[],
+  range: { start: Date; end: Date },
+  recentProtocols?: ReadonlySet<number>,
+): Map<string, SplitterMassivaStats> {
+  const inPeriod = tickets.filter((ticket) => ticketOpenedInRange(ticket, range))
+  return buildMassivaStatsBySplitter(inPeriod, recentProtocols)
 }
 
 export function findMassivaStatsForSplitter(

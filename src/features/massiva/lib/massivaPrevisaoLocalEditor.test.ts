@@ -17,6 +17,8 @@ const base: MassivaTicket = {
   createdBy: '',
   responsible: '',
   status: 'aberta',
+  ellevenLifecycle: 'open',
+  ellevenIncidentStatusId: null,
   openedAt: new Date(2026, 3, 23, 10, 0, 0),
   expectedCloseAt: new Date(2026, 3, 25, 3, 5, 0),
   previsaoEncerramentoAtualizadaPor: '',

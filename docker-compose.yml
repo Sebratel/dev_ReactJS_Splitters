@@ -12,6 +12,7 @@ services:
       dockerfile: Dockerfile
     container_name: nexaview-backend
     environment:
+      TZ: America/Sao_Paulo
       PORT: "3001"
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}

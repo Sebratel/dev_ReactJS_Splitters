@@ -32,6 +32,16 @@ export const splittersKeys = {
   /** Códigos de splitters que possuem massiva aberta no histórico local. */
   openMassivaSplitterCodes: () => [...splittersKeys.all, 'open-massiva-splitter-codes'] as const,
 
+  /** Splitters com massiva aberta (Elleven + histórico + AP) para filtro da listagem. */
+  openFilterSplitterCodes: (protocols: string, apCodes: string, ticketCodes: string) =>
+    [
+      ...splittersKeys.all,
+      'open-filter-splitter-codes',
+      protocols,
+      apCodes,
+      ticketCodes,
+    ] as const,
+
   /** Tendências agregadas por splitter a partir dos snapshots diários. */
   trendsBySplitters: (codes: readonly string[]) =>
     [...splittersKeys.all, 'trends-by-splitters', ...codes] as const,
