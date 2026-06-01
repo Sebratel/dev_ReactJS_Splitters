@@ -7,6 +7,8 @@ import { useSplittersFiltersStore } from '@/features/splitters/store/useSplitter
 type UseSplittersListMassivaOptions = {
   openMassivaSplitterCodes?: string[]
   maintenanceSplitterCodes?: string[]
+  /** Evita `WHERE 1=0` enquanto os códigos de massiva aberta ainda estão sendo resolvidos. */
+  enabled?: boolean
 }
 
 /**
@@ -20,11 +22,12 @@ export function useSplittersList(
   const { state } = useSplittersFiltersStore()
   const openMassivaSplitterCodes = options?.openMassivaSplitterCodes ?? []
   const maintenanceSplitterCodes = options?.maintenanceSplitterCodes ?? []
+  const userEnabled = options?.enabled !== false
   const withOpenMassiva =
     state.massivaOpenState === 'all'
       ? undefined
       : state.massivaOpenState === 'with-open'
-  
+
   return useQuery({
     queryKey: [
       ...splittersKeys.list(),
@@ -67,5 +70,6 @@ export function useSplittersList(
     }),
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
     placeholderData: keepPreviousData,
+    enabled: userEnabled,
   })
 }

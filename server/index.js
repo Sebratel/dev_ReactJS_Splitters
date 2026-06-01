@@ -1550,6 +1550,35 @@ app.post('/api/massiva/history/close', async (req, res) => {
   }
 });
 
+app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.markClosedByProtocols({
+      protocols: req.body?.protocols,
+      closeDescription: String(req.body?.closeDescription ?? '').trim(),
+      closedAt: req.body?.closedAt ?? null,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao sincronizar encerramentos locais de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao sincronizar encerramentos locais de massiva.',
+      error: error.message,
+    });
+  }
+});
+
 /**
  * Total do período sem repetir afetados por splitter (uma soma por massiva distinta).
  */
@@ -1741,6 +1770,80 @@ app.get('/api/massiva/history/open-splitter-codes', async (_req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao consultar códigos de splitters com massiva aberta.',
+      error: error.message,
+    });
+  }
+});
+
+function parseCsvQueryParam(raw) {
+  return String(raw ?? '')
+    .split(/[,;]+/)
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
+function parsePositiveIntCsvQueryParam(raw) {
+  const out = new Set();
+  for (const item of parseCsvQueryParam(raw)) {
+    const n = Number.parseInt(item, 10);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  }
+  return [...out];
+}
+
+async function querySplitterCodesByAccessPointCodes(accessPointCodes) {
+  const normalized = [...new Set(parseCsvQueryParam(accessPointCodes))];
+  if (normalized.length === 0) return [];
+
+  const result = await pool.query(
+    `
+      SELECT DISTINCT TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) AS "splitterCode"
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE COALESCE(
+        NULLIF(TRIM(base."PONTO DE ACESSO CODE"::text), ''),
+        TRIM(base."PONTO DE ACESSO"::text)
+      ) = ANY($1::text[])
+        AND TRIM(base."CÓDIGO[SPLT.SECUNDARIO]"::text) <> ''
+      ORDER BY "splitterCode" ASC
+    `,
+    [normalized],
+  );
+
+  return result.rows
+    .map((row) => String(row.splitterCode ?? '').trim())
+    .filter((code) => code !== '');
+}
+
+/**
+ * Códigos de splitter para o filtro “com massiva aberta” (Elleven + vínculos locais + AP).
+ * Query: protocols=1,2&apCodes=25903&ticketSplitterCodes=SPL-1
+ */
+app.get('/api/massiva/history/open-filter-splitter-codes', async (req, res) => {
+  try {
+    const protocols = parsePositiveIntCsvQueryParam(req.query.protocols);
+    const apCodes = parseCsvQueryParam(req.query.apCodes);
+    const ticketSplitterCodes = parseCsvQueryParam(req.query.ticketSplitterCodes);
+    const codes = new Set(ticketSplitterCodes);
+
+    if (massivaHistoryStore.configured && protocols.length > 0) {
+      const fromHistory = await massivaHistoryStore.getSplitterCodesForProtocols(protocols);
+      for (const code of fromHistory) codes.add(code);
+    }
+
+    if (apCodes.length > 0) {
+      const fromAp = await querySplitterCodesByAccessPointCodes(apCodes);
+      for (const code of fromAp) codes.add(code);
+    }
+
+    res.json({
+      success: true,
+      data: [...codes].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    });
+  } catch (error) {
+    console.error('Erro ao resolver splitters para filtro de massiva aberta:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao resolver splitters para filtro de massiva aberta.',
       error: error.message,
     });
   }

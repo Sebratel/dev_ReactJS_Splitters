@@ -81,6 +81,7 @@ export function useSplittersOperationalPriorityQueue(options: {
   maintenanceSplitterCodes: string[]
   maintenanceStatsByCode: Map<string, SplitterMaintenanceStats>
   listReady: boolean
+  massivaFilterReady?: boolean
 }) {
   const {
     totalCount,
@@ -88,6 +89,7 @@ export function useSplittersOperationalPriorityQueue(options: {
     maintenanceSplitterCodes,
     maintenanceStatsByCode,
     listReady,
+    massivaFilterReady = true,
   } = options
 
   const { state } = useSplittersFiltersStore()
@@ -171,7 +173,7 @@ export function useSplittersOperationalPriorityQueue(options: {
         massivaSource: api.massivaSource,
       }
     },
-    enabled: listReady && Number(totalCount) > 0,
+    enabled: listReady && massivaFilterReady && Number(totalCount) > 0,
     staleTime: SPLITTERS_LIST_STALE_TIME_MS,
   })
 }

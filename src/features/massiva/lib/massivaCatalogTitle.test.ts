@@ -1,6 +1,8 @@
 import {
   isExpectedMassivaCatalogTitle,
   isMassivaCatalogOutOfBand,
+  isMassivaMonitoringOutOfCatalogTitle,
+  isMassivaStandardFlowCatalogTitle,
   normalizeMassivaCatalogTitle,
 } from '@/features/massiva/lib/massivaCatalogTitle'
 
@@ -20,6 +22,9 @@ describe('massivaCatalogTitle', () => {
   it('rejects other titles', () => {
     expect(isExpectedMassivaCatalogTitle('Registro Incidente Massivo')).toBe(false)
     expect(isMassivaCatalogOutOfBand('Outro tipo')).toBe(true)
-    expect(isMassivaCatalogOutOfBand('')).toBe(true)
+    expect(isMassivaCatalogOutOfBand('')).toBe(false)
+    expect(isMassivaMonitoringOutOfCatalogTitle('')).toBe(false)
+    expect(isMassivaStandardFlowCatalogTitle('')).toBe(true)
+    expect(isMassivaStandardFlowCatalogTitle('OLT 04')).toBe(false)
   })
 })

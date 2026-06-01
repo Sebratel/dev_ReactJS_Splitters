@@ -151,6 +151,11 @@ export const env = {
     import.meta.env.VITE_MASSIVA_CLOSE_INCIDENT_STATUS_ID,
     '4',
   ),
+  /** IDs adicionais de `incidentStatusId` tratados como encerrado/cancelado (ex.: `3,5`). */
+  massivaClosedIncidentStatusIds: str(
+    import.meta.env.VITE_MASSIVA_CLOSED_INCIDENT_STATUS_IDS,
+    '',
+  ),
   massivaCloseProgress: str(import.meta.env.VITE_MASSIVA_CLOSE_PROGRESS, '0'),
   massivaClosePriority: str(import.meta.env.VITE_MASSIVA_CLOSE_PRIORITY, '35'),
   massivaCloseNotificationTarget: str(

@@ -7,6 +7,9 @@ export const massivaKeys = {
   /** GET listagem no BFF (`fetchMassivasListCore`). */
   list: () => [...massivaKeys.all, 'list'] as const,
 
+  /** Protocolos recém-abertos (cache TanStack) até aparecerem no BFF. */
+  recentOpens: () => [...massivaKeys.all, 'recent-opens'] as const,
+
   /** Enriquecimento `afetados/protocol/{id}` após a listagem (fingerprint = protocolos ordenados). */
   listAfetados: (protocolsFingerprint: string) =>
     [...massivaKeys.all, 'list-afetados', protocolsFingerprint] as const,

@@ -11,6 +11,8 @@ import {
 } from 'recharts'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
+import { reconcileMassivaLocalClosedProtocols } from '@/features/massiva/api/reconcileMassivaLocalClosedProtocols'
+import { collectOutOfCatalogProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import {
   formatMassivaListDateDisplay,
@@ -18,8 +20,25 @@ import {
 } from '@/features/massiva/lib/formatMassivaListDate'
 import {
   isExpectedMassivaCatalogTitle,
-  isMassivaCatalogOutOfBand,
+  isMassivaMonitoringOutOfCatalogTitle,
+  isMassivaStandardFlowCatalogTitle,
 } from '@/features/massiva/lib/massivaCatalogTitle'
+import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
+import {
+  isMassivaClosedForCounts,
+  isMassivaClosedForPanelList,
+  isMassivaEligibleForDashboardCounts,
+  isMassivaOpenForCounts,
+  isMassivaOpenForGlobalDashboard,
+  isMassivaOpenForPanelList,
+  summarizeMassivaPeriodCounts,
+  ticketOpenedInDashboardPeriod,
+} from '@/features/massiva/lib/massivaDashboardEligibility'
+import { pruneRecentOpensClosedByBff } from '@/features/massiva/lib/pruneRecentOpensAgainstBff'
+import {
+  readRecentOpenTicketsFromStorage,
+  removeRecentOpenTicketFromStorage,
+} from '@/features/massiva/lib/massivaRecentOpensStorage'
 import {
   formatMassivaStatusLabel,
   type MassivaTicket,
@@ -46,6 +65,9 @@ function ticketKey(t: MassivaTicket, index: number): string {
 type ImpactRange = 'all' | 'none' | 'low' | 'medium' | 'high'
 type MassivaListScope = 'abertas' | 'encerradas' | 'todas'
 type PeriodPreset = '7d' | '30d' | '90d'
+
+/** Histórico local sempre busca no mínimo 90d para o merge não mudar entre 7d/30d/90d. */
+const MASSIVA_HISTORY_LIST_LOOKBACK_DAYS = 90
 type MassivaRecordTypeFilter = 'all' | 'incidente' | 'evento'
 type MassivaCatalogFilter = 'all' | 'catalogo_esperado' | 'fora_catalogo'
 const MASSIVA_PAGE_SIZE = 30
@@ -94,9 +116,13 @@ function matchesMassivaCatalogFilter(
   ticket: MassivaTicket,
   catalogFilter: MassivaCatalogFilter,
 ): boolean {
-  if (catalogFilter === 'all') return true
-  if (catalogFilter === 'catalogo_esperado') return isExpectedMassivaCatalogTitle(ticket.title)
-  return isMassivaCatalogOutOfBand(ticket.title)
+  if (catalogFilter === 'fora_catalogo') {
+    return isMassivaMonitoringOutOfCatalogTitle(ticket.title)
+  }
+  if (catalogFilter === 'catalogo_esperado') {
+    return isExpectedMassivaCatalogTitle(ticket.title)
+  }
+  return isMassivaStandardFlowCatalogTitle(ticket.title)
 }
 
 function escapeCsvCell(value: string): string {
@@ -214,8 +240,6 @@ export function MassivaTicketsSection({
   layout = 'default',
 }: MassivaTicketsSectionProps) {
   const embedded = layout === 'embedded'
-  const { view, refetch, isRefreshing } = useMassivaTickets()
-  const queryClient = useQueryClient()
   const [uiState, setUiState] = useState(() => readMassivaTicketsUiState(layout))
   const {
     query,
@@ -226,6 +250,10 @@ export function MassivaTicketsSection({
     catalogFilter,
     visibleCount,
   } = uiState
+  const { view, refetch: refetchBffList, isRefreshing } = useMassivaTickets({
+    refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : undefined,
+  })
+  const queryClient = useQueryClient()
   const didRestoreVisibleCountRef = useRef(false)
   const [csvCopied, setCsvCopied] = useState(false)
   const [closingProtocol, setClosingProtocol] = useState<number | null>(null)
@@ -241,18 +269,18 @@ export function MassivaTicketsSection({
 
   const closeMutation = useMutation({
     mutationFn: closeMassivaTicket,
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       setClosingProtocol(null)
       setCloseDescription('')
+      if (variables.protocol > 0) {
+        removeRecentOpenTicketFromStorage(variables.protocol)
+        void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
+      }
       await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
+      await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
       await queryClient.invalidateQueries({ queryKey: splittersKeys.all })
     },
   })
-
-  const tickets = useMemo<MassivaTicket[]>(
-    () => (view.status === 'success' ? view.tickets : []),
-    [view],
-  )
 
   const periodStart = useMemo(() => {
     const now = new Date()
@@ -260,13 +288,141 @@ export function MassivaTicketsSection({
     return startOfDay(new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000))
   }, [periodPreset])
 
+  const historyListStart = useMemo(() => {
+    const now = new Date()
+    const presetDays = periodPreset === '7d' ? 7 : periodPreset === '30d' ? 30 : 90
+    const lookbackDays = Math.max(presetDays, MASSIVA_HISTORY_LIST_LOOKBACK_DAYS)
+    return startOfDay(new Date(now.getTime() - (lookbackDays - 1) * 24 * 60 * 60 * 1000))
+  }, [periodPreset])
+
+  const historyQuery = useQuery({
+    queryKey: massivaKeys.historyList(
+      'all',
+      historyListStart.toISOString(),
+      'merge',
+      4000,
+    ),
+    queryFn: () =>
+      fetchMassivaHistoryListFromLocalDb({
+        status: null,
+        startDate: historyListStart,
+        limit: 4000,
+      }),
+    staleTime: 60_000,
+    refetchOnMount: 'always',
+  })
+
+  const { data: recentOpenTickets = [] } = useQuery({
+    queryKey: massivaKeys.recentOpens(),
+    queryFn: () => readRecentOpenTicketsFromStorage(),
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+
+  const tickets = useMemo<MassivaTicket[]>(() => {
+    const fromBff = view.status === 'success' ? view.tickets : []
+    return buildDashboardMassivaTickets({
+      bffTickets: fromBff,
+      localRows: historyQuery.data ?? [],
+      recentOpenTickets,
+      periodStart,
+    })
+  }, [view, historyQuery.data, recentOpenTickets, periodStart])
+
+  const recentProtocolSet = useMemo(() => {
+    const set = new Set<number>()
+    for (const ticket of recentOpenTickets) {
+      if (ticket.protocol > 0) set.add(ticket.protocol)
+    }
+    return set
+  }, [recentOpenTickets])
+
+  const reconcileClosedRef = useRef<string>('')
+
+  useEffect(() => {
+    if (view.status !== 'success') return
+    const fromBff = view.tickets
+    if (fromBff.length > 0) {
+      pruneRecentOpensClosedByBff(fromBff)
+      void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
+    }
+  }, [view.status, view.status === 'success' ? view.tickets : null, queryClient])
+
+  useEffect(() => {
+    if (view.status !== 'success') return
+
+    const protocols = collectOutOfCatalogProtocolsForLocalCloseSync(
+      view.tickets,
+      historyQuery.data ?? [],
+    )
+
+    const key = protocols.slice().sort((a, b) => a - b).join(',')
+    if (key === '' || reconcileClosedRef.current === key) return
+
+    reconcileClosedRef.current = key
+    void reconcileMassivaLocalClosedProtocols(protocols, {
+      closeDescription:
+        'Sincronizado com encerramento no Elleven (massiva fora do catálogo, monitoração).',
+    })
+      .then(() => historyQuery.refetch())
+      .catch(() => {
+        reconcileClosedRef.current = ''
+      })
+  }, [historyQuery.data, view.status, view.status === 'success' ? view.tickets : null, historyQuery.refetch])
+
+  const refreshDashboard = () => {
+    refetchBffList()
+    void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
+    void historyQuery.refetch()
+  }
+
   const scopedTickets = useMemo(() => {
+    const monitorOutOfCatalog = catalogFilter === 'fora_catalogo'
     return tickets.filter((ticket) => {
-      if (scope === 'abertas') return ticket.status === 'aberta'
-      if (scope === 'encerradas') return ticket.status === 'encerrada'
+      if (scope === 'abertas') {
+        return monitorOutOfCatalog
+          ? isMassivaOpenForPanelList(ticket, recentProtocolSet)
+          : isMassivaOpenForGlobalDashboard(ticket, recentProtocolSet)
+      }
+      if (scope === 'encerradas') {
+        return monitorOutOfCatalog
+          ? isMassivaClosedForPanelList(ticket, recentProtocolSet)
+          : isMassivaClosedForCounts(ticket, recentProtocolSet)
+      }
       return true
     })
-  }, [tickets, scope])
+  }, [tickets, scope, catalogFilter, recentProtocolSet])
+
+  const ticketsInPeriod = useMemo(() => {
+    return tickets.filter((ticket) => ticketOpenedInDashboardPeriod(ticket, periodStart))
+  }, [tickets, periodStart])
+
+  const metricsTicketsInPeriod = useMemo(() => {
+    return ticketsInPeriod
+      .filter((ticket) => matchesRecordType(ticket, recordTypeFilter))
+      .filter((ticket) => matchesMassivaCatalogFilter(ticket, catalogFilter))
+  }, [ticketsInPeriod, recordTypeFilter, catalogFilter])
+
+  const kpiTicketsInPeriod = useMemo(() => {
+    return metricsTicketsInPeriod.filter((ticket) =>
+      isMassivaEligibleForDashboardCounts(ticket, recentProtocolSet),
+    )
+  }, [metricsTicketsInPeriod, recentProtocolSet])
+
+  /** KPIs e médias seguem a aba Abertas / Encerradas / Todas (antes era sempre o período inteiro). */
+  const kpiTicketsForScope = useMemo(() => {
+    return kpiTicketsInPeriod.filter((ticket) => {
+      if (scope === 'abertas') {
+        return catalogFilter === 'fora_catalogo'
+          ? isMassivaOpenForPanelList(ticket, recentProtocolSet)
+          : isMassivaOpenForGlobalDashboard(ticket, recentProtocolSet)
+      }
+      if (scope === 'encerradas') {
+        return isMassivaClosedForCounts(ticket, recentProtocolSet)
+      }
+      return true
+    })
+  }, [kpiTicketsInPeriod, scope, catalogFilter, recentProtocolSet])
 
   const scopedTicketsInWindow = useMemo(() => {
     return scopedTickets.filter((ticket) => {
@@ -274,25 +430,6 @@ export function MassivaTicketsSection({
       return ticket.openedAt >= periodStart
     })
   }, [scopedTickets, periodStart])
-
-  const historyStatus =
-    scope === 'abertas' ? 'aberta' : scope === 'encerradas' ? 'encerrada' : null
-  const historyQuery = useQuery({
-    queryKey: massivaKeys.historyList(
-      historyStatus ?? 'all',
-      periodStart.toISOString(),
-      'open-ended',
-      4000,
-    ),
-    queryFn: () =>
-      fetchMassivaHistoryListFromLocalDb({
-        status: historyStatus,
-        startDate: periodStart,
-        limit: 4000,
-      }),
-    staleTime: 60_000,
-    refetchOnMount: false,
-  })
 
   const historyAffectedByProtocol = useMemo(() => {
     const map = new Map<number, number>()
@@ -381,13 +518,15 @@ export function MassivaTicketsSection({
       if (recordType === 'incidente') current.affectedIncident += affected
       else if (recordType === 'evento') current.affectedEvent += affected
       else current.affectedOther += affected
-      if (ticket.status === 'aberta') current.affectedOpen += affected
-      if (ticket.status === 'encerrada') current.affectedClosed += affected
+      if (isMassivaOpenForCounts(ticket, recentProtocolSet)) {
+        current.affectedOpen += affected
+      }
+      if (isMassivaClosedForCounts(ticket)) current.affectedClosed += affected
       byDay.set(key, current)
     }
 
     return [...byDay.values()].sort((a, b) => a.at.getTime() - b.at.getTime())
-  }, [catalogScopedTicketsInWindow])
+  }, [catalogScopedTicketsInWindow, recentProtocolSet])
 
   const chartTotalAffected = useMemo(
     () => chartSeries.reduce((sum, day) => sum + day.affectedTotal, 0),
@@ -398,13 +537,18 @@ export function MassivaTicketsSection({
     [chartSeries],
   )
   const periodKpis = useMemo(() => {
-    const openNow = catalogScopedTicketsInWindow.filter((t) => t.status === 'aberta').length
-    const closedNow = catalogScopedTicketsInWindow.filter((t) => t.status === 'encerrada').length
-    const totalProtocols = catalogScopedTicketsInWindow.length
+    const periodCounts = summarizeMassivaPeriodCounts(kpiTicketsForScope, {
+      recentProtocols: recentProtocolSet,
+    })
+    const openNow = periodCounts.openCount
+    const closedNow = periodCounts.closedCount
+    const totalProtocols = periodCounts.totalProtocols
+    const affectedInPeriod = kpiTicketsForScope.reduce(
+      (sum, ticket) => sum + Math.max(0, ticket.affectedClients),
+      0,
+    )
     const affectedAvg =
-      totalProtocols > 0
-        ? chartTotalAffected / totalProtocols
-        : 0
+      totalProtocols > 0 ? affectedInPeriod / totalProtocols : 0
     const topDay = chartSeries.reduce<{ label: string; value: number } | null>(
       (max, day) => {
         if (!max || day.affectedTotal > max.value) {
@@ -414,8 +558,8 @@ export function MassivaTicketsSection({
       },
       null,
     )
-    const closedWithCycle = catalogScopedTicketsInWindow.filter(
-      (t) => t.status === 'encerrada' && t.openedAt && t.closedAt,
+    const closedWithCycle = kpiTicketsForScope.filter(
+      (t) => isMassivaClosedForCounts(t) && t.openedAt && t.closedAt,
     )
     const avgClosureHours =
       closedWithCycle.length > 0
@@ -432,7 +576,7 @@ export function MassivaTicketsSection({
       topDay,
       avgClosureHours,
     }
-  }, [catalogScopedTicketsInWindow, chartTotalAffected, chartSeries])
+  }, [kpiTicketsForScope, chartSeries, recentProtocolSet])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -491,18 +635,23 @@ export function MassivaTicketsSection({
         <ErrorState
           title="Não foi possível carregar as massivas"
           message={formatQueryError(view.error)}
-          onRetry={() => refetch()}
+          onRetry={() => refreshDashboard()}
         />
       </div>
     )
   }
 
-  if (view.status === 'empty') {
+  if (
+    view.status === 'success' &&
+    tickets.length === 0 &&
+    !historyQuery.isPending &&
+    !historyQuery.isFetching
+  ) {
     return (
       <div className={embedded ? 'p-4' : ''}>
         <EmptyState
           title="Nenhuma massiva"
-          description="A listagem está vazia no momento."
+          description="Não há protocolos no período com os filtros atuais. Tente a aba Todas, amplie o período (90d) ou clique em Atualizar."
         />
       </div>
     )
@@ -614,7 +763,7 @@ export function MassivaTicketsSection({
               }))}
             className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : ''}`}
           >
-            <option value="all">Catálogo: todos</option>
+            <option value="all">Catálogo: fluxo padrão</option>
             <option value="catalogo_esperado">Catálogo: só esperados</option>
             <option value="fora_catalogo">Catálogo: fora do padrão (monitorar)</option>
           </select>
@@ -622,7 +771,7 @@ export function MassivaTicketsSection({
         <div className={`flex flex-wrap items-center gap-2 ${embedded ? 'mt-2' : 'mt-3'}`}>
           <button
             type="button"
-            onClick={() => refetch()}
+            onClick={() => refreshDashboard()}
             className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/25"
           >
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
@@ -637,7 +786,10 @@ export function MassivaTicketsSection({
             CSV
           </button>
           <span className="text-[11px] text-neutral-500">
-            {filteredTickets.length}/{catalogScopedTicketsInWindow.length} no período
+            {filteredTickets.length}/{kpiTicketsForScope.length} no período
+            {scope === 'todas' && metricsTicketsInPeriod.length > kpiTicketsInPeriod.length
+              ? ` (${metricsTicketsInPeriod.length} com filtros de tipo/catálogo)`
+              : ''}
           </span>
           {historyQuery.isFetching ? (
             <span className="text-[11px] text-neutral-500">sincronizando histórico…</span>
@@ -648,25 +800,37 @@ export function MassivaTicketsSection({
             </span>
           ) : null}
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <div
+          className={`mt-3 grid gap-2 sm:grid-cols-2 ${scope === 'todas' ? 'xl:grid-cols-5' : 'xl:grid-cols-3'}`}
+        >
           <div className="rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Protocolos no período</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+              {scope === 'abertas'
+                ? 'Protocolos abertos no período'
+                : scope === 'encerradas'
+                  ? 'Protocolos encerrados no período'
+                  : 'Protocolos no período'}
+            </p>
             <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900">
               {periodKpis.totalProtocols.toLocaleString('pt-BR')}
             </p>
           </div>
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800/90">Abertas no período</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-amber-900">
-              {periodKpis.openNow.toLocaleString('pt-BR')}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Encerradas no período</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">
-              {periodKpis.closedNow.toLocaleString('pt-BR')}
-            </p>
-          </div>
+          {scope === 'todas' ? (
+            <>
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800/90">Abertas no período</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-amber-900">
+                  {periodKpis.openNow.toLocaleString('pt-BR')}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Encerradas no período</p>
+                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">
+                  {periodKpis.closedNow.toLocaleString('pt-BR')}
+                </p>
+              </div>
+            </>
+          ) : null}
           <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Média afetados/protocolo</p>
             <p className="mt-1 text-xl font-bold tabular-nums text-rose-800">

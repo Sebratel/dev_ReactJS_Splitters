@@ -25,6 +25,14 @@ import {
   fetchMassivaPeriodRollupFromLocalDb,
   type IntelligenceMassivaPeriodRollup,
 } from '@/features/splitters/api/fetchMassivaPeriodRollupFromLocalDb'
+import { useOperationalMassivaTickets } from '@/features/massiva/hooks/useOperationalMassivaTickets'
+import { mergeIntelligenceMassivaPeriodRollup } from '@/features/massiva/lib/mergeIntelligenceMassivaPeriodRollup'
+import { rollupMassivaPeriodFromTickets } from '@/features/massiva/lib/rollupMassivaPeriodFromTickets'
+import {
+  buildMassivaStatsBySplitterInPeriod,
+  findMassivaStatsForSplitter,
+} from '@/features/splitters/lib/buildMassivaStatsBySplitter'
+import { mergeSplitterMassivaStats } from '@/features/splitters/lib/mergeSplitterMassivaStats'
 import { fetchSplitterIntelligenceBatchFromLocalDb } from '@/features/splitters/api/fetchSplitterIntelligenceBatchFromLocalDb'
 import {
   fetchMaintenanceBySplitter,
@@ -832,6 +840,8 @@ export function useNetworkIntelligenceData(
     [preset, customStart, customEnd],
   )
 
+  const operationalMassiva = useOperationalMassivaTickets({ enabled: true })
+
   const query = useQuery({
     queryKey: [
       'network-intelligence',
@@ -901,6 +911,57 @@ export function useNetworkIntelligenceData(
     return { ...data, trends, massivaStats }
   }, [query.data, window.end, window.start])
 
+  const massivaRollupEffective = useMemo(() => {
+    const mysql = filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP
+    if (
+      operationalMassiva.massivaView.status !== 'success' ||
+      operationalMassiva.dashboardTickets.length === 0
+    ) {
+      return mysql
+    }
+    const ellevenInPeriod = rollupMassivaPeriodFromTickets(
+      operationalMassiva.dashboardTickets,
+      window,
+      operationalMassiva.recentProtocolSet,
+    )
+    return mergeIntelligenceMassivaPeriodRollup(mysql, ellevenInPeriod)
+  }, [filtered?.massivaRollup, operationalMassiva, window])
+
+  const massivaStatsEffective = useMemo<IntelligenceMassivaRow[]>(() => {
+    if (!filtered) return []
+    const statsInPeriod =
+      operationalMassiva.massivaView.status === 'success'
+        ? buildMassivaStatsBySplitterInPeriod(
+            operationalMassiva.dashboardTickets,
+            window,
+          )
+        : new Map<string, SplitterMassivaStats>()
+
+    return filtered.massivaStats.map((row) => {
+      const localStats: SplitterMassivaStats = {
+        totalTickets: row.totalTickets,
+        openTickets: row.openTickets,
+        closedTickets: row.closedTickets,
+        affectedClientsTotal: row.affectedClientsTotal,
+        latestOpenedAt: row.latestOpenedAt,
+      }
+      const fromTickets = findMassivaStatsForSplitter(
+        statsInPeriod,
+        row.splitterCode,
+        row.splitterTitle,
+      )
+      const merged = mergeSplitterMassivaStats(localStats, fromTickets)
+      return {
+        splitterCode: row.splitterCode,
+        totalTickets: merged.totalTickets,
+        openTickets: merged.openTickets,
+        closedTickets: merged.closedTickets,
+        affectedClientsTotal: merged.affectedClientsTotal,
+        latestOpenedAt: merged.latestOpenedAt,
+      }
+    })
+  }, [filtered, operationalMassiva, window])
+
   const splittersMetaByCode = useMemo(() => {
     const out = new Map<string, Splitter>()
     if (!filtered) return out
@@ -954,7 +1015,7 @@ export function useNetworkIntelligenceData(
     const titleByTrend = new Map(
       filtered.trends.map((t) => [t.splitterCode, t.splitterTitle.trim()] as const),
     )
-    return [...filtered.massivaStats]
+    return [...massivaStatsEffective]
       .sort((a, b) => b.totalTickets - a.totalTickets)
       .slice(0, 10)
       .map((row) => {
@@ -970,7 +1031,7 @@ export function useNetworkIntelligenceData(
           affectedClientsTotal: row.affectedClientsTotal,
         }
       })
-  }, [filtered, splittersMetaByCode])
+  }, [filtered, massivaStatsEffective, splittersMetaByCode])
 
   const recurrenceCells = useMemo<IntelligenceRecurrenceCell[]>(() => {
     if (!filtered) return []
@@ -992,7 +1053,7 @@ export function useNetworkIntelligenceData(
 
   const saturationCells = useMemo<IntelligenceSaturationCell[]>(() => {
     if (!filtered) return []
-    const massivaByCode = new Map(filtered.massivaStats.map((r) => [r.splitterCode, r]))
+    const massivaByCode = new Map(massivaStatsEffective.map((r) => [r.splitterCode, r]))
 
     const trendsForMap = mapCorporateOnly
       ? filtered.trends.filter((t) => corporateSplitterCodes.has(t.splitterCode))
@@ -1032,7 +1093,7 @@ export function useNetworkIntelligenceData(
         affectedClientsTotal,
       }
     })
-  }, [filtered, splittersMetaByCode, mapCorporateOnly, corporateSplitterCodes])
+  }, [filtered, massivaStatsEffective, splittersMetaByCode, mapCorporateOnly, corporateSplitterCodes])
 
   const riskRanking = useMemo<IntelligenceRiskRankingRow[]>(() => {
     if (!filtered) return []
@@ -1090,7 +1151,7 @@ export function useNetworkIntelligenceData(
         }
       })
       .sort((a, b) => b.riskScore - a.riskScore)
-  }, [filtered, splittersMetaByCode, deltaReference])
+  }, [filtered, massivaStatsEffective, splittersMetaByCode, deltaReference])
 
   const massivaRecurrenceInsights = useMemo<MassivaRecurrenceInsights>(
     () => computeMassivaRecurrenceInsights(riskRanking),
@@ -1101,9 +1162,8 @@ export function useNetworkIntelligenceData(
     const totalSplittersInWindow = riskRanking.length
     const criticalSplitters = riskRanking.filter((row) => row.currentUsagePercent >= 95).length
     const growthSplitters = riskRanking.filter((row) => row.selectedDelta >= 5).length
-    const rollup = filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP
-    const openMassivas = rollup.openMassivasCount
-    const affectedClientsTotal = rollup.affectedClientsDistinctSum
+    const openMassivas = massivaRollupEffective.openMassivasCount
+    const affectedClientsTotal = massivaRollupEffective.affectedClientsDistinctSum
     const highRiskMassivaTickets = riskRanking
       .filter((row) => row.riskBand === 'critico' || row.riskBand === 'alto')
       .reduce((sum, row) => sum + row.totalTickets, 0)
@@ -1121,7 +1181,7 @@ export function useNetworkIntelligenceData(
       highRiskMassivaTickets,
       attentionSharePercent,
     }
-  }, [riskRanking, filtered])
+  }, [riskRanking, massivaRollupEffective])
 
   const impactUrgencyMatrix = useMemo<IntelligenceImpactUrgencyCell[]>(() => {
     const quadrants: IntelligenceImpactUrgencyCell[] = [
@@ -1383,7 +1443,6 @@ export function useNetworkIntelligenceData(
     source: filtered?.source ?? null,
     kpis: filtered?.kpis ?? null,
     trends: filtered?.trends ?? [],
-    massivaStats: filtered?.massivaStats ?? [],
     areaPoints,
     barPoints,
     massivaRecurrenceInsights,
@@ -1404,7 +1463,8 @@ export function useNetworkIntelligenceData(
       splittersWithMaintenances: 0,
       unmappedMaintenances: 0,
     },
-    massivaRollup: filtered?.massivaRollup ?? EMPTY_MASSIVA_ROLLUP,
+    massivaRollup: massivaRollupEffective,
+    massivaStats: massivaStatsEffective,
     massivaPeriodLinks: filtered?.massivaPeriodLinks ?? [],
     deltaReference,
     deltaReferenceLabel,

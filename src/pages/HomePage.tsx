@@ -19,7 +19,8 @@ import {
   formatRefreshChipShort,
   interpretTrendDelta,
 } from '@/features/dashboard/lib/dashboardNarrative'
-import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { useHomeDashboardMassivaOpen } from '@/features/massiva/hooks/useHomeDashboardMassivaOpen'
+import { effectiveMassivaStatus } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
 import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
@@ -46,21 +47,15 @@ export function HomePage() {
   const reduceMotion = useReducedMotion()
 
   const { data: networkStats, isLoading: isLoadingStats, dataUpdatedAt } = useNetworkStats()
-  /** Dashboard é visível a todos: massivas aqui não dependem de `canViewMassiva` (a rota /massivas continua restrita). */
-  const { view: massivaView } = useMassivaTickets({ enabled: true })
+  /** Dashboard: BFF + histórico local + aberturas recentes (mesma lógica do painel de massivas). */
+  const {
+    pending: massivaKpisPending,
+    openMassivas,
+    openCount: openMassivasCount,
+    affectedClientsTotal: totalAffectedInOpenMassivas,
+  } = useHomeDashboardMassivaOpen()
 
-  const massivaKpisPending =
-    massivaView.status === 'loading' ||
-    massivaView.status === 'error' ||
-    massivaView.status === 'not-configured'
-
-  const tickets = massivaView.status === 'success' ? massivaView.tickets : []
-  const openMassivasCount = tickets.filter((t) => t.status === 'aberta').length
-  const totalAffectedInOpenMassivas = tickets
-    .filter((t) => t.status === 'aberta')
-    .reduce((acc, t) => acc + t.affectedClients, 0)
-
-  const recentMassivas = tickets.filter((t) => t.status === 'aberta').slice(0, 3)
+  const recentMassivas = openMassivas.slice(0, 3)
 
   const equipmentOccupancy = networkStats?.equipmentOccupancy ?? {
     green: 0,
@@ -541,10 +536,10 @@ export function HomePage() {
                           <span
                             className={cn(
                               'inline-flex rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide',
-                              statusBadgeClasses(ticket.status),
+                              statusBadgeClasses(effectiveMassivaStatus(ticket)),
                             )}
                           >
-                            {ticket.status.toUpperCase()}
+                            {effectiveMassivaStatus(ticket).toUpperCase()}
                           </span>
                           <time
                             className="text-[11px] font-medium tabular-nums text-stone-500"

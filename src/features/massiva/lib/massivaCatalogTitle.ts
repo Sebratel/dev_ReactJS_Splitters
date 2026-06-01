@@ -21,7 +21,21 @@ export function isExpectedMassivaCatalogTitle(title: string): boolean {
   return NORMALIZED_EXPECTED_SET.has(normalizeMassivaCatalogTitle(title))
 }
 
+/**
+ * Monitoração Elleven: título preenchido e diferente dos dois registos NexaView.
+ * Título vazio não entra aqui (segue fluxo padrão no painel).
+ */
+export function isMassivaMonitoringOutOfCatalogTitle(title: string): boolean {
+  if (!title.trim()) return false
+  return !isExpectedMassivaCatalogTitle(title)
+}
+
+/** Fluxo padrão no painel (catálogo NexaView + BFF sem título). */
+export function isMassivaStandardFlowCatalogTitle(title: string): boolean {
+  return !isMassivaMonitoringOutOfCatalogTitle(title)
+}
+
 /** Precisa alerta visual / monitorização: fora dos dois registos esperados. */
 export function isMassivaCatalogOutOfBand(title: string): boolean {
-  return !isExpectedMassivaCatalogTitle(title)
+  return isMassivaMonitoringOutOfCatalogTitle(title)
 }

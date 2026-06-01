@@ -1,9 +1,10 @@
 ﻿import { useLocation, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import type { SplitterMapReliefInsight } from '@/features/splitters/lib/splitterStreetRelief'
-import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { useOperationalMassivaTickets } from '@/features/massiva/hooks/useOperationalMassivaTickets'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
-import { buildMassivaStatsBySplitter, findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
+import { findMassivaStatsForSplitter } from '@/features/splitters/lib/buildMassivaStatsBySplitter'
+import { mergeSplitterMassivaStats } from '@/features/splitters/lib/mergeSplitterMassivaStats'
 import { buildSplitterOperationalScore } from '@/features/splitters/lib/buildSplitterOperationalScore'
 import { useSplitterMassivaStatsFromLocalDb } from '@/features/splitters/hooks/useSplitterMassivaStatsFromLocalDb'
 import { useSplitterDetail } from '@/features/splitters/hooks/useSplitterDetail'
@@ -25,7 +26,7 @@ export function SplitterDetailScreen() {
   const location = useLocation()
   const { state, refetch, dataUpdatedAt: splitterUpdatedAt, isFetching: splitterIsFetching } = useSplitterDetail(code)
   const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
-  const { view: massivaView } = useMassivaTickets({ enabled: canViewMassiva })
+  const operationalMassiva = useOperationalMassivaTickets({ enabled: canViewMassiva })
   const localMassivaStatsQuery = useSplitterMassivaStatsFromLocalDb(
     state.status === 'ready' ? [state.splitter.code] : [],
   )
@@ -40,26 +41,17 @@ export function SplitterDetailScreen() {
     !rawListHref.trim().startsWith('//')
       ? rawListHref.trim()
       : '/splitters'
-  const massivaStatsByMatcher = useMemo(
-    () =>
-      massivaView.status === 'success'
-        ? buildMassivaStatsBySplitter(massivaView.tickets)
-        : new Map(),
-    [massivaView],
-  )
   const detailMassivaStats = useMemo(() => {
     if (state.status !== 'ready') return null
     const codeKey = String(state.splitter.code ?? '').trim()
     const localMassiva = localMassivaStatsQuery.data?.get(codeKey)
-    if (localMassiva && localMassiva.totalTickets > 0) {
-      return localMassiva
-    }
-    return findMassivaStatsForSplitter(
-      massivaStatsByMatcher,
+    const fromTickets = findMassivaStatsForSplitter(
+      operationalMassiva.statsByMatcher,
       state.splitter.code,
       state.splitter.title,
     )
-  }, [state, localMassivaStatsQuery.data, massivaStatsByMatcher])
+    return mergeSplitterMassivaStats(localMassiva, fromTickets)
+  }, [state, localMassivaStatsQuery.data, operationalMassiva.statsByMatcher])
   const detailOperationalScore =
     state.status === 'ready' && detailMassivaStats !== null
       ? buildSplitterOperationalScore(state.splitter, detailMassivaStats)

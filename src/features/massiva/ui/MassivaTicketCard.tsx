@@ -39,8 +39,10 @@ import { isMassivaCatalogOutOfBand } from '@/features/massiva/lib/massivaCatalog
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
+import { effectiveMassivaStatus } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import {
   formatMassivaStatusLabel,
+  formatMassivaTicketStatusLabel,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'
 import { MassivaPrevisaoReferenceBlock } from '@/features/massiva/ui/MassivaPrevisaoReferenceBlock'
@@ -207,7 +209,7 @@ function ProtocolDescriptionDialog({
                 <span className="font-mono text-[13px] text-neutral-600">#{protocolLabel}</span>
                 <span className="text-neutral-400"> — </span>
                 <span className="text-sm font-medium text-neutral-700">
-                  {formatMassivaStatusLabel(ticket.status)}
+                  {formatMassivaTicketStatusLabel(ticket)}
                 </span>
               </p>
             </div>
@@ -270,9 +272,10 @@ export function MassivaTicketCard({
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [editingExpectedClose, setEditingExpectedClose] = useState(false)
   const [expectedCloseDraft, setExpectedCloseDraft] = useState('')
+  const displayStatus = effectiveMassivaStatus(ticket)
 
   const canEditExpectedClose =
-    ticket.status === 'aberta' &&
+    displayStatus === 'aberta' &&
     env.massivaAfetadosPath.trim() !== '' &&
     ticket.protocol > 0
 
@@ -316,13 +319,18 @@ export function MassivaTicketCard({
   })
 
   const protocolLabel = ticket.protocol > 0 ? String(ticket.protocol) : '—'
-  const statusLabel = formatMassivaStatusLabel(ticket.status)
+  const statusLabel = formatMassivaTicketStatusLabel({
+    ...ticket,
+    status: displayStatus,
+  })
 
   const statusStyles =
-    ticket.status === 'aberta'
+    displayStatus === 'aberta'
       ? 'border-emerald-300/80 bg-emerald-50 text-emerald-900'
-      : ticket.status === 'encerrada'
-        ? 'border-neutral-200 bg-neutral-100 text-neutral-700'
+      : displayStatus === 'encerrada'
+        ? statusLabel === 'Cancelada'
+          ? 'border-neutral-200 bg-neutral-100 text-neutral-600'
+          : 'border-neutral-200 bg-neutral-100 text-neutral-700'
         : 'border-amber-200 bg-amber-50 text-amber-900'
 
   const apKnown = ticket.apCode.trim() !== ''
@@ -356,9 +364,9 @@ export function MassivaTicketCard({
                 ? 'bg-rose-100 text-rose-800 ring-rose-200/70'
                 : recordKind === 'evento'
                   ? 'bg-sky-100 text-sky-800 ring-sky-200/70'
-                  : ticket.status === 'aberta'
+                  : displayStatus === 'aberta'
                     ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                    : ticket.status === 'encerrada'
+                    : displayStatus === 'encerrada'
                       ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
                       : 'bg-amber-100 text-amber-800 ring-amber-200/70',
             )}
@@ -608,7 +616,7 @@ export function MassivaTicketCard({
         ) : null}
         <div className="pt-0.5 sm:col-span-2">
           <div className="flex min-h-[34px] items-center justify-center">
-            {ticket.status === 'aberta' ? (
+            {displayStatus === 'aberta' ? (
               <button
                 type="button"
                 disabled={!closeConfigured}

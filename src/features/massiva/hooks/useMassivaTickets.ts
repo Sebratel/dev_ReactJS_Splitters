@@ -53,6 +53,8 @@ function connectivityFromListAndAfetados(
 export type UseMassivaTicketsOptions = {
   /** Quando `false`, não chama o BFF (ex.: utilizador sem permissão de massiva). */
   enabled?: boolean
+  /** Sobrescreve o polling da listagem (padrão 5 min). Use `false` para desligar. */
+  refetchIntervalMs?: number | false
 }
 
 function protocolsFingerprintFromTickets(rows: MassivaTicket[] | undefined): string {
@@ -81,13 +83,19 @@ export function useMassivaTickets(options?: UseMassivaTicketsOptions): {
   const userEnabled = options?.enabled !== false
   const baseEnabled = configured && userEnabled
   const afetadosConfigured = env.massivaAfetadosPath.trim() !== ''
+  const listRefetchInterval =
+    options?.refetchIntervalMs !== undefined
+      ? options.refetchIntervalMs
+      : baseEnabled
+        ? 5 * 60 * 1000
+        : false
 
   const listQuery = useQuery({
     queryKey: massivaKeys.list(),
     queryFn: fetchMassivasListCore,
     staleTime: MASSIVA_LIST_STALE_TIME_MS,
     enabled: baseEnabled,
-    refetchInterval: baseEnabled ? 5 * 60 * 1000 : false,
+    refetchInterval: listRefetchInterval,
     retry: 1,
   })
 
@@ -171,15 +179,6 @@ export function useMassivaTickets(options?: UseMassivaTicketsOptions): {
       : base
 
   const isRefreshing = listQuery.isFetching || afetadosQuery.isFetching
-
-  if (tickets.length === 0) {
-    return {
-      view: { status: 'empty' },
-      refetch,
-      isRefreshing,
-      listConnectivity,
-    }
-  }
 
   return {
     view: { status: 'success', tickets },
