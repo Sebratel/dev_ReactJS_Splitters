@@ -90,7 +90,7 @@ export function SplitterDetailScreen() {
   }, [mapReliefResetKey])
 
   return (
-    <>
+    <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <AppPageHeader
         icon={Database}
         badge="Equipamento"
@@ -107,7 +107,9 @@ export function SplitterDetailScreen() {
         }}
       />
 
-      <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-outline-variant/50 to-transparent" />
+
+      <div className="space-y-5">
       {state.status === 'invalid-param' ? (
         <EmptyState
           title="Código inválido"
@@ -184,7 +186,7 @@ export function SplitterDetailScreen() {
         </div>
       )}
       </div>
-    </>
+    </div>
   )
 }
 
