@@ -46,4 +46,27 @@ describe('pruneRecentOpensClosedByBff', () => {
     ])
     expect(readRecentOpenTicketsFromStorage()).toHaveLength(0)
   })
+
+  it('remove protocolo quando MySQL local já está encerrado', () => {
+    appendRecentOpenTicketsToStorage([
+      ticket({ protocol: 1686776, status: 'aberta', ellevenLifecycle: 'open', closedAt: null }),
+    ])
+    pruneRecentOpensClosedByBff([], [
+      {
+        id: 1,
+        protocol: 1686776,
+        assignmentId: 1,
+        accessPointCode: 'AP',
+        title: 'OLT 04 - NHOPN',
+        operatorEmail: 'op@test.com',
+        affectedClients: 0,
+        status: 'encerrada',
+        openedAt: new Date(),
+        expectedCloseAt: null,
+        closedAt: new Date(),
+        updatedAt: null,
+      },
+    ])
+    expect(readRecentOpenTicketsFromStorage()).toHaveLength(0)
+  })
 })

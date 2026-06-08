@@ -25,9 +25,9 @@ function bff(partial: Partial<MassivaTicket> & Pick<MassivaTicket, 'protocol'>):
     ellevenIncidentStatusId: partial.ellevenIncidentStatusId ?? null,
     ellevenStatusTexts: partial.ellevenStatusTexts ?? [],
     openedAt: partial.openedAt ?? staleOpenedAt,
-    expectedCloseAt: null,
+    expectedCloseAt: partial.expectedCloseAt ?? null,
     previsaoEncerramentoAtualizadaPor: '',
-    estimateTimeOfRestoration: null,
+    estimateTimeOfRestoration: partial.estimateTimeOfRestoration ?? null,
     closedAt: partial.closedAt ?? null,
     affectedClients: 0,
     affectedClientsResidential: null,
@@ -47,7 +47,7 @@ function local(partial: Partial<MassivaHistoryListRow> & Pick<MassivaHistoryList
     affectedClients: partial.affectedClients ?? 1,
     status: partial.status ?? 'aberta',
     openedAt: partial.openedAt ?? staleOpenedAt,
-    expectedCloseAt: null,
+    expectedCloseAt: partial.expectedCloseAt ?? null,
     closedAt: partial.closedAt ?? null,
     updatedAt: null,
   }
@@ -107,6 +107,36 @@ describe('buildDashboardMassivaTickets', () => {
     const ticket = merged.find((t) => t.protocol === 1676359)
     expect(ticket?.status).toBe('encerrada')
     expect(ticket?.affectedClients).toBe(12)
+  })
+
+  it('prioriza expected_close_at do MySQL sobre finalDate distorcido do Elleven', () => {
+    const opened = new Date(2026, 5, 8, 15, 42, 0)
+    const closeLocal = new Date(2026, 5, 8, 18, 42, 0)
+    const closeBffWrong = new Date(2026, 7, 6, 15, 42, 0)
+
+    const merged = buildDashboardMassivaTickets({
+      bffTickets: [
+        bff({
+          protocol: 1686508,
+          openedAt: opened,
+          expectedCloseAt: closeBffWrong,
+          estimateTimeOfRestoration: 1420,
+        }),
+      ],
+      localRows: [
+        local({
+          protocol: 1686508,
+          openedAt: opened,
+          expectedCloseAt: closeLocal,
+        }),
+      ],
+      recentOpenTickets: [],
+      periodStart,
+    })
+
+    const ticket = merged.find((t) => t.protocol === 1686508)
+    expect(ticket?.expectedCloseAt?.getTime()).toBe(closeLocal.getTime())
+    expect(ticket?.estimateTimeOfRestoration).toBeCloseTo(3, 5)
   })
 
   it('remove fantasma: local aberta antiga sem protocolo no BFF', () => {

@@ -14,9 +14,9 @@ export type MassivaOpenFinalContext = {
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
-  /** `assignment.finalDate` em `yyyy-MM-dd'T'HH:mm:ss` (LocalDateTime esperado pelo BFF). */
+  /** Prazo no fuso do formulário (`yyyy-MM-dd'T'HH:mm:ss`) — histórico MySQL; o POST ao gateway converte para ISO UTC. */
   assignmentFinalDateLocal: string
-  /** `assignment.beginningDate` em `yyyy-MM-dd'T'HH:mm:ss` quando informado no formulário. */
+  /** Início do evento no fuso do formulário; convertido para ISO UTC no POST ao gateway. */
   assignmentBeginningDateLocal: string | null
   /** Horário em que o evento foi identificado (campo operacional do formulário de abertura). */
   eventIdentifiedAtLocal: string | null

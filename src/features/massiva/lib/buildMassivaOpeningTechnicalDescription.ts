@@ -1,4 +1,5 @@
 import type { MassivaOpeningBasis } from '@/features/massiva/model/massivaOpeningBasis'
+import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 
 export const MASSIVA_SOLICITATION_TYPE_LABEL = 'Registro Massivas'
@@ -58,8 +59,8 @@ function formatPtLocalDateTimeFromParts(
   const combined = combineLocalDateAndTime(date, time)
   if (!combined) return '-'
 
-  const instant = new Date(combined)
-  if (Number.isNaN(instant.getTime())) return '-'
+  const instant = parseDateTimeLocalToDate(combined.slice(0, 16))
+  if (instant === null) return '-'
 
   return formatBrazilDateTimeShortDisplay(instant)
 }

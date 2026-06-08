@@ -27,12 +27,73 @@ export function formatRestorationHoursLabel(
   })} h`
 }
 
+/** Tolerância para considerar previsão alinhada com abertura + ETR (paridade com editor local). */
+const PREVISAO_SLA_ALIGN_TOLERANCE_MS = 2 * 60 * 1000
+
+/** Horas entre abertura e previsão; `null` se inválido. */
+export function restorationHoursBetweenDates(
+  openedAt: Date | null,
+  expectedCloseAt: Date | null,
+): number | null {
+  if (openedAt === null || expectedCloseAt === null) return null
+  if (Number.isNaN(openedAt.getTime()) || Number.isNaN(expectedCloseAt.getTime())) {
+    return null
+  }
+  const diffMs = expectedCloseAt.getTime() - openedAt.getTime()
+  if (!Number.isFinite(diffMs) || diffMs < 0) return null
+  return diffMs / (60 * 60 * 1000)
+}
+
+/**
+ * ETR do Elleven pode vir distorcido (ex.: ~1400 h por data enviada em UTC).
+ * Quando abertura + previsão existem, prioriza a diferença entre datas se o ETR da API
+ * divergir demais (>3× ou <¼).
+ */
+export function pickRestorationHoursForDisplay(
+  openedAt: Date | null,
+  expectedCloseAt: Date | null,
+  estimateTimeOfRestoration: number | null,
+): number | null {
+  const fromDates = restorationHoursBetweenDates(openedAt, expectedCloseAt)
+  if (fromDates === null) {
+    return estimateTimeOfRestoration
+  }
+  if (
+    estimateTimeOfRestoration === null ||
+    !Number.isFinite(estimateTimeOfRestoration) ||
+    estimateTimeOfRestoration < 0
+  ) {
+    return fromDates
+  }
+
+  const projectedClose = computeProjectedRestorationAt(openedAt, estimateTimeOfRestoration)
+  const previsaoAjustadaManualmente =
+    expectedCloseAt != null &&
+    projectedClose != null &&
+    Math.abs(expectedCloseAt.getTime() - projectedClose.getTime()) >
+      PREVISAO_SLA_ALIGN_TOLERANCE_MS
+  if (previsaoAjustadaManualmente) {
+    return fromDates
+  }
+
+  if (estimateTimeOfRestoration > fromDates * 3 || estimateTimeOfRestoration < fromDates * 0.25) {
+    return fromDates
+  }
+  return estimateTimeOfRestoration
+}
+
 /** Linha "Previsão" no card/CSV: prioriza o prazo (ETR em h); se não houver, mostra a data. */
 export function formatPrevisaoEncerramentoDisplay(
   expectedCloseAt: Date | null,
   estimateTimeOfRestoration: number | null,
+  openedAt: Date | null = null,
 ): string {
-  const fromHours = formatRestorationHoursLabel(estimateTimeOfRestoration)
+  const hours = pickRestorationHoursForDisplay(
+    openedAt,
+    expectedCloseAt,
+    estimateTimeOfRestoration,
+  )
+  const fromHours = formatRestorationHoursLabel(hours)
   if (fromHours !== null) {
     return fromHours
   }

@@ -12,7 +12,7 @@ import {
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { reconcileMassivaLocalClosedProtocols } from '@/features/massiva/api/reconcileMassivaLocalClosedProtocols'
-import { collectOutOfCatalogProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
+import { collectProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import {
   formatMassivaListDateDisplay,
@@ -24,6 +24,7 @@ import {
   isMassivaStandardFlowCatalogTitle,
 } from '@/features/massiva/lib/massivaCatalogTitle'
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
+import { collectMassivaPanelAbertasTickets } from '@/features/massiva/lib/massivaPanelAbertasList'
 import {
   isMassivaClosedForCounts,
   isMassivaClosedForPanelList,
@@ -158,6 +159,7 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
     formatPrevisaoEncerramentoDisplay(
       row.expectedCloseAt,
       row.estimateTimeOfRestoration,
+      row.openedAt,
     ),
     row.apCode,
     row.splitterCode,
@@ -282,11 +284,12 @@ export function MassivaTicketsSection({
     },
   })
 
+  const periodDays = periodPreset === '7d' ? 7 : periodPreset === '90d' ? 90 : 30
+
   const periodStart = useMemo(() => {
     const now = new Date()
-    const days = periodPreset === '7d' ? 7 : periodPreset === '30d' ? 30 : 90
-    return startOfDay(new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000))
-  }, [periodPreset])
+    return startOfDay(new Date(now.getTime() - (periodDays - 1) * 24 * 60 * 60 * 1000))
+  }, [periodDays])
 
   const historyListStart = useMemo(() => {
     const now = new Date()
@@ -341,17 +344,19 @@ export function MassivaTicketsSection({
 
   useEffect(() => {
     if (view.status !== 'success') return
-    const fromBff = view.tickets
-    if (fromBff.length > 0) {
-      pruneRecentOpensClosedByBff(fromBff)
-      void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
-    }
-  }, [view.status, view.status === 'success' ? view.tickets : null, queryClient])
+    pruneRecentOpensClosedByBff(view.tickets, historyQuery.data ?? [])
+    void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
+  }, [
+    view.status,
+    view.status === 'success' ? view.tickets : null,
+    historyQuery.data,
+    queryClient,
+  ])
 
   useEffect(() => {
     if (view.status !== 'success') return
 
-    const protocols = collectOutOfCatalogProtocolsForLocalCloseSync(
+    const protocols = collectProtocolsForLocalCloseSync(
       view.tickets,
       historyQuery.data ?? [],
     )
@@ -464,7 +469,25 @@ export function MassivaTicketsSection({
     [typeScopedTicketsInWindow, catalogFilter],
   )
 
+  const panelAbertasListInput = useMemo(
+    () => ({
+      bffTickets: view.status === 'success' ? view.tickets : [],
+      localRows: historyQuery.data ?? [],
+      recentOpenTickets,
+    }),
+    [view, historyQuery.data, recentOpenTickets],
+  )
+
   const filteredTickets = useMemo(() => {
+    if (scope === 'abertas') {
+      return collectMassivaPanelAbertasTickets(panelAbertasListInput, {
+        periodDays,
+        catalogFilter,
+        recordTypeFilter,
+        impactRange,
+        query,
+      })
+    }
     const text = normalizeText(query)
     return catalogScopedTicketsInWindow.filter((ticket) => {
       if (!matchesImpactRange(ticket, impactRange)) return false
@@ -481,7 +504,37 @@ export function MassivaTicketsSection({
       )
       return haystack.includes(text)
     })
-  }, [catalogScopedTicketsInWindow, query, impactRange])
+  }, [
+    scope,
+    panelAbertasListInput,
+    periodDays,
+    catalogFilter,
+    recordTypeFilter,
+    impactRange,
+    query,
+    catalogScopedTicketsInWindow,
+  ])
+
+  const chartSourceTickets = useMemo(
+    () =>
+      scope === 'abertas'
+        ? collectMassivaPanelAbertasTickets(panelAbertasListInput, {
+            periodDays,
+            catalogFilter,
+            recordTypeFilter,
+            impactRange: 'all',
+            query: '',
+          })
+        : catalogScopedTicketsInWindow,
+    [
+      scope,
+      panelAbertasListInput,
+      periodDays,
+      catalogFilter,
+      recordTypeFilter,
+      catalogScopedTicketsInWindow,
+    ],
+  )
 
   const chartSeries = useMemo(() => {
     const byDay = new Map<string, {
@@ -496,7 +549,7 @@ export function MassivaTicketsSection({
       protocols: number
     }>()
 
-    for (const ticket of catalogScopedTicketsInWindow) {
+    for (const ticket of chartSourceTickets) {
       if (!ticket.openedAt) continue
       const day = startOfDay(ticket.openedAt)
       const key = day.toISOString().slice(0, 10)
@@ -526,7 +579,7 @@ export function MassivaTicketsSection({
     }
 
     return [...byDay.values()].sort((a, b) => a.at.getTime() - b.at.getTime())
-  }, [catalogScopedTicketsInWindow, recentProtocolSet])
+  }, [chartSourceTickets, recentProtocolSet])
 
   const chartTotalAffected = useMemo(
     () => chartSeries.reduce((sum, day) => sum + day.affectedTotal, 0),

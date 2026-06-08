@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { collectOpenMassivasForHomeDashboard } from '@/features/massiva/lib/collectOpenMassivasForHomeDashboard'
+import { collectMassivaPanelAbertasTickets } from '@/features/massiva/lib/massivaPanelAbertasList'
 import type { MassivaHistoryListRow } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
@@ -15,8 +16,9 @@ function bff(partial: Partial<MassivaTicket> & Pick<MassivaTicket, 'protocol'>):
     createdBy: '',
     responsible: '',
     status: partial.status ?? 'aberta',
-    ellevenLifecycle: partial.ellevenLifecycle ?? 'unknown',
+    ellevenLifecycle: partial.ellevenLifecycle ?? 'open',
     ellevenIncidentStatusId: null,
+    ellevenStatusTexts: [],
     openedAt: partial.openedAt ?? new Date(),
     expectedCloseAt: null,
     previsaoEncerramentoAtualizadaPor: '',
@@ -30,45 +32,62 @@ function bff(partial: Partial<MassivaTicket> & Pick<MassivaTicket, 'protocol'>):
 }
 
 describe('collectOpenMassivasForHomeDashboard', () => {
-  it('inclui BFF aberta com lifecycle unknown (caso típico da Home)', () => {
-    const open = collectOpenMassivasForHomeDashboard({
-      bffTickets: [bff({ protocol: 100, ellevenLifecycle: 'unknown', affectedClients: 12 })],
-      localRows: [],
-      recentOpenTickets: [],
-    })
-    expect(open).toHaveLength(1)
-    expect(open[0]?.affectedClients).toBe(12)
+  it('espelha collectMassivaPanelAbertasTickets', () => {
+    const input = {
+      bffTickets: [bff({ protocol: 100, ellevenLifecycle: 'open', affectedClients: 12 })],
+      localRows: [] as MassivaHistoryListRow[],
+      recentOpenTickets: [] as MassivaTicket[],
+    }
+    expect(collectOpenMassivasForHomeDashboard(input)).toEqual(
+      collectMassivaPanelAbertasTickets(input),
+    )
   })
 
-  it('exclui Elleven encerrado', () => {
+  it('não inclui OLT fora do catálogo (filtro padrão do painel)', () => {
     const open = collectOpenMassivasForHomeDashboard({
-      bffTickets: [bff({ protocol: 200, ellevenLifecycle: 'closed', status: 'encerrada' })],
+      bffTickets: [
+        bff({
+          protocol: 1686865,
+          title: 'OLT 02 - NHOCE',
+          ellevenLifecycle: 'open',
+          affectedClients: 7,
+        }),
+      ],
       localRows: [],
       recentOpenTickets: [],
     })
     expect(open).toHaveLength(0)
   })
 
-  it('inclui aberta só no MySQL local (sem BFF)', () => {
-    const local: MassivaHistoryListRow = {
-      id: 1,
-      protocol: 1676225,
-      assignmentId: 1,
-      accessPointCode: 'AP',
-      title: 'Registro Incidente de Rede',
-      operatorEmail: 'op@test.com',
-      affectedClients: 3,
-      status: 'aberta',
-      openedAt: new Date('2026-05-01T10:00:00'),
-      expectedCloseAt: null,
-      closedAt: null,
-      updatedAt: null,
-    }
+  it('inclui catálogo aberto no período', () => {
     const open = collectOpenMassivasForHomeDashboard({
-      bffTickets: [],
-      localRows: [local],
+      bffTickets: [
+        bff({
+          protocol: 200,
+          title: 'Registro Evento Massivo',
+          ellevenLifecycle: 'open',
+          openedAt: new Date(),
+        }),
+      ],
+      localRows: [],
       recentOpenTickets: [],
     })
-    expect(open.some((t) => t.protocol === 1676225)).toBe(true)
+    expect(open).toHaveLength(1)
+    expect(open[0]?.protocol).toBe(200)
+  })
+
+  it('exclui Elleven encerrado', () => {
+    const open = collectOpenMassivasForHomeDashboard({
+      bffTickets: [
+        bff({
+          protocol: 300,
+          status: 'encerrada',
+          ellevenLifecycle: 'closed',
+        }),
+      ],
+      localRows: [],
+      recentOpenTickets: [],
+    })
+    expect(open).toHaveLength(0)
   })
 })

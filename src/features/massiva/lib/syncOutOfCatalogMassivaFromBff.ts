@@ -21,14 +21,14 @@ export function bffSaysMassivaOpen(ticket: MassivaTicket): boolean {
   )
 }
 
-/**
- * Protocolos fora do catálogo com MySQL ainda `aberta` mas Elleven já encerrou —
- * para `mark-closed-by-protocols` (somente monitorização OOT).
- */
-export function collectOutOfCatalogProtocolsForLocalCloseSync(
-  bffTickets: readonly MassivaTicket[],
+/** Após abertura, o catálogo Elleven pode demorar a listar o protocolo. */
+export const LOCAL_CLOSE_MISSING_FROM_BFF_GRACE_MS = 2 * 60 * 60 * 1000
+
+const LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS = 2 * 60 * 60 * 1000
+
+function localAbertaProtocolsFromRows(
   localRows: readonly MassivaHistoryListRow[],
-): number[] {
+): Set<number> {
   const localAbertaProtocols = new Set<number>()
   for (const row of localRows) {
     if (row.status !== 'aberta' || row.closedAt != null) continue
@@ -37,15 +37,67 @@ export function collectOutOfCatalogProtocolsForLocalCloseSync(
       localAbertaProtocols.add(protocol)
     }
   }
+  return localAbertaProtocols
+}
 
-  const protocols: number[] = []
+/** Previsão de encerramento já passou há horas — típico de MySQL `aberta` obsoleto. */
+export function localRowExpectedCloseExpired(
+  row: MassivaHistoryListRow,
+  nowMs = Date.now(),
+): boolean {
+  const close = row.expectedCloseAt
+  if (close == null || Number.isNaN(close.getTime())) return false
+  return close.getTime() < nowMs - LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS
+}
+
+/**
+ * MySQL ainda `aberta` mas Elleven já encerrou, ou protocolo sumiu do catálogo BFF
+ * (ex. #1684421) — para `mark-closed-by-protocols`.
+ */
+export function collectProtocolsForLocalCloseSync(
+  bffTickets: readonly MassivaTicket[],
+  localRows: readonly MassivaHistoryListRow[],
+): number[] {
+  const localAbertaProtocols = localAbertaProtocolsFromRows(localRows)
+  const protocols = new Set<number>()
+
   for (const bff of bffTickets) {
     if (bff.protocol <= 0) continue
-    if (!isMassivaMonitoringOutOfCatalogTitle(bff.title)) continue
     if (!bffSaysMassivaClosed(bff)) continue
-    if (!localAbertaProtocols.has(bff.protocol)) continue
-    protocols.push(bff.protocol)
+    if (localAbertaProtocols.has(bff.protocol)) {
+      protocols.add(bff.protocol)
+    }
   }
 
-  return protocols
+  if (bffTickets.length > 0) {
+    const bffProtocols = new Set(
+      bffTickets.filter((t) => t.protocol > 0).map((t) => t.protocol),
+    )
+    const now = Date.now()
+    for (const row of localRows) {
+      if (row.status !== 'aberta' || row.closedAt != null) continue
+      const protocol = row.protocol
+      if (protocol == null || protocol <= 0) continue
+      if (localRowExpectedCloseExpired(row, now)) {
+        protocols.add(protocol)
+        continue
+      }
+      if (bffProtocols.has(protocol)) continue
+      const opened = row.openedAt
+      if (opened == null || Number.isNaN(opened.getTime())) continue
+      if (now - opened.getTime() > LOCAL_CLOSE_MISSING_FROM_BFF_GRACE_MS) {
+        protocols.add(protocol)
+      }
+    }
+  }
+
+  return [...protocols].sort((a, b) => a - b)
+}
+
+/** @deprecated Prefer `collectProtocolsForLocalCloseSync` (inclui catálogo + sumiu do BFF). */
+export function collectOutOfCatalogProtocolsForLocalCloseSync(
+  bffTickets: readonly MassivaTicket[],
+  localRows: readonly MassivaHistoryListRow[],
+): number[] {
+  return collectProtocolsForLocalCloseSync(bffTickets, localRows)
 }

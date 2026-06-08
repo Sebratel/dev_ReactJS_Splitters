@@ -6,6 +6,7 @@ import {
   formatRestorationHoursLabel,
   normalizeDateTimeLocalString,
   parseDateTimeLocalToDate,
+  pickRestorationHoursForDisplay,
 } from '@/features/massiva/lib/formatMassivaListDate'
 
 describe('computeProjectedRestorationAt', () => {
@@ -39,6 +40,36 @@ describe('formatPrevisaoEncerramentoDisplay', () => {
     expect(
       formatPrevisaoEncerramentoDisplay(null, null),
     ).toBe('—')
+  })
+
+  it('ignora ETR absurdo quando abertura e previsão batem (~3 h)', () => {
+    const opened = new Date(2026, 5, 8, 15, 42, 0)
+    const close = new Date(2026, 5, 8, 18, 42, 0)
+    expect(
+      formatPrevisaoEncerramentoDisplay(close, 1420, opened),
+    ).toBe('3 h')
+  })
+})
+
+describe('pickRestorationHoursForDisplay', () => {
+  it('prefere diferença entre datas quando ETR do Elleven diverge', () => {
+    const opened = new Date(2026, 5, 8, 14, 0, 0)
+    const close = new Date(2026, 5, 8, 17, 0, 0)
+    expect(pickRestorationHoursForDisplay(opened, close, 1419)).toBe(3)
+    expect(pickRestorationHoursForDisplay(opened, close, 3)).toBe(3)
+  })
+
+  it('recalcula horas quando a previsão foi ajustada manualmente (Editar)', () => {
+    const opened = new Date(2026, 5, 8, 17, 22, 0)
+    const closeOriginal = new Date(2026, 5, 8, 20, 19, 0)
+    const etr = 2.95
+    expect(pickRestorationHoursForDisplay(opened, closeOriginal, etr)).toBeCloseTo(etr, 2)
+
+    const closeExtended = new Date(2026, 5, 8, 22, 0, 0)
+    expect(pickRestorationHoursForDisplay(opened, closeExtended, etr)).toBeCloseTo(4.633, 2)
+
+    const closeShortened = new Date(2026, 5, 8, 18, 0, 0)
+    expect(pickRestorationHoursForDisplay(opened, closeShortened, etr)).toBeCloseTo(0.633, 2)
   })
 })
 

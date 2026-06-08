@@ -3,6 +3,8 @@ import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashbo
 import {
   bffSaysMassivaClosed,
   collectOutOfCatalogProtocolsForLocalCloseSync,
+  collectProtocolsForLocalCloseSync,
+  localRowExpectedCloseExpired,
 } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import type { MassivaHistoryListRow } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
@@ -68,8 +70,8 @@ describe('syncOutOfCatalogMassivaFromBff', () => {
     expect(protocols).toEqual([55])
   })
 
-  it('ignora catálogo esperado no reconcile', () => {
-    const protocols = collectOutOfCatalogProtocolsForLocalCloseSync(
+  it('reconcilia catálogo quando BFF já encerrou', () => {
+    const protocols = collectProtocolsForLocalCloseSync(
       [
         bff({
           protocol: 56,
@@ -95,7 +97,31 @@ describe('syncOutOfCatalogMassivaFromBff', () => {
         },
       ],
     )
-    expect(protocols).toEqual([])
+    expect(protocols).toEqual([56])
+  })
+
+  it('reconcilia MySQL aberta com previsão expirada (#1684421)', () => {
+    const row = {
+      id: 281,
+      protocol: 1684421,
+      assignmentId: 1,
+      accessPointCode: '29370',
+      title: 'OLT 02 - CANMV',
+      operatorEmail: 'op@test.com',
+      affectedClients: 4,
+      status: 'aberta' as const,
+      openedAt: new Date('2026-06-06T14:08:03-03:00'),
+      expectedCloseAt: new Date('2025-06-06T18:00:00-03:00'),
+      closedAt: null,
+      updatedAt: null,
+    }
+    expect(localRowExpectedCloseExpired(row)).toBe(true)
+    expect(
+      collectProtocolsForLocalCloseSync(
+        [bff({ protocol: 1686865, title: 'OLT 02 - NHOCE', ellevenLifecycle: 'open' })],
+        [row],
+      ),
+    ).toEqual([1684421])
   })
 })
 
