@@ -8,7 +8,8 @@ import {
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_FALLBACK_MODEL = 'gemini-2.0-flash';
+/** Cadeia de fallback tentada em ordem quando o modelo principal retorna 503. */
+const GEMINI_FALLBACK_CHAIN = ['gemini-2.0-flash', 'gemini-1.5-flash'];
 
 function getGeminiConfig() {
   const apiKey = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1826,7 +1827,7 @@ async function runGeminiQuery({ apiKey, model, question, context, promptSections
   return { structured, responseMode };
 }
 
-function formatAndThrowGeminiError(error, { usedFallback = false } = {}) {
+function formatAndThrowGeminiError(error, { exhaustedChain = false } = {}) {
   const apiStatus = Number(error?.statusCode);
   const apiMessage = error instanceof Error ? error.message.trim() : '';
   if (apiStatus >= 400 && apiMessage !== '') {
@@ -1834,8 +1835,8 @@ function formatAndThrowGeminiError(error, { usedFallback = false } = {}) {
       apiStatus === 403 && /blocked|API_KEY/i.test(apiMessage)
         ? ' Verifique se GEMINI_API_KEY é uma chave do Google AI Studio (ou Cloud) com a API Generative Language habilitada — não use a chave do Firebase (VITE_FIREBASE_API_KEY).'
         : apiStatus === 503 && /high demand|unavailable/i.test(apiMessage)
-          ? usedFallback
-            ? ` Modelo principal e fallback (${GEMINI_FALLBACK_MODEL}) em alta demanda. Tente novamente em instantes.`
+          ? exhaustedChain
+            ? ` Todos os modelos disponíveis (${[DEFAULT_GEMINI_MODEL, ...GEMINI_FALLBACK_CHAIN].join(', ')}) estão em alta demanda. Tente novamente em instantes.`
             : ' Tente novamente em instantes.'
           : '';
     const trailingPunct = /[.!?]$/.test(apiMessage) ? '' : '.';
@@ -1863,36 +1864,31 @@ export async function askPlanningAssistant({
   }
 
   const startedAt = Date.now();
-  const canFallback = model !== GEMINI_FALLBACK_MODEL;
+  const fallbackChain = GEMINI_FALLBACK_CHAIN.filter((m) => m !== model);
   let activeModel = model;
   let queryResult;
 
-  try {
-    queryResult = await runGeminiQuery({ apiKey, model, question, context, promptSections, conversationHistory });
-  } catch (primaryError) {
-    const apiStatus = Number(primaryError?.statusCode);
-    const apiMessage = primaryError instanceof Error ? primaryError.message.trim() : '';
-    const is503HighDemand = apiStatus === 503 && /high demand|unavailable/i.test(apiMessage);
-
-    if (is503HighDemand && canFallback) {
-      logger.warn('planning_assistant_gemini_fallback', { from: model, to: GEMINI_FALLBACK_MODEL });
-      try {
-        queryResult = await runGeminiQuery({
-          apiKey,
-          model: GEMINI_FALLBACK_MODEL,
-          question,
-          context,
-          promptSections,
-          conversationHistory,
-        });
-        activeModel = GEMINI_FALLBACK_MODEL;
-      } catch (fallbackError) {
-        logger.error('planning_assistant_gemini_fallback_failed', { model: GEMINI_FALLBACK_MODEL, error: fallbackError });
-        formatAndThrowGeminiError(primaryError, { usedFallback: true });
+  const modelsToTry = [model, ...fallbackChain];
+  for (const candidate of modelsToTry) {
+    try {
+      queryResult = await runGeminiQuery({ apiKey, model: candidate, question, context, promptSections, conversationHistory });
+      activeModel = candidate;
+      break;
+    } catch (err) {
+      const status = Number(err?.statusCode);
+      const msg = err instanceof Error ? err.message.trim() : '';
+      const is503 = status === 503 && /high demand|unavailable/i.test(msg);
+      if (!is503) {
+        logger.error('planning_assistant_gemini_error', { model: candidate, error: err });
+        formatAndThrowGeminiError(err);
       }
-    } else {
-      logger.error('planning_assistant_gemini_error', { model, error: primaryError });
-      formatAndThrowGeminiError(primaryError);
+      const nextCandidate = modelsToTry[modelsToTry.indexOf(candidate) + 1];
+      if (nextCandidate) {
+        logger.warn('planning_assistant_gemini_fallback', { from: candidate, to: nextCandidate });
+      } else {
+        logger.error('planning_assistant_gemini_chain_exhausted', { tried: modelsToTry });
+        formatAndThrowGeminiError(err, { exhaustedChain: true });
+      }
     }
   }
 
