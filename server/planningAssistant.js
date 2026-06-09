@@ -1878,7 +1878,9 @@ export async function askPlanningAssistant({
       const status = Number(err?.statusCode);
       const msg = err instanceof Error ? err.message.trim() : '';
       const is503 = status === 503 && /high demand|unavailable/i.test(msg);
-      const is429 = status === 429 && /quota exceeded|rate.?limit/i.test(msg);
+      // Billing esgotado afeta toda a conta — não adianta tentar outros modelos.
+      const isBillingError = /prepayment|credits.{0,20}(depleted|exhausted)|billing/i.test(msg);
+      const is429 = status === 429 && !isBillingError && /quota exceeded|rate.?limit/i.test(msg);
       const is404ModelNotFound = status === 404 && /not found|not supported/i.test(msg);
       if (!is503 && !is429 && !is404ModelNotFound) {
         logger.error('planning_assistant_gemini_error', { model: candidate, error: err });
