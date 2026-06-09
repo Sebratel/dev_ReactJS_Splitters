@@ -7,9 +7,9 @@ import {
 } from './isaPlanningTeamInstructions.js';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.1-pro-preview';
 /** Cadeia de fallback tentada em ordem quando o modelo principal retorna 503. */
-const GEMINI_FALLBACK_CHAIN = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
 function getGeminiConfig() {
   const apiKey = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1749,10 +1749,10 @@ async function requestGeminiAnswer({
       topP: 0.9,
       maxOutputTokens: 4096,
       ...(responseMode === 'json' ? { responseMimeType: 'application/json' } : {}),
-      // Gemini 2.5+ tem thinking dinâmico — sem cap pode usar 20k+ tokens de raciocínio
-      // interno em prompts longos, multiplicando a latência. 1024 tokens de thinking
-      // é suficiente para tarefas analíticas estruturadas como esta.
-      ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 1024 } } : {}),
+      // Gemini 2.5 tem thinking dinâmico — sem cap pode usar 20k+ tokens de raciocínio
+      // interno em prompts longos, multiplicando a latência. 1024 tokens é suficiente
+      // para tarefas analíticas estruturadas. Não aplicar em outros modelos (API diferente).
+      ...(model.startsWith('gemini-2.5') ? { thinkingConfig: { thinkingBudget: 1024 } } : {}),
     },
   };
 
