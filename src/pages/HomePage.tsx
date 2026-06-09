@@ -546,15 +546,20 @@ export function HomePage() {
                           >
                             {effectiveMassivaStatus(ticket).toUpperCase()}
                           </span>
-                          <time
-                            className="text-[11px] font-medium tabular-nums text-stone-500"
-                            dateTime={
-                              resolveExpectedCloseAtForDisplay(ticket)?.toISOString()
-                            }
-                            title="Previsão de encerramento"
-                          >
-                            {formatExpectedCloseTimestamp(ticket)}
-                          </time>
+                          <p className="flex flex-wrap items-baseline justify-start gap-x-1.5 text-[11px] sm:justify-end">
+                            <span className="font-medium text-stone-500">Previsão de encerramento</span>
+                            <span className="text-stone-300" aria-hidden>
+                              ·
+                            </span>
+                            <time
+                              className="font-medium tabular-nums text-stone-600"
+                              dateTime={
+                                resolveExpectedCloseAtForDisplay(ticket)?.toISOString()
+                              }
+                            >
+                              {formatExpectedCloseTimestamp(ticket)}
+                            </time>
+                          </p>
                         </div>
                       </div>
                     </motion.article>
