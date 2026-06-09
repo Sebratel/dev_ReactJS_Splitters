@@ -8,8 +8,8 @@ import {
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-/** Cadeia de fallback tentada em ordem quando o modelo principal retorna 503. */
-const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+/** Cadeia de fallback tentada em ordem quando o modelo principal não está disponível. */
+const GEMINI_FALLBACK_CHAIN = ['gemini-2.0-flash', 'gemini-2.5-flash-lite'];
 
 function getGeminiConfig() {
   const apiKey = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1879,7 +1879,8 @@ export async function askPlanningAssistant({
       const msg = err instanceof Error ? err.message.trim() : '';
       const is503 = status === 503 && /high demand|unavailable/i.test(msg);
       const is429 = status === 429 && /quota exceeded|rate.?limit/i.test(msg);
-      if (!is503 && !is429) {
+      const is404ModelNotFound = status === 404 && /not found|not supported/i.test(msg);
+      if (!is503 && !is429 && !is404ModelNotFound) {
         logger.error('planning_assistant_gemini_error', { model: candidate, error: err });
         formatAndThrowGeminiError(err);
       }
