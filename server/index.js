@@ -2080,6 +2080,15 @@ function parseIsoDateParam(rawValue, fallback) {
   return parsed;
 }
 
+/** Catálogos ERP usados na aba Manutenções do Painel da rede (assignments + catalog_services). */
+const DEFAULT_MAINTENANCE_ERP_CATALOGS = [
+  'Oper. Reparo',
+  'Oper. Tecnologia',
+  // Legado — mantido para períodos em que o ERP ainda usava estes títulos.
+  'Equipe reparo',
+  'Equipe tecnologia',
+];
+
 app.get('/api/intelligence/maintenance-by-splitter', async (req, res) => {
   try {
     const now = new Date();
@@ -2098,9 +2107,15 @@ app.get('/api/intelligence/maintenance-by-splitter', async (req, res) => {
     }
 
     const catalogsRaw = String(req.query.catalogs ?? '').trim();
+    const catalogsFromEnv = String(process.env.MAINTENANCE_ERP_CATALOGS ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value !== '');
     const catalogs = catalogsRaw
       ? catalogsRaw.split(',').map((value) => value.trim()).filter((value) => value !== '')
-      : ['Equipe reparo', 'Equipe tecnologia'];
+      : catalogsFromEnv.length > 0
+        ? catalogsFromEnv
+        : DEFAULT_MAINTENANCE_ERP_CATALOGS;
     const splitterCodes = String(req.query.splitterCodes ?? '')
       .split(',')
       .map((value) => value.trim())
