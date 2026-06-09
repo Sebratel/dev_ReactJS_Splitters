@@ -10,6 +10,7 @@ import type {
 import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOperationalDate'
 import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
+import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
 import { BellOff, BellRing, Cable, Cpu, Hash, Layers } from 'lucide-react'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
@@ -319,11 +320,11 @@ export function SplitterDetailSummary({
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/[0.07] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
                 <Layers size={12} strokeWidth={1.75} />
-                Slot {slot}
+                {OLT_SLOT_LABEL} {slot}
               </span>
               <span className="inline-flex items-center gap-1 rounded-md border border-tertiary/20 bg-tertiary/[0.08] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-tertiary">
                 <Cable size={12} strokeWidth={1.75} />
-                Porta {port}
+                {OLT_PON_LABEL} {port}
               </span>
             </div>
           ) : null}

@@ -184,7 +184,7 @@ export function AutoIspSuggestions({
       {connectionsIndexQuery.isPending ? (
         <p className="text-[11px] text-sky-800">
           Carregando <code className="text-[10px]">/api/massiva/connections</code> para correlacionar os PPPoE dos
-          eventos com AP, slot e porta…
+          eventos com AP, slot e PON…
         </p>
       ) : null}
       {connectionsIndexQuery.isError ? (
@@ -229,7 +229,7 @@ export function AutoIspSuggestions({
                         </span>
                         <span className="text-neutral-300">·</span>
                         <span>
-                          Porta <span className="font-medium text-neutral-700">{route.port}</span>
+                          PON <span className="font-medium text-neutral-700">{route.port}</span>
                         </span>
                         {route.splitterCode ? (
                           <>
@@ -252,7 +252,7 @@ export function AutoIspSuggestions({
                         </p>
                       ) : null}
                       <p className="mt-1 text-[10px] text-amber-800/90">
-                        Sem rota automática: escolha AP, slot e porta no preview; o restante do formulário será preenchido.
+                        Sem rota automática: escolha AP, slot e PON no preview; o restante do formulário será preenchido.
                       </p>
                     </div>
                   )}

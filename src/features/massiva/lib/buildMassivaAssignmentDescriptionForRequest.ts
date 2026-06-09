@@ -1,6 +1,7 @@
 import { formatSplitterLabelsTwoColumns } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
+import { formatOltTopologyDescriptionLine } from '@/shared/lib/oltTopologyLabels'
 
 type PlanRequest = MassivaOpenFinalContext['plan']['requests'][number]
 
@@ -37,7 +38,13 @@ function buildTopologyLineForAp(
   return routes
     .map((route) => {
       const splitterCount = route.effectiveSplitterDisplay.length
-      return `PA ${route.apCode} (${route.apDisplayTitle}) / slot ${route.slot} / porta ${route.port} / ${splitterCount} splitter(s)`
+      return formatOltTopologyDescriptionLine({
+        apCode: route.apCode,
+        apDisplayTitle: route.apDisplayTitle,
+        slot: route.slot,
+        pon: route.port,
+        splitterCount,
+      })
     })
     .join(' ; ')
 }

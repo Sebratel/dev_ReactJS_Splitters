@@ -4,6 +4,7 @@ import type {
   MassivaLocalPreviewRouteSelection,
   MassivaRouteCatalog,
 } from '@/features/massiva/model/massivaLocalPreview'
+import { OLT_PON_LABEL } from '@/shared/lib/oltTopologyLabels'
 
 /**
  * Valida seleção para preview e abertura.
@@ -22,7 +23,7 @@ export function getMassivaRouteSelectionIssues(
   }
 
   if (selection.connections.length === 0) {
-    issues.push('Adicione ao menos uma rota (AP, slot e porta).')
+    issues.push(`Adicione ao menos uma rota (AP, slot e ${OLT_PON_LABEL}).`)
     return issues
   }
 
@@ -41,7 +42,7 @@ export function getMassivaRouteSelectionIssues(
     }
 
     if (route.porta === null) {
-      issues.push(`Rota ${routeNumber}: selecione a porta da OLT.`)
+      issues.push(`Rota ${routeNumber}: selecione a ${OLT_PON_LABEL} da OLT.`)
       return
     }
 
@@ -54,14 +55,14 @@ export function getMassivaRouteSelectionIssues(
 
     if (effective.length === 0) {
       issues.push(
-        `Rota ${routeNumber}: nenhum splitter resolvido para AP ${ap}, slot ${route.slot}, porta ${route.porta}.`,
+        `Rota ${routeNumber}: nenhum splitter resolvido para AP ${ap}, slot ${route.slot}, ${OLT_PON_LABEL} ${route.porta}.`,
       )
     }
   })
 
   const normalizedRoutes = massivaPreviewNormalizedRoutes(selection)
   if (normalizedRoutes.length === 0) {
-    issues.push('Finalize ao menos uma rota completa (AP, slot e porta).')
+    issues.push(`Finalize ao menos uma rota completa (AP, slot e ${OLT_PON_LABEL}).`)
   }
 
   return issues

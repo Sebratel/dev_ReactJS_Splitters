@@ -37,7 +37,7 @@ export function MassivaAutoIspSupportSection() {
           <strong className="font-semibold text-sky-950">Aplicar na abertura</strong> para preencher o formulário (relato,
           origem, horários, afetados) e a rota: de preferência os{' '}
           <strong className="font-semibold text-neutral-900">PPPoE</strong> do evento são buscados na base de conexões
-          para definir AP, slot, porta e splitter; se faltar match, usa-se o{' '}
+          para definir AP, slot, PON e splitter; se faltar match, usa-se o{' '}
           <code className="rounded-md bg-white/80 px-1.5 py-0.5 text-xs font-medium text-neutral-800 ring-1 ring-neutral-200/80">
             ponlink
           </code>

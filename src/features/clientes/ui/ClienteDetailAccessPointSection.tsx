@@ -47,7 +47,7 @@ export function ClienteDetailAccessPointSection({
         </div>
         <div>
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
-            Porta OLT
+            PON
           </dt>
           <dd className="mt-1 font-semibold tabular-nums text-on-surface">{accessPoint.portOlt}</dd>
         </div>

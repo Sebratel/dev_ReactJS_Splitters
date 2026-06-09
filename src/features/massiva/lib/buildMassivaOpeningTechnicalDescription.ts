@@ -1,6 +1,7 @@
 import type { MassivaOpeningBasis } from '@/features/massiva/model/massivaOpeningBasis'
 import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
+import { formatOltTopologyDescriptionLine } from '@/shared/lib/oltTopologyLabels'
 
 export const MASSIVA_SOLICITATION_TYPE_LABEL = 'Registro Massivas'
 
@@ -101,7 +102,13 @@ export function buildTopologySummaryLine(
 
   const parts = basis.topology.routes.map((route) => {
     const splitterCount = route.effectiveSplitterDisplay.length
-    return `PA ${route.apCode} (${route.apDisplayTitle}) / slot ${route.slot} / porta ${route.port} / ${splitterCount} splitter(s)`
+    return formatOltTopologyDescriptionLine({
+      apCode: route.apCode,
+      apDisplayTitle: route.apDisplayTitle,
+      slot: route.slot,
+      pon: route.port,
+      splitterCount,
+    })
   })
 
   return parts.join(' ; ')

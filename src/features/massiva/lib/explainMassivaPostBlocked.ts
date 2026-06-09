@@ -10,7 +10,7 @@ export function explainMassivaPostBlocked(
 
   switch (readiness.status) {
     case 'blocked-preparation':
-      return 'Finalize a rota acima (AP, slot, porta e splitters) até o resumo ficar “preparado”.'
+      return 'Finalize a rota acima (AP, slot, PON e splitters) até o resumo ficar “preparado”.'
     case 'missing-session':
       if (readiness.reason === 'token') {
         return 'Sem credencial de sessão neste host. Use login pelo Hub ou ambiente local com perfil válido.'

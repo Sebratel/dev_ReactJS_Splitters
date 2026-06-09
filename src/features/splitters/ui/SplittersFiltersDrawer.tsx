@@ -205,7 +205,7 @@ export function SplittersFiltersDrawer({
             </div>
 
             <div className="space-y-2 border-t border-outline-variant/40 pt-6">
-              <SectionTitle>{'Slot e porta OLT (PON)'}</SectionTitle>
+              <SectionTitle>{'Slot e PON (OLT)'}</SectionTitle>
               <p className="text-[11px] leading-snug text-on-surface-variant/75">
                 Mesma leitura do nome do splitter: dois últimos grupos numéricos antes da
                 primeira «/». Deixe em branco o que não quiser usar.
@@ -238,7 +238,7 @@ export function SplittersFiltersDrawer({
                 </label>
                 <label className="block space-y-1">
                   <span className="text-[11px] font-semibold text-on-surface-variant/80">
-                    Porta
+                    PON
                   </span>
                   <input
                     type="number"

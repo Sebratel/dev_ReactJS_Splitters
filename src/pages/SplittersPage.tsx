@@ -220,7 +220,7 @@ export function SplittersPage() {
     const hasOltPort = typeof state.oltPort === 'number' && Number.isFinite(state.oltPort)
     if (hasOltSlot || hasOltPort) {
       const slotPart = hasOltSlot ? `slot ${state.oltSlot}` : null
-      const portPart = hasOltPort ? `porta ${state.oltPort}` : null
+      const portPart = hasOltPort ? `PON ${state.oltPort}` : null
       const ponLabel = [slotPart, portPart].filter(Boolean).join(' · ')
       chips.push({
         key: 'olt-pon',

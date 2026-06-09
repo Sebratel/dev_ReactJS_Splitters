@@ -39,7 +39,7 @@ describe('getMassivaRouteSelectionIssues', () => {
         1,
         catalog,
       )[0],
-    ).toContain('porta')
+    ).toContain('PON')
 
     expect(
       getMassivaRouteSelectionIssues(
