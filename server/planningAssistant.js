@@ -7,7 +7,7 @@ import {
 } from './isaPlanningTeamInstructions.js';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const DEFAULT_GEMINI_MODEL = 'gemini-3.1-pro-preview';
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 /** Cadeia de fallback tentada em ordem quando o modelo principal retorna 503. */
 const GEMINI_FALLBACK_CHAIN = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
@@ -1878,7 +1878,8 @@ export async function askPlanningAssistant({
       const status = Number(err?.statusCode);
       const msg = err instanceof Error ? err.message.trim() : '';
       const is503 = status === 503 && /high demand|unavailable/i.test(msg);
-      if (!is503) {
+      const is429 = status === 429 && /quota exceeded|rate.?limit/i.test(msg);
+      if (!is503 && !is429) {
         logger.error('planning_assistant_gemini_error', { model: candidate, error: err });
         formatAndThrowGeminiError(err);
       }
