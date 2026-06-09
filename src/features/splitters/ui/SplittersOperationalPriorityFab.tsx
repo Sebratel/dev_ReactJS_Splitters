@@ -834,6 +834,7 @@ export function SplittersOperationalPriorityFab({
         buildAssistantConversationTurn(trimmedMessage, reply),
       ])
     } catch (error) {
+      setAssistantReply(null)
       setAssistantError(
         error instanceof Error ? error.message : 'Falha ao consultar a ISA.',
       )
@@ -1128,7 +1129,7 @@ export function SplittersOperationalPriorityFab({
                     <span className="tabular-nums">{reliefMeta?.scannedCount ?? reliefScannedCount}</span>{' '}
                     candidato(s) avaliados no snapshot global.
                     {reliefMeta?.ponFilterActive
-                      ? ' Filtro de slot/porta OLT dos filtros da página aplicado aos casos da lista.'
+                      ? ' Filtro de slot/PON OLT dos filtros da página aplicado aos casos da lista.'
                       : ' Demais filtros da listagem (cidade, rua, OLT primário…) não entraram neste painel.'}
                   </p>
                   <div className="grid min-w-0 gap-2">

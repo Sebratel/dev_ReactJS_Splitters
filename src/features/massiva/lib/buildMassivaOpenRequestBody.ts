@@ -1,5 +1,6 @@
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
+import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 
 type PlanRequest = MassivaOpenFinalContext['plan']['requests'][number]
 
@@ -16,6 +17,9 @@ export function buildMassivaOpenRequestBody(
 ): Record<string, unknown> {
   const d = context.plan.apiDefaults
   const assignmentDescription = buildMassivaAssignmentDescriptionForRequest(context, request)
+  const finalDateGateway =
+    massivaLocalDateTimeToGatewayIso(context.assignmentFinalDateLocal) ??
+    context.assignmentFinalDateLocal
 
   return {
     incidentStatusId: d.incidentStatusId,
@@ -34,7 +38,7 @@ export function buildMassivaOpenRequestBody(
     assignment: {
       title: request.assignmentTitle,
       description: assignmentDescription,
-      finalDate: context.assignmentFinalDateLocal,
+      finalDate: finalDateGateway,
       companyPlaceId: d.companyPlaceId,
     },
     affectedUsersQuantity: context.affectedUsersQuantityFlutterParity,

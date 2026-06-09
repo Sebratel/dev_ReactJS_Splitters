@@ -1,4 +1,8 @@
 import mysql from 'mysql2/promise';
+import {
+  mysqlNaiveDateTimeToIso,
+  parseMysqlNaiveDateTimeParts,
+} from './mysqlBrazilDateTime.js';
 import { splitterLabelsMatchOptionalPonFilter } from './splitterTitleOltDerivation.js';
 
 function normalizeText(value) {
@@ -25,6 +29,19 @@ function normalizeDate(value) {
   if (value === null || value === undefined || value === '') return null;
   const d = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** DATETIME MySQL / `yyyy-MM-dd'T'HH:mm:ss` sem fuso — grava “de parede” de Brasília. */
+function normalizeMysqlNaiveDateInput(value) {
+  const parts = parseMysqlNaiveDateTimeParts(value);
+  if (!parts) return null;
+  const { y, mo, d, h, mi, s } = parts;
+  const out = new Date(y, mo - 1, d, h, mi, s);
+  return Number.isNaN(out.getTime()) ? null : out;
+}
+
+function serializeHistoryDate(value) {
+  return mysqlNaiveDateTimeToIso(value);
 }
 
 /** @param {unknown} value */
@@ -195,9 +212,9 @@ export function createMassivaHistoryStore(config) {
     const title = normalizeText(input?.title);
     const operatorEmail = normalizeText(input?.operatorEmail);
     const affectedClients = normalizeNonNegativeInt(input?.affectedClients, 0);
-    const expectedCloseAt = normalizeDate(input?.expectedCloseAt);
-    const eventIdentifiedAt = normalizeDate(input?.eventIdentifiedAt);
-    const openedAt = normalizeDate(input?.openedAt) ?? new Date();
+    const expectedCloseAt = normalizeMysqlNaiveDateInput(input?.expectedCloseAt);
+    const eventIdentifiedAt = normalizeMysqlNaiveDateInput(input?.eventIdentifiedAt);
+    const openedAt = normalizeMysqlNaiveDateInput(input?.openedAt) ?? new Date();
     const autoClosed = input?.autoClosedWithoutClients === true;
     const status = autoClosed ? 'encerrada' : 'aberta';
     const closeDescription =
@@ -1491,15 +1508,11 @@ export function createMassivaHistoryStore(config) {
       operatorEmail: normalizeText(row.operatorEmail),
       affectedClients: Number(row.affectedClients ?? 0),
       status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
-      openedAt: row.openedAt instanceof Date ? row.openedAt : normalizeDate(row.openedAt),
-      eventIdentifiedAt:
-        row.eventIdentifiedAt instanceof Date
-          ? row.eventIdentifiedAt
-          : normalizeDate(row.eventIdentifiedAt),
-      expectedCloseAt:
-        row.expectedCloseAt instanceof Date ? row.expectedCloseAt : normalizeDate(row.expectedCloseAt),
-      closedAt: row.closedAt instanceof Date ? row.closedAt : normalizeDate(row.closedAt),
-      updatedAt: row.updatedAt instanceof Date ? row.updatedAt : normalizeDate(row.updatedAt),
+      openedAt: serializeHistoryDate(row.openedAt),
+      eventIdentifiedAt: serializeHistoryDate(row.eventIdentifiedAt),
+      expectedCloseAt: serializeHistoryDate(row.expectedCloseAt),
+      closedAt: serializeHistoryDate(row.closedAt),
+      updatedAt: serializeHistoryDate(row.updatedAt),
     }));
   }
 

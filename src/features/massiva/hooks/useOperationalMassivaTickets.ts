@@ -6,7 +6,7 @@ import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import { collectOpenMassivasForHomeDashboard } from '@/features/massiva/lib/collectOpenMassivasForHomeDashboard'
 import { pruneRecentOpensClosedByBff } from '@/features/massiva/lib/pruneRecentOpensAgainstBff'
-import { collectOutOfCatalogProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
+import { collectProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { readRecentOpenTicketsFromStorage } from '@/features/massiva/lib/massivaRecentOpensStorage'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import type { MassivaTicketsViewState } from '@/features/massiva/hooks/useMassivaTickets'
@@ -62,14 +62,14 @@ export function useOperationalMassivaTickets(options?: { enabled?: boolean }): {
   const reconcileOotClosedRef = useRef<string>('')
 
   useEffect(() => {
-    if (massivaView.status !== 'success' || bffTickets.length === 0) return
-    pruneRecentOpensClosedByBff(bffTickets)
+    if (massivaView.status !== 'success') return
+    pruneRecentOpensClosedByBff(bffTickets, localRows)
     void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
-  }, [massivaView.status, bffTickets, queryClient])
+  }, [massivaView.status, bffTickets, localRows, queryClient])
 
   useEffect(() => {
     if (massivaView.status !== 'success') return
-    const protocols = collectOutOfCatalogProtocolsForLocalCloseSync(bffTickets, localRows)
+    const protocols = collectProtocolsForLocalCloseSync(bffTickets, localRows)
     const key = protocols.slice().sort((a, b) => a - b).join(',')
     if (key === '' || reconcileOotClosedRef.current === key) return
     reconcileOotClosedRef.current = key

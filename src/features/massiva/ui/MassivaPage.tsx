@@ -134,7 +134,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
       {
         id: 'rota',
         title: 'Rota',
-        description: 'AP, slot e porta',
+        description: 'AP, slot e PON',
         status: currentStep === 'rota' ? 'current' : rotaStatus,
       },
       {

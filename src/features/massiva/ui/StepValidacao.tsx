@@ -18,6 +18,7 @@ import {
   hasMassivaClienteMapCoords,
 } from '@/features/massiva/lib/formatMassivaClienteLocation'
 import { massivaClientDedupeKey } from '@/features/massiva/lib/massivaClientDedupeKey'
+import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
 import { MassivaClientesMapPreview } from '@/features/massiva/ui/MassivaClientesMapPreview'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import type { MassivaLocalPreviewViewState } from '@/features/massiva/model/massivaLocalPreview'
@@ -88,11 +89,22 @@ function initialsFromName(name: string): string {
   return `${a}${b}`.toUpperCase()
 }
 
-function ClienteNameCell({ cliente }: { cliente: SplitterCliente }) {
+function ClienteNameCell({
+  cliente,
+  wide,
+}: {
+  cliente: SplitterCliente
+  wide?: boolean
+}) {
   const name = cliente.name?.trim() || '?'
   return (
-    <td className="px-3 py-2">
-      <span className="inline-flex min-w-0 max-w-[16rem] items-center gap-2.5 sm:max-w-[20rem]">
+    <td className={clsx('px-3 py-2', wide && 'min-w-[14rem]')}>
+      <span
+        className={clsx(
+          'inline-flex min-w-0 items-center gap-2.5',
+          wide ? 'max-w-[22rem]' : 'max-w-[16rem] sm:max-w-[20rem]',
+        )}
+      >
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200/90 text-[11px] font-bold uppercase text-slate-700 shadow-sm ring-2 ring-white"
           aria-hidden
@@ -135,12 +147,23 @@ function filterClientesByQuery(
   })
 }
 
-function LocalCell({ cliente, narrow }: { cliente: SplitterCliente; narrow?: boolean }) {
+function LocalCell({
+  cliente,
+  narrow,
+  wide,
+}: {
+  cliente: SplitterCliente
+  narrow?: boolean
+  wide?: boolean
+}) {
   const line = formatMassivaClienteLocationLine(cliente)
   const onMap = hasMassivaClienteMapCoords(cliente)
-  const maxW = narrow ? 'max-w-[14rem]' : 'max-w-[16rem]'
+  const maxW = narrow ? 'max-w-[14rem]' : wide ? 'max-w-[32rem]' : 'max-w-[16rem]'
   return (
-    <td className={clsx(maxW, 'px-3 py-2 text-xs text-neutral-600')} title={line}>
+    <td
+      className={clsx(maxW, 'px-3 py-2 text-xs text-neutral-600', wide && 'min-w-[20rem]')}
+      title={line}
+    >
       <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
         <span
           className={clsx(
@@ -553,10 +576,10 @@ export function StepValidacao({
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="inline-flex items-center rounded-md border border-neutral-200/80 bg-neutral-100 px-2 py-1 font-mono text-[11px] font-semibold text-neutral-800 shadow-sm">
-                          Slot {route.slot}
+                          {OLT_SLOT_LABEL} {route.slot}
                         </span>
                         <span className="inline-flex items-center rounded-md border border-neutral-200/80 bg-neutral-100 px-2 py-1 font-mono text-[11px] font-semibold text-neutral-800 shadow-sm">
-                          Porta {route.port}
+                          {OLT_PON_LABEL} {route.port}
                         </span>
                       </div>
                     </li>
@@ -595,8 +618,8 @@ export function StepValidacao({
       </div>
 
       {isExpandedOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-neutral-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="flex max-h-[92vh] w-[min(96vw,88rem)] max-w-none flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-neutral-200">
             <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-neutral-900">Clientes afetados</p>
@@ -624,19 +647,19 @@ export function StepValidacao({
 
             <div className="overflow-auto px-4 py-3">
               <div className="overflow-hidden rounded-lg ring-1 ring-neutral-200/80">
-                <table className="w-full min-w-[900px] text-left text-sm">
+                <table className="w-full min-w-[72rem] text-left text-sm">
                   <thead className="sticky top-0 z-[1] border-b border-neutral-200 bg-neutral-50">
                     <tr>
-                      <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                      <th className="min-w-[14rem] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                         Cliente
                       </th>
-                      <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                      <th className="min-w-[10rem] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                         PPPoE
                       </th>
-                      <th className="px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                      <th className="min-w-[14rem] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                         Splitter
                       </th>
-                      <th className="max-w-[16rem] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
+                      <th className="min-w-[20rem] px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">
                         <span className="inline-flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5 text-neutral-400" aria-hidden />
                           Local
@@ -650,14 +673,14 @@ export function StepValidacao({
                   <tbody className="divide-y divide-neutral-100 bg-white">
                     {fullClientes.slice(0, expandedVisibleCount).map((cliente) => (
                       <tr key={massivaClientDedupeKey(cliente)} className="hover:bg-neutral-50/60">
-                        <ClienteNameCell cliente={cliente} />
-                        <td className="px-3 py-2 font-mono text-[12px] text-neutral-800">
+                        <ClienteNameCell cliente={cliente} wide />
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-neutral-800">
                           {cliente.user || '?'}
                         </td>
-                        <td className="px-3 py-2 font-mono text-[12px] text-neutral-700">
+                        <td className="min-w-[14rem] px-3 py-2 font-mono text-[12px] leading-snug text-neutral-700">
                           {splitterDisplayName(cliente)}
                         </td>
-                        <LocalCell cliente={cliente} />
+                        <LocalCell cliente={cliente} wide />
                         <td className="px-3 py-2 text-right">
                           <ClienteStatusPill cliente={cliente} />
                         </td>

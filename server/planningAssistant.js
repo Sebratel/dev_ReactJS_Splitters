@@ -8,6 +8,7 @@ import {
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_FALLBACK_MODEL = 'gemini-2.0-flash';
 
 function getGeminiConfig() {
   const apiKey = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
@@ -1486,7 +1487,7 @@ function normalizeConversationHistory(history) {
       },
     }))
     .filter((turn) => turn.userPrompt !== '')
-    .slice(-20);
+    .slice(-8);
 }
 
 function buildConversationHistoryPrompt(history) {
@@ -1745,8 +1746,12 @@ async function requestGeminiAnswer({
     generationConfig: {
       temperature: 0.15,
       topP: 0.9,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 4096,
       ...(responseMode === 'json' ? { responseMimeType: 'application/json' } : {}),
+      // Gemini 2.5+ tem thinking dinâmico — sem cap pode usar 20k+ tokens de raciocínio
+      // interno em prompts longos, multiplicando a latência. 1024 tokens de thinking
+      // é suficiente para tarefas analíticas estruturadas como esta.
+      ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 1024 } } : {}),
     },
   };
 
@@ -1782,6 +1787,67 @@ async function requestGeminiAnswer({
   return { rawText, finishReason };
 }
 
+async function runGeminiQuery({ apiKey, model, question, context, promptSections, conversationHistory }) {
+  const { rawText: rawJsonText, finishReason: finishJson } = await requestGeminiAnswer({
+    apiKey,
+    model,
+    question,
+    context,
+    responseMode: 'json',
+    promptSections,
+    conversationHistory,
+  });
+  let structured = parseGeminiStructuredAnswer(rawJsonText);
+  let responseMode = 'json';
+
+  if (
+    looksLikeTruncatedAnswer(structured, rawJsonText, finishJson) ||
+    geminiFinishIndicatesOutputTruncated(finishJson)
+  ) {
+    logger.warn('planning_assistant_gemini_retry_text_mode', { model, finishReason: finishJson });
+    const { rawText: rawTextMode, finishReason: finishText } = await requestGeminiAnswer({
+      apiKey,
+      model,
+      question,
+      context,
+      responseMode: 'text',
+      promptSections,
+      conversationHistory,
+    });
+    structured = parseGeminiStructuredAnswer(rawTextMode);
+    responseMode = 'text';
+    if (/MAX_TOKEN/i.test(toCleanString(finishText))) {
+      logger.warn('planning_assistant_gemini_text_mode_still_max_tokens', { model });
+    }
+  }
+
+  structured = enrichStructuredAnswer(structured, context);
+  structured = repairStructuredPlanningAnswer(structured, context);
+  return { structured, responseMode };
+}
+
+function formatAndThrowGeminiError(error, { usedFallback = false } = {}) {
+  const apiStatus = Number(error?.statusCode);
+  const apiMessage = error instanceof Error ? error.message.trim() : '';
+  if (apiStatus >= 400 && apiMessage !== '') {
+    const hint =
+      apiStatus === 403 && /blocked|API_KEY/i.test(apiMessage)
+        ? ' Verifique se GEMINI_API_KEY é uma chave do Google AI Studio (ou Cloud) com a API Generative Language habilitada — não use a chave do Firebase (VITE_FIREBASE_API_KEY).'
+        : apiStatus === 503 && /high demand|unavailable/i.test(apiMessage)
+          ? usedFallback
+            ? ` Modelo principal e fallback (${GEMINI_FALLBACK_MODEL}) em alta demanda. Tente novamente em instantes.`
+            : ' Tente novamente em instantes.'
+          : '';
+    const trailingPunct = /[.!?]$/.test(apiMessage) ? '' : '.';
+    const wrapped = new Error(`API Gemini: ${apiMessage}${trailingPunct}${hint}`);
+    wrapped.statusCode = apiStatus >= 500 ? 503 : apiStatus;
+    throw wrapped;
+  }
+  const wrapped = new Error('Gemini respondeu fora do formato esperado.');
+  wrapped.statusCode = 502;
+  throw wrapped;
+}
+
 export async function askPlanningAssistant({
   question,
   context,
@@ -1797,66 +1863,49 @@ export async function askPlanningAssistant({
   }
 
   const startedAt = Date.now();
+  const canFallback = model !== GEMINI_FALLBACK_MODEL;
+  let activeModel = model;
+  let queryResult;
 
   try {
-    const { rawText: rawJsonText, finishReason: finishJson } = await requestGeminiAnswer({
-      apiKey,
-      model,
-      question,
-      context,
-      responseMode: 'json',
-      promptSections,
-      conversationHistory,
-    });
-    let structured = parseGeminiStructuredAnswer(rawJsonText);
-    let responseMode = 'json';
+    queryResult = await runGeminiQuery({ apiKey, model, question, context, promptSections, conversationHistory });
+  } catch (primaryError) {
+    const apiStatus = Number(primaryError?.statusCode);
+    const apiMessage = primaryError instanceof Error ? primaryError.message.trim() : '';
+    const is503HighDemand = apiStatus === 503 && /high demand|unavailable/i.test(apiMessage);
 
-    if (
-      looksLikeTruncatedAnswer(structured, rawJsonText, finishJson) ||
-      geminiFinishIndicatesOutputTruncated(finishJson)
-    ) {
-      logger.warn('planning_assistant_gemini_retry_text_mode', {
-        model,
-        finishReason: finishJson,
-      });
-      const { rawText: rawTextMode, finishReason: finishText } = await requestGeminiAnswer({
-        apiKey,
-        model,
-        question,
-        context,
-        responseMode: 'text',
-        promptSections,
-        conversationHistory,
-      });
-      structured = parseGeminiStructuredAnswer(rawTextMode);
-      responseMode = 'text';
-      if (/MAX_TOKEN/i.test(toCleanString(finishText))) {
-        logger.warn('planning_assistant_gemini_text_mode_still_max_tokens', { model });
+    if (is503HighDemand && canFallback) {
+      logger.warn('planning_assistant_gemini_fallback', { from: model, to: GEMINI_FALLBACK_MODEL });
+      try {
+        queryResult = await runGeminiQuery({
+          apiKey,
+          model: GEMINI_FALLBACK_MODEL,
+          question,
+          context,
+          promptSections,
+          conversationHistory,
+        });
+        activeModel = GEMINI_FALLBACK_MODEL;
+      } catch (fallbackError) {
+        logger.error('planning_assistant_gemini_fallback_failed', { model: GEMINI_FALLBACK_MODEL, error: fallbackError });
+        formatAndThrowGeminiError(primaryError, { usedFallback: true });
       }
+    } else {
+      logger.error('planning_assistant_gemini_error', { model, error: primaryError });
+      formatAndThrowGeminiError(primaryError);
     }
-
-    structured = enrichStructuredAnswer(structured, context);
-    structured = repairStructuredPlanningAnswer(structured, context);
-
-    logger.info('planning_assistant_gemini_ok', {
-      model,
-      responseMode,
-      promptSource: toCleanString(promptMeta?.source) || 'fallback',
-      promptVersion:
-        promptMeta?.version == null || !Number.isFinite(Number(promptMeta.version))
-          ? null
-          : Math.round(Number(promptMeta.version)),
-      durationMs: Date.now() - startedAt,
-    });
-
-    return { structured, model };
-  } catch (error) {
-    logger.error('planning_assistant_gemini_parse_error', {
-      model,
-      error,
-    });
-    const wrapped = new Error('Gemini respondeu fora do formato esperado.');
-    wrapped.statusCode = 502;
-    throw wrapped;
   }
+
+  logger.info('planning_assistant_gemini_ok', {
+    model: activeModel,
+    responseMode: queryResult.responseMode,
+    promptSource: toCleanString(promptMeta?.source) || 'fallback',
+    promptVersion:
+      promptMeta?.version == null || !Number.isFinite(Number(promptMeta.version))
+        ? null
+        : Math.round(Number(promptMeta.version)),
+    durationMs: Date.now() - startedAt,
+  });
+
+  return { structured: queryResult.structured, model: activeModel };
 }

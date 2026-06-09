@@ -9,6 +9,7 @@ import {
   bffSaysMassivaClosed,
   bffSaysMassivaOpen,
 } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
+import { restorationHoursBetweenDates } from '@/features/massiva/lib/formatMassivaListDate'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 export const LOCAL_OPEN_TRUST_MS = 7 * 24 * 60 * 60 * 1000
@@ -168,6 +169,13 @@ function mergeBffOntoLocal(
     )
   }
 
+  const openedAt = local.openedAt ?? bffEffective.openedAt
+  const expectedCloseAt = local.expectedCloseAt ?? bffEffective.expectedCloseAt
+  const hoursFromMysql =
+    local.expectedCloseAt != null
+      ? restorationHoursBetweenDates(openedAt, expectedCloseAt)
+      : null
+
   return withAffectedClients(
     {
       ...local,
@@ -176,8 +184,8 @@ function mergeBffOntoLocal(
       apCode: bffEffective.apCode.trim() !== '' ? bffEffective.apCode : local.apCode,
       splitterCode: bffEffective.splitterCode.trim() !== '' ? bffEffective.splitterCode : local.splitterCode,
       assignmentId: bffEffective.assignmentId ?? local.assignmentId,
-      openedAt: local.openedAt ?? bffEffective.openedAt,
-      expectedCloseAt: bffEffective.expectedCloseAt ?? local.expectedCloseAt,
+      openedAt,
+      expectedCloseAt,
       closedAt: trustLocalOpen ? null : bffEffective.closedAt ?? local.closedAt,
       status: trustLocalOpen ? 'aberta' : bffEffective.status === 'aberta' ? 'aberta' : local.status,
       ellevenLifecycle: trustLocalOpen ? 'open' : bffEffective.ellevenLifecycle,
@@ -186,7 +194,9 @@ function mergeBffOntoLocal(
       affectedClientsResidential: bffEffective.affectedClientsResidential ?? local.affectedClientsResidential,
       affectedClientsCorporate: bffEffective.affectedClientsCorporate ?? local.affectedClientsCorporate,
       estimateTimeOfRestoration:
-        bffEffective.estimateTimeOfRestoration ?? local.estimateTimeOfRestoration,
+        hoursFromMysql ??
+        bffEffective.estimateTimeOfRestoration ??
+        local.estimateTimeOfRestoration,
       previsaoEncerramentoAtualizadaPor:
         bffEffective.previsaoEncerramentoAtualizadaPor || local.previsaoEncerramentoAtualizadaPor,
       usedFallback: bffEffective.usedFallback || local.usedFallback,

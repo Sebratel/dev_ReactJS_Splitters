@@ -25,8 +25,10 @@ import {
 import { exportElementToPdf } from '@/features/massiva/lib/exportElementToPdf'
 import {
   formatMassivaListDateDisplay,
-  formatRestorationHoursLabel,
   formatPrevisaoEncerramentoDisplay,
+  formatRestorationHoursLabel,
+  pickRestorationHoursForDisplay,
+  restorationHoursBetweenDates,
   normalizeDateTimeLocalString,
   parseDateTimeLocalToDate,
   toDateTimeLocalInputValue,
@@ -83,23 +85,18 @@ function classifyMassivaRecordKind(ticket: MassivaTicket): MassivaRecordKind {
 
 function expectedCloseDisplayForCard(ticket: MassivaTicket): string {
   const closeAt = resolveExpectedCloseAtForDisplay(ticket)
-  const openedAt = ticket.openedAt
-  if (
-    closeAt !== null &&
-    openedAt !== null &&
-    !Number.isNaN(closeAt.getTime()) &&
-    !Number.isNaN(openedAt.getTime())
-  ) {
-    const diffMs = closeAt.getTime() - openedAt.getTime()
-    if (Number.isFinite(diffMs) && diffMs >= 0) {
-      const byRange = formatRestorationHoursLabel(diffMs / (60 * 60 * 1000))
-      if (byRange !== null) return byRange
-    }
-  }
+  const hours = pickRestorationHoursForDisplay(
+    ticket.openedAt,
+    closeAt,
+    ticket.estimateTimeOfRestoration,
+  )
+  const fromHours = formatRestorationHoursLabel(hours)
+  if (fromHours !== null) return fromHours
 
   return formatPrevisaoEncerramentoDisplay(
-    ticket.expectedCloseAt,
+    closeAt ?? ticket.expectedCloseAt,
     ticket.estimateTimeOfRestoration,
+    ticket.openedAt,
   )
 }
 
@@ -308,11 +305,15 @@ export function MassivaTicketCard({
       })
       queryClient.setQueryData<MassivaTicket[]>(massivaKeys.list(), (prev) => {
         if (prev == null) return prev
-        return prev.map((t) =>
-          t.protocol === ticket.protocol
-            ? { ...t, expectedCloseAt: savedAt }
-            : t,
-        )
+        return prev.map((t) => {
+          if (t.protocol !== ticket.protocol) return t
+          const hours = restorationHoursBetweenDates(t.openedAt, savedAt)
+          return {
+            ...t,
+            expectedCloseAt: savedAt,
+            estimateTimeOfRestoration: hours ?? t.estimateTimeOfRestoration,
+          }
+        })
       })
       await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
     },

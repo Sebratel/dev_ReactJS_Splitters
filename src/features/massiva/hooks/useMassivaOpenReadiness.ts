@@ -8,7 +8,7 @@ import {
 } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import {
   getMassivaOpenDraftIssues,
-  massivaOpenDraftFinalDateIsoUtc,
+  massivaOpenDraftFinalDateLocal,
 } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaOpenReadiness'
@@ -210,11 +210,11 @@ export function useMassivaOpenReadiness(
       return { status: 'missing-assignment', issues: draftIssues }
     }
 
-    const finalIso = massivaOpenDraftFinalDateIsoUtc(
+    const finalDateLocal = massivaOpenDraftFinalDateLocal(
       assignmentForecastDate,
       assignmentForecastTime,
     )
-    if (finalIso === null) {
+    if (finalDateLocal === null) {
       return {
         status: 'missing-assignment',
         issues: ['Data/hora de encerramento invalida.'],
@@ -237,7 +237,7 @@ export function useMassivaOpenReadiness(
       basis,
       plan,
       assignmentDescription,
-      assignmentFinalDateLocal: finalIso,
+      assignmentFinalDateLocal: finalDateLocal,
       assignmentBeginningDateLocal,
       eventIdentifiedAtLocal,
       massivaOpenPath: openPath,

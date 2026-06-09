@@ -2,6 +2,10 @@ import { useMemo } from 'react'
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { fetchMassivaAfetadosCountsByProtocols } from '@/features/massiva/api/fetchMassivaAfetadosCounts'
 import { fetchMassivasListCore } from '@/features/massiva/api/fetchMassivas'
+import {
+  collectProtocolsForAfetadosEnrichment,
+  protocolsFingerprintForAfetadosEnrichment,
+} from '@/features/massiva/lib/collectProtocolsForAfetadosEnrichment'
 import { mergeMassivaTicketsAfetados } from '@/features/massiva/lib/mergeMassivaTicketsAfetados'
 import { MASSIVA_LIST_STALE_TIME_MS } from '@/features/massiva/model/constants'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
@@ -57,18 +61,6 @@ export type UseMassivaTicketsOptions = {
   refetchIntervalMs?: number | false
 }
 
-function protocolsFingerprintFromTickets(rows: MassivaTicket[] | undefined): string {
-  if (rows == null || rows.length === 0) return ''
-  const u = new Set<number>()
-  for (const t of rows) {
-    if (Number.isFinite(t.protocol) && t.protocol > 0) {
-      u.add(Math.trunc(t.protocol))
-    }
-  }
-  if (u.size === 0) return ''
-  return [...u].sort((a, b) => a - b).join(',')
-}
-
 /**
  * Lista somente leitura de massivas (BFF). Listagem principal e enriquecimento de afetados são
  * queries separadas: a UI deixa de esperar todos os GET por protocolo antes de mostrar dados.
@@ -100,7 +92,7 @@ export function useMassivaTickets(options?: UseMassivaTicketsOptions): {
   })
 
   const protocolsFingerprint = useMemo(
-    () => protocolsFingerprintFromTickets(listQuery.data),
+    () => protocolsFingerprintForAfetadosEnrichment(listQuery.data),
     [listQuery.data],
   )
 
@@ -109,7 +101,9 @@ export function useMassivaTickets(options?: UseMassivaTicketsOptions): {
     queryFn: async () => {
       const base = listQuery.data
       if (base == null || base.length === 0) return []
-      const map = await fetchMassivaAfetadosCountsByProtocols(base.map((t) => t.protocol))
+      const map = await fetchMassivaAfetadosCountsByProtocols(
+        collectProtocolsForAfetadosEnrichment(base),
+      )
       return mergeMassivaTicketsAfetados(base, map)
     },
     staleTime: MASSIVA_LIST_STALE_TIME_MS,

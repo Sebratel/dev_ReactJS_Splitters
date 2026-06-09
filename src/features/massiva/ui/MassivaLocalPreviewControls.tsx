@@ -3,6 +3,7 @@ import type {
   MassivaRouteConnectionSelection,
   MassivaSelectedSplitter,
 } from '@/features/massiva/model/massivaLocalPreview'
+import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
 
 type MassivaLocalPreviewControlsProps = {
   connections: MassivaRouteConnectionSelection[]
@@ -58,7 +59,7 @@ export function MassivaLocalPreviewControls({
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Rotas selecionadas</p>
           <p className="mt-0.5 text-xs text-neutral-600">
-            Você pode começar por AP/slot/porta ou pelo splitter. A seleção é bidirecional.
+            Você pode começar por AP/slot/PON ou pelo splitter. A seleção é bidirecional.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -140,7 +141,7 @@ export function MassivaLocalPreviewControls({
                 </label>
 
                 <label className="flex min-w-0 flex-col gap-1.5 text-sm">
-                  <span className={labelClass}>Slot</span>
+                  <span className={labelClass}>{OLT_SLOT_LABEL}</span>
                   <select
                     className={selectClass}
                     value={slotValue}
@@ -159,7 +160,7 @@ export function MassivaLocalPreviewControls({
                 </label>
 
                 <label className="flex min-w-0 flex-col gap-1.5 text-sm">
-                  <span className={labelClass}>Porta</span>
+                  <span className={labelClass}>{OLT_PON_LABEL}</span>
                   <select
                     className={selectClass}
                     value={portaValue}
@@ -278,7 +279,7 @@ export function MassivaLocalPreviewControls({
         </summary>
         <p className="border-t border-neutral-200/50 px-3 py-2.5 leading-relaxed text-neutral-600">
           Cada bloco representa uma rota. Você pode começar pelos splitters e depois fechar AP,
-          slot e porta, ou fazer o caminho inverso.
+          slot e PON, ou fazer o caminho inverso.
         </p>
       </details>
     </div>

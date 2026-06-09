@@ -3,6 +3,7 @@ import type {
   MassivaRouteConnectionSelection,
   MassivaSelectedSplitter,
 } from '@/features/massiva/model/massivaLocalPreview'
+import { formatOltTopologySegment } from '@/shared/lib/oltTopologyLabels'
 
 type StepSplittersProps = {
   connections: MassivaRouteConnectionSelection[]
@@ -30,7 +31,7 @@ export function StepSplitters({
         <h3 className="text-base font-semibold text-neutral-900">Splitters</h3>
         <p className="mt-1 text-sm text-neutral-600">
           Busque e selecione splitters por rota. Sem filtro manual, a rota usa todos os splitters
-          daquele AP/slot/porta.
+          daquele AP/slot/PON.
         </p>
       </div>
 
@@ -59,7 +60,7 @@ export function StepSplitters({
                   </p>
                   <p className="mt-1 text-xs text-neutral-600">
                     {routeReady
-                      ? `${connection.apLabel.trim() || connection.apId} / slot ${connection.slot} / porta ${connection.porta}`
+                      ? `${connection.apLabel.trim() || connection.apId} / ${formatOltTopologySegment(connection.slot, connection.porta)}`
                       : 'Complete a rota para restringir melhor os splitters'}
                   </p>
                 </div>

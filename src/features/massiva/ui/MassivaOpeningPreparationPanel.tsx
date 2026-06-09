@@ -80,7 +80,7 @@ export function MassivaOpeningPreparationPanel({
               <span className="text-violet-400"> - </span>
               slot <span className="tabular-nums font-semibold">{route.slot}</span>
               <span className="text-violet-400"> - </span>
-              porta <span className="tabular-nums font-semibold">{route.port}</span>
+              PON <span className="tabular-nums font-semibold">{route.port}</span>
               <span className="text-violet-400"> - </span>
               <span className="font-medium">
                 {route.effectiveSplitterDisplay.length} splitter(s)

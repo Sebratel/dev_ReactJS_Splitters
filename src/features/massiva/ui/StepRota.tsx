@@ -1,4 +1,10 @@
-﻿import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
+﻿import { formatMassivaRoutePairsSummary } from '@/features/massiva/lib/formatMassivaRoutePairsSummary'
+import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
+import {
+  formatOltSlotPonPair,
+  OLT_PON_LABEL,
+  OLT_SLOT_LABEL,
+} from '@/shared/lib/oltTopologyLabels'
 import { useMemo, useState } from 'react'
 
 type StepRotaProps = {
@@ -26,6 +32,37 @@ type StepRotaProps = {
 const fieldClass =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20'
 
+const SLOT_PORT_SECTION_TONES = [
+  {
+    shell: 'border-sky-200/90 bg-sky-50/40',
+    header: 'border-sky-200/80 bg-sky-100/90',
+    accent: 'border-l-sky-500',
+    title: 'text-sky-950',
+    action: 'text-sky-800 hover:bg-sky-200/50',
+  },
+  {
+    shell: 'border-violet-200/90 bg-violet-50/35',
+    header: 'border-violet-200/80 bg-violet-100/90',
+    accent: 'border-l-violet-500',
+    title: 'text-violet-950',
+    action: 'text-violet-800 hover:bg-violet-200/50',
+  },
+  {
+    shell: 'border-amber-200/90 bg-amber-50/35',
+    header: 'border-amber-200/80 bg-amber-100/90',
+    accent: 'border-l-amber-500',
+    title: 'text-amber-950',
+    action: 'text-amber-900 hover:bg-amber-200/50',
+  },
+  {
+    shell: 'border-emerald-200/90 bg-emerald-50/35',
+    header: 'border-emerald-200/80 bg-emerald-100/90',
+    accent: 'border-l-emerald-500',
+    title: 'text-emerald-950',
+    action: 'text-emerald-800 hover:bg-emerald-200/50',
+  },
+] as const
+
 export function StepRota({
   connections,
   apDisplayLabel,
@@ -48,7 +85,10 @@ export function StepRota({
 
   const [openDropdownRouteIndex, setOpenDropdownRouteIndex] = useState<number | null>(null)
   const [selectedSlots, setSelectedSlots] = useState<Record<number, boolean>>({})
-  const [selectedPorts, setSelectedPorts] = useState<Record<number, boolean>>({})
+  /** PONs marcadas por slot (slot → pon → selecionada). */
+  const [selectedPortsBySlot, setSelectedPortsBySlot] = useState<
+    Record<number, Record<number, boolean>>
+  >({})
 
   const openedConnection =
     openDropdownRouteIndex !== null ? connections[openDropdownRouteIndex] : undefined
@@ -65,77 +105,72 @@ export function StepRota({
       [...new Set(openedRouteOptions.map((pair) => pair.slot))].sort((a, b) => a - b),
     [openedRouteOptions],
   )
-  const portOptions = useMemo(
-    () =>
-      [...new Set(openedRouteOptions.map((pair) => pair.port))].sort((a, b) => a - b),
-    [openedRouteOptions],
-  )
+  const portOptionsBySlot = useMemo(() => {
+    const map = new Map<number, number[]>()
+    for (const pair of openedRouteOptions) {
+      const ports = map.get(pair.slot) ?? []
+      if (!ports.includes(pair.port)) ports.push(pair.port)
+      map.set(pair.slot, ports)
+    }
+    for (const [slot, ports] of map) {
+      map.set(
+        slot,
+        [...ports].sort((a, b) => a - b),
+      )
+    }
+    return map
+  }, [openedRouteOptions])
   const selectedSlotValues = useMemo(
     () =>
       Object.entries(selectedSlots)
         .filter(([, checked]) => checked)
-        .map(([slot]) => Number(slot)),
+        .map(([slot]) => Number(slot))
+        .sort((a, b) => a - b),
     [selectedSlots],
   )
-  const selectedPortValues = useMemo(
-    () =>
-      Object.entries(selectedPorts)
-        .filter(([, checked]) => checked)
-        .map(([port]) => Number(port)),
-    [selectedPorts],
-  )
-  const compatiblePortsBySelectedSlots = useMemo(() => {
-    if (selectedSlotValues.length === 0) return new Set<number>(portOptions)
-    return new Set(
-      openedRouteOptions
-        .filter((pair) => selectedSlotValues.includes(pair.slot))
-        .map((pair) => pair.port),
-    )
-  }, [openedRouteOptions, portOptions, selectedSlotValues])
-  const compatibleSlotsBySelectedPorts = useMemo(() => {
-    if (selectedPortValues.length === 0) return new Set<number>(slotOptions)
-    return new Set(
-      openedRouteOptions
-        .filter((pair) => selectedPortValues.includes(pair.port))
-        .map((pair) => pair.slot),
-    )
-  }, [openedRouteOptions, selectedPortValues, slotOptions])
   const selectedPairsCount = useMemo(
     () =>
       openedRouteOptions.filter(
-        (pair) => selectedSlots[pair.slot] === true && selectedPorts[pair.port] === true,
+        (pair) =>
+          selectedSlots[pair.slot] === true &&
+          selectedPortsBySlot[pair.slot]?.[pair.port] === true,
       ).length,
-    [openedRouteOptions, selectedPorts, selectedSlots],
+    [openedRouteOptions, selectedPortsBySlot, selectedSlots],
   )
 
   const closeDropdown = () => {
     setOpenDropdownRouteIndex(null)
     setSelectedSlots({})
-    setSelectedPorts({})
+    setSelectedPortsBySlot({})
   }
 
   const openDropdown = (routeIndex: number, connection: MassivaRouteConnectionSelection) => {
     const preselectedSlots: Record<number, boolean> = {}
-    const preselectedPorts: Record<number, boolean> = {}
+    const preselectedPortsBySlot: Record<number, Record<number, boolean>> = {}
     const selectedPairs = connection.selectedPairs ?? []
     if (selectedPairs.length > 0) {
       for (const pair of selectedPairs) {
         preselectedSlots[pair.slot] = true
-        preselectedPorts[pair.port] = true
+        if (preselectedPortsBySlot[pair.slot] == null) {
+          preselectedPortsBySlot[pair.slot] = {}
+        }
+        preselectedPortsBySlot[pair.slot][pair.port] = true
       }
     } else if (connection.slot !== null && connection.porta !== null) {
       preselectedSlots[connection.slot] = true
-      preselectedPorts[connection.porta] = true
+      preselectedPortsBySlot[connection.slot] = { [connection.porta]: true }
     }
     setOpenDropdownRouteIndex(routeIndex)
     setSelectedSlots(preselectedSlots)
-    setSelectedPorts(preselectedPorts)
+    setSelectedPortsBySlot(preselectedPortsBySlot)
   }
 
   const applyDropdownSelection = () => {
     if (openDropdownRouteIndex === null) return
     const pairs = openedRouteOptions.filter(
-      (pair) => selectedSlots[pair.slot] === true && selectedPorts[pair.port] === true,
+      (pair) =>
+        selectedSlots[pair.slot] === true &&
+        selectedPortsBySlot[pair.slot]?.[pair.port] === true,
     )
     if (pairs.length === 0) return
     onApplyMultiplePairsAtRoute(openDropdownRouteIndex, pairs)
@@ -146,22 +181,90 @@ export function StepRota({
     if (openDropdownRouteIndex === null) return
 
     const allSlots: Record<number, boolean> = {}
-    const allPorts: Record<number, boolean> = {}
+    const allPortsBySlot: Record<number, Record<number, boolean>> = {}
 
     for (const option of openedRouteOptions) {
       allSlots[option.slot] = true
-      allPorts[option.port] = true
+      if (allPortsBySlot[option.slot] == null) {
+        allPortsBySlot[option.slot] = {}
+      }
+      allPortsBySlot[option.slot][option.port] = true
     }
 
     setSelectedSlots(allSlots)
-    setSelectedPorts(allPorts)
+    setSelectedPortsBySlot(allPortsBySlot)
   }
 
   const clearOpenedRouteSelection = () => {
     if (openDropdownRouteIndex === null) return
     setSelectedSlots({})
-    setSelectedPorts({})
+    setSelectedPortsBySlot({})
   }
+
+  const toggleSlotSelection = (slot: number, checked: boolean) => {
+    setSelectedSlots((current) => ({ ...current, [slot]: checked }))
+    if (!checked) {
+      setSelectedPortsBySlot((current) => {
+        if (current[slot] == null) return current
+        const next = { ...current }
+        delete next[slot]
+        return next
+      })
+    }
+  }
+
+  const togglePortForSlot = (slot: number, port: number, checked: boolean) => {
+    setSelectedPortsBySlot((current) => ({
+      ...current,
+      [slot]: {
+        ...(current[slot] ?? {}),
+        [port]: checked,
+      },
+    }))
+  }
+
+  const allPortsSelectedForSlot = (slot: number): boolean => {
+    const ports = portOptionsBySlot.get(slot) ?? []
+    if (ports.length === 0) return false
+    const selected = selectedPortsBySlot[slot] ?? {}
+    return ports.every((port) => selected[port] === true)
+  }
+
+  const selectAllPortsForSlot = (slot: number) => {
+    const ports = portOptionsBySlot.get(slot) ?? []
+    setSelectedPortsBySlot((current) => ({
+      ...current,
+      [slot]: Object.fromEntries(ports.map((port) => [port, true])),
+    }))
+  }
+
+  const clearPortsForSlot = (slot: number) => {
+    setSelectedPortsBySlot((current) => {
+      if (current[slot] == null) return current
+      const next = { ...current }
+      delete next[slot]
+      return next
+    })
+  }
+
+  const selectAllPortsForSelectedSlots = () => {
+    const next: Record<number, Record<number, boolean>> = {}
+    for (const slot of selectedSlotValues) {
+      const ports = portOptionsBySlot.get(slot) ?? []
+      next[slot] = Object.fromEntries(ports.map((port) => [port, true]))
+    }
+    setSelectedPortsBySlot(next)
+  }
+
+  const allPortsSelectedForSelectedSlots = useMemo(() => {
+    if (selectedSlotValues.length === 0) return false
+    return selectedSlotValues.every((slot) => {
+      const ports = portOptionsBySlot.get(slot) ?? []
+      if (ports.length === 0) return false
+      const selected = selectedPortsBySlot[slot] ?? {}
+      return ports.every((port) => selected[port] === true)
+    })
+  }, [selectedSlotValues, selectedPortsBySlot, portOptionsBySlot])
 
   return (
     <div className="space-y-5">
@@ -169,7 +272,7 @@ export function StepRota({
         <div>
           <h3 className="text-base font-semibold text-neutral-900">Rota</h3>
           <p className="mt-1 text-sm text-neutral-600">
-            Defina AP, slot e porta. A seleção múltipla aplica todas as combinações válidas do AP.
+            Defina AP, slot e PON. Na seleção múltipla, escolha as PONs de cada slot separadamente.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -203,6 +306,15 @@ export function StepRota({
                 (pair) => pair.slot === option.slot && pair.port === option.port,
               ),
             )
+          const pairsSummary =
+            selectedPairs.length > 0
+              ? formatMassivaRoutePairsSummary(selectedPairs)
+              : connection.slot !== null && connection.porta !== null
+                ? {
+                    display: formatOltSlotPonPair(connection.slot, connection.porta),
+                    full: formatOltSlotPonPair(connection.slot, connection.porta),
+                  }
+                : null
 
           const apSelectDisabled =
             isRoutesCatalogPending || isRoutesCatalogError
@@ -283,7 +395,7 @@ export function StepRota({
 
                 <div className="text-sm">
                   <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Seleção múltipla (slot e porta)
+                    Seleção múltipla (slot e PON)
                   </span>
                   <div className="space-y-2">
                     <button
@@ -291,14 +403,17 @@ export function StepRota({
                       className={`${fieldClass} flex items-center justify-between text-left`}
                       onClick={() => openDropdown(index, connection)}
                       disabled={connection.apId.trim() === ''}
-                      aria-label={`Selecionar múltiplos slots e portas da rota ${index + 1}`}
+                      aria-label={`Selecionar múltiplos slots e PONs da rota ${index + 1}`}
                     >
-                      <span className="truncate">
+                      <span
+                        className="min-w-0 flex-1 truncate text-left"
+                        title={pairsSummary?.full ?? undefined}
+                      >
                         {hasAllPairsSelected
                           ? 'Todos selecionados'
-                          : connection.slot !== null && connection.porta !== null
-                          ? `Atual: slot ${connection.slot} / porta ${connection.porta}`
-                          : 'Selecionar pares...'}
+                          : pairsSummary != null
+                            ? pairsSummary.display
+                            : 'Selecionar pares...'}
                       </span>
                       <span className="text-xs text-neutral-500">Abrir</span>
                     </button>
@@ -313,7 +428,7 @@ export function StepRota({
                       onClick={() =>
                         onApplyMultiplePairsAtRoute(index, hasAllPairsSelected ? [] : routeOptions)
                       }
-                      aria-label={`Selecionar todos os slots e portas da rota ${index + 1}`}
+                      aria-label={`Selecionar todos os slots e PONs da rota ${index + 1}`}
                     >
                       <span
                         aria-hidden
@@ -340,9 +455,9 @@ export function StepRota({
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-4"
           role="dialog"
           aria-modal="true"
-          aria-label={`Selecionar múltiplos slots e portas da rota ${openDropdownRouteIndex + 1}`}
+          aria-label={`Selecionar múltiplos slots e PONs da rota ${openDropdownRouteIndex + 1}`}
         >
-          <div className="w-full max-w-xl rounded-xl border border-neutral-200 bg-white p-4 shadow-xl">
+          <div className="w-full max-w-2xl rounded-xl border border-neutral-200 bg-white p-4 shadow-xl">
             <div className="mb-3">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
                 Rota {openDropdownRouteIndex + 1}
@@ -351,7 +466,7 @@ export function StepRota({
                 Dropdown multi-seleção
               </h4>
               <p className="mt-1 text-sm text-neutral-600">
-                Selecione múltiplos slots e portas para encontrar combinações válidas do AP.
+                Marque os slots desejados e, em seguida, escolha as PONs de cada slot.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
@@ -371,77 +486,144 @@ export function StepRota({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50/50 p-2">
-                <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Slots</p>
-                {slotOptions.length > 0 ? (
-                  slotOptions.map((slot) => {
-                    const checked = selectedSlots[slot] === true
-                    const disabled = !compatibleSlotsBySelectedPorts.has(slot)
-                    return (
-                      <label
-                        key={slot}
-                        className={`flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-sm transition ${
-                          disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer hover:bg-sky-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={(event) =>
-                            setSelectedSlots((current) => ({
-                              ...current,
-                              [slot]: event.target.checked,
-                            }))
-                          }
-                        />
-                        <span>Slot <strong>{slot}</strong></span>
-                      </label>
-                    )
-                  })
-                ) : (
-                  <p className="px-2 py-3 text-sm text-neutral-500">Nenhum slot disponível.</p>
-                )}
+            <div className="grid min-h-[18rem] gap-3 sm:grid-cols-[minmax(0,11rem)_1fr]">
+              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50/60">
+                <div className="border-b border-neutral-200/80 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Slots</p>
+                </div>
+                <div className="max-h-80 flex-1 space-y-0.5 overflow-y-auto p-2">
+                  {slotOptions.length > 0 ? (
+                    slotOptions.map((slot) => {
+                      const checked = selectedSlots[slot] === true
+                      return (
+                        <label
+                          key={slot}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${
+                            checked
+                              ? 'bg-sky-50 text-sky-950 ring-1 ring-sky-200/80'
+                              : 'bg-white hover:bg-neutral-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => toggleSlotSelection(slot, event.target.checked)}
+                          />
+                          <span>Slot <strong>{slot}</strong></span>
+                        </label>
+                      )
+                    })
+                  ) : (
+                    <p className="px-2 py-3 text-sm text-neutral-500">Nenhum slot disponível.</p>
+                  )}
+                </div>
               </div>
 
-              <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50/50 p-2">
-                <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Portas</p>
-                {portOptions.length > 0 ? (
-                  portOptions.map((port) => {
-                    const checked = selectedPorts[port] === true
-                    const disabled = !compatiblePortsBySelectedSlots.has(port)
-                    return (
-                      <label
-                        key={port}
-                        className={`flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-sm transition ${
-                          disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer hover:bg-sky-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={(event) =>
-                            setSelectedPorts((current) => ({
-                              ...current,
-                              [port]: event.target.checked,
-                            }))
-                          }
-                        />
-                        <span>Porta <strong>{port}</strong></span>
-                      </label>
-                    )
-                  })
-                ) : (
-                  <p className="px-2 py-3 text-sm text-neutral-500">Nenhuma porta disponível.</p>
-                )}
+              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50/60">
+                <div className="flex items-center justify-between gap-2 border-b border-neutral-200/80 bg-white px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    PONs por slot
+                  </p>
+                  {selectedSlotValues.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (allPortsSelectedForSelectedSlots) {
+                          setSelectedPortsBySlot({})
+                        } else {
+                          selectAllPortsForSelectedSlots()
+                        }
+                      }}
+                      className="shrink-0 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-900 transition hover:border-sky-300 hover:bg-sky-100"
+                    >
+                      {allPortsSelectedForSelectedSlots
+                        ? 'Limpar PONs'
+                        : 'Selecionar todas as PONs'}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="max-h-80 flex-1 overflow-y-auto p-3">
+                  {selectedSlotValues.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedSlotValues.map((slot, slotIndex) => {
+                        const ports = portOptionsBySlot.get(slot) ?? []
+                        const selectedPortsForSlot = selectedPortsBySlot[slot] ?? {}
+                        const slotPortsAllSelected = allPortsSelectedForSlot(slot)
+                        const tone = SLOT_PORT_SECTION_TONES[slotIndex % SLOT_PORT_SECTION_TONES.length]
+                        return (
+                          <section
+                            key={slot}
+                            aria-label={`PONs do ${OLT_SLOT_LABEL.toLowerCase()} ${slot}`}
+                            className={`overflow-hidden rounded-lg border border-l-4 shadow-sm ${tone.shell} ${tone.accent}`}
+                          >
+                            <div
+                              className={`flex items-center justify-between gap-2 border-b px-3 py-2 ${tone.header}`}
+                            >
+                              <p className={`text-xs font-bold uppercase tracking-wide ${tone.title}`}>
+                                Slot <span className="tabular-nums">{slot}</span>
+                              </p>
+                              {ports.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    slotPortsAllSelected
+                                      ? clearPortsForSlot(slot)
+                                      : selectAllPortsForSlot(slot)
+                                  }
+                                  className={`rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${tone.action}`}
+                                >
+                                  {slotPortsAllSelected ? 'Limpar' : 'Selecionar todas'}
+                                </button>
+                              ) : null}
+                            </div>
+                            {ports.length > 0 ? (
+                              <div className="grid grid-cols-2 gap-1.5 bg-white/70 p-2.5 sm:grid-cols-3">
+                                {ports.map((port) => (
+                                  <label
+                                    key={`${slot}-${port}`}
+                                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition ${
+                                      selectedPortsForSlot[port] === true
+                                        ? 'border-sky-300 bg-sky-50 text-sky-950 shadow-sm'
+                                        : 'border-neutral-200/70 bg-white hover:border-neutral-300 hover:bg-neutral-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedPortsForSlot[port] === true}
+                                      onChange={(event) =>
+                                        togglePortForSlot(slot, port, event.target.checked)
+                                      }
+                                    />
+                                    <span className="tabular-nums">{OLT_PON_LABEL} {port}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="bg-white/70 px-3 py-2 text-xs text-neutral-500">
+                                Sem PONs neste slot.
+                              </p>
+                            )}
+                          </section>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex h-full min-h-[10rem] flex-col items-center justify-center px-4 text-center">
+                      <p className="text-sm font-medium text-neutral-700">Nenhum slot selecionado</p>
+                      <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                        Marque um ou mais slots à esquerda para escolher as PONs de cada um.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <p className="mt-3 text-xs text-neutral-600">
               {selectedPairsCount > 0
                 ? `${selectedPairsCount} combinação(ões) válida(s) selecionada(s).`
-                : 'Selecione slots e portas compatíveis para habilitar o avanço.'}
+                : selectedSlotValues.length > 0
+                  ? 'Marque ao menos uma PON em cada slot selecionado.'
+                  : 'Selecione os slots para habilitar a escolha de PONs.'}
             </p>
 
             <div className="mt-4 flex items-center justify-end gap-2">

@@ -21,6 +21,8 @@ import {
 } from '@/features/dashboard/lib/dashboardNarrative'
 import { useHomeDashboardMassivaOpen } from '@/features/massiva/hooks/useHomeDashboardMassivaOpen'
 import { effectiveMassivaStatus } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
+import { resolveExpectedCloseAtForDisplay } from '@/features/massiva/lib/massivaPrevisaoLocalEditor'
+import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 import { DashboardAccessRequestSection } from '@/features/access/ui/DashboardAccessRequestSection'
 import type { MassivaStatus } from '@/features/massiva/model/massivaTicket'
 import { formatBrazilCompactDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
@@ -28,8 +30,11 @@ import { cn } from '@/shared/lib/utils'
 import { resolveIsaHeroImageSrc } from '@/shared/lib/accessRequestFabImage'
 import { useFabPhotoDecodedGate } from '@/shared/hooks/useFabPhotoDecodedGate'
 
-function formatTicketTimestamp(openedAt: Date | null): string {
-  return formatBrazilCompactDateTimeDisplay(openedAt, 'detectado agora')
+function formatExpectedCloseTimestamp(ticket: MassivaTicket): string {
+  return formatBrazilCompactDateTimeDisplay(
+    resolveExpectedCloseAtForDisplay(ticket),
+    'sem previsão',
+  )
 }
 
 function statusBadgeClasses(status: MassivaStatus): string {
@@ -541,14 +546,20 @@ export function HomePage() {
                           >
                             {effectiveMassivaStatus(ticket).toUpperCase()}
                           </span>
-                          <time
-                            className="text-[11px] font-medium tabular-nums text-stone-500"
-                            dateTime={
-                              ticket.openedAt != null ? ticket.openedAt.toISOString() : undefined
-                            }
-                          >
-                            {formatTicketTimestamp(ticket.openedAt)}
-                          </time>
+                          <p className="flex flex-wrap items-baseline justify-start gap-x-1.5 text-[11px] sm:justify-end">
+                            <span className="font-medium text-stone-500">Previsão de encerramento</span>
+                            <span className="text-stone-300" aria-hidden>
+                              ·
+                            </span>
+                            <time
+                              className="font-medium tabular-nums text-stone-600"
+                              dateTime={
+                                resolveExpectedCloseAtForDisplay(ticket)?.toISOString()
+                              }
+                            >
+                              {formatExpectedCloseTimestamp(ticket)}
+                            </time>
+                          </p>
                         </div>
                       </div>
                     </motion.article>

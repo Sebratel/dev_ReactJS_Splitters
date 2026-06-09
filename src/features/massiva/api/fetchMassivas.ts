@@ -1,4 +1,5 @@
 import { fetchMassivaAfetadosCountsByProtocols } from '@/features/massiva/api/fetchMassivaAfetadosCounts'
+import { collectProtocolsForAfetadosEnrichment } from '@/features/massiva/lib/collectProtocolsForAfetadosEnrichment'
 import { extractMassivaListRows } from '@/features/massiva/lib/extractMassivaListRows'
 import { mergeMassivaTicketsAfetados } from '@/features/massiva/lib/mergeMassivaTicketsAfetados'
 import {
@@ -41,8 +42,9 @@ export async function fetchMassivas(): Promise<MassivaTicket[]> {
   }
 
   try {
-    const protocols = tickets.map((t) => t.protocol)
-    const byProtocol = await fetchMassivaAfetadosCountsByProtocols(protocols)
+    const byProtocol = await fetchMassivaAfetadosCountsByProtocols(
+      collectProtocolsForAfetadosEnrichment(tickets),
+    )
     tickets = mergeMassivaTicketsAfetados(tickets, byProtocol)
   } catch (e) {
     console.warn(
