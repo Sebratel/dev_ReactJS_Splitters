@@ -5,6 +5,7 @@ import {
   collectOutOfCatalogProtocolsForLocalCloseSync,
   collectProtocolsForLocalCloseSync,
   localRowExpectedCloseExpired,
+  LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS,
 } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import type { MassivaHistoryListRow } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
@@ -100,8 +101,8 @@ describe('syncOutOfCatalogMassivaFromBff', () => {
     expect(protocols).toEqual([56])
   })
 
-  it('reconcilia MySQL aberta com previsão expirada (#1684421)', () => {
-    const row = {
+  it('localRowExpectedCloseExpired detecta previsão expirada', () => {
+    const expiredRow = {
       id: 281,
       protocol: 1684421,
       assignmentId: 1,
@@ -115,11 +116,55 @@ describe('syncOutOfCatalogMassivaFromBff', () => {
       closedAt: null,
       updatedAt: null,
     }
-    expect(localRowExpectedCloseExpired(row)).toBe(true)
+    expect(localRowExpectedCloseExpired(expiredRow)).toBe(true)
+  })
+
+  it('previsão expirada sozinha NÃO fecha localmente sem confirmação do Elleven (#1689210)', () => {
+    // Protocolo com SLA vencido mas Elleven ainda mostrando "Abertura" (finalizado: null).
+    // Se fechássemos localmente, o DELETE no Elleven nunca seria chamado e os afetados
+    // continuariam na tabela sem limpeza.
+    const expiredRow: MassivaHistoryListRow = {
+      id: 300,
+      protocol: 1689210,
+      assignmentId: 2054064,
+      accessPointCode: 'OLT 01 - SLESC',
+      title: 'Registro Evento Massivo',
+      operatorEmail: 'gustavo.dutra@sebratel.com.br',
+      affectedClients: 44,
+      status: 'aberta',
+      openedAt: new Date('2026-06-10T03:34:10.233812'),
+      expectedCloseAt: new Date('2026-06-10T11:00:00'),
+      closedAt: null,
+      updatedAt: null,
+    }
+    // Elleven ainda responde como aberto (finalizado: null, status: "Abertura")
+    const ellevenStillOpen = bff({ protocol: 1689210, status: 'aberta', ellevenLifecycle: 'open' })
+    expect(localRowExpectedCloseExpired(expiredRow, Date.now())).toBe(true)
+    expect(
+      collectProtocolsForLocalCloseSync([ellevenStillOpen], [expiredRow]),
+    ).toEqual([])
+  })
+
+  it('fecha localmente quando protocolo sumiu do BFF há mais de ' + LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS / 3600000 + 'h', () => {
+    const oldRow: MassivaHistoryListRow = {
+      id: 282,
+      protocol: 1684421,
+      assignmentId: 1,
+      accessPointCode: '29370',
+      title: 'OLT 02 - CANMV',
+      operatorEmail: 'op@test.com',
+      affectedClients: 4,
+      status: 'aberta',
+      openedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      expectedCloseAt: null,
+      closedAt: null,
+      updatedAt: null,
+    }
+    // Protocolo 1684421 não aparece no BFF (sumiu do catálogo)
     expect(
       collectProtocolsForLocalCloseSync(
         [bff({ protocol: 1686865, title: 'OLT 02 - NHOCE', ellevenLifecycle: 'open' })],
-        [row],
+        [oldRow],
       ),
     ).toEqual([1684421])
   })

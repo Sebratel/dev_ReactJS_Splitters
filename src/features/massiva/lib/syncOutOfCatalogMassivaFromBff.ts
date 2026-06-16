@@ -24,7 +24,7 @@ export function bffSaysMassivaOpen(ticket: MassivaTicket): boolean {
 /** Após abertura, o catálogo Elleven pode demorar a listar o protocolo. */
 export const LOCAL_CLOSE_MISSING_FROM_BFF_GRACE_MS = 2 * 60 * 60 * 1000
 
-const LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS = 2 * 60 * 60 * 1000
+export const LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS = 2 * 60 * 60 * 1000
 
 function localAbertaProtocolsFromRows(
   localRows: readonly MassivaHistoryListRow[],
@@ -51,8 +51,14 @@ export function localRowExpectedCloseExpired(
 }
 
 /**
- * MySQL ainda `aberta` mas Elleven já encerrou, ou protocolo sumiu do catálogo BFF
- * (ex. #1684421) — para `mark-closed-by-protocols`.
+ * MySQL ainda `aberta` mas Elleven já encerrou ou protocolo sumiu do BFF há horas —
+ * para `mark-closed-by-protocols`.
+ *
+ * Somente sincroniza encerramento quando o Elleven/BFF confirma: ou o BFF diz
+ * "encerrada", ou o protocolo desapareceu do catálogo por tempo suficiente.
+ * Previsão de encerramento expirada *não* é critério: ela não garante que o
+ * Elleven encerrou, e usar ela causaria fechamento local sem acionar o Elleven,
+ * deixando o protocolo em aberto lá e os afetados sem limpeza.
  */
 export function collectProtocolsForLocalCloseSync(
   bffTickets: readonly MassivaTicket[],
@@ -78,10 +84,6 @@ export function collectProtocolsForLocalCloseSync(
       if (row.status !== 'aberta' || row.closedAt != null) continue
       const protocol = row.protocol
       if (protocol == null || protocol <= 0) continue
-      if (localRowExpectedCloseExpired(row, now)) {
-        protocols.add(protocol)
-        continue
-      }
       if (bffProtocols.has(protocol)) continue
       const opened = row.openedAt
       if (opened == null || Number.isNaN(opened.getTime())) continue

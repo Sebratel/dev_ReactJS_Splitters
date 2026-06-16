@@ -168,7 +168,7 @@ export async function openMassivaFromContext(
         try {
           await registerOpenedMassivaHistoryInLocalDb(context, payload)
         } catch (localError) {
-          console.warn('[Massiva] Falha ao registrar hist??rico local ap??s autoencerramento.', localError)
+          console.warn('[Massiva] Falha ao registrar histórico local após autoencerramento.', localError)
           payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
         }
         return payload
@@ -193,7 +193,7 @@ export async function openMassivaFromContext(
     try {
       await registerOpenedMassivaHistoryInLocalDb(context, payload)
     } catch (localError) {
-      console.warn('[Massiva] Falha ao registrar hist??rico local ap??s abertura.', localError)
+      console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
       payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
     }
 
@@ -201,12 +201,15 @@ export async function openMassivaFromContext(
   }
 
   let afetadosPostedCount = 0
+  const afetadosWarnings: string[] = []
+
   for (const opened of successes) {
     const ids = resolveProtocolAndAssignment(opened)
     if (ids == null) {
-      throw new Error(
-        'Abertura concluída, mas a resposta não trouxe protocolo e assignmentId para registrar os afetados.',
+      afetadosWarnings.push(
+        `AP ${opened.accessPointCode}: resposta da abertura não trouxe protocolo/assignmentId — afetados não registrados.`,
       )
+      continue
     }
 
     const scopedClientes = clientesForAccessPoint(
@@ -220,13 +223,19 @@ export async function openMassivaFromContext(
       scopedClientes,
     )
 
-    await bffClient.request({
-      path: afetadosPath,
-      method: 'POST',
-      body: afetadosBody,
-      signal,
-    })
-    afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
+    try {
+      await bffClient.request({
+        path: afetadosPath,
+        method: 'POST',
+        body: afetadosBody,
+        signal,
+      })
+      afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
+    } catch (afetadosError) {
+      const msg = afetadosError instanceof Error ? afetadosError.message : String(afetadosError)
+      console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
+      afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
+    }
   }
 
   let payload: MassivaOpenMutationSuccessPayload = {
@@ -234,10 +243,17 @@ export async function openMassivaFromContext(
     afetadosPostedCount,
   }
 
+  if (afetadosWarnings.length > 0) {
+    payload = appendFollowUpWarning(
+      payload,
+      `Afetados não registrados em alguns pontos de acesso:\n${afetadosWarnings.join('\n')}`,
+    )
+  }
+
   try {
     await registerOpenedMassivaHistoryInLocalDb(context, payload)
   } catch (localError) {
-    console.warn('[Massiva] Falha ao registrar hist??rico local ap??s abertura.', localError)
+    console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
     payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
   }
 

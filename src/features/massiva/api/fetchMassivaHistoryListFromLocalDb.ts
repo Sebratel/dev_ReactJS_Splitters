@@ -13,6 +13,8 @@ export type MassivaHistoryListRow = {
   openedAt: Date | null
   expectedCloseAt: Date | null
   closedAt: Date | null
+  /** Relato preenchido pelo operador ao encerrar a massiva. */
+  closeDescription: string | null
   updatedAt: Date | null
 }
 
@@ -65,6 +67,9 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
     openedAt: toNullableDate(row.openedAt),
     expectedCloseAt: toNullableDate(row.expectedCloseAt),
     closedAt: toNullableDate(row.closedAt),
+    closeDescription: row.closeDescription != null && String(row.closeDescription).trim() !== ''
+      ? String(row.closeDescription).trim()
+      : null,
     updatedAt: toNullableDate(row.updatedAt),
   }))
 }

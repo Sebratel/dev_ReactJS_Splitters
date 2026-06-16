@@ -1490,6 +1490,7 @@ export function createMassivaHistoryStore(config) {
           h.event_identified_at AS eventIdentifiedAt,
           h.expected_close_at AS expectedCloseAt,
           h.closed_at AS closedAt,
+          h.close_description AS closeDescription,
           h.updated_at AS updatedAt
         FROM massiva_history h
         ${whereSql}
@@ -1512,6 +1513,7 @@ export function createMassivaHistoryStore(config) {
       eventIdentifiedAt: serializeHistoryDate(row.eventIdentifiedAt),
       expectedCloseAt: serializeHistoryDate(row.expectedCloseAt),
       closedAt: serializeHistoryDate(row.closedAt),
+      closeDescription: normalizeNullableText(row.closeDescription),
       updatedAt: serializeHistoryDate(row.updatedAt),
     }));
   }

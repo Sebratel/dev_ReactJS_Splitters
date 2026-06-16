@@ -13,6 +13,7 @@ import {
   Megaphone,
   Network,
   Pencil,
+  ScrollText,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -259,6 +260,76 @@ function ProtocolDescriptionDialog({
   return createPortal(modalContent, document.body)
 }
 
+function CloseDescriptionDialog({
+  ticket,
+  onClose,
+}: {
+  ticket: MassivaTicket
+  onClose: () => void
+}) {
+  const protocolLabel = ticket.protocol > 0 ? String(ticket.protocol) : '—'
+  const text = ticket.closeDescription?.trim() ?? ''
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="massiva-close-desc-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shrink-0 border-b border-neutral-200/80 bg-gradient-to-r from-neutral-50/80 to-white px-5 pb-4 pt-5 sm:px-6">
+          <h3
+            id="massiva-close-desc-title"
+            className="text-base font-bold tracking-tight text-neutral-900"
+          >
+            Motivo de encerramento
+          </h3>
+          <p className="mt-0.5 font-mono text-xs text-neutral-500">
+            #{protocolLabel}
+          </p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+          {text !== '' ? (
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-800">
+              {text}
+            </p>
+          ) : (
+            <p className="text-sm italic text-neutral-400">
+              Nenhum relato de encerramento registrado.
+            </p>
+          )}
+        </div>
+        <div className="shrink-0 border-t border-neutral-200/80 bg-neutral-50/50 px-5 py-3 sm:px-6">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
+}
+
 export function MassivaTicketCard({
   ticket,
   closeConfigured,
@@ -267,6 +338,7 @@ export function MassivaTicketCard({
   const queryClient = useQueryClient()
   const auth = useAuth()
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [closeDescOpen, setCloseDescOpen] = useState(false)
   const [editingExpectedClose, setEditingExpectedClose] = useState(false)
   const [expectedCloseDraft, setExpectedCloseDraft] = useState('')
   const displayStatus = effectiveMassivaStatus(ticket)
@@ -414,6 +486,17 @@ export function MassivaTicketCard({
           </div>
         </div>
         <div className="flex w-full shrink-0 items-stretch justify-end gap-2 sm:w-auto sm:items-center">
+          {displayStatus === 'encerrada' ? (
+            <button
+              type="button"
+              onClick={() => setCloseDescOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:text-neutral-800"
+              title="Ver motivo de encerramento"
+              aria-label="Ver motivo de encerramento"
+            >
+              <ScrollText size={18} strokeWidth={2} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setDetailsOpen(true)}
@@ -638,6 +721,12 @@ export function MassivaTicketCard({
         <ProtocolDescriptionDialog
           ticket={ticket}
           onClose={() => setDetailsOpen(false)}
+        />
+      ) : null}
+      {closeDescOpen ? (
+        <CloseDescriptionDialog
+          ticket={ticket}
+          onClose={() => setCloseDescOpen(false)}
         />
       ) : null}
     </article>

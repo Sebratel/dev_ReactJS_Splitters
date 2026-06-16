@@ -8,6 +8,17 @@ type CloseMassivaInput = {
   closeDescription: string
 }
 
+export type CloseMassivaResult = {
+  /** Encerrado com sucesso no Elleven. */
+  ok: true
+  /**
+   * Presente quando o registro local (MySQL) falhou após o encerramento no Elleven.
+   * O protocolo está encerrado no Elleven, mas o histórico local pode ficar inconsistente
+   * até o próximo ciclo de sincronização automática.
+   */
+  localHistoryWarning?: string
+}
+
 function normalizePath(path: string): string {
   const trimmed = path.trim()
   if (trimmed === '') return ''
@@ -20,7 +31,7 @@ function affectedUsersCleanupBasePath(): string {
   return normalizePath(env.massivaAfetadosPath)
 }
 
-export async function closeMassivaTicket(input: CloseMassivaInput): Promise<void> {
+export async function closeMassivaTicket(input: CloseMassivaInput): Promise<CloseMassivaResult> {
   const closePath = normalizePath(env.massivaClosePath)
   if (closePath === '') {
     throw new Error('Defina VITE_MASSIVA_CLOSE_PATH para encerrar massivas.')
@@ -48,13 +59,22 @@ export async function closeMassivaTicket(input: CloseMassivaInput): Promise<void
         method: 'DELETE',
       })
     } catch {
-      // Encerramento já concluído no BFF; limpeza de afetados é auxiliar.
+      // Encerramento concluído no Elleven; limpeza de afetados é auxiliar.
     }
   }
 
   try {
     await registerClosedMassivaHistoryInLocalDb(input)
+    return { ok: true }
   } catch (localError) {
+    const msg =
+      localError instanceof Error
+        ? localError.message
+        : 'Erro desconhecido ao salvar encerramento localmente.'
     console.warn('[Massiva] Falha ao registrar encerramento no histórico local.', localError)
+    return {
+      ok: true,
+      localHistoryWarning: `Encerrado no Elleven, mas o registro local falhou: ${msg}. O histórico pode demorar a refletir.`,
+    }
   }
 }

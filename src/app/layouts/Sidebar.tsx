@@ -18,6 +18,7 @@ import { isFirebaseAuthConfigured } from '@/shared/config/env'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { prefetchNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
+import { prefetchIntelligenceSplittersCatalog } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
 
 type SidebarProps = {
   collapsed: boolean
@@ -151,9 +152,9 @@ export function Sidebar({
                     title={navCollapsed ? item.label : undefined}
                     onClick={() => onNavigate()}
                     onMouseEnter={() => {
-                      /** Só KPIs leves — prefetch do catálogo inteiro competia com GET da lista de splitters no BFF. */
                       if (item.to === '/intelligence') {
                         void prefetchNetworkStats(queryClient)
+                        void prefetchIntelligenceSplittersCatalog(queryClient)
                       }
                     }}
                     className={cn(
