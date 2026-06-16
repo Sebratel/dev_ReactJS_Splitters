@@ -61,6 +61,7 @@ function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTi
     previsaoEncerramentoAtualizadaPor: '',
     estimateTimeOfRestoration: null,
     closedAt: row.closedAt,
+    closeDescription: row.closeDescription ?? null,
     affectedClients: row.affectedClients,
     affectedClientsResidential: null,
     affectedClientsCorporate: null,
@@ -91,6 +92,8 @@ function applyClosedMassivaFromLocalRow(
       apCode: bffEffective.apCode.trim() !== '' ? bffEffective.apCode : base.apCode,
       splitterCode:
         bffEffective.splitterCode.trim() !== '' ? bffEffective.splitterCode : base.splitterCode,
+      team: bffEffective.team.trim() !== '' ? bffEffective.team : base.team,
+      responsible: bffEffective.responsible.trim() !== '' ? bffEffective.responsible : base.responsible,
       assignmentId: bffEffective.assignmentId ?? base.assignmentId,
       ellevenIncidentStatusId: bffEffective.ellevenIncidentStatusId,
       ellevenStatusTexts: bffEffective.ellevenStatusTexts,
@@ -162,6 +165,7 @@ function mergeBffOntoLocal(
         ellevenIncidentStatusId: bffEffective.ellevenIncidentStatusId,
         closedAt: bffEffective.closedAt ?? local.closedAt,
         openedAt: local.openedAt ?? bffEffective.openedAt,
+        closeDescription: local.closeDescription ?? bffEffective.closeDescription,
       },
       localRow,
       local,
@@ -183,6 +187,8 @@ function mergeBffOntoLocal(
       description: bffEffective.description.trim() !== '' ? bffEffective.description : local.description,
       apCode: bffEffective.apCode.trim() !== '' ? bffEffective.apCode : local.apCode,
       splitterCode: bffEffective.splitterCode.trim() !== '' ? bffEffective.splitterCode : local.splitterCode,
+      team: bffEffective.team.trim() !== '' ? bffEffective.team : local.team,
+      responsible: bffEffective.responsible.trim() !== '' ? bffEffective.responsible : local.responsible,
       assignmentId: bffEffective.assignmentId ?? local.assignmentId,
       openedAt,
       expectedCloseAt,
@@ -349,18 +355,6 @@ export function buildDashboardMassivaTickets(input: {
     }
 
     if (existing) {
-      if (bff && bffIndicatesClosed(bff)) {
-        const bffEffective = applyEffectiveMassivaTicket(bff)
-        if (localRow) {
-          byProtocol.set(recent.protocol, applyClosedMassivaFromLocalRow(localRow, bff))
-        } else if (isMassivaMonitoringOutOfCatalogTitle(bffEffective.title)) {
-          byProtocol.set(
-            recent.protocol,
-            withAffectedClients(bffEffective, null, null, bff),
-          )
-        }
-        continue
-      }
       if (bffIndicatesClosed(existing)) {
         continue
       }

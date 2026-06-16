@@ -70,6 +70,7 @@ export function massivaTicketsFromOpenSuccess(
         previsaoEncerramentoAtualizadaPor: '',
         estimateTimeOfRestoration: null,
         closedAt,
+        closeDescription: null,
         affectedClients,
         affectedClientsResidential: null,
         affectedClientsCorporate: null,

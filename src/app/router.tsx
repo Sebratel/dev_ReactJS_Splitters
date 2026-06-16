@@ -1,18 +1,40 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
 import { PermissionGuard } from '@/app/auth/PermissionGuard'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { HomePage } from '@/pages/HomePage'
-import { SplittersPage } from '@/pages/SplittersPage'
-import { SplitterDetailPage } from '@/pages/SplitterDetailPage'
-import { ClienteDetailPage } from '@/pages/ClienteDetailPage'
-import { MassivaPage } from '@/pages/MassivaPage'
-import { NetworkIntelligencePage } from '@/pages/NetworkIntelligencePage'
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage'
 import { LoginPage } from '@/pages/LoginPage'
-import { UsersManagementPage } from '@/pages/UsersManagementPage'
-import { IsaSettingsPage } from '@/pages/IsaSettingsPage'
-import { PlatformSuggestionsPage } from '@/pages/PlatformSuggestionsPage'
+
+const SplittersPage = lazy(() =>
+  import('@/pages/SplittersPage').then((m) => ({ default: m.SplittersPage })),
+)
+const SplitterDetailPage = lazy(() =>
+  import('@/pages/SplitterDetailPage').then((m) => ({ default: m.SplitterDetailPage })),
+)
+const ClienteDetailPage = lazy(() =>
+  import('@/pages/ClienteDetailPage').then((m) => ({ default: m.ClienteDetailPage })),
+)
+const MassivaPage = lazy(() =>
+  import('@/pages/MassivaPage').then((m) => ({ default: m.MassivaPage })),
+)
+const NetworkIntelligencePage = lazy(() =>
+  import('@/pages/NetworkIntelligencePage').then((m) => ({ default: m.NetworkIntelligencePage })),
+)
+const UsersManagementPage = lazy(() =>
+  import('@/pages/UsersManagementPage').then((m) => ({ default: m.UsersManagementPage })),
+)
+const IsaSettingsPage = lazy(() =>
+  import('@/pages/IsaSettingsPage').then((m) => ({ default: m.IsaSettingsPage })),
+)
+const PlatformSuggestionsPage = lazy(() =>
+  import('@/pages/PlatformSuggestionsPage').then((m) => ({ default: m.PlatformSuggestionsPage })),
+)
+
+function Page({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>
+}
 
 export const router = createBrowserRouter([
   {
@@ -31,13 +53,13 @@ export const router = createBrowserRouter([
         element: <ProtectedAppLayout />,
         children: [
           { index: true, element: <HomePage /> },
-          { path: 'splitters', element: <SplittersPage /> },
-          { path: 'sugestoes', element: <PlatformSuggestionsPage /> },
+          { path: 'splitters', element: <Page><SplittersPage /></Page> },
+          { path: 'sugestoes', element: <Page><PlatformSuggestionsPage /></Page> },
           {
             path: 'splitters/:code',
-            element: <SplitterDetailPage />,
+            element: <Page><SplitterDetailPage /></Page>,
           },
-          { path: 'clientes/:id', element: <ClienteDetailPage /> },
+          { path: 'clientes/:id', element: <Page><ClienteDetailPage /></Page> },
           {
             path: 'massiva',
             element: (
@@ -45,7 +67,7 @@ export const router = createBrowserRouter([
                 permission="canViewMassiva"
                 description="Seu perfil não possui acesso ao módulo de massivas."
               >
-                <MassivaPage />
+                <Page><MassivaPage /></Page>
               </PermissionGuard>
             ),
           },
@@ -56,7 +78,7 @@ export const router = createBrowserRouter([
                 permission="canViewIntelligence"
                 description="Seu perfil não possui acesso ao painel de inteligência."
               >
-                <NetworkIntelligencePage />
+                <Page><NetworkIntelligencePage /></Page>
               </PermissionGuard>
             ),
           },
@@ -67,7 +89,7 @@ export const router = createBrowserRouter([
                 permission="isAdmin"
                 description="Somente administradores podem acessar a gestão de usuários."
               >
-                <UsersManagementPage />
+                <Page><UsersManagementPage /></Page>
               </PermissionGuard>
             ),
           },
@@ -78,7 +100,7 @@ export const router = createBrowserRouter([
                 permission="isAdmin"
                 description="Somente administradores podem acessar a configuração da ISA."
               >
-                <IsaSettingsPage />
+                <Page><IsaSettingsPage /></Page>
               </PermissionGuard>
             ),
           },

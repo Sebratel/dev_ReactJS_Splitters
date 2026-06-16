@@ -53,6 +53,8 @@ export type MassivaTicket = {
    */
   estimateTimeOfRestoration: number | null
   closedAt: Date | null
+  /** Relato de encerramento preenchido pelo operador (null = não preenchido ou ticket aberto). */
+  closeDescription: string | null
   affectedClients: number
   /**
    * Discriminação PF/PJ quando a listagem ou o GET `…/afetados/protocol/{id}` a expuserem.
@@ -609,15 +611,20 @@ export function parseMassivaTicketFromApi(
   const team = pickString(merged.team ?? merged.equipe ?? '')
 
   const createdBy = pickString(
-    inputAssignment.responsavel ??
-      merged.responsavel ??
+    merged.criadoPor ??
       merged.createdBy ??
-      merged.criadoPor ??
+      merged.solicitante ??
+      merged.requester ??
       '',
   )
 
   const responsible = pickString(
-    merged.responsavel ?? merged.responsible ?? '',
+    merged.responsavel ??
+      merged.responsible ??
+      merged.assignedTo ??
+      merged.responsibleName ??
+      merged.atendente ??
+      '',
   )
 
   const openedAt = parseMassivaDate(
@@ -783,6 +790,7 @@ export function parseMassivaTicketFromApi(
     previsaoEncerramentoAtualizadaPor,
     estimateTimeOfRestoration,
     closedAt,
+    closeDescription: null,
     affectedClients,
     affectedClientsResidential: hasListSplit ? affectedClientsResidential : null,
     affectedClientsCorporate: hasListSplit ? affectedClientsCorporate : null,

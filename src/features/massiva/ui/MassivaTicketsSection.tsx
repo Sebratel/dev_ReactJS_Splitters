@@ -269,11 +269,14 @@ export function MassivaTicketsSection({
 
   const closeConfigured = env.massivaClosePath.trim() !== ''
 
+  const [closeLocalWarning, setCloseLocalWarning] = useState<string | null>(null)
+
   const closeMutation = useMutation({
     mutationFn: closeMassivaTicket,
-    onSuccess: async (_data, variables) => {
+    onSuccess: async (result, variables) => {
       setClosingProtocol(null)
       setCloseDescription('')
+      setCloseLocalWarning(result?.localHistoryWarning ?? null)
       if (variables.protocol > 0) {
         removeRecentOpenTicketFromStorage(variables.protocol)
         void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
@@ -281,6 +284,7 @@ export function MassivaTicketsSection({
       await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
       await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
       await queryClient.invalidateQueries({ queryKey: splittersKeys.all })
+      void historyQuery.refetch()
     },
   })
 
@@ -367,7 +371,7 @@ export function MassivaTicketsSection({
     reconcileClosedRef.current = key
     void reconcileMassivaLocalClosedProtocols(protocols, {
       closeDescription:
-        'Sincronizado com encerramento no Elleven (massiva fora do catálogo, monitoração).',
+        'Encerrado automaticamente: protocolo confirmado como encerrado pelo Elleven ou removido do catálogo BFF.',
     })
       .then(() => historyQuery.refetch())
       .catch(() => {
@@ -971,6 +975,7 @@ export function MassivaTicketsSection({
                   onRequestClose={(protocol) => {
                     setClosingProtocol(protocol)
                     setCloseDescription('')
+                    setCloseLocalWarning(null)
                   }}
                 />
               </li>
@@ -1037,6 +1042,11 @@ export function MassivaTicketsSection({
                     {formatQueryError(closeMutation.error)}
                   </p>
                 ) : null}
+                {closeLocalWarning !== null ? (
+                  <p className="text-xs text-amber-700">
+                    ⚠️ {closeLocalWarning}
+                  </p>
+                ) : null}
               </div>
             )}
 
@@ -1047,6 +1057,7 @@ export function MassivaTicketsSection({
                 onClick={() => {
                   setClosingProtocol(null)
                   setCloseDescription('')
+                  setCloseLocalWarning(null)
                 }}
               >
                 Cancelar

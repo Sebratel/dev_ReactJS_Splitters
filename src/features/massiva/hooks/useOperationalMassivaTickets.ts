@@ -75,7 +75,7 @@ export function useOperationalMassivaTickets(options?: { enabled?: boolean }): {
     reconcileOotClosedRef.current = key
     void reconcileMassivaLocalClosedProtocols(protocols, {
       closeDescription:
-        'Sincronizado com encerramento no Elleven (massiva fora do catálogo, monitoração).',
+        'Encerrado automaticamente: protocolo confirmado como encerrado pelo Elleven ou removido do catálogo BFF.',
     })
       .then(() => historyQuery.refetch())
       .catch(() => {

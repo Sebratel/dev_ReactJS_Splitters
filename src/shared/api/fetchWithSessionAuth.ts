@@ -11,9 +11,12 @@ function readSessionToken(): string | null {
   return null
 }
 
+/** Timeout padrão para chamadas ao BFF local (Node/MySQL). */
+const LOCAL_BFF_TIMEOUT_MS = 30_000
+
 /**
  * Wrapper de fetch para endpoints que exigem Bearer no browser.
- * Mantem compatibilidade com chamadas existentes e injeta Authorization quando houver token.
+ * Inclui timeout de 30s para evitar hang indefinido quando o BFF local estiver indisponível.
  */
 export async function fetchWithSessionAuth(
   input: RequestInfo | URL,
@@ -24,6 +27,28 @@ export async function fetchWithSessionAuth(
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`)
   }
-  return fetch(input, { ...init, headers })
+
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), LOCAL_BFF_TIMEOUT_MS)
+
+  const externalSignal = init?.signal as AbortSignal | undefined
+  const onExternalAbort = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort()
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true })
+  }
+
+  try {
+    return await fetch(input, {
+      ...init,
+      headers,
+      signal: controller.signal,
+    })
+  } finally {
+    window.clearTimeout(timeoutId)
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', onExternalAbort)
+    }
+  }
 }
 

@@ -48,7 +48,31 @@ export function parseMassivaOpenResponseToResult(
     protocolParsed ??
     (createdProtocols.length > 0 ? (createdProtocols[0] ?? null) : null)
 
-  const assignmentParsed = Number.parseInt(String(merged.assignmentId ?? ''), 10)
+  const inputBlock = nestedMap(merged.input)
+  const inputAssignmentBlock = nestedMap(inputBlock.assignment)
+  const assignmentBlock = nestedMap(merged.assignment)
+  const atendimentoBlock = nestedMap(merged.atendimento ?? merged.incident ?? merged.task)
+  const chamadoBlock = nestedMap(merged.chamado ?? merged.chamada)
+
+  const assignmentIdRaw =
+    merged.assignmentId ??
+    merged.assignment_id ??
+    merged.idAssignment ??
+    merged.id_assignment ??
+    merged.incidentAssignmentId ??
+    merged.atendimentoId ??
+    merged.atendimento_id ??
+    inputAssignmentBlock.id ??
+    inputAssignmentBlock.assignmentId ??
+    assignmentBlock.id ??
+    assignmentBlock.assignmentId ??
+    atendimentoBlock.assignmentId ??
+    atendimentoBlock.id ??
+    chamadoBlock.assignmentId ??
+    chamadoBlock.id ??
+    ''
+
+  const assignmentParsed = Number.parseInt(String(assignmentIdRaw), 10)
   const assignmentId =
     Number.isFinite(assignmentParsed) && assignmentParsed > 0
       ? assignmentParsed
