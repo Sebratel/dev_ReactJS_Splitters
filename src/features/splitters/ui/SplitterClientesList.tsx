@@ -8,12 +8,16 @@ import type { GeogridReservaRow } from '@/features/splitters/model/geogridReserv
 import {
   User,
   ArrowRight,
-  Activity,
   Hash,
   Lock,
   Building2,
 } from 'lucide-react'
+import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
+import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
+import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
+import { OnuStatusBadge } from '@/features/onu/ui/OnuStatusBadge'
+import { normalizeClientName } from '@/features/onu/model/projectedSignal'
 
 type SplitterClientesListProps = {
   clientes: SplitterCliente[]
@@ -37,9 +41,6 @@ function formatReservaNome(row: GeogridReservaRow): string {
   return 'Sem cliente informado'
 }
 
-function statusLabel(status: number): string {
-  return status === 1 ? 'Ativo' : 'Inativo'
-}
 
 function ReservaBadge({ reserva }: { reserva: GeogridReservaRow }) {
   return (
@@ -112,6 +113,33 @@ export function SplitterClientesList({
     () => clientes.filter((c) => c.isCorporate).length,
     [clientes],
   )
+
+  // Diagnóstico de ONU em lote (polling 60s) para o status em tempo real no card.
+  const clienteUsernames = useMemo(
+    () => clientes.map((c) => c.user).filter((u): u is string => Boolean(u)),
+    [clientes],
+  )
+  const onuQuery = useOnuDiagnosticsBatch(clienteUsernames)
+  const onuByUsername = onuQuery.data
+
+  // Sinal projetado (Fase 2) por nome — sem polling; refina o badge com alerta
+  // de atenuação quando o match por nome é inequívoco.
+  const clienteNames = useMemo(
+    () => clientes.map((c) => c.name).filter((n): n is string => Boolean(n)),
+    [clientes],
+  )
+  const projectedByName = useProjectedSignalsBatch(clienteNames).data
+
+  const onuForCliente = (c: SplitterCliente) => {
+    const onu = onuByUsername?.get(c.user)
+    if (!onu) return onu
+    const projected = c.name
+      ? projectedByName?.get(normalizeClientName(c.name))
+      : undefined
+    return projected?.projectedRxPower != null
+      ? { ...onu, projectedRxPower: projected.projectedRxPower }
+      : onu
+  }
 
   const visiblePorts = corporateOnly
     ? ports.filter((portNum) => {
@@ -198,8 +226,9 @@ export function SplitterClientesList({
 
                 <div className={cn('min-w-0 flex-1', hasReservaNoCard && 'pr-44')}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-outline-variant bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70">
-                      Porta {portNum}
+                    <span className="inline-flex items-stretch overflow-hidden rounded-full border border-outline-variant text-[10px] font-bold uppercase tracking-wider">
+                      <span className="flex items-center bg-surface-container-low/60 px-2.5 py-1 text-on-surface-variant/60">Porta</span>
+                      <span className="flex items-center bg-on-surface-variant/[0.10] px-2.5 py-1 font-extrabold text-on-surface-variant/70">{portNum}</span>
                     </span>
                     <span className="inline-flex items-center rounded-full border border-outline-variant/50 bg-white/70 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/45">
                       Livre
@@ -237,20 +266,20 @@ export function SplitterClientesList({
 
                 <div className={cn('min-w-0 flex-1', hasReservaNoCard && 'pr-44')}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/[0.08] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
-                      Porta {portNum}
+                    <span className="inline-flex items-stretch overflow-hidden rounded-full border border-primary/30 text-[10px] font-bold uppercase tracking-wider">
+                      <span className="flex items-center bg-primary/[0.12] px-2.5 py-1 text-primary">Porta</span>
+                      <span className="flex items-center bg-primary px-2.5 py-1 font-extrabold text-white">{portNum}</span>
                     </span>
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
-                      c.status === 1
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-200 bg-slate-100 text-slate-700',
-                    )}
-                    >
-                      <Activity size={11} />
-                      {statusLabel(c.status)}
-                    </span>
+                  <SplitterStatusBadge
+                    active={c.status === 1}
+                    labels={{ active: 'Contrato ativo', inactive: 'Contrato suspenso' }}
+                    variant="neutral"
+                  />
+                    <OnuStatusBadge
+                      diagnostic={onuForCliente(c)}
+                      loading={onuQuery.isPending}
+                      compact
+                    />
                     {hasBlock && blocked ? <PortBlockIndicator block={blocked} /> : null}
                     {c.isCorporate ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-800">

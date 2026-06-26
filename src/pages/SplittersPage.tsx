@@ -32,6 +32,7 @@ import {
   compareByRisk,
   occupancyPercent,
 } from '@/features/splitters/lib/splitterOperationalPriorityCompare'
+import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -508,6 +509,10 @@ export function SplittersPage() {
       latestCreatedAt: null,
     }
 
+  const onuSummaryBySplitter = useOnuSummaryBySplitter()
+  const getOnuSignal = (splitter: Splitter) =>
+    onuSummaryBySplitter.data?.get(String(splitter.code ?? '')) ?? null
+
   const showSummary =
     !splittersQuery.isPending &&
     !splittersQuery.isError &&
@@ -658,6 +663,7 @@ export function SplittersPage() {
         getMaintenanceStats={getMaintenanceStats}
         getOperationalScore={getOperationalScore}
         getTrendLabel={getTrendLabel}
+        getOnuSignal={getOnuSignal}
       />
     </ResponsiveWrapper>
   )
