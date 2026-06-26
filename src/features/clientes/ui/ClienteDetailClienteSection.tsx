@@ -29,7 +29,11 @@ export function ClienteDetailClienteSection({
             >
               Cliente
             </h2>
-            <SplitterStatusBadge active={cliente.status === 1} />
+            <SplitterStatusBadge
+              active={cliente.status === 1}
+              labels={{ active: 'Contrato ativo', inactive: 'Contrato suspenso' }}
+              variant="neutral"
+            />
             {cliente.isCorporate ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-800">
                 <Building2 size={12} strokeWidth={2} />

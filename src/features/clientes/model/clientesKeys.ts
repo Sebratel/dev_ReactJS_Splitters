@@ -13,4 +13,8 @@ export const clientesKeys = {
   /** GET `solicitacoes/cliente/:clientId` — paridade `SolicitationService` + `cliente.clientId` no Flutter. */
   solicitations: (clientId: number) =>
     [...clientesKeys.all, 'solicitations', clientId] as const,
+
+  /** GET `/api/clientes/:clientId/patrimonios` — equipamentos do cliente (banco principal). */
+  patrimonies: (clientId: number) =>
+    [...clientesKeys.all, 'patrimonies', clientId] as const,
 }
