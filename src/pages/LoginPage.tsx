@@ -76,7 +76,7 @@ export function LoginPage() {
   if (!isFirebaseAuthConfigured()) {
     return (
       <div className="mx-auto mt-20 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-950">
-        <h1 className="text-lg font-semibold">Login da Operação Sebratel não configurado</h1>
+        <h1 className="text-lg font-semibold">Login do Monitoramento de Splitters não configurado</h1>
         <p className="mt-2 text-sm">
           Defina as variáveis <code>VITE_FIREBASE_*</code> no ambiente para ativar autenticação e
           gestão de permissões no Firestore.

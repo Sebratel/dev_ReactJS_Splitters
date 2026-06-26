@@ -69,9 +69,9 @@ export function RootLayout() {
             <Menu className="size-5" strokeWidth={2} aria-hidden />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black tracking-tight text-neutral-900">Operação</p>
+            <p className="truncate text-sm font-black tracking-tight text-neutral-900">Monitoramento</p>
             <p className="truncate text-[9px] font-bold uppercase tracking-widest text-neutral-400">
-              Dashboard Sebratel
+              de Splitters
             </p>
           </div>
         </header>
