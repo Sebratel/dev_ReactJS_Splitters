@@ -191,8 +191,22 @@ const onuPool = process.env.ONU_DB_HOST
       password: process.env.ONU_DB_PASSWORD,
       ssl: process.env.ONU_DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
       max: parseInt(process.env.ONU_DB_POOL_MAX || '6'),
+      connectionTimeoutMillis: 6000,
+      idleTimeoutMillis: 30000,
     })
   : null;
+
+if (onuPool) {
+  onuPool.on('error', (err) => {
+    console.error('[onu] Erro inesperado no pool PostgreSQL de monitoramento:', err.message);
+  });
+  onuPool.connect().then((client) => {
+    client.release();
+    console.log('[onu] Conexão com banco de monitoramento estabelecida com sucesso.');
+  }).catch((err) => {
+    console.error('[onu] Falha ao conectar no banco de monitoramento ONU:', err.message);
+  });
+}
 
 if (!onuPool) {
   console.warn(
