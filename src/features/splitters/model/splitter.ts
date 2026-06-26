@@ -34,6 +34,10 @@ export type Splitter = {
   neighborhoodCadastro?: string | null
   /** Pelo menos um cliente corporativo (contrato corporativo / PME) neste splitter. */
   hasCorporateClients?: boolean
+  /** Slot da OLT extraído do título do splitter (`SLOT[SPLT.SECUNDARIO]`); null se ausente. */
+  oltSlot?: number | null
+  /** Porta/PON da OLT extraída do título (`PORTA EXTRAÍDA[SPLT.SECUNDARIO]`); null se ausente. */
+  oltPort?: number | null
 }
 
 export function mapSplitterTypeText(raw: string): string {
@@ -121,5 +125,7 @@ export function parseSplitterFromApi(raw: unknown): Splitter {
         : pickString(olt.description),
     createdAt: null,
     busyCount: 0,
+    oltSlot: null,
+    oltPort: null,
   }
 }
