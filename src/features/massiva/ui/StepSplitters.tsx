@@ -60,7 +60,7 @@ export function StepSplitters({
                   </p>
                   <p className="mt-1 text-xs text-neutral-600">
                     {routeReady
-                      ? `${connection.apLabel.trim() || connection.apId} / ${formatOltTopologySegment(connection.slot, connection.porta)}`
+                      ? `${connection.apLabel.trim() || connection.apId} / ${formatOltTopologySegment(connection.slot ?? 0, connection.porta ?? 0)}`
                       : 'Complete a rota para restringir melhor os splitters'}
                   </p>
                 </div>

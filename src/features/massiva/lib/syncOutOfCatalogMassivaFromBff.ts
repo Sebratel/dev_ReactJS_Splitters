@@ -2,7 +2,6 @@ import {
   effectiveMassivaStatus,
 } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import type { MassivaHistoryListRow } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
-import { isMassivaMonitoringOutOfCatalogTitle } from '@/features/massiva/lib/massivaCatalogTitle'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 /** Elleven/BFF indica protocolo encerrado ou cancelado. */

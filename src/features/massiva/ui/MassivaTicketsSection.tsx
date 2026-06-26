@@ -11,8 +11,6 @@ import {
 } from 'recharts'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
-import { reconcileMassivaLocalClosedProtocols } from '@/features/massiva/api/reconcileMassivaLocalClosedProtocols'
-import { collectProtocolsForLocalCloseSync } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import {
   formatMassivaListDateDisplay,
@@ -344,8 +342,6 @@ export function MassivaTicketsSection({
     return set
   }, [recentOpenTickets])
 
-  const reconcileClosedRef = useRef<string>('')
-
   useEffect(() => {
     if (view.status !== 'success') return
     pruneRecentOpensClosedByBff(view.tickets, historyQuery.data ?? [])
@@ -357,27 +353,8 @@ export function MassivaTicketsSection({
     queryClient,
   ])
 
-  useEffect(() => {
-    if (view.status !== 'success') return
-
-    const protocols = collectProtocolsForLocalCloseSync(
-      view.tickets,
-      historyQuery.data ?? [],
-    )
-
-    const key = protocols.slice().sort((a, b) => a - b).join(',')
-    if (key === '' || reconcileClosedRef.current === key) return
-
-    reconcileClosedRef.current = key
-    void reconcileMassivaLocalClosedProtocols(protocols, {
-      closeDescription:
-        'Encerrado automaticamente: protocolo confirmado como encerrado pelo Elleven ou removido do catálogo BFF.',
-    })
-      .then(() => historyQuery.refetch())
-      .catch(() => {
-        reconcileClosedRef.current = ''
-      })
-  }, [historyQuery.data, view.status, view.status === 'success' ? view.tickets : null, historyQuery.refetch])
+  // Encerramento de massiva é SOMENTE manual (ação do usuário). Não há mais
+  // reconciliação automática que grave fechamento local a partir do Elleven/BFF.
 
   const refreshDashboard = () => {
     refetchBffList()

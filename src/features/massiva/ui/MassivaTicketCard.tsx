@@ -44,7 +44,6 @@ import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 import { effectiveMassivaStatus } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import {
-  formatMassivaStatusLabel,
   formatMassivaTicketStatusLabel,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'

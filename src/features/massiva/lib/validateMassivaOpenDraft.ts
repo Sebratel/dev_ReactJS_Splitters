@@ -1,4 +1,3 @@
-import { combineLocalDateAndTime } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
 
 const DATE_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})$/
