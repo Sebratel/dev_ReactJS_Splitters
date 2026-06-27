@@ -3666,6 +3666,15 @@ app.post('/api/onu-diagnostics/batch', async (req, res) => {
     }
     return res.json({ success: true, count: rows.length, data: byUsername });
   } catch (error) {
+    const isConnTimeout =
+      error.message?.includes('Connection terminated') ||
+      error.message?.includes('connection timeout') ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT';
+    if (isConnTimeout) {
+      console.warn('[onu-batch] Banco de monitoramento inacessível — retornando dados vazios:', error.message);
+      return res.status(503).json({ success: false, unavailable: true, data: {}, count: 0, error: 'Banco de monitoramento ONU inacessível.' });
+    }
     console.error('Erro ao buscar diagnóstico de ONU em lote:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
