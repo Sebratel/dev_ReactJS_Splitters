@@ -3645,6 +3645,20 @@ app.get('/api/onu-diagnostics/by-username/:username', async (req, res) => {
   }
 });
 
+// Endpoint de diagnóstico de conectividade do pool ONU (temporário — remover após resolver).
+app.get('/api/onu-diagnostics/pool-health', async (req, res) => {
+  if (!onuPool) return res.json({ configured: false });
+  const t0 = Date.now();
+  try {
+    const client = await onuPool.connect();
+    const { rows } = await client.query('SELECT version() AS ver');
+    client.release();
+    return res.json({ ok: true, ms: Date.now() - t0, version: rows[0]?.ver });
+  } catch (err) {
+    return res.status(500).json({ ok: false, ms: Date.now() - t0, error: err.message, code: err.code, detail: String(err.cause ?? '') });
+  }
+});
+
 // Diagnóstico em lote (cards da lista de clientes). Body: { usernames: string[] }.
 // Retorna um mapa { [username]: diagnostic } para casar fácil no frontend.
 app.post('/api/onu-diagnostics/batch', async (req, res) => {
