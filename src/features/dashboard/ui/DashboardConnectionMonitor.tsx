@@ -1,5 +1,7 @@
+import { useAutoIspEvents } from '@/features/autoisp/hooks/useAutoIspEvents'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { isAutoIspBrowserReady } from '@/shared/config/env'
 import { formatBrazilDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 import { Activity, RefreshCw } from 'lucide-react'
@@ -8,6 +10,8 @@ import { Activity, RefreshCw } from 'lucide-react'
 const STATS_REFETCH_MS = 30_000
 /** Paridade com `useMassivaTickets` (refetchInterval). */
 const MASSIVA_REFETCH_MS = 5 * 60 * 1000
+/** Paridade com `useAutoIspEvents` (refetchInterval). */
+const AUTOISP_REFETCH_MS = 5 * 60 * 1000
 
 function formatUpdatedAt(ts: number): string {
   if (ts <= 0) return '—'
@@ -44,6 +48,8 @@ function toneDot(tone: RowTone): string {
 export function DashboardConnectionMonitor() {
   const statsQ = useNetworkStats()
   const { listConnectivity, refetch: refetchMassivas } = useMassivaTickets({ enabled: true })
+  const autoIspQ = useAutoIspEvents()
+  const autoIspConfigured = isAutoIspBrowserReady()
 
   const statsTone: RowTone = statsQ.isPending
     ? 'warn'
@@ -61,12 +67,21 @@ export function DashboardConnectionMonitor() {
         ? 'err'
         : 'ok'
 
+  const autoIspTone: RowTone = !autoIspConfigured
+    ? 'idle'
+    : autoIspQ.isPending
+      ? 'warn'
+      : autoIspQ.isError
+        ? 'err'
+        : 'ok'
+
   const onRefreshAll = () => {
     void statsQ.refetch()
     void refetchMassivas()
+    if (autoIspConfigured) void autoIspQ.refetch()
   }
 
-  const busy = statsQ.isFetching || listConnectivity.isFetching
+  const busy = statsQ.isFetching || listConnectivity.isFetching || autoIspQ.isFetching
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 bg-gradient-to-b from-white via-stone-50/40 to-amber-50/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
@@ -148,6 +163,32 @@ export function DashboardConnectionMonitor() {
                       {!listConnectivity.configured
                         ? '—'
                         : formatRefetchEvery(MASSIVA_REFETCH_MS)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </li>
+
+          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+            <div className="flex items-start gap-3">
+              <div
+                className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(autoIspTone))}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold text-stone-900">Dados AutoISP</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-stone-500">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                      {!autoIspConfigured ? '—' : formatUpdatedAt(autoIspQ.dataUpdatedAt)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-stone-500">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-stone-800">
+                      {!autoIspConfigured ? '—' : formatRefetchEvery(AUTOISP_REFETCH_MS)}
                     </dd>
                   </div>
                 </dl>
