@@ -337,6 +337,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
           view={localPreview.view}
           openingPreparation={localPreview.openingPreparation}
           onRetryConnections={localPreview.refetchConnections}
+          totalConnectionsCount={localPreview.totalConnectionsCount}
         />
       )
     }

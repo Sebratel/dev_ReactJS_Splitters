@@ -697,6 +697,7 @@ LEFT JOIN network_box_addresses nba
     ON nba.id = nb.network_box_address_id
 `;
 
+
 /** Data “operacional” no fuso de São Paulo (alinhada à captura diária). */
 const DASHBOARD_KPI_TODAY_SQL = `(CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date`;
 
@@ -1326,17 +1327,28 @@ app.get('/api/massiva/routes', async (req, res) => {
  * Slot/porta na rota seguem a nomenclatura do título (`…-slot-porta/…`); o pareamento com linhas
  * do catálogo faz-se em memória via `rowMatchesMassivaOltRoute` (mesma regra do detalhe splitter).
  */
-function buildMassivaConnectionsWhere({ apCode, splitterCodes } = {}) {
+function buildMassivaConnectionsWhere({ apCode, apCodes, splitterCodes } = {}) {
   const values = [];
   const where = ['base."ID CONEXAO[CLIENTE]" IS NOT NULL'];
   let p = 1;
 
-  const ap = String(apCode ?? '').trim();
-  if (ap !== '') {
+  // apCodes (array) tem precedência sobre apCode (string)
+  const apArr = Array.isArray(apCodes)
+    ? apCodes.map((c) => String(c ?? '').trim()).filter((c) => c !== '')
+    : [];
+  const singleAp = String(apCode ?? '').trim();
+
+  if (apArr.length > 0) {
+    where.push(
+      `COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = ANY($${p})`,
+    );
+    values.push(apArr);
+    p += 1;
+  } else if (singleAp !== '') {
     where.push(
       `COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $${p}`,
     );
-    values.push(ap);
+    values.push(singleAp);
     p += 1;
   }
 
@@ -1376,6 +1388,15 @@ function massivaConnectionsSelectQuery(where) {
     ORDER BY
       base."ID[SPLT.SECUNDARIO]" ASC,
       base."PORTA SPLITTER[SPLT.SECUNDARIO]" ASC
+  `;
+}
+
+/** Sem ORDER BY — mais rápido para contagem/amostra no batch-summary. */
+function massivaConnectionsSummaryQuery(where) {
+  return `
+    SELECT base.*
+    FROM (${SPLITTERS_BASE_QUERY}) base
+    WHERE ${where.join(' AND ')}
   `;
 }
 
@@ -1522,6 +1543,131 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao listar conexões (batch) para Massiva:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/massiva/connections/batch-summary', async (req, res) => {
+  try {
+    if (!Array.isArray(req.body?.routes)) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Body deve incluir "routes" (array de rotas).' });
+    }
+
+    const routes = req.body.routes;
+    if (routes.length === 0) {
+      return res.json({
+        success: true,
+        counts: { total: 0, pppoe: 0, corporate: 0, uniqueAuthIds: 0 },
+        sample: [],
+      });
+    }
+
+    const unique = new Map();
+    const invalidIndexes = [];
+    for (const [routeIndex, r] of routes.entries()) {
+      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
+      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
+      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
+      const portN = Number.parseInt(String(rawPort ?? ''), 10);
+      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
+        invalidIndexes.push(routeIndex);
+        continue;
+      }
+      const key = `${apCode}|${slotN}|${portN}`;
+      if (!unique.has(key)) {
+        unique.set(key, { apCode, slot: slotN, port: portN });
+      }
+    }
+
+    if (unique.size === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma rota válida recebida no lote.',
+        invalidRouteIndexes: invalidIndexes,
+      });
+    }
+
+    const uniqueRoutes = Array.from(unique.values());
+
+    // Uma única query para todos os APs do lote — CTEs pesados rodam uma só vez
+    const apCodes = [...new Set(uniqueRoutes.map((r) => r.apCode))];
+    const { where, values } = buildMassivaConnectionsWhere({ apCodes });
+    const result = await queryWithTransientRetry(
+      massivaConnectionsSummaryQuery(where),
+      values,
+      { retries: 1, delayMs: 180 },
+    );
+
+    // Filtra em memória: cada linha deve corresponder a alguma rota (apCode + slot/porta)
+    const merged = [];
+    const seenKeys = new Set();
+    for (const row of result.rows) {
+      const rowAp = String(
+        row['PONTO DE ACESSO CODE'] || row['PONTO DE ACESSO'] || '',
+      ).trim();
+      const matches = uniqueRoutes.some(
+        (route) =>
+          route.apCode === rowAp &&
+          rowMatchesMassivaOltRoute(route.slot, route.port, row),
+      );
+      if (!matches) continue;
+      const dk = massivaRowDedupeKey(row);
+      if (seenKeys.has(dk)) continue;
+      seenKeys.add(dk);
+      merged.push(row);
+    }
+
+    // Aggregate server-side — never transfer all rows to the client
+    const CORPORATE_KEYS = [
+      'CORPORATIVO', 'CLIENTE CORPORATIVO', 'FL_CORPORATIVO', 'IS_CORPORATE', 'corporativo',
+    ];
+    const seenPppoes = new Set();
+    const seenAuthIds = new Set();
+    let corporate = 0;
+
+    for (const row of merged) {
+      const authId = row['ID CONEXAO[CLIENTE]'];
+      if (authId != null) {
+        const s = String(authId).trim();
+        if (s !== '') seenAuthIds.add(s);
+      }
+      const user = String(
+        row['USUARIO[CLIENTE]'] ?? row['USUÁRIO[CLIENTE]'] ?? '',
+      ).trim().toLowerCase();
+      if (user !== '') seenPppoes.add(user);
+
+      for (const key of CORPORATE_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+        const v = row[key];
+        if (v === undefined || v === null) continue;
+        let isCorp = false;
+        if (v === true) isCorp = true;
+        else if (v !== false) {
+          if (typeof v === 'number') isCorp = v === 1;
+          else {
+            const t = String(v).trim().toLowerCase();
+            isCorp = t === '1' || t === 'true' || t === 't' || t === 's' || t === 'sim' || t === 'y' || t === 'yes';
+          }
+        }
+        if (isCorp) corporate += 1;
+        break;
+      }
+    }
+
+    res.json({
+      success: true,
+      counts: {
+        total: merged.length,
+        pppoe: seenPppoes.size,
+        corporate,
+        uniqueAuthIds: seenAuthIds.size,
+      },
+      sample: merged.slice(0, 50),
+    });
+  } catch (error) {
+    console.error('Erro ao sumarizar conexões (batch-summary) para Massiva:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

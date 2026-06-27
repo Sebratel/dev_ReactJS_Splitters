@@ -31,6 +31,7 @@ type StepValidacaoProps = {
   view: MassivaLocalPreviewViewState
   openingPreparation: MassivaOpeningPreparationView
   onRetryConnections: () => void
+  totalConnectionsCount?: number
 }
 
 const EXPANDED_PAGE_SIZE = 200
@@ -245,6 +246,7 @@ export function StepValidacao({
   view,
   openingPreparation,
   onRetryConnections,
+  totalConnectionsCount,
 }: StepValidacaoProps) {
   const [validationUiState, setValidationUiState] = useState(readMassivaValidationUiState)
   const [isExpandedOpen, setExpandedOpen] = useState(false)
@@ -275,6 +277,9 @@ export function StepValidacao({
     }
     return sampleClientes
   }, [openingPreparation, sampleClientes])
+
+  const totalCount = Math.max(totalConnectionsCount ?? 0, fullClientes.length)
+  const isSampleOnly = totalCount > fullClientes.length
 
   const filteredSampleClientes = useMemo(
     () => filterClientesByQuery(sampleClientes, clienteFilterQuery, splitterDisplayName),
@@ -506,7 +511,10 @@ export function StepValidacao({
                 ) : null}
                 <div className="flex items-center justify-between gap-2 border-t border-neutral-200/80 bg-neutral-50/90 px-3 py-2.5 text-[11px] text-neutral-600">
                   <p>
-                    Mostrando {tableSampleRows.length} de {fullClientes.length} registro(s) de rede
+                    Mostrando {tableSampleRows.length} de {totalCount.toLocaleString('pt-BR')} registro(s) de rede
+                    {isSampleOnly ? (
+                      <span className="ml-1 text-amber-600">(amostra)</span>
+                    ) : null}
                     {clienteFilterQuery.trim() !== '' ? (
                       <span className="text-neutral-500"> ({filteredSampleClientes.length} com filtro)</span>
                     ) : null}
@@ -624,7 +632,8 @@ export function StepValidacao({
               <div>
                 <p className="text-sm font-semibold text-neutral-900">Clientes afetados</p>
                 <p className="text-xs text-neutral-500">
-                  Mostrando {Math.min(expandedVisibleCount, fullClientes.length)} de {fullClientes.length}
+                  Mostrando {Math.min(expandedVisibleCount, fullClientes.length)} de {totalCount.toLocaleString('pt-BR')}
+                  {isSampleOnly ? <span className="ml-1 text-amber-600">(amostra de {fullClientes.length})</span> : null}
                 </p>
               </div>
               <div className="flex items-center gap-2">

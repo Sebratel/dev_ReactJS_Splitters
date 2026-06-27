@@ -1,4 +1,18 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
+
+/** TanStack Query cancela queries anteriores via AbortController quando a queryKey muda.
+ *  Isso gera um AbortError que não é falha real — deve ser tratado como loading. */
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return true
+  if (error instanceof Error) {
+    return (
+      error.name === 'AbortError' ||
+      error.message.toLowerCase().includes('aborted') ||
+      error.message.toLowerCase().includes('abort')
+    )
+  }
+  return false
+}
 import { useQuery } from '@tanstack/react-query'
 import { fetchMassivaRoutesFromLocalDb } from '@/features/massiva/api/fetchMassivaRoutesFromLocalDb'
 import { buildMassivaLocalPreview } from '@/features/massiva/lib/buildMassivaLocalPreview'
@@ -12,7 +26,10 @@ import {
   massivaPreviewNormalizedRoutes,
 } from '@/features/massiva/lib/massivaPreviewSelectionMaps'
 import { getMassivaRouteSelectionIssues } from '@/features/massiva/lib/validateMassivaRouteSelection'
-import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
+import type {
+  MassivaOpeningBasis,
+  MassivaOpeningPreparationView,
+} from '@/features/massiva/model/massivaOpeningBasis'
 import type {
   MassivaLocalPreviewRouteSelection,
   MassivaLocalPreviewViewState,
@@ -21,7 +38,7 @@ import type {
 } from '@/features/massiva/model/massivaLocalPreview'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { useMassivaPreviewSelectionStore } from '@/features/massiva/store/massivaPreviewSelectionStore'
-import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
+import { fetchMassivaConnectionsBatchSummary } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import { SPLITTERS_CONNECTIONS_STALE_TIME_MS } from '@/features/splitters/model/constants'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
@@ -124,6 +141,8 @@ export function useMassivaLocalPreview(options?: {
   ) => Array<{ apCode: string; apLabel: string; slot: number; port: number }>
   refetchConnections: () => void
   connections: SplitterCliente[]
+  /** Total de conexões contadas no servidor (pode ser muito maior que `connections.length`, que é amostra). */
+  totalConnectionsCount: number
   isApplyingFilters: boolean
   isConnectionsLoading: boolean
   /** `GET /api/massiva/routes` ainda nao concluiu — AP/slot/splitters no catalogo ainda vazios. */
@@ -256,7 +275,7 @@ export function useMassivaLocalPreview(options?: {
 
   const connectionsQuery = useQuery({
     queryKey: massivaBatchQueryKey,
-    queryFn: () => fetchMassivaConnectionsFromLocalDbByRoutes(normalizedRoutes),
+    queryFn: () => fetchMassivaConnectionsBatchSummary(normalizedRoutes),
     staleTime: SPLITTERS_CONNECTIONS_STALE_TIME_MS,
     // Prefetch no passo Splitters (batch leve); o banner de loading só em validação/abertura.
     enabled: hasCompleteRoutes,
@@ -432,18 +451,35 @@ export function useMassivaLocalPreview(options?: {
     }
     if (selectionIssues.length > 0) return null
 
-    const allConnections = connectionsQuery.data ?? []
+    const summary = connectionsQuery.data
+    const sampleConnections = summary?.sample ?? []
     const basis = buildMassivaOpeningBasis(
       deferredSelection,
       catalog,
-      allConnections,
+      sampleConnections,
       apDisplayLabel,
     )
-    const plan = buildMassivaOpeningPlanDraft(basis)
+    // Override totals with server-aggregated counts — server counted all rows, not just the sample
+    const serverCounts = summary?.counts
+    const basisWithCounts: MassivaOpeningBasis = serverCounts
+      ? {
+          ...basis,
+          previewTotals: {
+            totalAffected: serverCounts.total,
+            totalPppoes: serverCounts.pppoe,
+            totalCorporateAffected: serverCounts.corporate,
+          },
+          uniqueAuthenticationIdsOnRoute: Array(
+            serverCounts.uniqueAuthIds,
+          ) as number[],
+          flutterStyleAffectedUsersQuantity: serverCounts.uniqueAuthIds,
+        }
+      : basis
+    const plan = buildMassivaOpeningPlanDraft(basisWithCounts)
     return {
-      basis,
+      basis: basisWithCounts,
       plan,
-      sampleClientes: basis.collectedClientes.slice(0, 12),
+      sampleClientes: basisWithCounts.collectedClientes.slice(0, 12),
     }
   }, [
     enableImpactComputation,
@@ -519,6 +555,7 @@ export function useMassivaLocalPreview(options?: {
     }
 
     if (hasCompleteRoutes && connectionsQuery.isError) {
+      if (isAbortError(connectionsQuery.error)) return { status: 'connections-loading' }
       return { status: 'connections-error', error: connectionsQuery.error }
     }
 
@@ -574,6 +611,9 @@ export function useMassivaLocalPreview(options?: {
     }
 
     if (hasCompleteRoutes && connectionsQuery.isError) {
+      if (isAbortError(connectionsQuery.error)) {
+        return { status: 'unavailable', reason: 'connections-loading' }
+      }
       return {
         status: 'unavailable',
         reason: 'connections-error',
@@ -608,7 +648,7 @@ export function useMassivaLocalPreview(options?: {
   ])
 
   const previewDebug = useMemo(() => {
-    const allConnections = connectionsQuery.data ?? []
+    const allConnections = connectionsQuery.data?.sample ?? []
     const selectedAps = topologySelection.selectedAps
     const selectedSplitterCodes = [...new Set(
       normalizedRoutes.flatMap((route) => route.splitterCodes),
@@ -618,12 +658,12 @@ export function useMassivaLocalPreview(options?: {
     if (!import.meta.env.DEV || view.status !== 'empty-selection') {
       return {
         apForConnections: null,
-        connectionsCount: allConnections.length,
+        connectionsCount: connectionsQuery.data?.counts.total ?? allConnections.length,
         selectedRoutesCount: normalizedRoutes.length,
         selectedAps,
         selectedSplitterCodes,
-        matchedBySelectedSplitters: allConnections.length,
-        mergedAfterTopologyFilters: allConnections.length,
+        matchedBySelectedSplitters: connectionsQuery.data?.counts.total ?? allConnections.length,
+        mergedAfterTopologyFilters: connectionsQuery.data?.counts.total ?? allConnections.length,
       }
     }
 
@@ -640,11 +680,11 @@ export function useMassivaLocalPreview(options?: {
 
     return {
       apForConnections: null,
-      connectionsCount: allConnections.length,
+      connectionsCount: connectionsQuery.data?.counts.total ?? allConnections.length,
       selectedRoutesCount: normalizedRoutes.length,
       selectedAps,
       selectedSplitterCodes,
-      matchedBySelectedSplitters: allConnections.length,
+      matchedBySelectedSplitters: connectionsQuery.data?.counts.total ?? allConnections.length,
       mergedAfterTopologyFilters,
     }
   }, [connectionsQuery.data, normalizedRoutes, catalog, view.status, topologySelection])
@@ -680,7 +720,8 @@ export function useMassivaLocalPreview(options?: {
     apDisplayLabel,
     findRoutesBySplitterCode,
     refetchConnections,
-    connections: connectionsQuery.data ?? [],
+    connections: connectionsQuery.data?.sample ?? [],
+    totalConnectionsCount: connectionsQuery.data?.counts.total ?? 0,
     isApplyingFilters,
     isConnectionsLoading,
     isRoutesCatalogPending: routesQuery.isPending,
