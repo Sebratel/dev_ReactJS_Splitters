@@ -21,6 +21,7 @@ import {
   type OnuDiagnostic,
 } from '@/features/onu/model/onuDiagnostic'
 import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 
 /** Estado da consulta `/connections`: espelho por porta; fallback usa apenas busyCount do splitter. */
 type ConnectionsMirrorLoadState = 'pending' | 'success' | 'error'
@@ -616,7 +617,7 @@ export function SplitterDetailSummary({
               Concentrador (OLT)
             </p>
             <p className="mt-1 line-clamp-2 text-sm font-semibold text-on-surface">
-              {splitter.oltDescription ?? splitter.oltCode ?? '-'}
+              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) ?? '-'}
             </p>
           </div>
           <div className="border-b border-outline-variant/40 p-3 md:border-b-0 md:border-r">

@@ -1,6 +1,7 @@
 ﻿import { Link, useLocation } from 'react-router-dom'
 import type { Splitter } from '@/features/splitters/model/splitter'
 import { ChevronRight, Cpu, Building2 } from 'lucide-react'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 
 type SplitterRowProps = {
   splitter: Splitter
@@ -38,9 +39,9 @@ export function SplitterRow({ splitter }: SplitterRowProps) {
               )}
             </div>
             <div className="mt-1 flex items-center gap-4 text-sm text-on-surface-variant/70">
-              {splitter.oltDescription && (
+              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) && (
                 <span className="flex items-center gap-1">
-                  OLT: <span className="font-semibold">{splitter.oltDescription}</span>
+                  OLT: <span className="font-semibold">{formatOltLabel(splitter.oltDescription ?? splitter.oltCode)}</span>
                 </span>
               )}
               <span className="h-1 w-1 rounded-full bg-outline-variant" />

@@ -6,6 +6,7 @@ import type {
 } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterMaintenanceStats } from '@/features/splitters/api/fetchSplitterMaintenanceStatsFromLocalDb'
 import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOperationalDate'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 import { Activity, ArrowRight, Building2, Cpu, Siren, Wifi, WifiOff } from 'lucide-react'
 import type { OnuSplitterSignalSummary } from '@/features/onu/model/onuSplitterSummary'
 import { RX_POWER_DEGRADED_DBM, RX_POWER_CRITICAL_DBM } from '@/features/onu/model/onuDiagnostic'
@@ -143,9 +144,9 @@ export function SplitterCard({
           <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-on-surface sm:text-lg">
             {titleLine}
           </h3>
-          {(splitter.oltDescription ?? splitter.oltCode) ? (
+          {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) ? (
             <p className="mt-0.5 truncate text-[11px] font-medium text-on-surface-variant/60">
-              {splitter.oltDescription ?? splitter.oltCode}
+              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode)}
             </p>
           ) : null}
 
