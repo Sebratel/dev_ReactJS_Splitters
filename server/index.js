@@ -4506,8 +4506,17 @@ app.get('/api/onu-diagnostics/summary-by-splitter', async (req, res) => {
     const payload = await buildOnuSplitterSummaryOnce();
     return res.json({ success: true, cached: false, data: payload });
   } catch (error) {
-    console.error('Erro ao montar resumo ONU por splitter:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    const isConnTimeout =
+      error.message?.includes('Connection terminated') ||
+      error.message?.includes('connection timeout') ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT';
+    if (isConnTimeout) {
+      console.warn('[onu-summary-splitter] Banco inacessível:', error.message);
+      return res.status(503).json({ success: false, unavailable: true, data: {} });
+    }
+    console.error('Erro ao montar resumo ONU por splitter:', error.message, error.code ?? '', error.detail ?? '');
+    return res.status(500).json({ success: false, error: error.message, code: error.code ?? null });
   }
 });
 
