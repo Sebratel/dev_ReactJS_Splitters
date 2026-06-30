@@ -55,7 +55,7 @@ export function MassivaOpeningPreparationPanel({
     )
   }
 
-  const { basis, plan } = preparation
+  const { basis } = preparation
 
   return (
     <div
@@ -96,7 +96,7 @@ export function MassivaOpeningPreparationPanel({
             {t('massiva.affected_total')}
           </dt>
           <dd className="mt-0.5 text-xl font-semibold tabular-nums text-violet-950">
-            {plan.routeCollectedClientCount}
+            {basis.previewTotals.totalAffected.toLocaleString('pt-BR')}
           </dd>
         </div>
         <div className="rounded-xl border border-violet-100/80 bg-white/60 px-3 py-2.5 shadow-sm">
@@ -104,7 +104,7 @@ export function MassivaOpeningPreparationPanel({
             {t('massiva.pppoes_total')}
           </dt>
           <dd className="mt-0.5 text-xl font-semibold tabular-nums text-violet-950">
-            {plan.routeUniqueAuthenticationIdCount}
+            {basis.previewTotals.totalPppoes.toLocaleString('pt-BR')}
           </dd>
         </div>
       </dl>
