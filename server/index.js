@@ -1488,6 +1488,19 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     const merged = [];
     const seenKeys = new Set();
     const uniqueRoutes = Array.from(unique.values());
+
+    // O SQL filtra apenas por apCode (slot/porta são filtrados em memória). Rotas do
+    // mesmo AP compartilham a MESMA query — então agrupamos por AP e consultamos UMA vez
+    // por AP, em vez de uma vez por rota (evita N queries idênticas e o timeout em
+    // massivas com muitas PONs do mesmo AP).
+    const slotPortsByAp = new Map();
+    for (const route of uniqueRoutes) {
+      const list = slotPortsByAp.get(route.apCode) ?? [];
+      list.push({ slot: route.slot, port: route.port });
+      slotPortsByAp.set(route.apCode, list);
+    }
+    const apEntries = Array.from(slotPortsByAp.entries());
+
     const chunkSizeRaw = Number.parseInt(
       String(process.env.MASSIVA_BATCH_ROUTE_CHUNK_SIZE ?? '80'),
       10,
@@ -1496,15 +1509,13 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       Number.isFinite(chunkSizeRaw) && chunkSizeRaw > 0 ? chunkSizeRaw : 80;
     let chunksProcessed = 0;
 
-    for (let index = 0; index < uniqueRoutes.length; index += chunkSize) {
-      const chunk = uniqueRoutes.slice(index, index + chunkSize);
+    for (let index = 0; index < apEntries.length; index += chunkSize) {
+      const chunk = apEntries.slice(index, index + chunkSize);
       chunksProcessed += 1;
 
       const chunkResults = await Promise.all(
-        chunk.map(async (route) => {
-          const { where, values } = buildMassivaConnectionsWhere({
-            apCode: route.apCode,
-          });
+        chunk.map(async ([apCode, slotPorts]) => {
+          const { where, values } = buildMassivaConnectionsWhere({ apCode });
           const result = await queryWithTransientRetry(
             massivaConnectionsSelectQuery(where),
             values,
@@ -1515,7 +1526,9 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
           );
           return {
             rows: result.rows.filter((row) =>
-              rowMatchesMassivaOltRoute(route.slot, route.port, row),
+              slotPorts.some((sp) =>
+                rowMatchesMassivaOltRoute(sp.slot, sp.port, row),
+              ),
             ),
           };
         }),
@@ -1538,6 +1551,7 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       invalidRouteIndexes: invalidIndexes,
       totalRoutesReceived: routes.length,
       uniqueRoutesProcessed: uniqueRoutes.length,
+      uniqueApsProcessed: apEntries.length,
       chunkSize,
       chunksProcessed,
     });
