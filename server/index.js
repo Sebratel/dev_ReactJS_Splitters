@@ -3645,53 +3645,6 @@ app.get('/api/onu-diagnostics/by-username/:username', async (req, res) => {
   }
 });
 
-// Diagnóstico TCP raw do banco ONU — mostra o que o servidor responde no socket antes do protocolo pg.
-app.get('/api/onu-diagnostics/pool-health', async (req, res) => {
-  const host = process.env.ONU_DB_HOST;
-  const port = parseInt(process.env.ONU_DB_PORT || '5432');
-  if (!host) return res.json({ configured: false });
-
-  const net = await import('node:net');
-  const t0 = Date.now();
-
-  const result = await new Promise((resolve) => {
-    const sock = net.default.createConnection({ host, port, timeout: 5000 });
-    let received = Buffer.alloc(0);
-
-    sock.on('connect', () => {
-      // Envia startup packet mínimo do PostgreSQL (protocol 3.0, user + database)
-      const user = process.env.ONU_DB_USER || 'postgres';
-      const db = process.env.ONU_DB_NAME || 'postgres';
-      const params = `user\x00${user}\x00database\x00${db}\x00\x00`;
-      const len = 4 + 4 + params.length; // length(4) + protocol(4) + params
-      const buf = Buffer.alloc(len);
-      buf.writeInt32BE(len, 0);
-      buf.writeInt32BE(0x00030000, 4); // protocol 3.0
-      Buffer.from(params, 'binary').copy(buf, 8);
-      sock.write(buf);
-    });
-
-    sock.on('data', (chunk) => {
-      received = Buffer.concat([received, chunk]);
-      sock.destroy();
-    });
-
-    sock.on('close', () => {
-      const hex = received.slice(0, 64).toString('hex');
-      const text = received.slice(0, 128).toString('utf8').replace(/[^\x20-\x7e]/g, '·');
-      const firstByte = received.length > 0 ? received[0] : null;
-      // R=Auth, E=Error, N=Notice, S=SSL-deny
-      const msgType = firstByte ? String.fromCharCode(firstByte) : null;
-      resolve({ tcpOk: true, ms: Date.now() - t0, bytesReceived: received.length, firstByte: msgType, hex, text });
-    });
-
-    sock.on('timeout', () => { sock.destroy(); resolve({ tcpOk: false, ms: Date.now() - t0, error: 'TCP timeout — porta não alcançável ou firewall DROP' }); });
-    sock.on('error', (err) => resolve({ tcpOk: false, ms: Date.now() - t0, error: err.message, code: err.code }));
-  });
-
-  return res.json({ host, port, ...result });
-});
-
 // Diagnóstico em lote (cards da lista de clientes). Body: { usernames: string[] }.
 // Retorna um mapa { [username]: diagnostic } para casar fácil no frontend.
 app.post('/api/onu-diagnostics/batch', async (req, res) => {
