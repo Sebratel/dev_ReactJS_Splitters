@@ -19,6 +19,7 @@ import {
   buildNetworkTopology,
   type TopologyOltNode,
 } from '@/features/intelligence/lib/buildNetworkTopology'
+import { resolveOltSlotPortFromSplitterTitleAndCode } from '@/features/splitters/lib/parseOltPonFromSplitterLabels'
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import {
   countDistinctMassivasByLifecycleBucket,
@@ -1112,6 +1113,13 @@ export function useNetworkIntelligenceData(
       .map((trend) => {
         const massiva = massivaByCode.get(trend.splitterCode)
         const meta = splittersMetaByCode.get(trend.splitterCode)
+        // Slot/PON pela MESMA regra do detalhe do splitter e do filtro da lista:
+        // penúltimo e último números antes da primeira "/" no título/código. O cadastro
+        // (SLOT[SPLT.SECUNDARIO]) só entra como fallback quando o código não parseia.
+        const resolvedOlt = resolveOltSlotPortFromSplitterTitleAndCode(
+          trend.splitterTitle,
+          trend.splitterCode,
+        )
         const ageYears =
           meta?.createdAt != null
             ? Number((diffDays(meta.createdAt, new Date()) / 365.25).toFixed(2))
@@ -1139,8 +1147,8 @@ export function useNetworkIntelligenceData(
           splitterTitle: trend.splitterTitle,
           oltCode: meta?.oltCode ?? null,
           oltDescription: meta?.oltDescription ?? null,
-          oltSlot: meta?.oltSlot ?? null,
-          oltPort: meta?.oltPort ?? null,
+          oltSlot: resolvedOlt.slot ?? meta?.oltSlot ?? null,
+          oltPort: resolvedOlt.port ?? meta?.oltPort ?? null,
           street: meta?.street ?? null,
           tipoLocal: meta?.tipoLocal,
           nomeCondominio: meta?.nomeCondominio ?? null,
