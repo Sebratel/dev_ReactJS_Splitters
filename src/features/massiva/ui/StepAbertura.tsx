@@ -1,5 +1,8 @@
-﻿import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
+﻿import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
+import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
@@ -49,6 +52,30 @@ export function StepAbertura({
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
 
+  // Preview por AP usa amostra de 50 do batch-summary; na abertura buscamos a lista
+  // completa por rota para a contagem de afetados bater com a validação.
+  const preparedBasis =
+    openingPreparation.status === 'prepared' ? openingPreparation.basis : null
+  const fullRoutes = useMemo(
+    () =>
+      preparedBasis
+        ? preparedBasis.topology.routes.map((route) => ({
+            apCode: route.apCode,
+            slot: route.slot,
+            port: route.port,
+            splitterCodes: [...route.effectiveSplitterCodes],
+          }))
+        : [],
+    [preparedBasis],
+  )
+  const fullConnectionsQuery = useQuery({
+    queryKey: ['massiva', 'open', 'full-connections', JSON.stringify(fullRoutes)],
+    queryFn: () => fetchMassivaConnectionsFromLocalDbByRoutes(fullRoutes),
+    enabled: fullRoutes.length > 0,
+    staleTime: 60_000,
+  })
+  const fullConnections = fullConnectionsQuery.data ?? []
+
   const requestsByAp = readiness.status === 'ready-to-open'
     ? readiness.context.plan.requests
     : openingPreparation.status === 'prepared'
@@ -74,13 +101,22 @@ export function StepAbertura({
         }
       : null
 
+  const effectiveContextForPreview =
+    contextForPreview !== null &&
+    fullConnections.length > contextForPreview.basis.collectedClientes.length
+      ? {
+          ...contextForPreview,
+          basis: { ...contextForPreview.basis, collectedClientes: fullConnections },
+        }
+      : contextForPreview
+
   const descriptionByAp =
-    contextForPreview !== null
+    effectiveContextForPreview !== null
       ? requestsByAp.map((request) => ({
           apCode: request.authenticationAccessPointCode,
           apTitle: request.assignmentTitle,
           description: buildMassivaAssignmentDescriptionForRequest(
-            contextForPreview,
+            effectiveContextForPreview,
             request,
           ),
         }))

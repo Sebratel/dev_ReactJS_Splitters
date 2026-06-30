@@ -107,7 +107,8 @@ export function useMassivaOpenReadiness(
       typeof affectedUsersQuantityAutoIspOverride === 'number' &&
       affectedUsersQuantityAutoIspOverride >= 0
         ? Math.floor(affectedUsersQuantityAutoIspOverride)
-        : plan.routeCollectedClientCount
+        : // Contagem real do servidor (não a amostra de 50 do preview — `routeCollectedClientCount`).
+          plan.affectedUsersQuantityFlutterParity
 
     const next = buildMassivaOpeningTechnicalDescription({
       requesterDisplayName: requester,

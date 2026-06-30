@@ -44,6 +44,14 @@ function toNullableString(value: unknown): string | null {
   return text === '' ? null : text
 }
 
+function toNullableInt(value: unknown): number | null {
+  if (value == null) return null
+  const text = String(value).trim()
+  if (text === '') return null
+  const n = Number.parseInt(text, 10)
+  return Number.isFinite(n) ? n : null
+}
+
 function toNullableDate(value: unknown): Date | null {
   const text = toStringValue(value).trim()
   if (text === '') return null
@@ -192,6 +200,14 @@ export async function fetchSplittersFromLocalDb({
       cityCadastro: toNullableString(row['CIDADE[SPLT.SECUNDARIO]']),
       neighborhoodCadastro: toNullableString(row['BAIRRO[SPLT.SECUNDARIO]']),
       hasCorporateClients: row['TEM_CORPORATIVO_SPLITTER'] === true,
+      oltSlot: toNullableInt(row['SLOT[SPLT.SECUNDARIO]']),
+      oltPort: toNullableInt(
+        pickRowValue(
+          row,
+          'PORTA EXTRAÍDA[SPLT.SECUNDARIO]',
+          'PORTA EXTRA�DA[SPLT.SECUNDARIO]',
+        ),
+      ),
     }
   })
 

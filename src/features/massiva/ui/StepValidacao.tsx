@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
   AlertCircle,
@@ -18,6 +19,7 @@ import {
   hasMassivaClienteMapCoords,
 } from '@/features/massiva/lib/formatMassivaClienteLocation'
 import { massivaClientDedupeKey } from '@/features/massiva/lib/massivaClientDedupeKey'
+import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
 import { MassivaClientesMapPreview } from '@/features/massiva/ui/MassivaClientesMapPreview'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
@@ -31,6 +33,7 @@ type StepValidacaoProps = {
   view: MassivaLocalPreviewViewState
   openingPreparation: MassivaOpeningPreparationView
   onRetryConnections: () => void
+  totalConnectionsCount?: number
 }
 
 const EXPANDED_PAGE_SIZE = 200
@@ -245,6 +248,7 @@ export function StepValidacao({
   view,
   openingPreparation,
   onRetryConnections,
+  totalConnectionsCount,
 }: StepValidacaoProps) {
   const [validationUiState, setValidationUiState] = useState(readMassivaValidationUiState)
   const [isExpandedOpen, setExpandedOpen] = useState(false)
@@ -269,12 +273,43 @@ export function StepValidacao({
       view.status === 'success' || view.status === 'empty-selection' ? view.totals : null,
     [view],
   )
+  // Lista completa por rota (endpoint /batch otimizado): mapa, CSV e lista expandida
+  // usam todos os afetados, não a amostra de 50. Compartilha cache com o passo de Abertura.
+  const preparedBasis =
+    openingPreparation.status === 'prepared' ? openingPreparation.basis : null
+  const fullRoutes = useMemo(
+    () =>
+      preparedBasis
+        ? preparedBasis.topology.routes.map((route) => ({
+            apCode: route.apCode,
+            slot: route.slot,
+            port: route.port,
+            splitterCodes: [...route.effectiveSplitterCodes],
+          }))
+        : [],
+    [preparedBasis],
+  )
+  const fullConnectionsQuery = useQuery({
+    queryKey: ['massiva', 'open', 'full-connections', JSON.stringify(fullRoutes)],
+    queryFn: () => fetchMassivaConnectionsFromLocalDbByRoutes(fullRoutes),
+    enabled: fullRoutes.length > 0,
+    staleTime: 60_000,
+  })
+  const fullConnections = useMemo(
+    () => fullConnectionsQuery.data ?? [],
+    [fullConnectionsQuery.data],
+  )
+
   const fullClientes = useMemo((): readonly SplitterCliente[] => {
+    if (fullConnections.length > 0) return fullConnections
     if (openingPreparation.status === 'prepared') {
       return openingPreparation.basis.collectedClientes
     }
     return sampleClientes
-  }, [openingPreparation, sampleClientes])
+  }, [fullConnections, openingPreparation, sampleClientes])
+
+  const totalCount = Math.max(totalConnectionsCount ?? 0, fullClientes.length)
+  const isSampleOnly = totalCount > fullClientes.length
 
   const filteredSampleClientes = useMemo(
     () => filterClientesByQuery(sampleClientes, clienteFilterQuery, splitterDisplayName),
@@ -506,7 +541,10 @@ export function StepValidacao({
                 ) : null}
                 <div className="flex items-center justify-between gap-2 border-t border-neutral-200/80 bg-neutral-50/90 px-3 py-2.5 text-[11px] text-neutral-600">
                   <p>
-                    Mostrando {tableSampleRows.length} de {fullClientes.length} registro(s) de rede
+                    Mostrando {tableSampleRows.length} de {totalCount.toLocaleString('pt-BR')} registro(s) de rede
+                    {isSampleOnly ? (
+                      <span className="ml-1 text-amber-600">(amostra)</span>
+                    ) : null}
                     {clienteFilterQuery.trim() !== '' ? (
                       <span className="text-neutral-500"> ({filteredSampleClientes.length} com filtro)</span>
                     ) : null}
@@ -624,7 +662,8 @@ export function StepValidacao({
               <div>
                 <p className="text-sm font-semibold text-neutral-900">Clientes afetados</p>
                 <p className="text-xs text-neutral-500">
-                  Mostrando {Math.min(expandedVisibleCount, fullClientes.length)} de {fullClientes.length}
+                  Mostrando {Math.min(expandedVisibleCount, fullClientes.length)} de {totalCount.toLocaleString('pt-BR')}
+                  {isSampleOnly ? <span className="ml-1 text-amber-600">(amostra de {fullClientes.length})</span> : null}
                 </p>
               </div>
               <div className="flex items-center gap-2">

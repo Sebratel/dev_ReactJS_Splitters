@@ -1,5 +1,14 @@
 ﻿import { type ReactNode } from 'react'
-import { ChevronDown, FileText, Lock, Wand2 } from 'lucide-react'
+import {
+  CalendarClock,
+  ChevronDown,
+  ClipboardList,
+  Clock,
+  FileText,
+  Lock,
+  Search,
+  Wand2,
+} from 'lucide-react'
 import { MASSIVA_SOLICITATION_TYPE_LABEL } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { cn } from '@/shared/lib/utils'
@@ -18,32 +27,49 @@ type MassivaOpenDraftFieldsProps = {
 function DraftSection({
   title,
   hint,
+  icon,
   variant = 'neutral',
   children,
 }: {
   title: string
   hint?: string
+  icon?: ReactNode
   variant?: 'neutral' | 'muted' | 'accent'
   children: ReactNode
 }) {
   return (
     <section
       className={cn(
-        'rounded-lg border p-2 sm:p-2.5',
+        'rounded-xl border p-3 sm:p-3.5',
         variant === 'accent' && 'border-violet-200/60 bg-violet-50/35',
-        variant === 'muted' && 'border-neutral-200/70 bg-neutral-50/40',
-        variant === 'neutral' && 'border-neutral-200/60 bg-white/70',
+        variant === 'muted' && 'border-neutral-200/70 bg-neutral-50/50',
+        variant === 'neutral' && 'border-neutral-200/70 bg-white/80',
       )}
     >
-      <div className="border-b border-neutral-200/50 pb-1.5">
-        <h4 className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
-          {title}
-        </h4>
-        {hint ? (
-          <p className="mt-0.5 text-[10px] leading-tight text-neutral-600">{hint}</p>
+      <div className="flex items-start gap-2.5 border-b border-neutral-200/60 pb-2">
+        {icon ? (
+          <span
+            className={cn(
+              'mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg ring-1',
+              variant === 'accent'
+                ? 'bg-violet-100/70 text-violet-600 ring-violet-200/70'
+                : 'bg-white text-neutral-500 ring-neutral-200/80',
+            )}
+            aria-hidden
+          >
+            {icon}
+          </span>
         ) : null}
+        <div className="min-w-0">
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-700">
+            {title}
+          </h4>
+          {hint ? (
+            <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">{hint}</p>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-2 space-y-2">{children}</div>
+      <div className="mt-3 space-y-2.5">{children}</div>
     </section>
   )
 }
@@ -58,7 +84,7 @@ function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+      className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500"
     >
       {children}
     </label>
@@ -66,7 +92,7 @@ function FieldLabel({
 }
 
 const inputClassName =
-  'w-full rounded-md border border-neutral-200/90 bg-white px-2.5 py-1.5 text-sm text-neutral-900 shadow-sm transition placeholder:text-neutral-400 hover:border-neutral-300 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:opacity-60'
+  'w-full rounded-lg border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition placeholder:text-neutral-400 hover:border-neutral-300 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:opacity-60'
 
 /**
  * Formulário de assignment (paridade com massiva_screen): tipo fixo, prazos, relato,
@@ -103,58 +129,36 @@ export function MassivaOpenDraftFields({
     <div className="mt-2">
       <div
         className={cn(
-          'space-y-2 rounded-2xl border border-neutral-200/80 bg-gradient-to-b from-neutral-50/80 to-white p-2.5 shadow-sm sm:p-3',
+          'space-y-3 rounded-2xl border border-neutral-200/80 bg-gradient-to-b from-neutral-50/80 to-white p-3 shadow-sm sm:p-4',
           'ring-1 ring-black/[0.03]',
         )}
       >
-        <header className="border-b border-neutral-200/70 pb-2">
-          <h3 className="text-sm font-bold tracking-tight text-neutral-900">
-            Dados para abertura do protocolo
-          </h3>
-          <p className="mt-0.5 text-[11px] leading-snug text-neutral-600">
-            Preencha para gerar a descrição e liberar o envio.
-          </p>
+        <header className="flex items-start gap-3 border-b border-neutral-200/70 pb-3">
+          <span
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100/70 text-violet-600 ring-1 ring-violet-200/70"
+            aria-hidden
+          >
+            <ClipboardList className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold tracking-tight text-neutral-900">
+              Dados para abertura do protocolo
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-snug text-neutral-600">
+              Preencha para gerar a descrição e liberar o envio.
+            </p>
+          </div>
         </header>
 
-        <div className="space-y-2">
-          <DraftSection
-            title="Abertura"
-            hint="Data e hora em que o protocolo está sendo registrado no NOC."
-          >
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="massiva-event-start-date">Data de abertura</FieldLabel>
-                <input
-                  id="massiva-event-start-date"
-                  type="date"
-                  className={inputClassName}
-                  value={eventStartDate}
-                  onChange={(e) => setEventStartDate(e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="massiva-event-start-time">Hora de abertura</FieldLabel>
-                <input
-                  id="massiva-event-start-time"
-                  type="time"
-                  className={inputClassName}
-                  value={eventStartTime}
-                  onChange={(e) => setEventStartTime(e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-            </div>
-          </DraftSection>
-
+        <div className="space-y-3">
           <DraftSection
             title="Identificação do evento"
             hint="Quando o time percebeu ou confirmou o incidente na rede."
-            variant="muted"
+            icon={<Search className="size-3.5" />}
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <FieldLabel htmlFor="massiva-event-identified-date">Data</FieldLabel>
+                <FieldLabel htmlFor="massiva-event-identified-date">Data de identificação do evento</FieldLabel>
                 <input
                   id="massiva-event-identified-date"
                   type="date"
@@ -165,7 +169,7 @@ export function MassivaOpenDraftFields({
                 />
               </div>
               <div>
-                <FieldLabel htmlFor="massiva-event-identified-time">Hora</FieldLabel>
+                <FieldLabel htmlFor="massiva-event-identified-time">Hora da identificação</FieldLabel>
                 <input
                   id="massiva-event-identified-time"
                   type="time"
@@ -179,8 +183,41 @@ export function MassivaOpenDraftFields({
           </DraftSection>
 
           <DraftSection
+            title="Início do evento"
+            hint="Data e hora em que o evento efetivamente começou na rede."
+            icon={<Clock className="size-3.5" />}
+            variant="muted"
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="massiva-event-start-date">Data de início do evento</FieldLabel>
+                <input
+                  id="massiva-event-start-date"
+                  type="date"
+                  className={inputClassName}
+                  value={eventStartDate}
+                  onChange={(e) => setEventStartDate(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="massiva-event-start-time">Hora de início</FieldLabel>
+                <input
+                  id="massiva-event-start-time"
+                  type="time"
+                  className={inputClassName}
+                  value={eventStartTime}
+                  onChange={(e) => setEventStartTime(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          </DraftSection>
+
+          <DraftSection
             title="Classificação e prazo"
             hint="Tipo fixo pelo fluxo massiva. Informe a previsão de normalização."
+            icon={<CalendarClock className="size-3.5" />}
             variant="accent"
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -227,7 +264,7 @@ export function MassivaOpenDraftFields({
             </div>
           </DraftSection>
 
-          <div className="rounded-lg border border-neutral-200/70 bg-white p-2 sm:p-2.5">
+          <div className="rounded-xl border border-neutral-200/70 bg-white p-2.5 sm:p-3">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <label
                 htmlFor="massiva-initial-report"
@@ -250,7 +287,7 @@ export function MassivaOpenDraftFields({
 
           <div
             className={cn(
-              'flex items-center justify-between gap-3 rounded-lg border px-2.5 py-1.5 shadow-sm sm:px-3',
+              'flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm',
               fieldTechnicianRequesting
                 ? 'border-blue-200/80 bg-blue-50/40'
                 : 'border-red-200/80 bg-red-50/40',
@@ -301,7 +338,7 @@ export function MassivaOpenDraftFields({
             </button>
           </div>
 
-          <div className="rounded-lg border border-violet-200/70 bg-violet-50/50 p-2 sm:p-2.5">
+          <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-2.5 sm:p-3">
             <button
               type="button"
               disabled={disabled}
@@ -323,7 +360,7 @@ export function MassivaOpenDraftFields({
             </p>
           </div>
 
-          <section className="rounded-lg border border-neutral-200/80 bg-white p-2 shadow-sm sm:p-2.5">
+          <section className="rounded-xl border border-neutral-200/80 bg-white p-2.5 shadow-sm sm:p-3">
             <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 pb-1.5">
               <FileText className="size-3.5 text-neutral-400" aria-hidden />
               <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">

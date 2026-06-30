@@ -2,7 +2,6 @@ import {
   effectiveMassivaStatus,
 } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import type { MassivaHistoryListRow } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
-import { isMassivaMonitoringOutOfCatalogTitle } from '@/features/massiva/lib/massivaCatalogTitle'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 /** Elleven/BFF indica protocolo encerrado ou cancelado. */
@@ -94,12 +93,4 @@ export function collectProtocolsForLocalCloseSync(
   }
 
   return [...protocols].sort((a, b) => a - b)
-}
-
-/** @deprecated Prefer `collectProtocolsForLocalCloseSync` (inclui catálogo + sumiu do BFF). */
-export function collectOutOfCatalogProtocolsForLocalCloseSync(
-  bffTickets: readonly MassivaTicket[],
-  localRows: readonly MassivaHistoryListRow[],
-): number[] {
-  return collectProtocolsForLocalCloseSync(bffTickets, localRows)
 }

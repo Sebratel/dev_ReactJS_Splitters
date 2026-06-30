@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { SplitterMapReliefInsight } from '@/features/splitters/lib/splitterStreetRelief'
 import type { Splitter } from '@/features/splitters/model/splitter'
@@ -11,8 +11,17 @@ import { formatOperationalRelativeDate } from '@/features/splitters/lib/formatOp
 import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
 import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
-import { BellOff, BellRing, Cable, Cpu, Hash, Layers } from 'lucide-react'
+import { BellOff, BellRing, Cable, Cpu, Hash, Layers, Wifi } from 'lucide-react'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
+import {
+  deriveOnuSignalStatus,
+  RX_POWER_DEGRADED_DBM,
+  RX_POWER_CRITICAL_DBM,
+  type OnuDiagnostic,
+} from '@/features/onu/model/onuDiagnostic'
+import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 
 /** Estado da consulta `/connections`: espelho por porta; fallback usa apenas busyCount do splitter. */
 type ConnectionsMirrorLoadState = 'pending' | 'success' | 'error'
@@ -74,7 +83,7 @@ function criticalityDotToneClasses(tone: SplitterOperationalScore['tone']): {
   }
 }
 
-type PortCellKind = 'free' | 'residential' | 'corporate'
+type PortCellKind = 'free' | 'residential' | 'corporate' | 'degraded' | 'offline'
 
 /**
  * Espelho por número de porta a partir dos clientes (mesma regra da lista de portas).
@@ -83,9 +92,14 @@ type PortCellKind = 'free' | 'residential' | 'corporate'
 function buildPortCellsFromClientes(
   outPorts: number,
   clientes: SplitterCliente[],
+  onuByUsername?: Map<string, OnuDiagnostic>,
 ): Array<{ port: number; kind: PortCellKind }> {
   const total = Math.max(0, Math.round(outPorts))
-  const byPort = new Map<number, 'residential' | 'corporate'>()
+
+  // Pass 1: tipo de cliente por porta (residential/corporate)
+  const typeByPort = new Map<number, 'residential' | 'corporate'>()
+  // Pass 2: username(s) por porta — para lookup de ONU
+  const usernamesByPort = new Map<number, string[]>()
 
   for (const c of clientes) {
     const p = c.port
@@ -94,19 +108,34 @@ function buildPortCellsFromClientes(
     if (portNum < 1 || portNum > total) continue
 
     const next: 'residential' | 'corporate' = c.isCorporate ? 'corporate' : 'residential'
-    const prev = byPort.get(portNum)
+    const prev = typeByPort.get(portNum)
     if (!prev) {
-      byPort.set(portNum, next)
+      typeByPort.set(portNum, next)
     } else if (next === 'corporate' || prev === 'residential') {
-      byPort.set(portNum, 'corporate')
+      typeByPort.set(portNum, 'corporate')
+    }
+
+    if (c.user) {
+      const existing = usernamesByPort.get(portNum) ?? []
+      existing.push(c.user)
+      usernamesByPort.set(portNum, existing)
     }
   }
 
   return Array.from({ length: total }, (_, index) => {
     const port = index + 1
-    const occ = byPort.get(port)
-    const kind: PortCellKind = occ === 'corporate' ? 'corporate' : occ === 'residential' ? 'residential' : 'free'
-    return { port, kind }
+    const occ = typeByPort.get(port)
+    if (!occ) return { port, kind: 'free' as PortCellKind }
+
+    // Deriva status de sinal: se qualquer cliente da porta estiver offline/degraded, prevalece
+    if (onuByUsername) {
+      const usernames = usernamesByPort.get(port) ?? []
+      const statuses = usernames.map((u) => deriveOnuSignalStatus(onuByUsername.get(u)))
+      if (statuses.some((s) => s === 'offline')) return { port, kind: 'offline' }
+      if (statuses.some((s) => s === 'degraded')) return { port, kind: 'degraded' }
+    }
+
+    return { port, kind: occ }
   })
 }
 
@@ -187,8 +216,17 @@ export function SplitterDetailSummary({
   const canOpenMassiva = useAccessAuthStore((state) => state.hasPermission('canOpenMassiva'))
   const [clockMs, setClockMs] = useState(() => Date.now())
   const mirrorLive = connectionsLoadState === 'success'
+
+  // ONU batch — declarado antes de portCells pois portCells usa onuBatch.data.
+  // TanStack Query deduplica com a query de SplitterClientesList (mesma cache key).
+  const onuUsernames = useMemo(
+    () => connectionClientes.map((c) => c.user).filter((u): u is string => Boolean(u)),
+    [connectionClientes],
+  )
+  const onuBatch = useOnuDiagnosticsBatch(onuUsernames)
+
   const portCells = mirrorLive
-    ? buildPortCellsFromClientes(splitter.outPorts, connectionClientes)
+    ? buildPortCellsFromClientes(splitter.outPorts, connectionClientes, onuBatch.data)
     : connectionsLoadState === 'pending'
       ? null
       : buildPortCellsFromBusyTotal(splitter.outPorts, splitter.busyCount)
@@ -219,6 +257,48 @@ export function SplitterDetailSummary({
     }
     return
   }, [operationalScore.tone])
+
+  // Sinal projetado — o valor GeoGrid é idêntico para todos os clientes do mesmo splitter.
+  // Enviamos os nomes para o hook batch e pegamos a primeira leitura não-ambígua.
+  const clientNames = useMemo(
+    () => connectionClientes.map((c) => c.name).filter((n): n is string => Boolean(n)),
+    [connectionClientes],
+  )
+  const projectedBatch = useProjectedSignalsBatch(clientNames)
+  const splitterProjectedRxPower = useMemo(() => {
+    if (!projectedBatch.data) return null
+    for (const [, proj] of projectedBatch.data) {
+      if (!proj.ambiguous && proj.projectedRxPower !== null) return proj.projectedRxPower
+    }
+    return null
+  }, [projectedBatch.data])
+
+  const onuSignalSummary = useMemo(() => {
+    const map = onuBatch.data
+    if (!map || map.size === 0) return null
+    let online = 0, degraded = 0, offline = 0
+    const rxValues: number[] = []
+    for (const [, diag] of map) {
+      const s = deriveOnuSignalStatus(diag)
+      if (s === 'online') online++
+      else if (s === 'degraded') degraded++
+      else if (s === 'offline') offline++
+      if (diag?.rxPower != null && diag.rxPower < 0) rxValues.push(diag.rxPower)
+    }
+    const avg = rxValues.length > 0
+      ? rxValues.reduce((a, b) => a + b, 0) / rxValues.length
+      : null
+    return { online, degraded, offline, avg, total: map.size }
+  }, [onuBatch.data])
+
+  const avgSignalColor =
+    onuSignalSummary?.avg == null
+      ? 'text-on-surface-variant/60'
+      : onuSignalSummary.avg <= RX_POWER_CRITICAL_DBM
+        ? 'text-rose-600'
+        : onuSignalSummary.avg <= RX_POWER_DEGRADED_DBM
+          ? 'text-amber-600'
+          : 'text-emerald-600'
 
   const { slot, port } = parseSlotAndPortFromTitle(splitter.title || splitter.code)
   const integrationRef = splitter.integrationCode || splitter.code || '-'
@@ -330,7 +410,7 @@ export function SplitterDetailSummary({
           ) : null}
         </div>
 
-          <div className="grid grid-cols-2 gap-2 md:min-w-[240px]">
+          <div className="grid grid-cols-2 gap-2 md:min-w-[260px]">
           <div
             className={cn(
               'rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow',
@@ -389,6 +469,50 @@ export function SplitterDetailSummary({
               </p>
             )}
           </div>
+          {/* Card Sinal ONU — span completo, abaixo de Criticidade+Massivas */}
+          <div className="col-span-2 rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-1.5">
+              <Wifi size={11} strokeWidth={2} className="text-on-surface-variant/60" />
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
+                Sinal ONU — média do splitter
+              </p>
+            </div>
+            {onuBatch.isPending && onuUsernames.length > 0 ? (
+              <p className="mt-1.5 text-[11px] text-on-surface-variant/50">Consultando…</p>
+            ) : !onuSignalSummary ? (
+              <p className="mt-1.5 text-[11px] text-on-surface-variant/45">Sem dados de ONU</p>
+            ) : (
+              <>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className={cn('text-2xl font-bold tabular-nums leading-tight', avgSignalColor)}>
+                    {onuSignalSummary.avg !== null
+                      ? `${onuSignalSummary.avg.toFixed(1)} dBm`
+                      : '— dBm'}
+                  </p>
+                  <div className="flex flex-col items-end gap-0.5 text-[10px] font-semibold tabular-nums">
+                    <span className="text-emerald-700">{onuSignalSummary.online} online</span>
+                    <span className="text-amber-700">{onuSignalSummary.degraded} atenuados</span>
+                    <span className="text-rose-700">{onuSignalSummary.offline} offline</span>
+                  </div>
+                </div>
+                {splitterProjectedRxPower != null && onuSignalSummary.avg !== null ? (() => {
+                  const delta = Math.round((splitterProjectedRxPower - onuSignalSummary.avg) * 10) / 10
+                  const deltaColor = delta > 3 ? 'text-rose-600' : delta > 1 ? 'text-amber-600' : 'text-emerald-600'
+                  return (
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-outline-variant/30 pt-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
+                        Projetado
+                      </span>
+                      <div className="flex items-center gap-2 text-[11px] font-bold tabular-nums">
+                        <span className="text-on-surface-variant/70">{splitterProjectedRxPower.toFixed(1)} dBm</span>
+                        <span className={deltaColor}>△{delta.toFixed(1)} dB</span>
+                      </div>
+                    </div>
+                  )
+                })() : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -437,7 +561,7 @@ export function SplitterDetailSummary({
           </p>
           {mirrorLive ? (
             <p className="mt-0.5 text-[10px] leading-snug text-on-surface-variant/55">
-              Verde: cliente PF/residencial · Roxo: corporativo · Cinza: livre.
+              Verde: PF/residencial · Roxo: corporativo · Âmbar: sinal atenuado · Vermelho: offline · Cinza: livre.
             </p>
           ) : null}
 
@@ -449,27 +573,25 @@ export function SplitterDetailSummary({
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {portCells.map((cell) => {
                 const occupied = cell.kind !== 'free'
-                const corp = cell.kind === 'corporate'
-                const res = cell.kind === 'residential'
+                const titleMap: Record<PortCellKind, string> = {
+                  corporate: `Porta ${cell.port} · corporativo`,
+                  residential: `Porta ${cell.port} · ocupada`,
+                  degraded: `Porta ${cell.port} · sinal atenuado`,
+                  offline: `Porta ${cell.port} · offline`,
+                  free: `Porta ${cell.port} · livre`,
+                }
                 return (
                   <span
                     key={cell.port}
-                    title={
-                      corp
-                        ? `Porta ${cell.port} · cliente corporativo`
-                        : res
-                          ? `Porta ${cell.port} · ocupada`
-                          : `Porta ${cell.port} · livre`
-                    }
+                    title={titleMap[cell.kind]}
                     className={cn(
                       'inline-flex h-7 min-w-8 items-center justify-center rounded-md border px-1.5 text-[9px] font-semibold transition-all duration-300 hover:-translate-y-0.5',
                       occupied && 'animate-in fade-in zoom-in-95 duration-300',
-                      corp &&
-                        'border-violet-500 bg-violet-600 text-white shadow-sm',
-                      res &&
-                        'border-emerald-300 bg-emerald-500 text-white',
-                      cell.kind === 'free' &&
-                        'border-outline-variant/70 bg-surface-container-low/20 text-on-surface-variant/45',
+                      cell.kind === 'offline' && 'border-rose-400 bg-rose-500 text-white shadow-sm',
+                      cell.kind === 'degraded' && 'border-amber-400 bg-amber-400 text-white shadow-sm',
+                      cell.kind === 'corporate' && 'border-violet-500 bg-violet-600 text-white shadow-sm',
+                      cell.kind === 'residential' && 'border-emerald-300 bg-emerald-500 text-white',
+                      cell.kind === 'free' && 'border-outline-variant/70 bg-surface-container-low/20 text-on-surface-variant/45',
                     )}
                     style={occupied ? { animationDelay: `${cell.port * 28}ms` } : undefined}
                   >
@@ -495,7 +617,7 @@ export function SplitterDetailSummary({
               Concentrador (OLT)
             </p>
             <p className="mt-1 line-clamp-2 text-sm font-semibold text-on-surface">
-              {splitter.oltDescription ?? splitter.oltCode ?? '-'}
+              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) ?? '-'}
             </p>
           </div>
           <div className="border-b border-outline-variant/40 p-3 md:border-b-0 md:border-r">

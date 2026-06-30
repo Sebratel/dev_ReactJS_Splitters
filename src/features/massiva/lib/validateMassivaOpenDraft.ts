@@ -1,4 +1,3 @@
-import { combineLocalDateAndTime } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
 
 const DATE_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})$/
@@ -47,16 +46,6 @@ export function massivaLocalDateTimeToGatewayIso(localDateTime: string): string 
   const d = parseDateTimeLocalToDate(trimmed.slice(0, 16))
   if (d === null) return null
   return d.toISOString()
-}
-
-/** @deprecated Alias de {@link massivaLocalDateTimeToGatewayIso} via campos do rascunho. */
-export function massivaOpenDraftFinalDateIsoUtc(
-  forecastCloseDate: string,
-  forecastCloseTime: string,
-): string | null {
-  const local = massivaOpenDraftFinalDateLocal(forecastCloseDate, forecastCloseTime)
-  if (local === null) return null
-  return massivaLocalDateTimeToGatewayIso(local)
 }
 
 /**

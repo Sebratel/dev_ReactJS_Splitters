@@ -111,6 +111,15 @@ function normalizeNumericSql(expression) {
   return `NULLIF(REPLACE(REGEXP_REPLACE(TRIM(${expression}::text), '[^0-9,.-]', '', 'g'), ',', '.'), '')::double precision`;
 }
 
+function normalizeGeoName(name) {
+  return String(name)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function geogridProxyGetJson(relativePath) {
   if (!geogridBaseUrl || !geogridApiKey) {
     const missing = [];
@@ -169,6 +178,41 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false
 });
+
+// Pool separado para o banco de monitoramento de ONUs (diagnóstico de sinal).
+// As tabelas onu_statuses/onu_infos/gpon_macs/gpon_clients/olts vivem em outro
+// servidor PostgreSQL, distinto do banco principal (dbemp00100).
+const onuPool = process.env.ONU_DB_HOST
+  ? new Pool({
+      host: process.env.ONU_DB_HOST,
+      port: parseInt(process.env.ONU_DB_PORT || '5432'),
+      database: process.env.ONU_DB_NAME,
+      user: process.env.ONU_DB_USER,
+      password: process.env.ONU_DB_PASSWORD,
+      ssl: process.env.ONU_DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.ONU_DB_POOL_MAX || '6'),
+      connectionTimeoutMillis: 6000,
+      idleTimeoutMillis: 30000,
+    })
+  : null;
+
+if (onuPool) {
+  onuPool.on('error', (err) => {
+    console.error('[onu] Erro inesperado no pool PostgreSQL de monitoramento:', err.message);
+  });
+  onuPool.connect().then((client) => {
+    client.release();
+    console.log('[onu] Conexão com banco de monitoramento estabelecida com sucesso.');
+  }).catch((err) => {
+    console.error('[onu] Falha ao conectar no banco de monitoramento ONU:', err.message);
+  });
+}
+
+if (!onuPool) {
+  console.warn(
+    '[onu] ONU_DB_HOST não definido — rotas /api/onu-diagnostics responderão 503 até configurar o banco de monitoramento.',
+  );
+}
 
 function isTransientPgError(error) {
   const code = String(error?.code ?? '').toUpperCase();
@@ -652,6 +696,7 @@ LEFT JOIN network_boxes nb
 LEFT JOIN network_box_addresses nba
     ON nba.id = nb.network_box_address_id
 `;
+
 
 /** Data “operacional” no fuso de São Paulo (alinhada à captura diária). */
 const DASHBOARD_KPI_TODAY_SQL = `(CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date`;
@@ -1282,17 +1327,28 @@ app.get('/api/massiva/routes', async (req, res) => {
  * Slot/porta na rota seguem a nomenclatura do título (`…-slot-porta/…`); o pareamento com linhas
  * do catálogo faz-se em memória via `rowMatchesMassivaOltRoute` (mesma regra do detalhe splitter).
  */
-function buildMassivaConnectionsWhere({ apCode, splitterCodes } = {}) {
+function buildMassivaConnectionsWhere({ apCode, apCodes, splitterCodes } = {}) {
   const values = [];
   const where = ['base."ID CONEXAO[CLIENTE]" IS NOT NULL'];
   let p = 1;
 
-  const ap = String(apCode ?? '').trim();
-  if (ap !== '') {
+  // apCodes (array) tem precedência sobre apCode (string)
+  const apArr = Array.isArray(apCodes)
+    ? apCodes.map((c) => String(c ?? '').trim()).filter((c) => c !== '')
+    : [];
+  const singleAp = String(apCode ?? '').trim();
+
+  if (apArr.length > 0) {
+    where.push(
+      `COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = ANY($${p})`,
+    );
+    values.push(apArr);
+    p += 1;
+  } else if (singleAp !== '') {
     where.push(
       `COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $${p}`,
     );
-    values.push(ap);
+    values.push(singleAp);
     p += 1;
   }
 
@@ -1332,6 +1388,15 @@ function massivaConnectionsSelectQuery(where) {
     ORDER BY
       base."ID[SPLT.SECUNDARIO]" ASC,
       base."PORTA SPLITTER[SPLT.SECUNDARIO]" ASC
+  `;
+}
+
+/** Sem ORDER BY — mais rápido para contagem/amostra no batch-summary. */
+function massivaConnectionsSummaryQuery(where) {
+  return `
+    SELECT base.*
+    FROM (${SPLITTERS_BASE_QUERY}) base
+    WHERE ${where.join(' AND ')}
   `;
 }
 
@@ -1423,6 +1488,19 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     const merged = [];
     const seenKeys = new Set();
     const uniqueRoutes = Array.from(unique.values());
+
+    // O SQL filtra apenas por apCode (slot/porta são filtrados em memória). Rotas do
+    // mesmo AP compartilham a MESMA query — então agrupamos por AP e consultamos UMA vez
+    // por AP, em vez de uma vez por rota (evita N queries idênticas e o timeout em
+    // massivas com muitas PONs do mesmo AP).
+    const slotPortsByAp = new Map();
+    for (const route of uniqueRoutes) {
+      const list = slotPortsByAp.get(route.apCode) ?? [];
+      list.push({ slot: route.slot, port: route.port });
+      slotPortsByAp.set(route.apCode, list);
+    }
+    const apEntries = Array.from(slotPortsByAp.entries());
+
     const chunkSizeRaw = Number.parseInt(
       String(process.env.MASSIVA_BATCH_ROUTE_CHUNK_SIZE ?? '80'),
       10,
@@ -1431,15 +1509,13 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       Number.isFinite(chunkSizeRaw) && chunkSizeRaw > 0 ? chunkSizeRaw : 80;
     let chunksProcessed = 0;
 
-    for (let index = 0; index < uniqueRoutes.length; index += chunkSize) {
-      const chunk = uniqueRoutes.slice(index, index + chunkSize);
+    for (let index = 0; index < apEntries.length; index += chunkSize) {
+      const chunk = apEntries.slice(index, index + chunkSize);
       chunksProcessed += 1;
 
       const chunkResults = await Promise.all(
-        chunk.map(async (route) => {
-          const { where, values } = buildMassivaConnectionsWhere({
-            apCode: route.apCode,
-          });
+        chunk.map(async ([apCode, slotPorts]) => {
+          const { where, values } = buildMassivaConnectionsWhere({ apCode });
           const result = await queryWithTransientRetry(
             massivaConnectionsSelectQuery(where),
             values,
@@ -1450,7 +1526,9 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
           );
           return {
             rows: result.rows.filter((row) =>
-              rowMatchesMassivaOltRoute(route.slot, route.port, row),
+              slotPorts.some((sp) =>
+                rowMatchesMassivaOltRoute(sp.slot, sp.port, row),
+              ),
             ),
           };
         }),
@@ -1473,11 +1551,137 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       invalidRouteIndexes: invalidIndexes,
       totalRoutesReceived: routes.length,
       uniqueRoutesProcessed: uniqueRoutes.length,
+      uniqueApsProcessed: apEntries.length,
       chunkSize,
       chunksProcessed,
     });
   } catch (error) {
     console.error('Erro ao listar conexões (batch) para Massiva:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/massiva/connections/batch-summary', async (req, res) => {
+  try {
+    if (!Array.isArray(req.body?.routes)) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Body deve incluir "routes" (array de rotas).' });
+    }
+
+    const routes = req.body.routes;
+    if (routes.length === 0) {
+      return res.json({
+        success: true,
+        counts: { total: 0, pppoe: 0, corporate: 0, uniqueAuthIds: 0 },
+        sample: [],
+      });
+    }
+
+    const unique = new Map();
+    const invalidIndexes = [];
+    for (const [routeIndex, r] of routes.entries()) {
+      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
+      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
+      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
+      const portN = Number.parseInt(String(rawPort ?? ''), 10);
+      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
+        invalidIndexes.push(routeIndex);
+        continue;
+      }
+      const key = `${apCode}|${slotN}|${portN}`;
+      if (!unique.has(key)) {
+        unique.set(key, { apCode, slot: slotN, port: portN });
+      }
+    }
+
+    if (unique.size === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma rota válida recebida no lote.',
+        invalidRouteIndexes: invalidIndexes,
+      });
+    }
+
+    const uniqueRoutes = Array.from(unique.values());
+
+    // Uma única query para todos os APs do lote — CTEs pesados rodam uma só vez
+    const apCodes = [...new Set(uniqueRoutes.map((r) => r.apCode))];
+    const { where, values } = buildMassivaConnectionsWhere({ apCodes });
+    const result = await queryWithTransientRetry(
+      massivaConnectionsSummaryQuery(where),
+      values,
+      { retries: 1, delayMs: 180 },
+    );
+
+    // Filtra em memória: cada linha deve corresponder a alguma rota (apCode + slot/porta)
+    const merged = [];
+    const seenKeys = new Set();
+    for (const row of result.rows) {
+      const rowAp = String(
+        row['PONTO DE ACESSO CODE'] || row['PONTO DE ACESSO'] || '',
+      ).trim();
+      const matches = uniqueRoutes.some(
+        (route) =>
+          route.apCode === rowAp &&
+          rowMatchesMassivaOltRoute(route.slot, route.port, row),
+      );
+      if (!matches) continue;
+      const dk = massivaRowDedupeKey(row);
+      if (seenKeys.has(dk)) continue;
+      seenKeys.add(dk);
+      merged.push(row);
+    }
+
+    // Aggregate server-side — never transfer all rows to the client
+    const CORPORATE_KEYS = [
+      'CORPORATIVO', 'CLIENTE CORPORATIVO', 'FL_CORPORATIVO', 'IS_CORPORATE', 'corporativo',
+    ];
+    const seenPppoes = new Set();
+    const seenAuthIds = new Set();
+    let corporate = 0;
+
+    for (const row of merged) {
+      const authId = row['ID CONEXAO[CLIENTE]'];
+      if (authId != null) {
+        const s = String(authId).trim();
+        if (s !== '') seenAuthIds.add(s);
+      }
+      const user = String(
+        row['USUARIO[CLIENTE]'] ?? row['USUÁRIO[CLIENTE]'] ?? '',
+      ).trim().toLowerCase();
+      if (user !== '') seenPppoes.add(user);
+
+      for (const key of CORPORATE_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+        const v = row[key];
+        if (v === undefined || v === null) continue;
+        let isCorp = false;
+        if (v === true) isCorp = true;
+        else if (v !== false) {
+          if (typeof v === 'number') isCorp = v === 1;
+          else {
+            const t = String(v).trim().toLowerCase();
+            isCorp = t === '1' || t === 'true' || t === 't' || t === 's' || t === 'sim' || t === 'y' || t === 'yes';
+          }
+        }
+        if (isCorp) corporate += 1;
+        break;
+      }
+    }
+
+    res.json({
+      success: true,
+      counts: {
+        total: merged.length,
+        pppoe: seenPppoes.size,
+        corporate,
+        uniqueAuthIds: seenAuthIds.size,
+      },
+      sample: merged.slice(0, 50),
+    });
+  } catch (error) {
+    console.error('Erro ao sumarizar conexões (batch-summary) para Massiva:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -3166,6 +3370,1120 @@ app.get('/api/clientes/:id', async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar cliente por ID:', error);
     return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Patrimônios (equipamentos: roteador, ONU etc.) do cliente — banco principal.
+// O parâmetro é o `client_id` (= people.id = cliente.clientId no app), NÃO o
+// authenticationId da rota /clientes/:id. Cancelados ficam de fora.
+const CLIENTE_PATRIMONIES_QUERY = `
+SELECT
+    p.client_id          AS "clientId",
+    p.contract_id        AS "contractId",
+    c.contract_number    AS "contractNumber",
+    ct.title             AS "contractTypeTitle",
+    c.v_status           AS "contractStatus",
+    p.title              AS "patrimonyTitle",
+    p.serial_number      AS "serialNumber",
+    p.tag_number         AS "tagNumber",
+    p.mac                AS "mac"
+FROM patrimonies p
+INNER JOIN people pe          ON pe.id = p.client_id
+INNER JOIN contracts c        ON c.id  = p.contract_id
+INNER JOIN contract_types ct  ON ct.id = c.contract_type_id
+WHERE c.v_status <> 'Cancelado'
+  AND p.client_id = $1
+ORDER BY p.mac ASC
+`;
+
+app.get('/api/clientes/:clientId/patrimonios', async (req, res) => {
+  try {
+    const clientId = Number.parseInt(String(req.params.clientId), 10);
+    if (!Number.isFinite(clientId) || clientId <= 0) {
+      return res.status(400).json({ success: false, message: 'client_id inválido.' });
+    }
+
+    const result = await pool.query(CLIENTE_PATRIMONIES_QUERY, [clientId]);
+    return res.json({
+      success: true,
+      count: result.rowCount,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar patrimônios do cliente:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Visão de frota de equipamentos (agregações sobre patrimonies — banco principal)
+// ---------------------------------------------------------------------------
+
+// População base: mesma da consulta por cliente (patrimonies ativos, contrato
+// não cancelado). Agregamos no SQL para não trazer ~centenas de milhares de
+// linhas; o tipo (roteador/ONU) e o Pareto são derivados no frontend.
+const EQUIP_BASE_FROM = `
+FROM patrimonies p
+INNER JOIN people pe          ON pe.id = p.client_id
+INNER JOIN contracts c        ON c.id  = p.contract_id
+INNER JOIN contract_types ct  ON ct.id = c.contract_type_id
+WHERE c.v_status <> 'Cancelado'
+`;
+
+const EQUIP_TOTALS_SQL = `
+SELECT
+  COUNT(*)                                                          AS total_patrimonies,
+  COUNT(DISTINCT p.client_id)                                       AS distinct_clients,
+  COUNT(DISTINCT NULLIF(TRIM(p.title), ''))                         AS distinct_models,
+  COUNT(*) FILTER (WHERE NULLIF(TRIM(p.serial_number), '') IS NULL) AS without_serial,
+  COUNT(*) FILTER (WHERE NULLIF(TRIM(p.mac), '') IS NULL)           AS without_mac
+${EQUIP_BASE_FROM}
+`;
+
+const EQUIP_BY_MODEL_SQL = `
+SELECT COALESCE(NULLIF(TRIM(p.title), ''), '(sem descrição)') AS model, COUNT(*) AS count
+${EQUIP_BASE_FROM}
+GROUP BY 1
+ORDER BY count DESC, model ASC
+`;
+
+const EQUIP_BY_CONTRACT_STATUS_SQL = `
+SELECT COALESCE(NULLIF(TRIM(c.v_status), ''), '(sem status)') AS status, COUNT(*) AS count
+${EQUIP_BASE_FROM}
+GROUP BY 1
+ORDER BY count DESC
+`;
+
+// MACs repetidos: cada valor que aparece em mais de um patrimônio. Retornamos a
+// contagem de grupos e o total de unidades envolvidas para o KPI de cadastro.
+const EQUIP_DUP_MAC_SQL = `
+SELECT COUNT(*) AS dup_groups, COALESCE(SUM(c2), 0) AS dup_units
+FROM (
+  SELECT TRIM(p.mac) AS mac, COUNT(*) AS c2
+  ${EQUIP_BASE_FROM}
+    AND NULLIF(TRIM(p.mac), '') IS NOT NULL
+  GROUP BY 1
+  HAVING COUNT(*) > 1
+) d
+`;
+
+app.get('/api/equipamentos/overview', async (_req, res) => {
+  try {
+    const [totals, byModel, byStatus, dupMac] = await Promise.all([
+      pool.query(EQUIP_TOTALS_SQL),
+      pool.query(EQUIP_BY_MODEL_SQL),
+      pool.query(EQUIP_BY_CONTRACT_STATUS_SQL),
+      pool.query(EQUIP_DUP_MAC_SQL),
+    ]);
+
+    const t = totals.rows[0] ?? {};
+    const dm = dupMac.rows[0] ?? {};
+
+    return res.json({
+      success: true,
+      data: {
+        totals: {
+          totalPatrimonies: Number(t.total_patrimonies ?? 0),
+          distinctClients: Number(t.distinct_clients ?? 0),
+          distinctModels: Number(t.distinct_models ?? 0),
+          withoutSerial: Number(t.without_serial ?? 0),
+          withoutMac: Number(t.without_mac ?? 0),
+          duplicateMacGroups: Number(dm.dup_groups ?? 0),
+          duplicateMacUnits: Number(dm.dup_units ?? 0),
+        },
+        byModel: byModel.rows.map((r) => ({ model: r.model, count: Number(r.count) })),
+        byContractStatus: byStatus.rows.map((r) => ({ status: r.status, count: Number(r.count) })),
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao agregar overview de equipamentos:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Diagnóstico de ONU (banco de monitoramento — onuPool)
+// ---------------------------------------------------------------------------
+
+// O banco de monitoramento grava os timestamps SEM timezone, num relógio que
+// está 3h adiantado em relação ao UTC (validado: a queda mais recente fica a
+// poucos segundos quando interpretada assim). 'Etc/GMT-3' = UTC+3 no padrão
+// POSIX. Usado para converter os naive em instante correto e calcular "há X".
+// Se o coletor mudar de fuso, ajustar SÓ aqui.
+const ONU_DB_TZ = 'Etc/GMT-3';
+
+// Uma linha por pppoe_username (o cliente mais recente, caso haja mais de uma
+// conexão para o mesmo login). As tabelas onu_statuses/onu_infos têm índice
+// UNIQUE em gpon_client_id, e gpon_clients.pppoe_username é indexado — filtrar
+// por username primeiro mantém a consulta leve mesmo com ~210k clientes.
+const ONU_DIAGNOSTICS_QUERY = `
+SELECT DISTINCT ON (gc.pppoe_username)
+    gc.pppoe_username,
+    gc.id                   AS gpon_client_id,
+    gm.id                   AS gpon_mac_id,
+    gm.mac,
+    o.hostname              AS olt_hostname,
+    oi.onu_model,
+    oi.distance,
+    oi.temperature,
+    gm.created_at           AS gpon_mac_created_at,
+    gm.updated_at           AS gpon_mac_updated_at,
+    gm.serial_number        AS gpon_mac_serial_number,
+    lgm.id                  AS related_gpon_mac_id,
+    lgm.ponlink             AS related_ponlink,
+    lgm.serial_number       AS related_serial_number,
+    os.id                   AS onu_status_id,
+    os.rx_good,
+    os.rx_power,
+    os.olt_olt_rx_power,
+    os.zabbix_olt_rx_power,
+    os.zabbix_onu_rx_power,
+    os.olt_onu_status,
+    os.status               AS onu_oper_status,
+    os.calculated_status,
+    os.tx_power,
+    os.last_off,
+    os.updated_at           AS onu_status_updated_at,
+    -- Frescor do STATUS up/down (atualizado por trap/alarme, ~tempo real),
+    -- distinto do updated_at das métricas (rxPower, atualizado em ondas lentas).
+    EXTRACT(EPOCH FROM (now() - (
+      GREATEST(os.status_update_timestamp, os.olt_onu_status_timestamp, os.calculated_status_timestamp)
+      AT TIME ZONE '${ONU_DB_TZ}')))::bigint AS status_seen_age_seconds,
+    EXTRACT(EPOCH FROM (now() - (os.last_off AT TIME ZONE '${ONU_DB_TZ}')))::bigint AS last_off_age_seconds,
+    gc.power_threshold,
+    gc.ponlink              AS client_ponlink,
+    gc.onu                  AS onu_index,
+    gc.splitter             AS gpon_splitter
+FROM gpon_clients gc
+LEFT JOIN gpon_macs gm
+    ON gm.gpon_client_id = gc.id
+LEFT JOIN gpon_macs lgm
+    ON lgm.mac = gm.mac AND lgm.id <> gm.id
+LEFT JOIN olts o
+    ON o.id = gm.olt_id
+LEFT JOIN onu_infos oi
+    ON oi.gpon_client_id = gc.id
+LEFT JOIN onu_statuses os
+    ON os.gpon_client_id = gc.id
+WHERE gc.pppoe_username = ANY($1::text[])
+ORDER BY
+    gc.pppoe_username,
+    os.updated_at DESC NULLS LAST,
+    gm.updated_at DESC NULLS LAST,
+    gm.id DESC
+`;
+
+// Normaliza "null"/"" textuais (vindos do agente de coleta) para null real.
+function cleanOnuText(value) {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim();
+  if (s === '' || s.toLowerCase() === 'null') return null;
+  return s;
+}
+
+function toNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function mapOnuDiagnosticRow(row) {
+  return {
+    pppoeUsername: row.pppoe_username ?? null,
+    gponClientId: row.gpon_client_id ?? null,
+    gponMacId: row.gpon_mac_id ?? null,
+    mac: cleanOnuText(row.mac),
+    serialNumber: cleanOnuText(row.gpon_mac_serial_number),
+    oltHostname: cleanOnuText(row.olt_hostname),
+    onuModel: cleanOnuText(row.onu_model),
+    distance: toNumberOrNull(row.distance),
+    temperature: toNumberOrNull(row.temperature),
+    relatedGponMacId: row.related_gpon_mac_id ?? null,
+    relatedPonlink: cleanOnuText(row.related_ponlink),
+    relatedSerialNumber: cleanOnuText(row.related_serial_number),
+    onuStatusId: row.onu_status_id ?? null,
+    rxGood: cleanOnuText(row.rx_good),
+    rxPower: toNumberOrNull(row.rx_power),
+    oltOltRxPower: toNumberOrNull(row.olt_olt_rx_power),
+    zabbixOltRxPower: toNumberOrNull(row.zabbix_olt_rx_power),
+    zabbixOnuRxPower: toNumberOrNull(row.zabbix_onu_rx_power),
+    oltOnuStatus: cleanOnuText(row.olt_onu_status),
+    onuOperStatus: cleanOnuText(row.onu_oper_status),
+    calculatedStatus: cleanOnuText(row.calculated_status),
+    txPower: toNumberOrNull(row.tx_power),
+    lastOff: row.last_off ?? null,
+    statusUpdatedAt: row.onu_status_updated_at ?? null,
+    // Idade (s) do status up/down e da última queda — near-real-time (trap).
+    statusSeenAgeSeconds: toNumberOrNull(row.status_seen_age_seconds),
+    lastOffAgeSeconds: toNumberOrNull(row.last_off_age_seconds),
+    powerThreshold: toNumberOrNull(row.power_threshold),
+    ponlink: cleanOnuText(row.client_ponlink),
+    onuIndex: row.onu_index ?? null,
+    gponSplitter: cleanOnuText(row.gpon_splitter),
+    // Fase 2: sinal projetado da porta alocada (outra plataforma). Mantido aqui
+    // para o contrato não mudar quando a integração chegar.
+    projectedRxPower: null,
+  };
+}
+
+async function fetchOnuDiagnosticsByUsernames(usernames) {
+  const list = Array.from(
+    new Set(
+      (usernames || [])
+        .map((u) => String(u ?? '').trim())
+        .filter((u) => u.length > 0),
+    ),
+  );
+  if (list.length === 0) return [];
+  const result = await onuPool.query(ONU_DIAGNOSTICS_QUERY, [list]);
+  return result.rows.map(mapOnuDiagnosticRow);
+}
+
+// Diagnóstico de uma ONU pelo usuário PPPoE (= "user" do cliente no sistema principal).
+app.get('/api/onu-diagnostics/by-username/:username', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    const username = String(req.params.username ?? '').trim();
+    if (!username) {
+      return res.status(400).json({ success: false, message: 'Parâmetro username obrigatório.' });
+    }
+    const rows = await fetchOnuDiagnosticsByUsernames([username]);
+    return res.json({ success: true, data: rows[0] ?? null });
+  } catch (error) {
+    console.error('Erro ao buscar diagnóstico de ONU:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Diagnóstico em lote (cards da lista de clientes). Body: { usernames: string[] }.
+// Retorna um mapa { [username]: diagnostic } para casar fácil no frontend.
+app.post('/api/onu-diagnostics/batch', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    if (!Array.isArray(req.body?.usernames)) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'Body deve incluir "usernames" (array de strings).' });
+    }
+    const rows = await fetchOnuDiagnosticsByUsernames(req.body.usernames);
+    const byUsername = {};
+    for (const row of rows) {
+      if (row.pppoeUsername) byUsername[row.pppoeUsername] = row;
+    }
+    return res.json({ success: true, count: rows.length, data: byUsername });
+  } catch (error) {
+    const isConnTimeout =
+      error.message?.includes('Connection terminated') ||
+      error.message?.includes('connection timeout') ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT';
+    if (isConnTimeout) {
+      console.warn('[onu-batch] Banco de monitoramento inacessível — retornando dados vazios:', error.message);
+      return res.status(503).json({ success: false, unavailable: true, data: {}, count: 0, error: 'Banco de monitoramento ONU inacessível.' });
+    }
+    console.error('Erro ao buscar diagnóstico de ONU em lote:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resumo agregado da saúde de sinal da rede (Painel da Rede). Caro de calcular
+// (agrega ~209k status), então cacheia em memória por 60s — o polling do
+// frontend bate no cache, não no banco.
+const ONU_SUMMARY_TTL_MS = 60_000;
+const ONU_SUMMARY_WORST_LIMIT = 25;
+const ONU_SUMMARY_HEAT_LIMIT = 8000;
+const ONU_SUMMARY_MARKER_LIMIT = 2000;
+const ONU_SUMMARY_OLT_LIMIT = 30;
+const ONU_SUMMARY_HOT_LIMIT = 25;
+// Limiares de temperatura da ONU (°C). Faixa de operação típica de ONUs GPON
+// chega a ~65 °C; acima disso há risco térmico crescente de falha de hardware.
+const ONU_TEMP_WARM_C = 60;
+const ONU_TEMP_HOT_C = 70;
+// Faixa de leitura válida — descarta 0/negativos (sensor ausente) e absurdos.
+const ONU_TEMP_MIN_VALID = 1;
+const ONU_TEMP_MAX_VALID = 120;
+let onuSummaryCache = { at: 0, payload: null };
+// Single-flight: enquanto um cálculo do resumo está em andamento, novas
+// requisições aguardam o MESMO resultado em vez de disparar outro (evita
+// "cache stampede" — N usuários rebuildando em paralelo na virada do cache).
+let onuSummaryInflight = null;
+function buildOnuSummaryOnce() {
+  if (onuSummaryInflight) return onuSummaryInflight;
+  onuSummaryInflight = buildOnuNetworkSummary()
+    .then((payload) => {
+      onuSummaryCache = { at: Date.now(), payload };
+      return payload;
+    })
+    .finally(() => {
+      // Limpa a trava em sucesso E em falha — erro transitório não fica preso.
+      onuSummaryInflight = null;
+    });
+  return onuSummaryInflight;
+}
+
+// Classificação de estado de uma ONU, na MESMA ordem/regra do
+// deriveOnuSignalStatus do front. PRIORIDADE: calculated_status (reconciliado
+// pela monitoração, fresco) sobre os campos brutos (olt_onu_status pode ficar
+// horas velho). Fallback para os brutos só quando o reconciliado falta.
+const ONU_BUCKET_CASE = `
+  CASE
+    WHEN os.rx_power = 0 THEN 'offline'
+    WHEN lower(os.calculated_status) IN ('down','offline','power_fail','loss_signal','inactive') THEN 'offline'
+    WHEN lower(os.calculated_status) IN ('ok','up') THEN
+      CASE WHEN os.rx_power IS NOT NULL AND os.rx_power <= -25 THEN 'degraded' ELSE 'online' END
+    WHEN lower(os.calculated_status) IN ('warning','critical') THEN 'degraded'
+    -- Fallback: sem calculated_status confiável, usa os campos brutos.
+    WHEN os.olt_onu_status IN ('down','power_fail','loss_signal')
+         OR os.rx_good IN ('inactive','power_fail','down','loss_signal') THEN 'offline'
+    WHEN os.olt_onu_status = 'up'
+         AND (os.rx_good IN ('warning','critical','unavailable')
+              OR (os.rx_power IS NOT NULL AND os.rx_power <= -25)) THEN 'degraded'
+    WHEN os.olt_onu_status = 'up' THEN 'online'
+    ELSE 'unknown'
+  END`;
+
+// "Operante" = ONU no ar segundo o estado reconciliado (ok/up/warning/critical),
+// com fallback ao bruto (olt_onu_status='up') quando o reconciliado falta. Usado
+// para filtrar as distribuições de sinal (só de quem está operante).
+const ONU_OPERANTE = `(
+  lower(os.calculated_status) IN ('ok','up','warning','critical')
+  OR (os.calculated_status IS NULL AND os.olt_onu_status = 'up')
+)`;
+
+// `onu_infos.temperature` pode estar como numeric OU varchar. Cast seguro por
+// regex: vira número só quando o texto é numérico (senão NULL), evitando que
+// AVG/comparação quebre a query inteira se a coluna for texto com lixo.
+const ONU_TEMP_NUMERIC = `CASE WHEN oi.temperature::text ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN oi.temperature::text::numeric END`;
+
+async function buildOnuNetworkSummary() {
+  // Base canônica: gpon_macs com gpon_client_id (= ONU ativo com MAC atribuído),
+  // deduplicada por pppoe_username (status mais recente por cliente). Mesma
+  // população da query de diagnóstico individual.
+  //
+  // A quebra por OLT já carrega TODAS as contagens (online/degraded/offline/
+  // unknown/critical) — os totais da rede são derivados somando as OLTs, então
+  // não precisamos de uma query de totais separada.
+  const oltBreakdownSql = `
+    SELECT
+      COALESCE(NULLIF(TRIM(olt_hostname), ''), 'Sem OLT') AS olt,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE bucket = 'online')::int AS online,
+      COUNT(*) FILTER (WHERE bucket = 'degraded')::int AS degraded,
+      COUNT(*) FILTER (WHERE bucket = 'offline')::int AS offline,
+      COUNT(*) FILTER (WHERE bucket = 'unknown')::int AS unknown,
+      COUNT(*) FILTER (WHERE is_critical)::int AS critical
+    FROM (
+      SELECT DISTINCT ON (gc.pppoe_username)
+        o.hostname AS olt_hostname,
+        ${ONU_BUCKET_CASE} AS bucket,
+        (os.rx_power IS NOT NULL AND os.rx_power <= -28) AS is_critical
+      FROM gpon_macs gm
+      JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+      JOIN onu_statuses os ON os.gpon_client_id = gc.id
+      LEFT JOIN olts o ON o.id = gm.olt_id
+      WHERE gm.gpon_client_id IS NOT NULL
+      ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    ) t
+    GROUP BY olt`;
+
+  // Estatísticas de distribuição do sinal de recepção das ONUs online.
+  const signalStatsSql = `
+    SELECT
+      COUNT(*)::int AS n,
+      ROUND(AVG(rx_power)::numeric, 2) AS avg,
+      ROUND(percentile_cont(0.10) WITHIN GROUP (ORDER BY rx_power)::numeric, 2) AS p10,
+      ROUND(percentile_cont(0.50) WITHIN GROUP (ORDER BY rx_power)::numeric, 2) AS p50,
+      ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY rx_power)::numeric, 2) AS p90
+    FROM (
+      SELECT DISTINCT ON (gc.pppoe_username) os.rx_power
+      FROM gpon_macs gm
+      JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+      JOIN onu_statuses os ON os.gpon_client_id = gc.id
+      WHERE gm.gpon_client_id IS NOT NULL
+        AND os.rx_power IS NOT NULL AND os.rx_power < 0 AND ${ONU_OPERANTE}
+      ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    ) t`;
+
+  const histogramSql = `
+    SELECT width_bucket(rx_power, -40, 0, 8) AS b, COUNT(*)::int AS n FROM (
+      SELECT DISTINCT ON (gc.pppoe_username) os.rx_power
+      FROM gpon_macs gm
+      JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+      JOIN onu_statuses os ON os.gpon_client_id = gc.id
+      WHERE gm.gpon_client_id IS NOT NULL
+        AND os.rx_power IS NOT NULL AND os.rx_power < 0 AND ${ONU_OPERANTE}
+      ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    ) t GROUP BY b ORDER BY b`;
+
+  const worstSql = `
+    SELECT DISTINCT ON (gc.pppoe_username)
+      gc.pppoe_username, os.rx_power, os.olt_onu_status, os.rx_good, o.hostname AS olt
+    FROM gpon_macs gm
+    JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+    JOIN onu_statuses os ON os.gpon_client_id = gc.id
+    LEFT JOIN olts o ON o.id = gm.olt_id
+    WHERE gm.gpon_client_id IS NOT NULL
+      AND ${ONU_OPERANTE} AND os.rx_power IS NOT NULL AND os.rx_power <= -25
+    ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST`;
+
+  // Pontos com problema + identidade (cliente/OLT/sinal), para o mapa: heat de
+  // densidade dos atenuados e marcadores clicáveis dos offline/críticos.
+  const heatSql = `
+    SELECT DISTINCT ON (gc.pppoe_username)
+      gc.pppoe_username, gc.latitude, gc.longitude,
+      os.calculated_status, os.olt_onu_status, os.rx_power, o.hostname AS olt
+    FROM gpon_macs gm
+    JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+    JOIN onu_statuses os ON os.gpon_client_id = gc.id
+    LEFT JOIN olts o ON o.id = gm.olt_id
+    WHERE gm.gpon_client_id IS NOT NULL
+      AND gc.latitude IS NOT NULL AND gc.latitude <> ''
+      AND gc.longitude IS NOT NULL AND gc.longitude <> ''
+      AND (
+        os.rx_power = 0
+        OR lower(os.calculated_status) IN ('down','offline','power_fail','loss_signal','inactive')
+        OR (os.rx_power IS NOT NULL AND os.rx_power <= -25)
+      )
+    ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    LIMIT ${ONU_SUMMARY_HEAT_LIMIT}`;
+
+  // Temperatura das ONUs online (onu_infos), para detectar superaquecimento.
+  const tempStatsSql = `
+    SELECT
+      COUNT(*)::int AS n,
+      COUNT(*) FILTER (WHERE temp >= ${ONU_TEMP_WARM_C})::int AS warm,
+      COUNT(*) FILTER (WHERE temp >= ${ONU_TEMP_HOT_C})::int AS hot,
+      ROUND(AVG(temp)::numeric, 1) AS avg,
+      ROUND(MAX(temp)::numeric, 1) AS max
+    FROM (
+      SELECT DISTINCT ON (gc.pppoe_username) (${ONU_TEMP_NUMERIC}) AS temp
+      FROM gpon_macs gm
+      JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+      JOIN onu_statuses os ON os.gpon_client_id = gc.id
+      LEFT JOIN onu_infos oi ON oi.gpon_client_id = gc.id
+      WHERE gm.gpon_client_id IS NOT NULL
+        AND os.olt_onu_status = 'up'
+        AND oi.temperature IS NOT NULL
+      ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    ) t
+    WHERE temp IS NOT NULL AND temp >= ${ONU_TEMP_MIN_VALID} AND temp < ${ONU_TEMP_MAX_VALID}`;
+
+  const hottestSql = `
+    SELECT pppoe_username, temp AS temperature, rx_power, olt FROM (
+      SELECT DISTINCT ON (gc.pppoe_username)
+        gc.pppoe_username, (${ONU_TEMP_NUMERIC}) AS temp, os.rx_power, o.hostname AS olt
+      FROM gpon_macs gm
+      JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+      JOIN onu_statuses os ON os.gpon_client_id = gc.id
+      LEFT JOIN onu_infos oi ON oi.gpon_client_id = gc.id
+      LEFT JOIN olts o ON o.id = gm.olt_id
+      WHERE gm.gpon_client_id IS NOT NULL
+        AND os.olt_onu_status = 'up'
+        AND oi.temperature IS NOT NULL
+      ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+    ) t
+    WHERE temp >= ${ONU_TEMP_WARM_C} AND temp < ${ONU_TEMP_MAX_VALID}`;
+
+  // Resiliência: a quebra por OLT é o núcleo (totais derivam dela) — se falhar,
+  // o resumo falha de verdade. As demais são enriquecimentos: se uma falhar
+  // (timeout, tipo inesperado), degrada para vazio em vez de derrubar o painel.
+  const runSafe = async (sql, label) => {
+    try {
+      return await onuPool.query(sql);
+    } catch (e) {
+      console.error(`Resumo de ONU: query "${label}" falhou (seguindo sem ela):`, e.message);
+      return { rows: [] };
+    }
+  };
+  const oltR = await onuPool.query(oltBreakdownSql);
+  const [statsR, histR, worstR, heatR, tempR, hottestR] = await Promise.all([
+    runSafe(signalStatsSql, 'signalStats'),
+    runSafe(histogramSql, 'histogram'),
+    runSafe(worstSql, 'worst'),
+    runSafe(heatSql, 'heat'),
+    runSafe(tempStatsSql, 'tempStats'),
+    runSafe(hottestSql, 'hottest'),
+  ]);
+
+  // Totais da rede = soma de todas as OLTs.
+  const buckets = { online: 0, degraded: 0, offline: 0, unknown: 0 };
+  let criticalSignal = 0;
+  const oltRows = oltR.rows.map((r) => {
+    const online = Number(r.online) || 0;
+    const degraded = Number(r.degraded) || 0;
+    const offline = Number(r.offline) || 0;
+    const unknown = Number(r.unknown) || 0;
+    const critical = Number(r.critical) || 0;
+    buckets.online += online;
+    buckets.degraded += degraded;
+    buckets.offline += offline;
+    buckets.unknown += unknown;
+    criticalSignal += critical;
+    const monitored = online + degraded + offline;
+    return {
+      olt: r.olt,
+      total: Number(r.total) || 0,
+      online,
+      degraded,
+      offline,
+      unknown,
+      critical,
+      monitored,
+      // Taxa de problema = (offline + atenuado) / monitoradas da OLT.
+      problemRate: monitored > 0 ? (offline + degraded) / monitored : 0,
+      offlineRate: monitored > 0 ? offline / monitored : 0,
+    };
+  });
+  const total = buckets.online + buckets.degraded + buckets.offline + buckets.unknown;
+  const oltCount = oltRows.length;
+
+  // OLTs mais afetadas: prioriza volume absoluto de problemas (offline + atenuado),
+  // que é o que mais impacta a operação; desempata pela taxa.
+  const oltBreakdown = oltRows
+    .filter((o) => o.monitored > 0)
+    .sort((a, b) => {
+      const pa = a.offline + a.degraded;
+      const pb = b.offline + b.degraded;
+      if (pb !== pa) return pb - pa;
+      return b.problemRate - a.problemRate;
+    })
+    .slice(0, ONU_SUMMARY_OLT_LIMIT);
+
+  const statsRow = statsR.rows[0] ?? {};
+  const signalStats = {
+    sampled: Number(statsRow.n) || 0,
+    avg: toNumberOrNull(statsRow.avg),
+    p10: toNumberOrNull(statsRow.p10),
+    p50: toNumberOrNull(statsRow.p50),
+    p90: toNumberOrNull(statsRow.p90),
+  };
+
+  const histLabels = [
+    '-40 a -35', '-35 a -30', '-30 a -25', '-25 a -20',
+    '-20 a -15', '-15 a -10', '-10 a -5', '-5 a 0',
+  ];
+  const histCounts = new Array(8).fill(0);
+  for (const row of histR.rows) {
+    const i = Number(row.b);
+    if (i >= 1 && i <= 8) histCounts[i - 1] = row.n;
+  }
+  const histogram = histLabels.map((label, i) => ({
+    label,
+    count: histCounts[i],
+    // Faixas (dBm) → banda de qualidade para colorir as barras.
+    // Crítico abaixo de -30, atenção entre -30 e -25, saudável acima de -25.
+    band: i <= 1 ? 'critical' : i === 2 ? 'warning' : 'ok',
+  }));
+
+  const worst = worstR.rows
+    .map((r) => ({
+      username: r.pppoe_username ?? null,
+      oltHostname: cleanOnuText(r.olt),
+      rxPower: toNumberOrNull(r.rx_power),
+      oltOnuStatus: cleanOnuText(r.olt_onu_status),
+      rxGood: cleanOnuText(r.rx_good),
+    }))
+    .filter((r) => r.rxPower !== null)
+    .sort((a, b) => a.rxPower - b.rxPower)
+    .slice(0, ONU_SUMMARY_WORST_LIMIT);
+
+  // Heat = densidade dos ATENUADOS (massa). Marcadores clicáveis = OFFLINE e
+  // CRÍTICOS. Offline usa o calculated_status RECONCILIADO (fresco) — não o
+  // olt_onu_status bruto, que pode estar horas velho e gerar falso-offline.
+  const OFFLINE_CALC = ['down', 'offline', 'power_fail', 'loss_signal', 'inactive'];
+  const heatPoints = [];
+  const problemMarkers = [];
+  for (const r of heatR.rows) {
+    const lat = Number(r.latitude);
+    const lng = Number(r.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+    const rx = toNumberOrNull(r.rx_power);
+    const calc = String(r.calculated_status ?? '').trim().toLowerCase();
+    const isOffline = rx === 0 || OFFLINE_CALC.includes(calc);
+    const kind = isOffline ? 'offline' : rx !== null && rx <= -28 ? 'critical' : 'degraded';
+
+    if (kind === 'degraded') {
+      // Peso proporcional à atenuação abaixo de -25 dBm.
+      const weight = rx !== null ? Math.min(1, Math.max(0.3, (Math.abs(rx) - 25) / 15)) : 0.3;
+      heatPoints.push([lat, lng, Number(weight.toFixed(2))]);
+    } else if (problemMarkers.length < ONU_SUMMARY_MARKER_LIMIT) {
+      problemMarkers.push({
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6)),
+        kind,
+        username: r.pppoe_username ?? null,
+        oltHostname: cleanOnuText(r.olt),
+        rxPower: rx,
+      });
+    }
+  }
+
+  const tempRow = tempR.rows[0] ?? {};
+  const temperature = {
+    sampled: Number(tempRow.n) || 0,
+    warm: Number(tempRow.warm) || 0, // >= ONU_TEMP_WARM_C
+    hot: Number(tempRow.hot) || 0, // >= ONU_TEMP_HOT_C
+    avg: toNumberOrNull(tempRow.avg),
+    max: toNumberOrNull(tempRow.max),
+    warmThreshold: ONU_TEMP_WARM_C,
+    hotThreshold: ONU_TEMP_HOT_C,
+    hottest: hottestR.rows
+      .map((r) => ({
+        username: r.pppoe_username ?? null,
+        oltHostname: cleanOnuText(r.olt),
+        temperature: toNumberOrNull(r.temperature),
+        rxPower: toNumberOrNull(r.rx_power),
+      }))
+      .filter((r) => r.temperature !== null)
+      .sort((a, b) => b.temperature - a.temperature)
+      .slice(0, ONU_SUMMARY_HOT_LIMIT),
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      total,
+      online: buckets.online,
+      degraded: buckets.degraded,
+      offline: buckets.offline,
+      noData: buckets.unknown,
+      criticalSignal,
+    },
+    signalStats,
+    temperature,
+    oltCount,
+    oltBreakdown,
+    histogram,
+    worst,
+    heatPoints,
+    problemMarkers,
+  };
+}
+
+app.get('/api/onu-diagnostics/summary', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && onuSummaryCache.payload && now - onuSummaryCache.at < ONU_SUMMARY_TTL_MS) {
+      return res.json({ success: true, cached: true, data: onuSummaryCache.payload });
+    }
+    const payload = await buildOnuSummaryOnce();
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    console.error('Erro ao montar resumo de ONU da rede:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Saúde de sinal agregada POR MODELO de ONU (banco de monitoramento). Responde
+// "quais modelos concentram clientes com sinal ruim?" — usa onu_infos.onu_model
+// (modelo real visto pela OLT) e a MESMA classificação de status do summary.
+const ONU_BY_MODEL_TTL_MS = 60_000;
+let onuByModelCache = { at: 0, payload: null };
+let onuByModelInflight = null;
+
+const ONU_BY_MODEL_SQL = `
+  SELECT
+    COALESCE(NULLIF(TRIM(onu_model), ''), '(modelo não informado)') AS model,
+    COUNT(*)::int                                  AS total,
+    COUNT(*) FILTER (WHERE bucket = 'online')::int   AS online,
+    COUNT(*) FILTER (WHERE bucket = 'degraded')::int AS degraded,
+    COUNT(*) FILTER (WHERE bucket = 'offline')::int  AS offline,
+    COUNT(*) FILTER (WHERE bucket = 'unknown')::int  AS unknown,
+    COUNT(*) FILTER (WHERE is_critical)::int         AS critical,
+    ROUND(AVG(rx_power) FILTER (
+      WHERE operante AND rx_power IS NOT NULL AND rx_power < 0
+    )::numeric, 2)                                   AS avg_rx
+  FROM (
+    SELECT DISTINCT ON (gc.pppoe_username)
+      oi.onu_model,
+      ${ONU_BUCKET_CASE} AS bucket,
+      (os.rx_power IS NOT NULL AND os.rx_power <= -28) AS is_critical,
+      os.rx_power,
+      ${ONU_OPERANTE} AS operante
+    FROM gpon_macs gm
+    JOIN gpon_clients gc ON gc.id = gm.gpon_client_id
+    JOIN onu_statuses os ON os.gpon_client_id = gc.id
+    LEFT JOIN onu_infos oi ON oi.gpon_client_id = gc.id
+    WHERE gm.gpon_client_id IS NOT NULL
+    ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+  ) t
+  GROUP BY model
+  ORDER BY total DESC`;
+
+async function buildOnuByModel() {
+  const result = await onuPool.query(ONU_BY_MODEL_SQL);
+  return {
+    generatedAt: new Date().toISOString(),
+    models: result.rows.map((r) => ({
+      model: r.model,
+      total: Number(r.total ?? 0),
+      online: Number(r.online ?? 0),
+      degraded: Number(r.degraded ?? 0),
+      offline: Number(r.offline ?? 0),
+      unknown: Number(r.unknown ?? 0),
+      critical: Number(r.critical ?? 0),
+      avgRx: r.avg_rx === null || r.avg_rx === undefined ? null : Number(r.avg_rx),
+    })),
+  };
+}
+
+function buildOnuByModelOnce() {
+  if (onuByModelInflight) return onuByModelInflight;
+  onuByModelInflight = buildOnuByModel()
+    .then((payload) => {
+      onuByModelCache = { at: Date.now(), payload };
+      return payload;
+    })
+    .finally(() => {
+      onuByModelInflight = null;
+    });
+  return onuByModelInflight;
+}
+
+app.get('/api/onu-diagnostics/by-model', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && onuByModelCache.payload && now - onuByModelCache.at < ONU_BY_MODEL_TTL_MS) {
+      return res.json({ success: true, cached: true, data: onuByModelCache.payload });
+    }
+    const payload = await buildOnuByModelOnce();
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    console.error('Erro ao agregar sinal por modelo de ONU:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Feed near-real-time de mudanças de status (quedas/recuperações), lendo o log
+// onu_status_changes. Ordena por id DESC (PK, monotônico ≈ tempo) p/ usar índice
+// — varredura barata mesmo com ~3,3M linhas; filtra/classifica em JS.
+const ONU_OFFLINE_STATES = new Set(['down', 'power_fail', 'loss_signal']);
+const ONU_CHANGES_SCAN = 400; // linhas mais recentes lidas do log
+const ONU_CHANGES_RETURN = 60; // eventos relevantes devolvidos
+const ONU_CHANGES_TTL_MS = 15_000;
+let onuChangesCache = { at: 0, payload: null };
+// Single-flight (mesmo padrão do resumo) — evita rebuilds paralelos do feed.
+let onuChangesInflight = null;
+function buildOnuRecentChangesOnce() {
+  if (onuChangesInflight) return onuChangesInflight;
+  onuChangesInflight = buildOnuRecentChanges()
+    .then((payload) => {
+      onuChangesCache = { at: Date.now(), payload };
+      return payload;
+    })
+    .finally(() => {
+      onuChangesInflight = null;
+    });
+  return onuChangesInflight;
+}
+
+const ONU_RECENT_CHANGES_QUERY = `
+  SELECT
+    osc.id,
+    osc.previous_status,
+    osc.new_status,
+    osc.new_status_trigger,
+    osc.previous_rx_power,
+    osc.new_rx_power,
+    osc.new_status_timestamp AS at,
+    EXTRACT(EPOCH FROM (now() - osc.new_status_timestamp))::bigint AS age_seconds,
+    gc.pppoe_username,
+    olt.hostname AS olt
+  FROM onu_status_changes osc
+  JOIN gpon_clients gc ON gc.id = osc.gpon_client_id
+  LEFT JOIN LATERAL (
+    SELECT o.hostname
+    FROM gpon_macs gm
+    JOIN olts o ON o.id = gm.olt_id
+    WHERE gm.gpon_client_id = gc.id AND gm.olt_id IS NOT NULL
+    ORDER BY gm.updated_at DESC NULLS LAST
+    LIMIT 1
+  ) olt ON true
+  ORDER BY osc.id DESC
+  LIMIT ${ONU_CHANGES_SCAN}`;
+
+function normState(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+async function buildOnuRecentChanges() {
+  const result = await onuPool.query(ONU_RECENT_CHANGES_QUERY);
+  const events = [];
+  for (const r of result.rows) {
+    const next = normState(r.new_status);
+    const prev = normState(r.previous_status);
+    const nextOffline = ONU_OFFLINE_STATES.has(next);
+    const prevOffline = ONU_OFFLINE_STATES.has(prev);
+
+    // Só interessam transições: caiu (queda) ou voltou (recuperação).
+    let kind = null;
+    if (nextOffline && !prevOffline) kind = 'drop';
+    else if (!nextOffline && prevOffline) kind = 'recovery';
+    if (!kind) continue;
+
+    events.push({
+      id: Number(r.id),
+      kind,
+      previousStatus: cleanOnuText(r.previous_status),
+      newStatus: cleanOnuText(r.new_status),
+      trigger: cleanOnuText(r.new_status_trigger),
+      previousRxPower: toNumberOrNull(r.previous_rx_power),
+      newRxPower: toNumberOrNull(r.new_rx_power),
+      at: r.at ?? null,
+      ageSeconds: toNumberOrNull(r.age_seconds),
+      username: r.pppoe_username ?? null,
+      oltHostname: cleanOnuText(r.olt),
+    });
+    if (events.length >= ONU_CHANGES_RETURN) break;
+  }
+  const drops = events.filter((e) => e.kind === 'drop').length;
+  return {
+    generatedAt: new Date().toISOString(),
+    drops,
+    recoveries: events.length - drops,
+    events,
+  };
+}
+
+app.get('/api/onu-diagnostics/recent-changes', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && onuChangesCache.payload && now - onuChangesCache.at < ONU_CHANGES_TTL_MS) {
+      return res.json({ success: true, cached: true, data: onuChangesCache.payload });
+    }
+    const payload = await buildOnuRecentChangesOnce();
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    console.error('Erro ao montar feed de mudanças de ONU:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resumo de sinal ONU agrupado por código de splitter — alimenta os cards da
+// listagem sem N queries individuais. Cache 60s + single-flight.
+const ONU_SPLITTER_SUMMARY_TTL_MS = 60_000;
+let onuSplitterSummaryCache = { at: 0, payload: null };
+let onuSplitterSummaryInflight = null;
+
+// Query 1 (main DB): username → splitter code + título legível.
+const ONU_SPLITTER_USERNAME_MAP_SQL = `
+SELECT DISTINCT ac."user" AS pppoe_username, ss.code AS splitter_code, ss.title AS splitter_title
+FROM authentication_splitter_ports ssp
+JOIN authentication_splitters ss ON ss.id = ssp.authentication_splitter_id
+JOIN authentication_contracts  ac ON ac.id = ssp.authentication_contract_id
+WHERE ssp.deleted = FALSE
+  AND ssp.busy    = TRUE
+  AND ac."user"   IS NOT NULL
+  AND ss.code     IS NOT NULL
+`;
+
+// Query 2 (monitoring DB): status/bucket por username (DISTINCT ON = mais recente).
+const ONU_SPLITTER_STATUS_SQL = `
+SELECT DISTINCT ON (gc.pppoe_username)
+  gc.pppoe_username,
+  os.rx_power,
+  ${ONU_BUCKET_CASE} AS bucket
+FROM gpon_macs gm
+JOIN  gpon_clients  gc ON gc.id = gm.gpon_client_id
+LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+WHERE gm.gpon_client_id IS NOT NULL
+  AND gc.pppoe_username  IS NOT NULL
+ORDER BY gc.pppoe_username,
+         os.updated_at  DESC NULLS LAST,
+         gm.updated_at  DESC NULLS LAST,
+         gm.id          DESC
+`;
+
+// Query 3 (main DB): um nome de cliente representativo por splitter — o sinal
+// projetado no GeoGrid é idêntico para toda a fibra, então um único lookup basta.
+const ONU_SPLITTER_CLIENT_NAME_SQL = `
+SELECT DISTINCT ON (ss.code)
+  ss.code AS splitter_code,
+  p.name  AS client_name
+FROM authentication_splitter_ports ssp
+JOIN authentication_splitters ss ON ss.id = ssp.authentication_splitter_id
+JOIN authentication_contracts  ac ON ac.id = ssp.authentication_contract_id
+JOIN contracts ct ON ct.id = ac.contract_id
+JOIN people    p  ON p.id  = ct.client_id
+WHERE ssp.deleted = FALSE
+  AND ssp.busy    = TRUE
+  AND ss.code     IS NOT NULL
+  AND p.name      IS NOT NULL
+ORDER BY ss.code
+`;
+
+async function buildOnuSplitterSummary() {
+  // Executa as três queries em paralelo — as duas do main DB e a do monitoring são independentes.
+  const [[mainResult, clientNameResult], monitorResult] = await Promise.all([
+    Promise.all([
+      pool.query(ONU_SPLITTER_USERNAME_MAP_SQL),
+      pool.query(ONU_SPLITTER_CLIENT_NAME_SQL),
+    ]),
+    onuPool.query(ONU_SPLITTER_STATUS_SQL),
+  ]);
+
+  // Mapa: pppoe_username → splitter_code.
+  const splitterByUser = new Map();
+  // Mapa: splitter_code → splitter_title (nome legível).
+  const titleByCode = new Map();
+  for (const row of mainResult.rows) {
+    if (row.pppoe_username && row.splitter_code) {
+      const code = String(row.splitter_code).trim();
+      splitterByUser.set(String(row.pppoe_username).trim(), code);
+      if (row.splitter_title && !titleByCode.has(code)) {
+        titleByCode.set(code, String(row.splitter_title).trim());
+      }
+    }
+  }
+
+  // Mapa: splitter_code → client_name (para busca de sinal projetado no GeoGrid).
+  const nameByCode = new Map();
+  for (const row of clientNameResult.rows) {
+    if (row.splitter_code && row.client_name) {
+      nameByCode.set(String(row.splitter_code).trim(), String(row.client_name).trim());
+    }
+  }
+
+  // Agrega bucket + rxPower por splitter_code.
+  const agg = new Map();
+  for (const row of monitorResult.rows) {
+    const username = String(row.pppoe_username ?? '').trim();
+    const code = splitterByUser.get(username);
+    if (!code) continue;
+
+    if (!agg.has(code)) {
+      agg.set(code, { total: 0, online: 0, degraded: 0, offline: 0, rxValues: [], title: titleByCode.get(code) ?? null });
+    }
+    const entry = agg.get(code);
+    entry.total++;
+    if (row.bucket === 'online') entry.online++;
+    else if (row.bucket === 'degraded') entry.degraded++;
+    else if (row.bucket === 'offline') entry.offline++;
+    const rx = toNumberOrNull(row.rx_power);
+    if (rx !== null && rx < 0) entry.rxValues.push(rx);
+  }
+
+  const data = {};
+  for (const [code, entry] of agg) {
+    const avg = entry.rxValues.length > 0
+      ? Math.round((entry.rxValues.reduce((a, b) => a + b, 0) / entry.rxValues.length) * 10) / 10
+      : null;
+    data[code] = {
+      title:            entry.title,
+      total:            entry.total,
+      online:           entry.online,
+      degraded:         entry.degraded,
+      offline:          entry.offline,
+      avgRxPower:       avg,
+      projectedRxPower: null,
+    };
+  }
+
+  // Sinal projetado via GeoGrid — um nome representativo por splitter.
+  // O valor projetado é idêntico para todos os clientes no mesmo splitter (mesma fibra),
+  // então um único lookup por splitter é suficiente. Falha do GeoGrid não impede o retorno.
+  if (geogridBaseUrl && geogridApiKey) {
+    try {
+      const normToCode = new Map();
+      for (const [code] of agg) {
+        const rawName = nameByCode.get(code);
+        if (!rawName) continue;
+        const norm = normalizeGeoName(rawName);
+        if (!norm.includes(',')) normToCode.set(norm, code);
+      }
+
+      if (normToCode.size > 0) {
+        const params = new URLSearchParams({
+          nomes: [...normToCode.keys()].join(','),
+          pagina: '1',
+          registrosPorPagina: String(Math.max(100, normToCode.size + 20)),
+        });
+        const geoResult = await geogridProxyGetJson(`/clientesAtendimentos?${params.toString()}`);
+        for (const reg of geoResult?.registros ?? []) {
+          const normName = normalizeGeoName(String(reg.nome ?? ''));
+          const code = normToCode.get(normName);
+          if (!code || !data[code]) continue;
+          for (const at of reg.atendimentos ?? []) {
+            const pf = at?.potencia?.potenciaFinal;
+            if (typeof pf === 'number' && Number.isFinite(pf)) {
+              data[code].projectedRxPower = pf;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('GeoGrid indisponível para sinal projetado por splitter:', err.message);
+    }
+  }
+
+  return data;
+}
+
+function buildOnuSplitterSummaryOnce() {
+  if (onuSplitterSummaryInflight) return onuSplitterSummaryInflight;
+  onuSplitterSummaryInflight = buildOnuSplitterSummary()
+    .then((payload) => {
+      onuSplitterSummaryCache = { at: Date.now(), payload };
+      return payload;
+    })
+    .finally(() => { onuSplitterSummaryInflight = null; });
+  return onuSplitterSummaryInflight;
+}
+
+app.get('/api/onu-diagnostics/summary-by-splitter', async (req, res) => {
+  if (!onuPool) {
+    return res
+      .status(503)
+      .json({ success: false, message: 'Banco de monitoramento de ONU não configurado.' });
+  }
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && onuSplitterSummaryCache.payload && now - onuSplitterSummaryCache.at < ONU_SPLITTER_SUMMARY_TTL_MS) {
+      return res.json({ success: true, cached: true, data: onuSplitterSummaryCache.payload });
+    }
+    const payload = await buildOnuSplitterSummaryOnce();
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    const isConnTimeout =
+      error.message?.includes('Connection terminated') ||
+      error.message?.includes('connection timeout') ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT';
+    if (isConnTimeout) {
+      console.warn('[onu-summary-splitter] Banco inacessível:', error.message);
+      return res.status(503).json({ success: false, unavailable: true, data: {} });
+    }
+    console.error('Erro ao montar resumo ONU por splitter:', error.message, error.code ?? '', error.detail ?? '');
+    return res.status(500).json({ success: false, error: error.message, code: error.code ?? null });
   }
 });
 

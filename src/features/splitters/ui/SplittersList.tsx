@@ -5,6 +5,7 @@ import type {
   SplitterOperationalScore,
 } from '@/features/splitters/model/splitterOperationalInsights'
 import type { SplitterMaintenanceStats } from '@/features/splitters/api/fetchSplitterMaintenanceStatsFromLocalDb'
+import type { OnuSplitterSignalSummary } from '@/features/onu/model/onuSplitterSummary'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -25,6 +26,7 @@ export type SplittersListProps = {
   getMaintenanceStats: (splitter: Splitter) => SplitterMaintenanceStats
   getOperationalScore: (splitter: Splitter) => SplitterOperationalScore
   getTrendLabel: (splitter: Splitter) => string
+  getOnuSignal?: (splitter: Splitter) => OnuSplitterSignalSummary | null | undefined
 }
 
 function getPaginationRange(current: number, total: number): (number | '...')[] {
@@ -75,6 +77,7 @@ export function SplittersList({
   getMaintenanceStats,
   getOperationalScore,
   getTrendLabel,
+  getOnuSignal,
 }: SplittersListProps) {
   const limit = 20
   const totalPages = Math.ceil(totalCount / limit)
@@ -154,6 +157,7 @@ export function SplittersList({
             maintenanceStats={getMaintenanceStats(splitter)}
             operationalScore={getOperationalScore(splitter)}
             trendLabel={getTrendLabel(splitter)}
+            onuSignal={getOnuSignal?.(splitter)}
           />
         ))}
       </ul>

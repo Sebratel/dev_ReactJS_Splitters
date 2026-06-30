@@ -122,10 +122,10 @@ export function Sidebar({
             {!navCollapsed ? (
               <div>
                 <h1 className="text-xl font-black tracking-tighter text-on-surface">
-                  Operação
+                  Monitoramento
                 </h1>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
-                  Dashboard Sebratel
+                  de Splitters
                 </p>
               </div>
             ) : null}

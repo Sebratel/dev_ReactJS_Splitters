@@ -16,6 +16,11 @@ import { fetchMassivaDayShiftRecurrenceFromLocalDb } from '@/features/massiva/ap
 import type { MassivaDayShiftRecurrenceCell } from '@/features/intelligence/lib/massivaDayShiftRecurrence'
 import { buildTopStreetsByNormalizedStreet } from '@/features/intelligence/lib/geoStreetAggregation'
 import {
+  buildNetworkTopology,
+  type TopologyOltNode,
+} from '@/features/intelligence/lib/buildNetworkTopology'
+import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
+import {
   countDistinctMassivasByLifecycleBucket,
   toLifecycleBucket,
   type LifecycleBucketKey,
@@ -136,6 +141,10 @@ export type IntelligenceRiskRankingRow = {
   splitterTitle: string
   oltCode: string | null
   oltDescription: string | null
+  /** Slot da OLT (extraído do cadastro do splitter); null se ausente. */
+  oltSlot: number | null
+  /** Porta/PON da OLT (extraída do cadastro); null se ausente. */
+  oltPort: number | null
   street: string | null
   tipoLocal: Splitter['tipoLocal']
   nomeCondominio: string | null
@@ -948,7 +957,8 @@ export function useNetworkIntelligenceData(
       const fromTickets = findMassivaStatsForSplitter(
         statsInPeriod,
         row.splitterCode,
-        row.splitterTitle,
+        // IntelligenceMassivaRow não carrega título; o matcher usa só o code.
+        '',
       )
       const merged = mergeSplitterMassivaStats(localStats, fromTickets)
       return {
@@ -1129,6 +1139,8 @@ export function useNetworkIntelligenceData(
           splitterTitle: trend.splitterTitle,
           oltCode: meta?.oltCode ?? null,
           oltDescription: meta?.oltDescription ?? null,
+          oltSlot: meta?.oltSlot ?? null,
+          oltPort: meta?.oltPort ?? null,
           street: meta?.street ?? null,
           tipoLocal: meta?.tipoLocal,
           nomeCondominio: meta?.nomeCondominio ?? null,
@@ -1259,6 +1271,12 @@ export function useNetworkIntelligenceData(
       .sort((a, b) => b.criticalSplitters - a.criticalSplitters || b.avgUsagePercent - a.avgUsagePercent)
       .slice(0, 8)
   }, [riskRanking])
+
+  const onuSummaryBySplitter = useOnuSummaryBySplitter()
+  const topology = useMemo<TopologyOltNode[]>(
+    () => buildNetworkTopology(riskRanking, onuSummaryBySplitter.data),
+    [riskRanking, onuSummaryBySplitter.data],
+  )
 
   const geoDrilldown = useMemo<IntelligenceGeoDrilldown>(() => {
     const tipoCounts = new Map<'CONDOMÍNIO' | 'UNIDADE' | 'SEM_CLASSIFICACAO', number>([
@@ -1452,6 +1470,7 @@ export function useNetworkIntelligenceData(
     riskRanking,
     impactUrgencyMatrix,
     oltDrilldown,
+    topology,
     geoDrilldown,
     ...lifecycleAnalytics,
     maintenanceBySplitter: maintenanceQuery.data?.rows ?? [],

@@ -289,7 +289,7 @@ export function buildDashboardMassivaTickets(input: {
 
     byProtocol.set(
       protocol,
-      withAffectedClients(massivaTicketFromLocalHistoryRow(row), row, massivaTicketFromLocalHistoryRow(row), bff),
+      withAffectedClients(massivaTicketFromLocalHistoryRow(row), row, massivaTicketFromLocalHistoryRow(row), bff ?? null),
     )
   }
 

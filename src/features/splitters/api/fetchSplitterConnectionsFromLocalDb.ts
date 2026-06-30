@@ -317,4 +317,51 @@ export async function fetchSplitterConnectionsFromLocalDb(
   return bundle.clientes
 }
 
+export type MassivaConnectionsSummary = {
+  counts: {
+    total: number
+    pppoe: number
+    corporate: number
+    uniqueAuthIds: number
+  }
+  sample: SplitterCliente[]
+}
+
+/** Versão agregada do batch: retorna contagens server-side + amostra de 50 linhas.
+ *  Nunca transfere toda a base para o frontend — seguro para massivas com 100k clientes. */
+export async function fetchMassivaConnectionsBatchSummary(
+  routes: MassivaConnectionBatchRoute[],
+): Promise<MassivaConnectionsSummary> {
+  if (routes.length === 0) {
+    return { counts: { total: 0, pppoe: 0, corporate: 0, uniqueAuthIds: 0 }, sample: [] }
+  }
+  const response = await fetchWithSessionAuth(
+    `${env.localBffUrl}/api/massiva/connections/batch-summary`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ routes }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(
+      `Erro ao consultar BFF Local para Conexoes (batch-summary): ${response.status}`,
+    )
+  }
+  const result = (await response.json()) as {
+    success?: boolean
+    counts?: Record<string, number>
+    sample?: unknown
+  }
+  if (!result.success || !result.counts) {
+    throw new Error('Formato de resposta inesperado do BFF Local (batch-summary).')
+  }
+  const { total = 0, pppoe = 0, corporate = 0, uniqueAuthIds = 0 } = result.counts
+  const rawSample = Array.isArray(result.sample)
+    ? (result.sample as Record<string, unknown>[])
+    : []
+  const { clientes } = mapConnectionRowsToSplitterBundle(rawSample)
+  return { counts: { total, pppoe, corporate, uniqueAuthIds }, sample: clientes }
+}
+
 

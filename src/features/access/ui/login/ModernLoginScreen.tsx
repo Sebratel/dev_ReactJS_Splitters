@@ -286,11 +286,11 @@ function LoginScreenCard({
           <header className="space-y-2">
             {isHero ? (
               <span className="inline-flex rounded-full bg-primary/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
-                Operação Sebratel
+                Monitoramento de Splitters
               </span>
             ) : (
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-on-surface-variant">
-                Operação Sebratel
+                Monitoramento de Splitters
               </p>
             )}
             <h1 className="text-2xl font-bold tracking-tight text-on-surface sm:text-[1.65rem]">
@@ -529,7 +529,7 @@ export function ModernLoginScreen({
                 />
               </span>
               <span className="text-base font-bold uppercase tracking-[0.28em] sm:text-lg">
-                Operação Sebratel
+                Monitoramento de Splitters
               </span>
             </motion.div>
             <motion.h2

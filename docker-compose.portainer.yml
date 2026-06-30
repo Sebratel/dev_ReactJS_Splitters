@@ -28,6 +28,13 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_SSL: ${DB_SSL:-false}
+      # PostgreSQL de monitoramento de ONUs (diagnóstico de sinal) — servidor separado
+      ONU_DB_HOST: ${ONU_DB_HOST}
+      ONU_DB_PORT: ${ONU_DB_PORT:-5432}
+      ONU_DB_NAME: ${ONU_DB_NAME}
+      ONU_DB_USER: ${ONU_DB_USER}
+      ONU_DB_PASSWORD: ${ONU_DB_PASSWORD}
+      ONU_DB_SSL: ${ONU_DB_SSL:-false}
       # MySQL remoto (do .env.local)
       MASSIVA_MYSQL_HOST: ${MASSIVA_MYSQL_HOST}
       MASSIVA_MYSQL_PORT: ${MASSIVA_MYSQL_PORT}

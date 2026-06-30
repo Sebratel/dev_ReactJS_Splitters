@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -24,6 +24,7 @@ import {
   MapPin,
   Moon,
   MoonStar,
+  Network,
   Sun,
   Sunrise,
   Wrench,
@@ -59,6 +60,21 @@ import { buildTopStreetsByNormalizedStreet } from '@/features/intelligence/lib/g
 const IntelligenceSaturationMap = lazy(async () => {
   const m = await import('@/features/intelligence/ui/IntelligenceSaturationMap')
   return { default: m.IntelligenceSaturationMap }
+})
+
+const OnuSignalHealthPanel = lazy(async () => {
+  const m = await import('@/features/onu/ui/OnuSignalHealthPanel')
+  return { default: m.OnuSignalHealthPanel }
+})
+
+const EquipmentFleetPanel = lazy(async () => {
+  const m = await import('@/features/equipamentos/ui/EquipmentFleetPanel')
+  return { default: m.EquipmentFleetPanel }
+})
+
+const NetworkTopologyPanel = lazy(async () => {
+  const m = await import('@/features/intelligence/ui/NetworkTopologyPanel')
+  return { default: m.NetworkTopologyPanel }
 })
 
 function formatDateLabel(date: Date): string {
@@ -235,8 +251,11 @@ const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: str
   { id: 'risco', label: 'Priorização' },
   { id: 'operacao', label: 'Uso e massivas' },
   { id: 'geografico', label: 'Mapa e OLTs' },
+  { id: 'topologia', label: 'Topologia' },
   { id: 'ciclo-vida', label: 'Idade e cohorts' },
   { id: 'manutencao', label: 'Manutenções ERP' },
+  { id: 'sinais', label: 'Sinais ONU' },
+  { id: 'equipamentos', label: 'Equipamentos' },
 ]
 
 const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
@@ -288,8 +307,11 @@ function readNetworkIntelligenceUiState(): {
         parsed.activeWindow === 'risco' ||
         parsed.activeWindow === 'operacao' ||
         parsed.activeWindow === 'geografico' ||
+        parsed.activeWindow === 'topologia' ||
         parsed.activeWindow === 'ciclo-vida' ||
-        parsed.activeWindow === 'manutencao'
+        parsed.activeWindow === 'manutencao' ||
+        parsed.activeWindow === 'sinais' ||
+        parsed.activeWindow === 'equipamentos'
           ? parsed.activeWindow
           : 'visao-geral',
       riskBandFilter:
@@ -342,10 +364,16 @@ const TAB_INTRO: Record<IntelligenceWindow, string> = {
     'Leitura operacional: evolução média da ocupação, volume de massivas por splitter, padrão de horários de abertura e status por equipamento.',
   geografico:
     'Indicadores por cidade, bairro e presença corporativa (cadastro do equipamento), agregações por OLT, contexto de condomínio/rua e mapa de calor — sempre no recorte filtrado.',
+  topologia:
+    'Drill-down pela hierarquia física da rede: OLT → Slot → PON → splitters. Navegue até a PON exata para ver ocupação, crescimento, massivas e clientes impactados em cada nível — sempre no recorte filtrado.',
   'ciclo-vida':
     'Idade do equipamento cruzada com pressão de uso: buckets de idade, ranking preventivo, alertas e cohorts por ano de implantação.',
   manutencao:
     'Manutenções registradas no ERP no intervalo de datas, consolidadas por splitter e ponto de acesso (útil para cruzar com risco no terreno).',
+  sinais:
+    'Saúde de sinal das ONUs em tempo quase real (monitoramento): panorama online/atenuado/offline, distribuição de potência RX, piores clientes e mapa de calor geográfico. Atualiza a cada 60s.',
+  equipamentos:
+    'Frota de equipamentos (patrimônio) na rede: dimensão do parque, modelos mais presentes (curva de Pareto), composição por tipo, distribuição por cidade e bairro e qualidade de cadastro (serial, MAC, duplicidades).',
 }
 
 function presetButtonLabel(p: IntelligenceDateRangePreset): string {
@@ -406,7 +434,7 @@ function trendBadgeClass(label: string): string {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200'
 }
 
-type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'ciclo-vida' | 'manutencao'
+type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'topologia' | 'ciclo-vida' | 'manutencao' | 'sinais' | 'equipamentos'
 
 type AgeFilter = 'all' | '0-1' | '1-3' | '3-5' | '5+'
 
@@ -502,6 +530,41 @@ function corporateRegionalInsightDirective(args: {
   return parts.slice(0, 2).join(' ')
 }
 
+/**
+ * Faixa narrativa reutilizada no topo das abas — frase dinâmica derivada dos
+ * dados do recorte (estilo dos painéis de Topologia/Equipamentos/Sinais).
+ */
+function InsightBanner({
+  tone = 'neutral',
+  icon: Icon,
+  children,
+}: {
+  tone?: 'neutral' | 'warning' | 'critical' | 'positive'
+  icon: LucideIcon
+  children: ReactNode
+}) {
+  const toneClass = {
+    neutral: 'border-slate-200 bg-gradient-to-br from-slate-50 to-white',
+    warning: 'border-amber-200 bg-gradient-to-br from-amber-50 to-white',
+    critical: 'border-rose-200 bg-gradient-to-br from-rose-50 to-white',
+    positive: 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
+  }[tone]
+  const iconClass = {
+    neutral: 'bg-slate-100 text-slate-600',
+    warning: 'bg-amber-100 text-amber-700',
+    critical: 'bg-rose-100 text-rose-700',
+    positive: 'bg-emerald-100 text-emerald-700',
+  }[tone]
+  return (
+    <div className={cn('flex items-start gap-3 rounded-2xl border p-3.5', toneClass)}>
+      <span className={cn('mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl', iconClass)}>
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <p className="text-sm font-medium leading-relaxed text-slate-700">{children}</p>
+    </div>
+  )
+}
+
 export function NetworkIntelligencePage() {
   const [uiState, setUiState] = useState(readNetworkIntelligenceUiState)
   const {
@@ -590,6 +653,7 @@ export function NetworkIntelligencePage() {
     decisionKpis,
     riskRanking,
     impactUrgencyMatrix,
+    topology,
     massivaRollup,
     massivaPeriodLinks,
     deltaReferenceLabel,
@@ -1032,6 +1096,98 @@ export function NetworkIntelligencePage() {
       ((maintenanceTotals.openMaintenances / maintenanceTotals.totalMaintenances) * 100).toFixed(1),
     )
   }, [maintenanceTotals.openMaintenances, maintenanceTotals.totalMaintenances])
+
+  // ── Narrativas dinâmicas (storytelling) das abas Risco / Ciclo de vida / Manutenção ──
+
+  const riskInsight = useMemo<{ tone: 'critical' | 'warning' | 'neutral'; text: string } | null>(() => {
+    const top = contextualRiskRanking[0]
+    if (!top) return null
+    let text = `Prioridade nº1: ${top.splitterTitle || top.splitterCode}`
+    if (top.oltCode) text += ` (OLT ${top.oltCode})`
+    text += ` — score ${top.riskScore.toFixed(1)}, ${top.currentUsagePercent.toFixed(1)}% de uso`
+    if (top.openTickets > 0) text += `, ${top.openTickets} massiva(s) aberta(s)`
+    text += '.'
+    if (top.etaTo95Days != null) {
+      text += ` No ritmo atual, satura em ~${top.etaTo95Days} ${top.etaTo95Days === 1 ? 'dia' : 'dias'}.`
+    }
+    const tone = top.riskBand === 'critico' ? 'critical' : top.riskBand === 'alto' ? 'warning' : 'neutral'
+    return { tone, text }
+  }, [contextualRiskRanking])
+
+  const riskOltConcentration = useMemo<string | null>(() => {
+    const topN = contextualRiskRanking.slice(0, 12)
+    if (topN.length < 3) return null
+    const byOlt = new Map<string, { label: string; count: number }>()
+    for (const row of topN) {
+      const key = row.oltCode?.trim() || row.oltDescription?.trim()
+      if (!key) continue
+      const label = row.oltDescription?.trim() || row.oltCode?.trim() || key
+      const cur = byOlt.get(key) ?? { label, count: 0 }
+      cur.count += 1
+      byOlt.set(key, cur)
+    }
+    let worst: { label: string; count: number } | null = null
+    for (const v of byOlt.values()) if (!worst || v.count > worst.count) worst = v
+    if (!worst || worst.count < 3) return null
+    return `Concentração: ${worst.label} responde por ${worst.count} dos ${topN.length} maiores riscos — investigar transmissão/obra na origem.`
+  }, [contextualRiskRanking])
+
+  const lifecycleInsight = useMemo<{ tone: 'critical' | 'warning' | 'positive'; text: string } | null>(() => {
+    if (contextualRiskRanking.length === 0) return null
+    const k = contextualLifecycle.kpis
+    const fmt1 = (n: number) => n.toFixed(1).replace('.', ',')
+    if (k.agedCriticalSplitters === 0) {
+      return {
+        tone: 'positive',
+        text: `Nenhum equipamento 5+ anos saturado no recorte — risco de ciclo de vida sob controle. Idade média ${fmt1(k.avgAgeYears)} anos.`,
+      }
+    }
+    const aged = contextualRiskRanking.filter((r) => r.ageYears >= 5)
+    const worst = (aged.length > 0 ? aged : contextualRiskRanking)
+      .slice()
+      .sort((a, b) => b.ageYears - a.ageYears || b.currentUsagePercent - a.currentUsagePercent)[0]
+    let text = `${k.agedCriticalSplitters} equipamento(s) com 5+ anos já saturados (${fmt1(k.agedPressurePercent)}% da base sob pressão envelhecida). Idade média ${fmt1(k.avgAgeYears)} anos.`
+    if (worst) {
+      text += ` Comece por ${worst.splitterTitle || worst.splitterCode}: ${fmt1(worst.ageYears)} anos e ${worst.currentUsagePercent.toFixed(1)}% de uso.`
+    }
+    return { tone: k.agedPressurePercent >= 20 ? 'critical' : 'warning', text }
+  }, [contextualLifecycle.kpis, contextualRiskRanking])
+
+  const lifecycleHeatmapInsight = useMemo<string | null>(() => {
+    const cell = contextualLifecycle.heatmap.find((c) => c.bucket === '5+' && c.usageBand === '95+')
+    if (!cell || cell.count === 0) return null
+    return `${cell.count} splitter(s) com 5+ anos E ≥95% de uso — prioridade máxima de troca.`
+  }, [contextualLifecycle.heatmap])
+
+  const maintenanceInsight = useMemo<{ tone: 'warning' | 'neutral'; text: string } | null>(() => {
+    if (contextualMaintenanceRows.length === 0) return null
+    const top = contextualMaintenanceRows.reduce((a, b) =>
+      b.totalMaintenances > a.totalMaintenances ? b : a,
+    )
+    return {
+      tone: top.openMaintenances > 0 ? 'warning' : 'neutral',
+      text: `Equipamento mais reincidente: ${top.splitterTitle || top.splitterCode} — ${top.totalMaintenances} manutenção(ões), ${top.openMaintenances} em aberto, afetando ${top.uniqueClients} cliente(s).`,
+    }
+  }, [contextualMaintenanceRows])
+
+  const maintenanceFailureMix = useMemo(() => {
+    let rompimento = 0
+    let troca = 0
+    for (const r of contextualMaintenanceRows) {
+      rompimento += r.rompimentoCount
+      troca += r.trocaFlatCount
+    }
+    const known = rompimento + troca
+    if (known === 0) return null
+    const rompPct = Math.round((rompimento / known) * 100)
+    return {
+      rompimento,
+      troca,
+      rompPct,
+      trocaPct: 100 - rompPct,
+      dominant: rompimento >= troca ? 'rompimento' : 'troca de flat',
+    }
+  }, [contextualMaintenanceRows])
 
   const hasActiveFilters =
     selectedMatrixKey !== null || riskBandFilter !== 'all' || ageFilter !== 'all' || splitterSearch.trim() !== ''
@@ -1620,6 +1776,18 @@ export function NetworkIntelligencePage() {
         <>
       {activeWindow === 'risco' ? (
         <>
+      {riskInsight ? (
+        <div className="space-y-2">
+          <InsightBanner tone={riskInsight.tone} icon={AlertTriangle}>
+            {riskInsight.text}
+          </InsightBanner>
+          {riskOltConcentration ? (
+            <p className="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] font-semibold text-amber-900">
+              {riskOltConcentration}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <section className="grid gap-4 xl:grid-cols-3">
         <motion.article
           initial={{ opacity: 0, y: 20 }}
@@ -1677,6 +1845,9 @@ export function NetworkIntelligencePage() {
                     <span title={PP_TOOLTIP_DELTA_PERIOD(deltaReferenceLabel)}>{formatDeltaPp(row.selectedDelta)}</span>
                   </p>
                   <p><span className="font-semibold">Massivas:</span> {row.openTickets}/{row.totalTickets}</p>
+                  {row.etaTo95Days != null ? (
+                    <p className="font-bold text-rose-600">Satura em ~{row.etaTo95Days}d</p>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -1731,7 +1902,14 @@ export function NetworkIntelligencePage() {
                     >
                       {formatDeltaPp(row.selectedDelta)}
                     </td>
-                    <td className="px-2 py-2 tabular-nums text-slate-700">{row.openTickets}/{row.totalTickets}</td>
+                    <td className="px-2 py-2 tabular-nums text-slate-700">
+                      {row.openTickets}/{row.totalTickets}
+                      {row.etaTo95Days != null ? (
+                        <span className="mt-0.5 block text-[10px] font-bold text-rose-600">
+                          satura em ~{row.etaTo95Days}d
+                        </span>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1761,7 +1939,9 @@ export function NetworkIntelligencePage() {
                   'rounded-xl bg-slate-50/90 px-2.5 py-2 text-left ring-1 transition hover:bg-amber-50',
                   selectedMatrixKey === cell.key
                     ? 'ring-amber-400 bg-amber-50'
-                    : 'ring-slate-200/70',
+                    : cell.key === 'altoImpactoAltaUrgencia' && cell.count > 0
+                      ? 'ring-rose-300 bg-rose-50/50'
+                      : 'ring-slate-200/70',
                 )}
               >
                 <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{cell.label}</p>
@@ -1774,9 +1954,25 @@ export function NetworkIntelligencePage() {
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            Clique em um quadrante para filtrar ranking e drill-down de forma contextual.
-          </p>
+          {(() => {
+            const action = impactUrgencyMatrix.find((c) => c.key === 'altoImpactoAltaUrgencia')
+            if (action && action.count > 0) {
+              return (
+                <p className="mt-2 text-[11px] font-semibold text-rose-700">
+                  Ação imediata: {action.count} splitter(s) em alto impacto × alta urgência
+                  {action.splitters[0]
+                    ? ` — comece por ${action.splitters[0].splitterTitle || action.splitters[0].splitterCode}`
+                    : ''}
+                  . Clique para filtrar o ranking.
+                </p>
+              )
+            }
+            return (
+              <p className="mt-2 text-[11px] text-slate-500">
+                Clique em um quadrante para filtrar ranking e drill-down de forma contextual.
+              </p>
+            )
+          })()}
         </motion.article>
       </section>
         </>
@@ -1784,6 +1980,11 @@ export function NetworkIntelligencePage() {
 
       {activeWindow === 'ciclo-vida' ? (
         <>
+      {lifecycleInsight ? (
+        <InsightBanner tone={lifecycleInsight.tone} icon={AlertTriangle}>
+          {lifecycleInsight.text}
+        </InsightBanner>
+      ) : null}
       <section className="grid gap-4 xl:grid-cols-3">
         <motion.article
           initial={{ opacity: 0, y: 20 }}
@@ -1967,6 +2168,11 @@ export function NetworkIntelligencePage() {
               )
             })}
           </div>
+          {lifecycleHeatmapInsight ? (
+            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-[11px] font-semibold text-rose-800">
+              {lifecycleHeatmapInsight}
+            </p>
+          ) : null}
         </motion.article>
       </section>
       <section className="rounded-3xl border border-white/50 bg-white/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
@@ -2137,6 +2343,31 @@ export function NetworkIntelligencePage() {
         </motion.article>
       </section>
         </>
+      ) : null}
+
+      {activeWindow === 'topologia' && !showFullSkeleton ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+          className="rounded-3xl border border-primary/20 bg-white/70 p-4 shadow-xl shadow-primary/5 backdrop-blur-xl ring-1 ring-primary/10"
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <Network size={18} className="shrink-0 text-primary" aria-hidden />
+            <h2 className="text-sm font-bold text-slate-800">
+              Topologia física — <span className="font-extrabold text-primary">OLT → Slot → PON</span>
+            </h2>
+          </div>
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando topologia…
+              </p>
+            }
+          >
+            <NetworkTopologyPanel topology={topology} deltaReferenceLabel={deltaReferenceLabel} />
+          </Suspense>
+        </motion.section>
       ) : null}
 
       {activeWindow === 'geografico' ? (
@@ -2486,7 +2717,7 @@ export function NetworkIntelligencePage() {
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 {/* Top condomínios */}
                 <section className={cn('min-w-0 rounded-xl bg-slate-50/70 p-2.5 ring-1 ring-slate-200/70', geoTab !== 'condominios' ? 'hidden sm:block' : '')}>
                   <header className="flex items-center justify-between gap-2">
@@ -2671,6 +2902,23 @@ export function NetworkIntelligencePage() {
             Dados do Elleven/ERP no intervalo de datas. Protocolos podem incluir rompimento, troca de flat e outros tipos
             mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita busca e filtros da barra superior.
           </p>
+          {maintenanceInsight ? (
+            <div className="mt-3 space-y-2">
+              <InsightBanner tone={maintenanceInsight.tone} icon={Wrench}>
+                {maintenanceInsight.text}
+              </InsightBanner>
+              {maintenanceFailureMix ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                  Mix de falhas no recorte:{' '}
+                  <span className="font-bold text-slate-900">{maintenanceFailureMix.rompPct}%</span> rompimento (
+                  {maintenanceFailureMix.rompimento}) ·{' '}
+                  <span className="font-bold text-slate-900">{maintenanceFailureMix.trocaPct}%</span> troca de flat (
+                  {maintenanceFailureMix.troca}). Predominante:{' '}
+                  <span className="font-bold text-slate-900">{maintenanceFailureMix.dominant}</span>.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <section className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <motion.article
               initial={{ opacity: 0, y: 20 }}
@@ -2698,6 +2946,14 @@ export function NetworkIntelligencePage() {
               <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">
                 {maintenanceTotals.totalMaintenances.toLocaleString('pt-BR')}
               </p>
+              {maintenanceTotals.splittersWithMaintenances > 0 ? (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {(maintenanceTotals.totalMaintenances / maintenanceTotals.splittersWithMaintenances)
+                    .toFixed(1)
+                    .replace('.', ',')}{' '}
+                  por splitter
+                </p>
+              ) : null}
             </motion.article>
             <motion.article
               initial={{ opacity: 0, y: 20 }}
@@ -2903,6 +3159,23 @@ export function NetworkIntelligencePage() {
                   <dd className="mt-0.5 text-lg font-black tabular-nums text-amber-900">
                     {maintenanceTotals.unmappedMaintenances.toLocaleString('pt-BR')}
                   </dd>
+                  {maintenanceTotals.totalMaintenances > 0 ? (
+                    (() => {
+                      const coverage = Number(
+                        (100 - (maintenanceTotals.unmappedMaintenances / maintenanceTotals.totalMaintenances) * 100).toFixed(1),
+                      )
+                      return (
+                        <p
+                          className={cn(
+                            'mt-1 text-[11px] font-bold',
+                            coverage >= 90 ? 'text-emerald-700' : coverage >= 70 ? 'text-amber-700' : 'text-rose-700',
+                          )}
+                        >
+                          Cobertura: {coverage.toFixed(1).replace('.', ',')}% das manutenções vinculadas a um splitter
+                        </p>
+                      )
+                    })()
+                  ) : null}
                 </div>
                 <div className="rounded-xl bg-slate-50/90 px-3 py-2 ring-1 ring-slate-200/70">
                   <dt className="font-semibold text-slate-600">Janela analisada</dt>
@@ -2919,6 +3192,44 @@ export function NetworkIntelligencePage() {
       ) : null}
           </motion.div>
         </AnimatePresence>
+      ) : null}
+
+      {/* Saúde de sinal das ONUs (monitoramento) — fonte de dados independente
+          da inteligência de splitters, por isso fora do gate de skeleton. */}
+      {activeWindow === 'sinais' ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+        >
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando painel de sinais…
+              </p>
+            }
+          >
+            <OnuSignalHealthPanel />
+          </Suspense>
+        </motion.section>
+      ) : null}
+
+      {activeWindow === 'equipamentos' ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+        >
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando painel de equipamentos…
+              </p>
+            }
+          >
+            <EquipmentFleetPanel />
+          </Suspense>
+        </motion.section>
       ) : null}
 
       {source === 'mock' ? (

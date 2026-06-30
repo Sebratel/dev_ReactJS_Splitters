@@ -1,10 +1,12 @@
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useClienteDetail } from '@/features/clientes/hooks/useClienteDetail'
 import { ClienteDetailAccessPointSection } from '@/features/clientes/ui/ClienteDetailAccessPointSection'
 import { ClienteDetailAddressSection } from '@/features/clientes/ui/ClienteDetailAddressSection'
 import { ClienteDetailClienteSection } from '@/features/clientes/ui/ClienteDetailClienteSection'
 import { ClienteDetailContractSection } from '@/features/clientes/ui/ClienteDetailContractSection'
 import { ClienteDetailMaintenanceSection } from '@/features/clientes/ui/ClienteDetailMaintenanceSection'
+import { ClienteDetailOnuSection } from '@/features/clientes/ui/ClienteDetailOnuSection'
+import { ClienteDetailPatrimoniesSection } from '@/features/clientes/ui/ClienteDetailPatrimoniesSection'
 import { ClienteDetailSolicitationsSection } from '@/features/clientes/ui/ClienteDetailSolicitationsSection'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
@@ -28,16 +30,13 @@ export function ClienteDetailScreen() {
             ? `Identificador de autenticação (BFF): ${id}. Contrato, endereço e ponto de acesso quando disponíveis.`
             : undefined
         }
-        trailing={
-          state.status === 'ready' && state.cliente.splitterCode ? (
-            <Link
-              to={`/splitters/${encodeURIComponent(state.cliente.splitterCode)}`}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-neutral-200/90 bg-white/90 px-4 py-2.5 text-xs font-semibold text-neutral-800 shadow-sm transition hover:border-amber-300/70 hover:bg-amber-50/90"
-            >
-              <Server size={16} strokeWidth={1.75} aria-hidden />
-              Ver splitter
-            </Link>
-          ) : null
+        primaryAction={
+          state.status === 'ready' && state.cliente.splitterCode
+            ? {
+                to: `/splitters/${encodeURIComponent(state.cliente.splitterCode)}`,
+                label: 'Voltar ao splitter',
+              }
+            : undefined
         }
       />
 
@@ -89,6 +88,15 @@ export function ClienteDetailScreen() {
           {state.cliente.accessPoint && (
             <ClienteDetailAccessPointSection accessPoint={state.cliente.accessPoint} />
           )}
+
+          {state.cliente.user ? (
+            <ClienteDetailOnuSection
+              username={state.cliente.user}
+              clientName={state.cliente.name}
+            />
+          ) : null}
+
+          <ClienteDetailPatrimoniesSection clientId={state.cliente.clientId} />
 
           <ClienteDetailMaintenanceSection clientId={state.cliente.clientId} />
 
