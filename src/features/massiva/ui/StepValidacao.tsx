@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import {
   AlertCircle,
@@ -18,6 +19,7 @@ import {
   hasMassivaClienteMapCoords,
 } from '@/features/massiva/lib/formatMassivaClienteLocation'
 import { massivaClientDedupeKey } from '@/features/massiva/lib/massivaClientDedupeKey'
+import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { OLT_PON_LABEL, OLT_SLOT_LABEL } from '@/shared/lib/oltTopologyLabels'
 import { MassivaClientesMapPreview } from '@/features/massiva/ui/MassivaClientesMapPreview'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
@@ -271,12 +273,40 @@ export function StepValidacao({
       view.status === 'success' || view.status === 'empty-selection' ? view.totals : null,
     [view],
   )
+  // Lista completa por rota (endpoint /batch otimizado): mapa, CSV e lista expandida
+  // usam todos os afetados, não a amostra de 50. Compartilha cache com o passo de Abertura.
+  const preparedBasis =
+    openingPreparation.status === 'prepared' ? openingPreparation.basis : null
+  const fullRoutes = useMemo(
+    () =>
+      preparedBasis
+        ? preparedBasis.topology.routes.map((route) => ({
+            apCode: route.apCode,
+            slot: route.slot,
+            port: route.port,
+            splitterCodes: [...route.effectiveSplitterCodes],
+          }))
+        : [],
+    [preparedBasis],
+  )
+  const fullConnectionsQuery = useQuery({
+    queryKey: ['massiva', 'open', 'full-connections', JSON.stringify(fullRoutes)],
+    queryFn: () => fetchMassivaConnectionsFromLocalDbByRoutes(fullRoutes),
+    enabled: fullRoutes.length > 0,
+    staleTime: 60_000,
+  })
+  const fullConnections = useMemo(
+    () => fullConnectionsQuery.data ?? [],
+    [fullConnectionsQuery.data],
+  )
+
   const fullClientes = useMemo((): readonly SplitterCliente[] => {
+    if (fullConnections.length > 0) return fullConnections
     if (openingPreparation.status === 'prepared') {
       return openingPreparation.basis.collectedClientes
     }
     return sampleClientes
-  }, [openingPreparation, sampleClientes])
+  }, [fullConnections, openingPreparation, sampleClientes])
 
   const totalCount = Math.max(totalConnectionsCount ?? 0, fullClientes.length)
   const isSampleOnly = totalCount > fullClientes.length
