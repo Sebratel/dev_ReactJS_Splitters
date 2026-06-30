@@ -48,16 +48,6 @@ export function massivaLocalDateTimeToGatewayIso(localDateTime: string): string 
   return d.toISOString()
 }
 
-/** @deprecated Alias de {@link massivaLocalDateTimeToGatewayIso} via campos do rascunho. */
-export function massivaOpenDraftFinalDateIsoUtc(
-  forecastCloseDate: string,
-  forecastCloseTime: string,
-): string | null {
-  const local = massivaOpenDraftFinalDateLocal(forecastCloseDate, forecastCloseTime)
-  if (local === null) return null
-  return massivaLocalDateTimeToGatewayIso(local)
-}
-
 /**
  * Paridade `_validateOpenMassivaSelection` (descrição + prazo) em `massiva_screen.dart`.
  */

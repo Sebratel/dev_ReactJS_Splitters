@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import {
   bffSaysMassivaClosed,
-  collectOutOfCatalogProtocolsForLocalCloseSync,
   collectProtocolsForLocalCloseSync,
   localRowExpectedCloseExpired,
   LOCAL_CLOSE_EXPIRED_PREVISAO_GRACE_MS,
@@ -49,7 +48,7 @@ describe('syncOutOfCatalogMassivaFromBff', () => {
   })
 
   it('lista protocolos OOT para reconciliar MySQL aberta', () => {
-    const protocols = collectOutOfCatalogProtocolsForLocalCloseSync(
+    const protocols = collectProtocolsForLocalCloseSync(
       [bff({ protocol: 55, status: 'encerrada', ellevenLifecycle: 'closed' })],
       [
         {

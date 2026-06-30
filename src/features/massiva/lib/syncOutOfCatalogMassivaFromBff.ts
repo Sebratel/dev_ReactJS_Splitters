@@ -94,11 +94,3 @@ export function collectProtocolsForLocalCloseSync(
 
   return [...protocols].sort((a, b) => a - b)
 }
-
-/** @deprecated Prefer `collectProtocolsForLocalCloseSync` (inclui catálogo + sumiu do BFF). */
-export function collectOutOfCatalogProtocolsForLocalCloseSync(
-  bffTickets: readonly MassivaTicket[],
-  localRows: readonly MassivaHistoryListRow[],
-): number[] {
-  return collectProtocolsForLocalCloseSync(bffTickets, localRows)
-}
