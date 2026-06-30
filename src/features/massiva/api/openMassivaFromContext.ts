@@ -6,6 +6,7 @@ import {
   resolveProtocolAndAssignment,
 } from '@/features/massiva/lib/buildMassivaAfetadosRequestBody'
 import { buildMassivaOpenRequestBody } from '@/features/massiva/lib/buildMassivaOpenRequestBody'
+import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { registerOpenedMassivaHistoryInLocalDb } from '@/features/massiva/api/registerOpenedMassivaHistoryInLocalDb'
 import {
   formatMassivaOpenApiFailure,
@@ -106,13 +107,43 @@ function clientesForAccessPoint(
 }
 
 /**
+ * O preview usa uma amostra de 50 conexões (otimização para massivas grandes), mas a
+ * abertura precisa registrar TODOS os afetados. Busca a lista completa por rota antes de
+ * montar o payload de afetados. Em falha, mantém a amostra (degradação controlada).
+ */
+async function withFullCollectedClientes(
+  context: MassivaOpenFinalContext,
+): Promise<MassivaOpenFinalContext> {
+  const routes = context.basis.topology.routes.map((route) => ({
+    apCode: route.apCode,
+    slot: route.slot,
+    port: route.port,
+    splitterCodes: [...route.effectiveSplitterCodes],
+  }))
+  if (routes.length === 0) return context
+
+  try {
+    const full = await fetchMassivaConnectionsFromLocalDbByRoutes(routes)
+    if (full.length <= context.basis.collectedClientes.length) return context
+    return { ...context, basis: { ...context.basis, collectedClientes: full } }
+  } catch (error) {
+    console.warn(
+      '[Massiva] Falha ao buscar a lista completa de afetados; registrando com a amostra do preview.',
+      error,
+    )
+    return context
+  }
+}
+
+/**
  * Um POST por entrada em `context.plan.requests` — paridade sequência em `_openMassiva`.
  * Em seguida: POST de afetados (seleção da rota) ou encerramento automático se não houver clientes mapeáveis.
  */
 export async function openMassivaFromContext(
-  context: MassivaOpenFinalContext,
+  inputContext: MassivaOpenFinalContext,
   signal?: AbortSignal,
 ): Promise<MassivaOpenMutationSuccessPayload> {
+  const context = await withFullCollectedClientes(inputContext)
   const path = context.massivaOpenPath.trim()
   if (path === '') {
     throw new Error('Path de abertura vazio no contexto.')
