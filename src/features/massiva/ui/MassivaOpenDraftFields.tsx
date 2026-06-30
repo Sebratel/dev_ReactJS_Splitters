@@ -118,43 +118,12 @@ export function MassivaOpenDraftFields({
 
         <div className="space-y-2">
           <DraftSection
-            title="Abertura"
-            hint="Data e hora em que o protocolo está sendo registrado no NOC."
-          >
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <FieldLabel htmlFor="massiva-event-start-date">Data de abertura</FieldLabel>
-                <input
-                  id="massiva-event-start-date"
-                  type="date"
-                  className={inputClassName}
-                  value={eventStartDate}
-                  onChange={(e) => setEventStartDate(e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-              <div>
-                <FieldLabel htmlFor="massiva-event-start-time">Hora de abertura</FieldLabel>
-                <input
-                  id="massiva-event-start-time"
-                  type="time"
-                  className={inputClassName}
-                  value={eventStartTime}
-                  onChange={(e) => setEventStartTime(e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-            </div>
-          </DraftSection>
-
-          <DraftSection
             title="Identificação do evento"
             hint="Quando o time percebeu ou confirmou o incidente na rede."
-            variant="muted"
           >
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <FieldLabel htmlFor="massiva-event-identified-date">Data</FieldLabel>
+                <FieldLabel htmlFor="massiva-event-identified-date">Data de identificação do evento</FieldLabel>
                 <input
                   id="massiva-event-identified-date"
                   type="date"
@@ -165,13 +134,44 @@ export function MassivaOpenDraftFields({
                 />
               </div>
               <div>
-                <FieldLabel htmlFor="massiva-event-identified-time">Hora</FieldLabel>
+                <FieldLabel htmlFor="massiva-event-identified-time">Hora da identificação</FieldLabel>
                 <input
                   id="massiva-event-identified-time"
                   type="time"
                   className={inputClassName}
                   value={eventIdentifiedTime}
                   onChange={(e) => setEventIdentifiedTime(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
+            </div>
+          </DraftSection>
+
+          <DraftSection
+            title="Início do evento"
+            hint="Data e hora em que o evento efetivamente começou na rede."
+            variant="muted"
+          >
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <FieldLabel htmlFor="massiva-event-start-date">Data de início do evento</FieldLabel>
+                <input
+                  id="massiva-event-start-date"
+                  type="date"
+                  className={inputClassName}
+                  value={eventStartDate}
+                  onChange={(e) => setEventStartDate(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="massiva-event-start-time">Hora de início</FieldLabel>
+                <input
+                  id="massiva-event-start-time"
+                  type="time"
+                  className={inputClassName}
+                  value={eventStartTime}
+                  onChange={(e) => setEventStartTime(e.target.value)}
                   disabled={disabled}
                 />
               </div>
