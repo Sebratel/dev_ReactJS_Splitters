@@ -5,6 +5,7 @@ import {
   Building2,
   Gauge,
   Lightbulb,
+  MapPin,
   Router,
   ShieldAlert,
   Target,
@@ -15,6 +16,7 @@ import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/u
 import { useCancellationsSummary } from '@/features/cancellations/hooks/useCancellationsSummary'
 import { useCancellationsActiveBase } from '@/features/cancellations/hooks/useCancellationsExtras'
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
+import { CondominiumsMap, type CondoMapPoint } from '@/features/condominiums/ui/CondominiumsMap'
 
 type CondominiumsPanelProps = {
   riskRanking: IntelligenceRiskRankingRow[]
@@ -40,6 +42,8 @@ type CondoRow = {
   onuOnline: number
   onuDegraded: number
   onuOffline: number
+  lat: number | null
+  lng: number | null
 }
 
 type View = 'saturacao' | 'churn' | 'massivas' | 'risco' | 'sinal'
@@ -60,6 +64,35 @@ const SIGNAL_MIN_SAMPLE = 5
 /** % de ONUs com sinal degradado ou offline no condomínio; null se sem leitura. */
 function signalProblemPct(c: CondoRow): number | null {
   return c.onuTotal > 0 ? ((c.onuDegraded + c.onuOffline) / c.onuTotal) * 100 : null
+}
+
+const MAP_NEUTRAL = '#cbd5e1'
+const MAP_GOOD = '#10b981'
+const MAP_INFO = '#38bdf8'
+const MAP_WARN = '#f59e0b'
+const MAP_BAD = '#f43f5e'
+
+/** Cor do marcador do condomínio conforme a lente selecionada. */
+function colorForCondo(c: CondoRow, view: View): string {
+  if (view === 'churn') return c.redeChurn > 0 ? MAP_BAD : MAP_NEUTRAL
+  if (view === 'massivas') return c.totalTickets > 0 ? MAP_WARN : MAP_NEUTRAL
+  if (view === 'sinal') {
+    const p = signalProblemPct(c)
+    if (p == null || c.onuTotal < SIGNAL_MIN_SAMPLE) return MAP_NEUTRAL
+    return p >= SIGNAL_PROBLEM_THRESHOLD ? MAP_BAD : p >= 5 ? MAP_WARN : MAP_GOOD
+  }
+  if (view === 'risco') {
+    return c.avgRisk >= 120 ? MAP_BAD : c.avgRisk >= 90 ? MAP_WARN : c.avgRisk >= 60 ? MAP_INFO : MAP_GOOD
+  }
+  return c.avgUsage >= 85 ? MAP_BAD : c.avgUsage >= 70 ? MAP_WARN : c.avgUsage >= 50 ? MAP_INFO : MAP_GOOD
+}
+
+const VIEW_MAP_LEGEND: Record<View, string> = {
+  saturacao: 'Cor = ocupação média (verde <50% · azul 50–70 · âmbar 70–85 · vermelho ≥85%)',
+  churn: 'Cor = tem churn de rede (vermelho) ou não (cinza)',
+  massivas: 'Cor = teve massiva no período (âmbar) ou não (cinza)',
+  risco: 'Cor = score de risco médio (verde baixo → vermelho crítico)',
+  sinal: 'Cor = sinal degradado/offline (verde ok · âmbar · vermelho ≥15%; cinza = amostra baixa)',
 }
 
 const SATURATION_THRESHOLD = 85
@@ -109,6 +142,9 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       onuOnline: number
       onuDegraded: number
       onuOffline: number
+      latSum: number
+      lngSum: number
+      geoCount: number
     }
     const map = new Map<string, Acc>()
     for (const r of riskRanking) {
@@ -121,6 +157,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
           splitters: 0, usageSum: 0, saturatedSplitters: 0, riskSum: 0, criticalSplitters: 0,
           openTickets: 0, totalTickets: 0, affectedClients: 0, ageSum: 0, deltaSum: 0, cities: new Set(),
           onuTotal: 0, onuOnline: 0, onuDegraded: 0, onuOffline: 0,
+          latSum: 0, lngSum: 0, geoCount: 0,
         }
         map.set(nome, c)
       }
@@ -141,6 +178,11 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         c.onuOnline += onu.online
         c.onuDegraded += onu.degraded
         c.onuOffline += onu.offline
+      }
+      if (r.latitude != null && r.longitude != null) {
+        c.latSum += r.latitude
+        c.lngSum += r.longitude
+        c.geoCount += 1
       }
     }
     return [...map.entries()].map(([nome, c]) => {
@@ -165,6 +207,8 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         onuOnline: c.onuOnline,
         onuDegraded: c.onuDegraded,
         onuOffline: c.onuOffline,
+        lat: c.geoCount > 0 ? c.latSum / c.geoCount : null,
+        lng: c.geoCount > 0 ? c.lngSum / c.geoCount : null,
       }
     })
   }, [riskRanking, summaryQuery.data, activeBaseQuery.data, onuQuery.data])
@@ -210,6 +254,24 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       rows.sort((a, b) => rank(b) - rank(a) || b.onuTotal - a.onuTotal)
     } else rows.sort((a, b) => b.avgRisk - a.avgRisk || b.criticalSplitters - a.criticalSplitters)
     return rows.slice(0, 60)
+  }, [condos, view])
+
+  const mapPoints = useMemo((): CondoMapPoint[] => {
+    return condos
+      .filter((c) => c.lat != null && c.lng != null)
+      .map((c) => ({
+        nome: c.nome,
+        lat: c.lat as number,
+        lng: c.lng as number,
+        splitters: c.splitters,
+        activeClients: c.activeClients,
+        avgUsage: c.avgUsage,
+        redeChurn: c.redeChurn,
+        totalTickets: c.totalTickets,
+        signalPct: signalProblemPct(c),
+        color: colorForCondo(c, view),
+        radius: Math.max(5, Math.min(22, Math.sqrt(c.splitters) * 4)),
+      }))
   }, [condos, view])
 
   if (condos.length === 0) {
@@ -334,6 +396,22 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
           ) : null}
         </ul>
       </div>
+
+      {/* Mapa dos condomínios (cor segue a lente do ranking) */}
+      {mapPoints.length > 0 ? (
+        <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
+              <MapPin className="size-4 text-indigo-500" aria-hidden />
+              Mapa dos condomínios
+            </p>
+            <span className="text-[11px] text-neutral-500">
+              {mapPoints.length} de {condos.length} com localização · {VIEW_MAP_LEGEND[view]}
+            </span>
+          </div>
+          <CondominiumsMap points={mapPoints} />
+        </div>
+      ) : null}
 
       {/* Ranking */}
       <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">

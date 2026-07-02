@@ -147,6 +147,9 @@ export type IntelligenceRiskRankingRow = {
   /** Porta/PON da OLT (extraída do cadastro); null se ausente. */
   oltPort: number | null
   street: string | null
+  /** Coordenadas do splitter (para mapas); null quando sem cadastro válido. */
+  latitude: number | null
+  longitude: number | null
   tipoLocal: Splitter['tipoLocal']
   nomeCondominio: string | null
   /** Cidade no cadastro do splitter (regionalização para decisão). */
@@ -1113,6 +1116,7 @@ export function useNetworkIntelligenceData(
       .map((trend) => {
         const massiva = massivaByCode.get(trend.splitterCode)
         const meta = splittersMetaByCode.get(trend.splitterCode)
+        const geo = normalizeSplitterLatLng(meta?.latitude ?? '', meta?.longitude ?? '')
         // Slot/PON pela MESMA regra do detalhe do splitter e do filtro da lista:
         // penúltimo e último números antes da primeira "/" no título/código. O cadastro
         // (SLOT[SPLT.SECUNDARIO]) só entra como fallback quando o código não parseia.
@@ -1150,6 +1154,8 @@ export function useNetworkIntelligenceData(
           oltSlot: resolvedOlt.slot ?? meta?.oltSlot ?? null,
           oltPort: resolvedOlt.port ?? meta?.oltPort ?? null,
           street: meta?.street ?? null,
+          latitude: geo.latitude,
+          longitude: geo.longitude,
           tipoLocal: meta?.tipoLocal,
           nomeCondominio: meta?.nomeCondominio ?? null,
           cityCadastro: meta?.cityCadastro?.trim() ? meta.cityCadastro.trim() : null,
