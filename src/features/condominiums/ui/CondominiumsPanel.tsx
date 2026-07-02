@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  Activity,
   AlertTriangle,
   Building2,
   Gauge,
@@ -13,6 +14,7 @@ import {
 import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
 import { useCancellationsSummary } from '@/features/cancellations/hooks/useCancellationsSummary'
 import { useCancellationsActiveBase } from '@/features/cancellations/hooks/useCancellationsExtras'
+import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 
 type CondominiumsPanelProps = {
   riskRanking: IntelligenceRiskRankingRow[]
@@ -34,9 +36,29 @@ type CondoRow = {
   avgDelta: number
   redeChurn: number
   totalChurn: number
+  onuTotal: number
+  onuOnline: number
+  onuDegraded: number
+  onuOffline: number
 }
 
-type View = 'saturacao' | 'churn' | 'massivas' | 'risco'
+type View = 'saturacao' | 'churn' | 'massivas' | 'risco' | 'sinal'
+
+/** Faixas de ocupação para a distribuição da rede de condomínios. */
+const USAGE_BANDS = [
+  { key: 'baixa', label: '< 50%', min: 0, max: 50, color: 'bg-emerald-400' },
+  { key: 'media', label: '50–70%', min: 50, max: 70, color: 'bg-sky-400' },
+  { key: 'alta', label: '70–85%', min: 70, max: 85, color: 'bg-amber-400' },
+  { key: 'saturada', label: '≥ 85%', min: 85, max: Infinity, color: 'bg-rose-500' },
+] as const
+
+/** Share de sinal degradado+offline a partir do qual um condomínio é "sinal crítico". */
+const SIGNAL_PROBLEM_THRESHOLD = 15
+
+/** % de ONUs com sinal degradado ou offline no condomínio; null se sem leitura. */
+function signalProblemPct(c: CondoRow): number | null {
+  return c.onuTotal > 0 ? ((c.onuDegraded + c.onuOffline) / c.onuTotal) * 100 : null
+}
 
 const SATURATION_THRESHOLD = 85
 
@@ -59,6 +81,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
   const startIso = useMemo(startIso12mAgo, [])
   const summaryQuery = useCancellationsSummary(startIso)
   const activeBaseQuery = useCancellationsActiveBase()
+  const onuQuery = useOnuSummaryBySplitter()
 
   const condos = useMemo((): CondoRow[] => {
     const churnByName = new Map<string, { rede: number; total: number }>()
@@ -66,6 +89,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       churnByName.set(b.key, { rede: b.rede, total: b.total })
     }
     const activeByName = activeBaseQuery.data?.byCondominio ?? {}
+    const onuByCode = onuQuery.data
 
     type Acc = {
       splitters: number
@@ -79,6 +103,10 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       ageSum: number
       deltaSum: number
       cities: Set<string>
+      onuTotal: number
+      onuOnline: number
+      onuDegraded: number
+      onuOffline: number
     }
     const map = new Map<string, Acc>()
     for (const r of riskRanking) {
@@ -90,6 +118,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         c = {
           splitters: 0, usageSum: 0, saturatedSplitters: 0, riskSum: 0, criticalSplitters: 0,
           openTickets: 0, totalTickets: 0, affectedClients: 0, ageSum: 0, deltaSum: 0, cities: new Set(),
+          onuTotal: 0, onuOnline: 0, onuDegraded: 0, onuOffline: 0,
         }
         map.set(nome, c)
       }
@@ -104,6 +133,13 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       c.ageSum += r.ageYears
       c.deltaSum += r.selectedDelta
       if (r.cityCadastro) c.cities.add(r.cityCadastro)
+      const onu = onuByCode?.get(r.splitterCode)
+      if (onu) {
+        c.onuTotal += onu.total
+        c.onuOnline += onu.online
+        c.onuDegraded += onu.degraded
+        c.onuOffline += onu.offline
+      }
     }
     return [...map.entries()].map(([nome, c]) => {
       const churn = churnByName.get(nome)
@@ -123,9 +159,13 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         avgDelta: c.splitters > 0 ? c.deltaSum / c.splitters : 0,
         redeChurn: churn?.rede ?? 0,
         totalChurn: churn?.total ?? 0,
+        onuTotal: c.onuTotal,
+        onuOnline: c.onuOnline,
+        onuDegraded: c.onuDegraded,
+        onuOffline: c.onuOffline,
       }
     })
-  }, [riskRanking, summaryQuery.data, activeBaseQuery.data])
+  }, [riskRanking, summaryQuery.data, activeBaseQuery.data, onuQuery.data])
 
   const totals = useMemo(() => {
     const splitters = condos.reduce((s, c) => s + c.splitters, 0)
@@ -135,7 +175,19 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
     const churnCondos = condos.filter((c) => c.redeChurn > 0).length
     const doubleTrouble = condos.filter((c) => c.avgUsage >= SATURATION_THRESHOLD && c.redeChurn > 0)
     const withMassivas = condos.filter((c) => c.totalTickets > 0).length
-    return { splitters, avgUsage, saturatedCondos, churnCondos, doubleTrouble, withMassivas }
+    const onuHasData = condos.some((c) => c.onuTotal > 0)
+    const signalCritical = condos.filter((c) => {
+      const p = c.onuTotal > 0 ? ((c.onuDegraded + c.onuOffline) / c.onuTotal) * 100 : null
+      return p != null && p >= SIGNAL_PROBLEM_THRESHOLD
+    })
+    const distribution = USAGE_BANDS.map((band) => ({
+      ...band,
+      count: condos.filter((c) => c.avgUsage >= band.min && c.avgUsage < band.max).length,
+    }))
+    return {
+      splitters, avgUsage, saturatedCondos, churnCondos, doubleTrouble, withMassivas,
+      onuHasData, signalCritical, distribution,
+    }
   }, [condos])
 
   const activeBase = activeBaseQuery.data
@@ -148,7 +200,13 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
     if (view === 'saturacao') rows.sort((a, b) => b.avgUsage - a.avgUsage || b.splitters - a.splitters)
     else if (view === 'churn') rows.sort((a, b) => b.redeChurn - a.redeChurn || b.totalChurn - a.totalChurn)
     else if (view === 'massivas') rows.sort((a, b) => b.totalTickets - a.totalTickets || b.affectedClients - a.affectedClients)
-    else rows.sort((a, b) => b.avgRisk - a.avgRisk || b.criticalSplitters - a.criticalSplitters)
+    else if (view === 'sinal') {
+      rows.sort((a, b) => {
+        const pa = signalProblemPct(a) ?? -1
+        const pb = signalProblemPct(b) ?? -1
+        return pb - pa || (b.onuOffline - a.onuOffline)
+      })
+    } else rows.sort((a, b) => b.avgRisk - a.avgRisk || b.criticalSplitters - a.criticalSplitters)
     return rows.slice(0, 60)
   }, [condos, view])
 
@@ -183,12 +241,40 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${totals.onuHasData ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         <Kpi label="Condomínios" value={condos.length.toLocaleString('pt-BR')} />
         <Kpi label="Splitters" value={fmt(totals.splitters)} />
         <Kpi label="Ocupação média" value={`${fmt1(totals.avgUsage)}%`} tone={totals.avgUsage >= SATURATION_THRESHOLD ? 'warn' : undefined} />
         <Kpi label="Saturados (≥85%)" value={totals.saturatedCondos.toLocaleString('pt-BR')} tone={totals.saturatedCondos > 0 ? 'warn' : undefined} />
         <Kpi label="Com churn de rede" value={totals.churnCondos.toLocaleString('pt-BR')} tone={totals.churnCondos > 0 ? 'danger' : undefined} />
+        {totals.onuHasData ? (
+          <Kpi label="Sinal crítico" value={totals.signalCritical.length.toLocaleString('pt-BR')} tone={totals.signalCritical.length > 0 ? 'danger' : undefined} />
+        ) : null}
+      </div>
+
+      {/* Distribuição por faixa de ocupação */}
+      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
+        <p className="mb-2 text-xs font-semibold text-neutral-800">Distribuição por ocupação</p>
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-neutral-100">
+          {totals.distribution.map((band) =>
+            band.count > 0 ? (
+              <div
+                key={band.key}
+                className={band.color}
+                style={{ width: `${(band.count / condos.length) * 100}%` }}
+                title={`${band.label}: ${band.count} condomínio(s)`}
+              />
+            ) : null,
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {totals.distribution.map((band) => (
+            <span key={band.key} className="inline-flex items-center gap-1.5 text-[11px] text-neutral-600">
+              <span className={`size-2 rounded-full ${band.color}`} aria-hidden />
+              {band.label}: <span className="font-semibold tabular-nums text-neutral-800">{band.count}</span>
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Leitura rápida */}
@@ -234,6 +320,16 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               </span>
             </li>
           ) : null}
+          {totals.onuHasData && totals.signalCritical.length > 0 ? (
+            <li className="flex items-start gap-2">
+              <Activity className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
+              <span>
+                <span className="font-semibold text-neutral-900">{totals.signalCritical.length}</span>{' '}
+                condomínio(s) com sinal ONU degradado/offline acima de {SIGNAL_PROBLEM_THRESHOLD}% —
+                monitore antes que vire churn.
+              </span>
+            </li>
+          ) : null}
         </ul>
       </div>
 
@@ -250,6 +346,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               { id: 'churn', label: 'Churn de rede' },
               { id: 'massivas', label: 'Massivas' },
               { id: 'risco', label: 'Risco' },
+              ...(totals.onuHasData ? [{ id: 'sinal' as const, label: 'Sinal ONU' }] : []),
             ] as Array<{ id: View; label: string }>).map((opt) => (
               <button
                 key={opt.id}
@@ -293,6 +390,12 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                   <>
                     <th className="px-3 py-2.5 text-right">Score médio</th>
                     <th className="px-3 py-2.5 text-right">Críticos</th>
+                  </>
+                ) : null}
+                {view === 'sinal' ? (
+                  <>
+                    <th className="px-3 py-2.5 text-right">Deg.+off.</th>
+                    <th className="px-3 py-2.5 text-right">Offline</th>
                   </>
                 ) : null}
               </tr>
@@ -364,6 +467,25 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         </td>
                       </>
                     ) : null}
+                    {view === 'sinal' ? (
+                      (() => {
+                        const p = signalProblemPct(c)
+                        return (
+                          <>
+                            <td
+                              className={`px-3 py-2 text-right font-bold tabular-nums ${
+                                p != null && p >= SIGNAL_PROBLEM_THRESHOLD ? 'text-rose-700' : 'text-neutral-700'
+                              }`}
+                            >
+                              {p != null ? `${fmt1(p)}%` : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                              {c.onuTotal > 0 ? c.onuOffline : '—'}
+                            </td>
+                          </>
+                        )
+                      })()
+                    ) : null}
                   </tr>
                 )
               })}
@@ -378,7 +500,9 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               ? 'Cancelamentos de rede/qualidade (insatisfação + concorrência) nos últimos 12 meses.'
               : view === 'massivas'
                 ? 'Massivas (abertas/total) e clientes afetados registrados no período.'
-                : 'Score de risco médio dos splitters do condomínio (ocupação + variação + massivas).'}
+                : view === 'sinal'
+                  ? 'Sinal ONU quase em tempo real: % de ONUs degradadas/offline e nº offline no condomínio.'
+                  : 'Score de risco médio dos splitters do condomínio (ocupação + variação + massivas).'}
         </div>
       </div>
     </div>
