@@ -54,6 +54,8 @@ const USAGE_BANDS = [
 
 /** Share de sinal degradado+offline a partir do qual um condomínio é "sinal crítico". */
 const SIGNAL_PROBLEM_THRESHOLD = 15
+/** Mínimo de ONUs para a % de sinal ser confiável (evita 100% de 1 ONU dominar o ranking). */
+const SIGNAL_MIN_SAMPLE = 5
 
 /** % de ONUs com sinal degradado ou offline no condomínio; null se sem leitura. */
 function signalProblemPct(c: CondoRow): number | null {
@@ -177,8 +179,9 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
     const withMassivas = condos.filter((c) => c.totalTickets > 0).length
     const onuHasData = condos.some((c) => c.onuTotal > 0)
     const signalCritical = condos.filter((c) => {
-      const p = c.onuTotal > 0 ? ((c.onuDegraded + c.onuOffline) / c.onuTotal) * 100 : null
-      return p != null && p >= SIGNAL_PROBLEM_THRESHOLD
+      if (c.onuTotal < SIGNAL_MIN_SAMPLE) return false
+      const p = ((c.onuDegraded + c.onuOffline) / c.onuTotal) * 100
+      return p >= SIGNAL_PROBLEM_THRESHOLD
     })
     const distribution = USAGE_BANDS.map((band) => ({
       ...band,
@@ -201,11 +204,10 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
     else if (view === 'churn') rows.sort((a, b) => b.redeChurn - a.redeChurn || b.totalChurn - a.totalChurn)
     else if (view === 'massivas') rows.sort((a, b) => b.totalTickets - a.totalTickets || b.affectedClients - a.affectedClients)
     else if (view === 'sinal') {
-      rows.sort((a, b) => {
-        const pa = signalProblemPct(a) ?? -1
-        const pb = signalProblemPct(b) ?? -1
-        return pb - pa || (b.onuOffline - a.onuOffline)
-      })
+      // Condomínios com amostra confiável primeiro; abaixo do mínimo vão para o fim.
+      const rank = (c: CondoRow) =>
+        c.onuTotal >= SIGNAL_MIN_SAMPLE ? (signalProblemPct(c) ?? -1) : -1
+      rows.sort((a, b) => rank(b) - rank(a) || b.onuTotal - a.onuTotal)
     } else rows.sort((a, b) => b.avgRisk - a.avgRisk || b.criticalSplitters - a.criticalSplitters)
     return rows.slice(0, 60)
   }, [condos, view])
@@ -394,6 +396,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                 ) : null}
                 {view === 'sinal' ? (
                   <>
+                    <th className="px-3 py-2.5 text-right">ONUs</th>
                     <th className="px-3 py-2.5 text-right">Deg.+off.</th>
                     <th className="px-3 py-2.5 text-right">Offline</th>
                   </>
@@ -470,14 +473,24 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                     {view === 'sinal' ? (
                       (() => {
                         const p = signalProblemPct(c)
+                        const lowSample = c.onuTotal > 0 && c.onuTotal < SIGNAL_MIN_SAMPLE
                         return (
                           <>
+                            <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                              {c.onuTotal > 0 ? fmt(c.onuTotal) : '—'}
+                            </td>
                             <td
                               className={`px-3 py-2 text-right font-bold tabular-nums ${
-                                p != null && p >= SIGNAL_PROBLEM_THRESHOLD ? 'text-rose-700' : 'text-neutral-700'
+                                lowSample
+                                  ? 'text-neutral-300'
+                                  : p != null && p >= SIGNAL_PROBLEM_THRESHOLD
+                                    ? 'text-rose-700'
+                                    : 'text-neutral-700'
                               }`}
+                              title={lowSample ? `Amostra baixa (< ${SIGNAL_MIN_SAMPLE} ONUs) — % pouco confiável` : undefined}
                             >
                               {p != null ? `${fmt1(p)}%` : '—'}
+                              {lowSample ? <span className="ml-1 text-[9px] font-normal">amostra baixa</span> : null}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
                               {c.onuTotal > 0 ? c.onuOffline : '—'}
@@ -501,7 +514,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               : view === 'massivas'
                 ? 'Massivas (abertas/total) e clientes afetados registrados no período.'
                 : view === 'sinal'
-                  ? 'Sinal ONU quase em tempo real: % de ONUs degradadas/offline e nº offline no condomínio.'
+                  ? `Sinal ONU quase em tempo real: % de ONUs degradadas/offline sobre o total do condomínio. Condomínios com menos de ${SIGNAL_MIN_SAMPLE} ONUs são marcados como "amostra baixa" e não entram no "sinal crítico".`
                   : 'Score de risco médio dos splitters do condomínio (ocupação + variação + massivas).'}
         </div>
       </div>
