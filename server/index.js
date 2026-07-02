@@ -22,6 +22,7 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
+import { aggregateCancellations } from './cancellationsInsights.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
@@ -4484,6 +4485,70 @@ app.get('/api/onu-diagnostics/summary-by-splitter', async (req, res) => {
     }
     console.error('Erro ao montar resumo ONU por splitter:', error.message, error.code ?? '', error.detail ?? '');
     return res.status(500).json({ success: false, error: error.message, code: error.code ?? null });
+  }
+});
+
+// Cancelamentos (churn) por área — agregado server-side a partir da Voalle.
+const CANCELLATIONS_SUMMARY_TTL_MS = 10 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = data inicial (YYYY-MM-DD) */
+const cancellationsSummaryCache = new Map();
+
+// Baseado na consulta validada com o planejamento. Filtra contrato Cancelado; o splitter
+// vem do JSON de authentication_splitter_port_data. Sem dados pessoais (só área + motivo).
+const CANCELLATIONS_SELECT_SQL = `
+SELECT
+    aaco.contract_id                                                                   AS contract_id,
+    aaco.date                                                                          AS canceled_at,
+    c.cancellation_motive                                                              AS motive,
+    acp.title                                                                          AS access_point,
+    pa.city                                                                            AS city,
+    (aaco.authentication_splitter_port_data::json->'AuthenticationSplitter'->>'title') AS splitter_title,
+    (aaco.authentication_splitter_port_data::json->'AuthenticationSplitterPort'->>'port') AS splitter_port
+FROM authentication_contract_connection_occurrences aaco
+LEFT JOIN contracts c                    ON c.id  = aaco.contract_id
+LEFT JOIN authentication_access_points acp ON acp.id = aaco.authentication_access_point_id
+LEFT JOIN people_addresses pa            ON pa.id = c.people_address_id
+WHERE aaco.date >= $1
+  AND c.v_status = 'Cancelado'
+`;
+
+app.get('/api/cancellations/summary', async (req, res) => {
+  try {
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsSummaryCache.get(startIso);
+    if (!force && cached && now - cached.at < CANCELLATIONS_SUMMARY_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_SELECT_SQL, [startIso], {
+      retries: 1,
+      delayMs: 200,
+    });
+    const rows = result.rows.map((r) => ({
+      contractId: r.contract_id,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+      accessPoint: r.access_point,
+      splitterTitle: r.splitter_title,
+      splitterPort: r.splitter_port,
+      city: r.city,
+    }));
+    const payload = aggregateCancellations(rows);
+    cancellationsSummaryCache.set(startIso, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao agregar cancelamentos:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
