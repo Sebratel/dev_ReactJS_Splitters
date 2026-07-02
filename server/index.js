@@ -22,7 +22,7 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
-import { aggregateCancellations, aggregateSplitterCancellations } from './cancellationsInsights.js';
+import { aggregateCancellations, aggregateSplitterCancellations, correlateMassivaChurn } from './cancellationsInsights.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
@@ -4621,6 +4621,122 @@ app.get('/api/cancellations/by-splitter', async (req, res) => {
     return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
   } catch (error) {
     console.error('Erro ao agregar cancelamentos do splitter:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Base ativa por tipo de local e condomínio — denominador para a taxa de churn normalizada.
+// Reaproveita a SPLITTERS_BASE_QUERY (comprovada) com DISTINCT por splitter; muda devagar → cache longo.
+const CANCELLATIONS_ACTIVE_BASE_TTL_MS = 30 * 60_000;
+/** @type {{ at: number, payload: unknown } | null} */
+let cancellationsActiveBaseCache = null;
+
+const CANCELLATIONS_ACTIVE_BASE_SQL = `
+SELECT
+  s.tipo_local           AS tipo_local,
+  s.nome_condominio      AS nome_condominio,
+  COUNT(*)::int          AS splitters,
+  SUM(s.busy_count)::int AS active_clients
+FROM (
+  SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
+    base."ID[SPLT.SECUNDARIO]"           AS id,
+    NULLIF(TRIM(base."TIPO LOCAL"), '')  AS tipo_local,
+    NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS nome_condominio,
+    COALESCE(base."BUSY_COUNT", 0)::int  AS busy_count
+  FROM (${SPLITTERS_BASE_QUERY}) base
+  WHERE base."ID[SPLT.SECUNDARIO]" IS NOT NULL
+  ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
+) s
+GROUP BY s.tipo_local, s.nome_condominio
+`;
+
+app.get('/api/cancellations/active-base', async (req, res) => {
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && cancellationsActiveBaseCache && now - cancellationsActiveBaseCache.at < CANCELLATIONS_ACTIVE_BASE_TTL_MS) {
+      return res.json({ success: true, cached: true, data: cancellationsActiveBaseCache.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_ACTIVE_BASE_SQL, [], {
+      retries: 1,
+      delayMs: 200,
+    });
+
+    let total = 0;
+    const byTipoLocal = { 'CONDOMÍNIO': 0, UNIDADE: 0 };
+    const byCondominio = {};
+    for (const row of result.rows) {
+      const active = Number(row.active_clients ?? 0) || 0;
+      total += active;
+      const tipo = String(row.tipo_local ?? '').trim().toUpperCase();
+      if (tipo === 'CONDOMÍNIO') {
+        byTipoLocal['CONDOMÍNIO'] += active;
+        const name = String(row.nome_condominio ?? '').trim();
+        if (name) byCondominio[name] = (byCondominio[name] ?? 0) + active;
+      } else {
+        byTipoLocal.UNIDADE += active;
+      }
+    }
+
+    const payload = { total, byTipoLocal, byCondominio };
+    cancellationsActiveBaseCache = { at: now, payload };
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    console.error('Erro ao consultar base ativa por local:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Áreas/condomínios em risco: onde massiva foi seguida de churn de rede na janela pós-evento.
+const CANCELLATIONS_MASSIVA_IMPACT_TTL_MS = 10 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = `${startIso}|${windowDays}` */
+const cancellationsMassivaImpactCache = new Map();
+
+app.get('/api/cancellations/massiva-impact', async (req, res) => {
+  try {
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const windowDaysRaw = Number.parseInt(String(req.query.windowDays ?? '30'), 10);
+    const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw > 0 ? windowDaysRaw : 30;
+
+    const cacheKey = `${startIso}|${windowDays}`;
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsMassivaImpactCache.get(cacheKey);
+    if (!force && cached && now - cached.at < CANCELLATIONS_MASSIVA_IMPACT_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    // Eventos de massiva (MySQL local) desde `start`; churn (Voalle) no mesmo período.
+    const [events, cancelResult] = await Promise.all([
+      massivaHistoryStore.getMassivaEventsWithSplitterInPeriod({ openedAtFrom: start }),
+      queryWithTransientRetry(CANCELLATIONS_SELECT_SQL, [startIso], { retries: 1, delayMs: 200 }),
+    ]);
+
+    const cancelRows = cancelResult.rows.map((r) => ({
+      splitterTitle: r.splitter_title,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+    }));
+
+    const ranking = correlateMassivaChurn(cancelRows, events, { windowDays, topLimit: 50 });
+    const payload = {
+      windowDays,
+      eventsCount: Array.isArray(events) ? events.length : 0,
+      ranking,
+    };
+    cancellationsMassivaImpactCache.set(cacheKey, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao correlacionar massiva × churn:', error.message, error.code ?? '');
     return res.status(500).json({ success: false, error: error.message });
   }
 });

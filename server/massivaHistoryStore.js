@@ -99,6 +99,9 @@ export function createMassivaHistoryStore(config) {
       async getMassivaSplitterLinksInPeriod() {
         return [];
       },
+      async getMassivaEventsWithSplitterInPeriod() {
+        return [];
+      },
       async getMassivaRecurrenceByDayShift() {
         return [];
       },
@@ -609,6 +612,42 @@ export function createMassivaHistoryStore(config) {
       massivaHistoryId,
       splitterCodes,
     }));
+  }
+
+  /**
+   * Eventos de massiva com o título/código do splitter e a data de abertura, para correlação
+   * churn × massiva (uma linha por par massiva↔splitter). `access_point_code` da massiva incluído.
+   * @param {{ openedAtFrom?: Date | null, openedAtTo?: Date | null }} [range]
+   */
+  async function getMassivaEventsWithSplitterInPeriod(range) {
+    await ensureReady();
+
+    const { rangeSql, extraParams } = buildMassivaPeriodRollupRangeClause(range);
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          h.opened_at         AS openedAt,
+          h.access_point_code AS accessPointCode,
+          hs.splitter_code    AS splitterCode,
+          hs.splitter_title   AS splitterTitle
+        FROM massiva_history h
+        INNER JOIN massiva_history_splitters hs
+          ON hs.massiva_history_id = h.id
+        WHERE h.opened_at IS NOT NULL${rangeSql}
+        ORDER BY h.opened_at ASC
+      `,
+      extraParams,
+    );
+
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) => ({
+        openedAt: serializeHistoryDate(row.openedAt),
+        accessPointCode: normalizeText(row.accessPointCode),
+        splitterCode: normalizeText(row.splitterCode),
+        splitterTitle: normalizeText(row.splitterTitle),
+      }))
+      .filter((row) => row.openedAt != null && (row.splitterTitle !== '' || row.splitterCode !== ''));
   }
 
   /**
@@ -1531,6 +1570,7 @@ export function createMassivaHistoryStore(config) {
     getSplitterStats,
     getMassivaPeriodRollup,
     getMassivaSplitterLinksInPeriod,
+    getMassivaEventsWithSplitterInPeriod,
     getMassivaRecurrenceByDayShift,
     getOpenSplitterCodes,
     getSplitterCodesForProtocols,

@@ -4,12 +4,12 @@
  */
 
 import { fetchRoadFromReverseGeocode, isReverseGeocodeDisabled } from './reverseGeocode.js';
+import { isCondominiumTitle } from './condominiumClassifier.js';
 
 function normalizeNumericSql(expression) {
   return `NULLIF(REPLACE(REGEXP_REPLACE(TRIM(${expression}::text), '[^0-9,.-]', '', 'g'), ',', '.'), '')::double precision`;
 }
 
-const CONDOMINIUM_TITLE_PREFIX_REGEX = /\b(?:RES|COND|ED)\./i;
 export const STREET_RELIEF_MAX_ROUTE_METERS = 200;
 const CROSS_STREET_RELIEF_MAX_ROUTE_METERS = 30;
 
@@ -96,11 +96,12 @@ export function findFirstReliefMatchFromAnalyzed(
 
 /**
  * Mesmo critério do SPLITTERS_BASE_QUERY para classificar condomínio pelo título.
+ * Delega ao classificador compartilhado (`condominiumClassifier.js`).
  * @param {unknown} title
  * @returns {boolean}
  */
 export function isCondominiumSplitterTitle(title) {
-  return CONDOMINIUM_TITLE_PREFIX_REGEX.test(String(title ?? ''));
+  return isCondominiumTitle(title);
 }
 
 export function normalizeStreetForRelief(street) {
