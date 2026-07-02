@@ -88,8 +88,11 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_BFF_BASE_URL=${VITE_BFF_BASE_URL}
-        - VITE_LOCAL_BFF_URL=${VITE_LOCAL_BFF_URL}
+        # IMPORTANTE: manter VAZIOS. O SPA chama `/api/...` no mesmo origin e o
+        # frontend-server.mjs faz proxy para BACKEND_ORIGIN (sem CORS). Preencher
+        # com a URL do backend faz o browser chamar cross-origin e cair em CORS.
+        - VITE_BFF_BASE_URL=
+        - VITE_LOCAL_BFF_URL=
         - VITE_GEOGRID_BASE_URL=${VITE_GEOGRID_BASE_URL}
         - VITE_GEOGRID_API_KEY=${VITE_GEOGRID_API_KEY}
         - VITE_BFF_PROXY_TARGET=${VITE_BFF_PROXY_TARGET}
@@ -113,6 +116,11 @@ services:
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
     container_name: react-frontend-portainer
     environment:
+      # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
+      # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
+      # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
+      AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
       # Desenvolvimento local
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
