@@ -273,6 +273,7 @@ function readNetworkIntelligenceUiState(): {
   activeWindow: IntelligenceWindow
   riskBandFilter: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo'
   ageFilter: AgeFilter
+  locationFilter: 'all' | 'CONDOMÍNIO' | 'UNIDADE'
   splitterSearch: string
   geoTab: 'condominios' | 'ruas'
   selectedMatrixKey:
@@ -291,6 +292,7 @@ function readNetworkIntelligenceUiState(): {
       activeWindow: 'visao-geral',
       riskBandFilter: 'all',
       ageFilter: 'all',
+      locationFilter: 'all',
       splitterSearch: '',
       geoTab: 'condominios',
       selectedMatrixKey: null,
@@ -335,6 +337,10 @@ function readNetworkIntelligenceUiState(): {
         parsed.ageFilter === '5+'
           ? parsed.ageFilter
           : 'all',
+      locationFilter:
+        parsed.locationFilter === 'CONDOMÍNIO' || parsed.locationFilter === 'UNIDADE'
+          ? parsed.locationFilter
+          : 'all',
       splitterSearch: typeof parsed.splitterSearch === 'string' ? parsed.splitterSearch : '',
       geoTab: parsed.geoTab === 'ruas' ? 'ruas' : 'condominios',
       selectedMatrixKey:
@@ -354,6 +360,7 @@ function readNetworkIntelligenceUiState(): {
       activeWindow: 'visao-geral',
       riskBandFilter: 'all',
       ageFilter: 'all',
+      locationFilter: 'all',
       splitterSearch: '',
       geoTab: 'condominios',
       selectedMatrixKey: null,
@@ -583,6 +590,7 @@ export function NetworkIntelligencePage() {
     activeWindow,
     riskBandFilter,
     ageFilter,
+    locationFilter,
     splitterSearch,
     geoTab,
     selectedMatrixKey,
@@ -600,6 +608,8 @@ export function NetworkIntelligencePage() {
     setUiState((prev) => ({ ...prev, riskBandFilter: value }))
   const setAgeFilter = (value: AgeFilter) =>
     setUiState((prev) => ({ ...prev, ageFilter: value }))
+  const setLocationFilter = (value: 'all' | 'CONDOMÍNIO' | 'UNIDADE') =>
+    setUiState((prev) => ({ ...prev, locationFilter: value }))
   const setSplitterSearch = (value: string) =>
     setUiState((prev) => ({ ...prev, splitterSearch: value }))
   const setGeoTab = (value: 'condominios' | 'ruas') =>
@@ -782,6 +792,9 @@ export function NetworkIntelligencePage() {
     if (riskBandFilter !== 'all') {
       rows = rows.filter((row) => row.riskBand === riskBandFilter)
     }
+    if (locationFilter !== 'all') {
+      rows = rows.filter((row) => (row.tipoLocal ?? 'UNIDADE') === locationFilter)
+    }
     const q = splitterSearch.trim().toLowerCase()
     if (q !== '') {
       rows = rows.filter((row) => {
@@ -795,7 +808,7 @@ export function NetworkIntelligencePage() {
       })
     }
     return rows
-  }, [riskRanking, ageFilter, selectedMatrixKey, riskBandFilter, splitterSearch])
+  }, [riskRanking, ageFilter, selectedMatrixKey, riskBandFilter, locationFilter, splitterSearch])
 
   const contextualOltDrilldown = useMemo(() => {
     const grouped = new Map<string, {
@@ -1199,12 +1212,17 @@ export function NetworkIntelligencePage() {
   }, [contextualMaintenanceRows])
 
   const hasActiveFilters =
-    selectedMatrixKey !== null || riskBandFilter !== 'all' || ageFilter !== 'all' || splitterSearch.trim() !== ''
+    selectedMatrixKey !== null ||
+    riskBandFilter !== 'all' ||
+    ageFilter !== 'all' ||
+    locationFilter !== 'all' ||
+    splitterSearch.trim() !== ''
 
   function clearAllFilters() {
     setSelectedMatrixKey(null)
     setRiskBandFilter('all')
     setAgeFilter('all')
+    setLocationFilter('all')
     setSplitterSearch('')
   }
 
@@ -1307,6 +1325,15 @@ export function NetworkIntelligencePage() {
             <option value="1-3">Idade: 1-3 anos</option>
             <option value="3-5">Idade: 3-5 anos</option>
             <option value="5+">Idade: 5+ anos</option>
+          </select>
+          <select
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value as 'all' | 'CONDOMÍNIO' | 'UNIDADE')}
+            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+          >
+            <option value="all">Local: todos</option>
+            <option value="CONDOMÍNIO">Só condomínios</option>
+            <option value="UNIDADE">Só ruas/unidades</option>
           </select>
           <button
             type="button"
