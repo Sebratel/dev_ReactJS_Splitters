@@ -119,6 +119,9 @@ services:
       # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
+      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados) — mesmo host usado
+      # em dev no VITE_BFF_PROXY_TARGET (ex.: https://api-gateway-bff.sebratel.net.br).
+      GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
       # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
       AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
       # Desenvolvimento local

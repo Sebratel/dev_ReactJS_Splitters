@@ -12,6 +12,9 @@ const port = Number(process.env.PORT || 3177)
 // encaminha ao backend. Configure BACKEND_ORIGIN (ex.: http://backend:3001 na rede do compose).
 // Opcional: AUTOISP_ORIGIN para `/__autoisp/...` (paridade com o proxy do Vite/nginx).
 const backendOrigin = String(process.env.BACKEND_ORIGIN || '').replace(/\/$/, '')
+// Gateway ERP/Elleven (n8n / api-gateway-bff) que atende as rotas `/api/v1/...` (massivas,
+// afetados). É um destino DIFERENTE do backend Node — por isso o roteamento por prefixo.
+const gatewayOrigin = String(process.env.GATEWAY_ORIGIN || '').replace(/\/$/, '')
 const autoIspOrigin = String(process.env.AUTOISP_ORIGIN || '').replace(/\/$/, '')
 
 /** Encaminha a requisição atual para `originBase`, opcionalmente reescrevendo o path. */
@@ -100,7 +103,17 @@ const serveFile = async (filePath, response) => {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`)
 
-  // Proxy do BFF (mesmo origin → sem CORS). Precede o serviço estático.
+  // Rotas do gateway ERP (massivas/afetados) → GATEWAY_ORIGIN. Precede o /api genérico.
+  if (url.pathname.startsWith('/api/v1/')) {
+    if (gatewayOrigin) {
+      proxyRequest(req, res, gatewayOrigin)
+    } else {
+      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ error: 'bad_gateway', message: 'GATEWAY_ORIGIN não configurado no frontend.' }))
+    }
+    return
+  }
+  // Demais rotas do BFF Node (mesmo origin → sem CORS). Precede o serviço estático.
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
     if (backendOrigin) {
       proxyRequest(req, res, backendOrigin)
