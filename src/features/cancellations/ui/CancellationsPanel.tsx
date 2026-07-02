@@ -14,8 +14,10 @@ import {
   ArrowUpRight,
   Building2,
   Home,
+  Lightbulb,
   Minus,
   Router,
+  Target,
   TrendingDown,
   Zap,
 } from 'lucide-react'
@@ -158,6 +160,44 @@ export function CancellationsPanel() {
   const impact = impactQuery.data
   const impactRows = (impact?.ranking ?? []).filter((r) => r.redeCount > 0).slice(0, 25)
 
+  // ---- Narrativa "Leitura rápida": interpreta os números em linguagem simples ----
+  const periodLabel = preset === '3m' ? '3 meses' : preset === '6m' ? '6 meses' : '12 meses'
+
+  const trendStory: { tone: 'bad' | 'good' | 'neutral'; text: string } =
+    trend.deltaPct >= 15
+      ? {
+          tone: 'bad',
+          text: `O churn de rede está subindo: +${trend.deltaPct}% frente aos ${trend.windowDays} dias anteriores. Vale atenção.`,
+        }
+      : trend.deltaPct <= -15
+        ? {
+            tone: 'good',
+            text: `O churn de rede está caindo: ${trend.deltaPct}% frente aos ${trend.windowDays} dias anteriores.`,
+          }
+        : {
+            tone: 'neutral',
+            text: `O churn de rede está estável frente aos ${trend.windowDays} dias anteriores (${trend.deltaPct > 0 ? '+' : ''}${trend.deltaPct}%).`,
+          }
+
+  const condoStory =
+    rateVerdict ??
+    (condoRede === ruaRede
+      ? 'Condomínios e ruas puxam o churn de rede de forma parecida.'
+      : condoRede > ruaRede
+        ? 'Em volume, os condomínios concentram mais churn de rede que as ruas.'
+        : 'Em volume, as ruas concentram mais churn de rede que os condomínios.')
+
+  const concStory =
+    conc.redeTotal > 0
+      ? `${conc.areasFor80pct} área(s) concentram 80% do churn de rede (as 5 maiores já somam ${conc.top5Share}%). É onde focar o esforço.`
+      : null
+
+  const massivaStory = impactQuery.isSuccess
+    ? impactRows.length > 0
+      ? `Em ${impactRows.length} área(s), uma massiva foi seguida de cancelamentos de rede em até ${WINDOW_DAYS} dias — investigue se o evento causou o churn (lista no fim).`
+      : `Nenhuma massiva recente foi seguida de churn de rede na janela de ${WINDOW_DAYS} dias — bom sinal.`
+    : null
+
   return (
     <div className="space-y-4">
       {/* Narrativa + período + tendência */}
@@ -214,7 +254,49 @@ export function CancellationsPanel() {
         </div>
       </div>
 
+      {/* Leitura rápida — o "e daí?" em linguagem simples */}
+      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
+        <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
+          <Lightbulb className="size-4 text-amber-500" aria-hidden />
+          Leitura rápida
+          <span className="ml-1 font-medium normal-case tracking-normal text-neutral-400">
+            · últimos {periodLabel}
+          </span>
+        </p>
+        <ul className="space-y-2 text-sm leading-snug text-neutral-700">
+          <li className="flex items-start gap-2">
+            {trendStory.tone === 'bad' ? (
+              <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
+            ) : trendStory.tone === 'good' ? (
+              <ArrowDownRight className="mt-0.5 size-4 shrink-0 text-emerald-500" aria-hidden />
+            ) : (
+              <Minus className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+            )}
+            <span>{trendStory.text}</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <Building2 className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden />
+            <span>{condoStory}</span>
+          </li>
+          {concStory ? (
+            <li className="flex items-start gap-2">
+              <Target className="mt-0.5 size-4 shrink-0 text-neutral-500" aria-hidden />
+              <span>{concStory}</span>
+            </li>
+          ) : null}
+          {massivaStory ? (
+            <li className="flex items-start gap-2">
+              <Zap className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+              <span>{massivaStory}</span>
+            </li>
+          ) : null}
+        </ul>
+      </div>
+
       {/* Condomínio × Rua — distinção central */}
+      <p className="pt-1 text-sm font-bold text-neutral-800">
+        Condomínio ou rua? <span className="font-normal text-neutral-500">Onde o churn de rede pesa mais</span>
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         <TipoLocalCard
           icon={<Building2 className="size-5" aria-hidden />}
@@ -246,6 +328,10 @@ export function CancellationsPanel() {
       ) : null}
 
       {/* Categorias + submotivos de rede */}
+      <p className="pt-1 text-sm font-bold text-neutral-800">
+        Por que os clientes cancelam?{' '}
+        <span className="font-normal text-neutral-500">Motivos agrupados — rede/qualidade em destaque</span>
+      </p>
       <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
           {CANCELLATION_CATEGORY_ORDER.map((cat) => {
