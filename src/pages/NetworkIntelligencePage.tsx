@@ -85,6 +85,11 @@ const CancellationsPanel = lazy(async () => {
   return { default: m.CancellationsPanel }
 })
 
+const CondominiumsPanel = lazy(async () => {
+  const m = await import('@/features/condominiums/ui/CondominiumsPanel')
+  return { default: m.CondominiumsPanel }
+})
+
 function formatDateLabel(date: Date): string {
   return formatBrazilDayMonthDisplay(date)
 }
@@ -265,6 +270,7 @@ const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: str
   { id: 'sinais', label: 'Sinais ONU' },
   { id: 'equipamentos', label: 'Equipamentos' },
   { id: 'cancelamentos', label: 'Cancelamentos' },
+  { id: 'condominios', label: 'Condomínios' },
 ]
 
 const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
@@ -323,7 +329,8 @@ function readNetworkIntelligenceUiState(): {
         parsed.activeWindow === 'manutencao' ||
         parsed.activeWindow === 'sinais' ||
         parsed.activeWindow === 'equipamentos' ||
-        parsed.activeWindow === 'cancelamentos'
+        parsed.activeWindow === 'cancelamentos' ||
+        parsed.activeWindow === 'condominios'
           ? parsed.activeWindow
           : 'visao-geral',
       riskBandFilter:
@@ -393,6 +400,8 @@ const TAB_INTRO: Record<IntelligenceWindow, string> = {
     'Frota de equipamentos (patrimônio) na rede: dimensão do parque, modelos mais presentes (curva de Pareto), composição por tipo, distribuição por cidade e bairro e qualidade de cadastro (serial, MAC, duplicidades).',
   cancelamentos:
     'Cancelamentos por área (Voalle) categorizados por motivo, com destaque para churn de rede/qualidade — insatisfação e migração para a concorrência. Cruze pontos de acesso, splitters e cidades para ver onde eventos de rede podem estar puxando cancelamento.',
+  condominios:
+    'Visão dedicada aos condomínios da rede: ocupação, saturação (candidatos a expansão), risco, massivas e churn de rede — tudo agregado por condomínio para priorizar monitoramento e investimento.',
 }
 
 function presetButtonLabel(p: IntelligenceDateRangePreset): string {
@@ -453,7 +462,7 @@ function trendBadgeClass(label: string): string {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200'
 }
 
-type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'topologia' | 'ciclo-vida' | 'manutencao' | 'sinais' | 'equipamentos' | 'cancelamentos'
+type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'topologia' | 'ciclo-vida' | 'manutencao' | 'sinais' | 'equipamentos' | 'cancelamentos' | 'condominios'
 
 type AgeFilter = 'all' | '0-1' | '1-3' | '3-5' | '5+'
 
@@ -3434,6 +3443,24 @@ export function NetworkIntelligencePage() {
             }
           >
             <CancellationsPanel />
+          </Suspense>
+        </motion.section>
+      ) : null}
+
+      {activeWindow === 'condominios' ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+        >
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando painel de condomínios…
+              </p>
+            }
+          >
+            <CondominiumsPanel riskRanking={riskRanking} />
           </Suspense>
         </motion.section>
       ) : null}
