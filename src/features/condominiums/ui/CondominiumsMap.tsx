@@ -1,5 +1,5 @@
 import 'leaflet/dist/leaflet.css'
-import { useEffect } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import L from 'leaflet'
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet'
 
@@ -16,22 +16,42 @@ export type CondoMapPoint = {
   redeChurn: number
   totalTickets: number
   signalPct: number | null
+  /** Dias até saturar (95%) — menor ETA entre os splitters; null se não projetável. */
+  etaSoonestDays: number | null
   color: string
   radius: number
 }
 
+/**
+ * Reenquadra o mapa apenas quando o CONJUNTO de pontos (coordenadas) muda — não a cada
+ * novo array (o resumo de ONU faz polling e recria os pontos). Assim o zoom/pan do usuário
+ * não é resetado enquanto ele navega.
+ */
 function FitBounds({ points }: { points: CondoMapPoint[] }) {
   const map = useMap()
+  const signature = useMemo(
+    () =>
+      points
+        .map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`)
+        .sort()
+        .join('|'),
+    [points],
+  )
+  const lastSignature = useRef<string | null>(null)
   useEffect(() => {
     if (points.length === 0) return
+    if (lastSignature.current === signature) return
+    lastSignature.current = signature
     const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]))
     map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 })
-  }, [points, map])
+    // `points` é intencionalmente omitido: só reenquadra quando a assinatura muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, map])
   return null
 }
 
 /** Mapa de condomínios: um círculo por condomínio (centro dos seus splitters). */
-export function CondominiumsMap({ points }: { points: CondoMapPoint[] }) {
+export const CondominiumsMap = memo(function CondominiumsMap({ points }: { points: CondoMapPoint[] }) {
   const center: [number, number] =
     points.length > 0 ? [points[0].lat, points[0].lng] : [-3.71, -38.54]
 
@@ -86,6 +106,18 @@ export function CondominiumsMap({ points }: { points: CondoMapPoint[] }) {
                       {p.totalTickets > 0 ? p.totalTickets.toLocaleString('pt-BR') : '—'}
                     </td>
                   </tr>
+                  {p.etaSoonestDays != null ? (
+                    <tr>
+                      <td style={{ color: '#64748b' }}>Satura em</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {p.etaSoonestDays <= 45
+                          ? `~${Math.round(p.etaSoonestDays)} d`
+                          : p.etaSoonestDays <= 365
+                            ? `~${Math.round(p.etaSoonestDays / 30)} m`
+                            : '> 1 a'}
+                      </td>
+                    </tr>
+                  ) : null}
                   {p.signalPct != null ? (
                     <tr>
                       <td style={{ color: '#64748b' }}>Sinal deg.+off.</td>
@@ -102,4 +134,4 @@ export function CondominiumsMap({ points }: { points: CondoMapPoint[] }) {
       ))}
     </MapContainer>
   )
-}
+})
