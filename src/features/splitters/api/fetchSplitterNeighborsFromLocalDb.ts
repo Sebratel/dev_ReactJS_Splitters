@@ -29,7 +29,7 @@ export async function fetchSplitterNeighborsFromLocalDb(args: {
   code: string
   radiusMeters: number
 }): Promise<Array<Omit<SplitterMapNeighbor, 'occupancyBand'>>> {
-  const url = new URL(`${env.localBffUrl}/api/splitters/neighbors`)
+  const url = new URL(`${env.localBffUrl}/api/splitters/neighbors`, window.location.origin)
   url.searchParams.set('code', args.code)
   url.searchParams.set('radius', String(args.radiusMeters))
 

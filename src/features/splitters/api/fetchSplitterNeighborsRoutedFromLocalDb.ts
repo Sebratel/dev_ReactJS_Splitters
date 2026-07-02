@@ -41,7 +41,7 @@ export async function fetchSplitterNeighborsRoutedFromLocalDb(args: {
   originStreet: string | null
   originStreetRaw: string | null
 }> {
-  const url = new URL(`${env.localBffUrl}/api/splitters/neighbors-routed`)
+  const url = new URL(`${env.localBffUrl}/api/splitters/neighbors-routed`, window.location.origin)
   url.searchParams.set('code', args.code)
   url.searchParams.set('straightRadius', String(args.straightRadiusMeters))
 

@@ -44,7 +44,7 @@ export async function fetchSplittersNetworkReliefQueueFromLocalDb(options?: {
   oltSlot?: number | null
   oltPort?: number | null
 }): Promise<NetworkReliefQueueData> {
-  const url = new URL(`${env.localBffUrl}/api/splitters/network-relief-queue`)
+  const url = new URL(`${env.localBffUrl}/api/splitters/network-relief-queue`, window.location.origin)
   if (options?.limit != null) url.searchParams.set('limit', String(options.limit))
   if (options?.cursor != null) url.searchParams.set('cursor', String(options.cursor))
   if (options?.straightRadiusMeters != null) {
