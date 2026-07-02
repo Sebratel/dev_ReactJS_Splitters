@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertTriangle, Building2, Home, TrendingDown, Zap } from 'lucide-react'
+import { AlertTriangle, Building2, Home, Lightbulb, TrendingDown, Zap } from 'lucide-react'
 import { useSplitterCancellations } from '@/features/cancellations/hooks/useSplitterCancellations'
 import {
   CANCELLATION_CATEGORY_LABELS,
@@ -133,6 +133,18 @@ export function SplitterCancellationsSection({
   const post = data.postEvent
   const maxMonth = data.monthly.reduce((max, m) => Math.max(max, m.total), 0)
 
+  const redeReading =
+    redeShare >= 40
+      ? 'a rede pesa bastante no churn deste splitter.'
+      : redeShare >= 20
+        ? 'a rede tem peso relevante no churn aqui.'
+        : 'a maior parte do churn aqui não é por rede.'
+  const postReading = post
+    ? post.redeCount > 0
+      ? ` Após a última massiva, ${post.redeCount} cancelamento(s) de rede em ${post.windowDays} dias — vale investigar.`
+      : ' A última massiva não foi seguida de churn de rede na janela.'
+    : ''
+
   if (data.total === 0) {
     return card(
       <p className="text-sm text-on-surface-variant/70">
@@ -143,6 +155,18 @@ export function SplitterCancellationsSection({
 
   return card(
     <div className="space-y-4">
+      {/* Leitura rápida */}
+      <p className="flex items-start gap-2 rounded-xl bg-neutral-50 px-3 py-2 text-sm leading-snug text-on-surface-variant/90 ring-1 ring-outline-variant/40">
+        <Lightbulb className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+        <span>
+          Dos <span className="font-semibold text-on-surface">{data.total.toLocaleString('pt-BR')}</span>{' '}
+          cancelamentos em 12 meses,{' '}
+          <span className="font-semibold text-rose-600">{totalRede.toLocaleString('pt-BR')} ({redeShare}%)</span>{' '}
+          foram por rede/qualidade — {redeReading}
+          {postReading}
+        </span>
+      </p>
+
       {/* Resumo */}
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
         <div>
