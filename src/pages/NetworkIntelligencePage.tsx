@@ -22,7 +22,6 @@ import {
   Database,
   Filter,
   Home,
-  Info,
   Loader2,
   MapPin,
   Moon,
@@ -1285,6 +1284,22 @@ export function NetworkIntelligencePage() {
     })
   }
 
+  // Filtros contextuais: só aparecem nas abas onde de fato recortam os dados.
+  const showSplitterFilters =
+    activeWindow === 'risco' ||
+    activeWindow === 'operacao' ||
+    activeWindow === 'geografico' ||
+    activeWindow === 'ciclo-vida'
+  const showSearchOnly = activeWindow === 'manutencao'
+  const showFilterBar = showSplitterFilters || showSearchOnly
+  const visibleFilterChips = showSplitterFilters ? activeFilterChips : []
+  const contextualHasActiveFilters = showSplitterFilters
+    ? hasActiveFilters
+    : splitterSearch.trim() !== ''
+  const clearContextualFilters = showSplitterFilters
+    ? clearAllFilters
+    : () => setSplitterSearch('')
+
   return (
     <div className="min-w-0 space-y-5">
       <AppPageHeader
@@ -1354,6 +1369,7 @@ export function NetworkIntelligencePage() {
           </div>
         </div>
 
+        {showFilterBar ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/40 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative w-full sm:w-48 md:w-52">
             <MapPin className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
@@ -1364,97 +1380,103 @@ export function NetworkIntelligencePage() {
               className="w-full rounded-lg border border-slate-200 bg-white/90 py-1.5 pl-7 pr-2 text-xs text-slate-700"
             />
           </div>
-          <select
-            value={riskBandFilter}
-            onChange={(e) =>
-              setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
-            }
-            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-          >
-            <option value="all">Risco: todos</option>
-            <option value="critico">Risco crítico</option>
-            <option value="alto">Risco alto</option>
-            <option value="moderado">Risco moderado</option>
-            <option value="baixo">Risco baixo</option>
-          </select>
-          <select
-            value={ageFilter}
-            onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
-            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-          >
-            <option value="all">Idade: todas</option>
-            <option value="0-1">Idade: 0-1 ano</option>
-            <option value="1-3">Idade: 1-3 anos</option>
-            <option value="3-5">Idade: 3-5 anos</option>
-            <option value="5+">Idade: 5+ anos</option>
-          </select>
-          {/* Local — controle segmentado (mais rápido e legível que dropdown) */}
-          <div
-            role="group"
-            aria-label="Tipo de local"
-            className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white/90"
-          >
-            {([
-              { id: 'all', label: 'Todos', icon: null },
-              { id: 'CONDOMÍNIO', label: 'Condomínios', icon: Building2 },
-              { id: 'UNIDADE', label: 'Ruas', icon: Home },
-            ] as Array<{ id: 'all' | 'CONDOMÍNIO' | 'UNIDADE'; label: string; icon: LucideIcon | null }>).map(
-              (opt, idx) => {
-                const active = locationFilter === opt.id
-                const Icon = opt.icon
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setLocationFilter(opt.id)}
-                    aria-pressed={active}
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition',
-                      idx > 0 && 'border-l border-slate-200',
-                      active ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-50',
-                    )}
-                  >
-                    {Icon ? <Icon className="size-3.5" aria-hidden /> : null}
-                    {opt.label}
-                  </button>
-                )
-              },
-            )}
-          </div>
-          {/* Contador de resultados do recorte atual */}
-          <div className="flex items-center gap-1.5 sm:ml-auto">
-            <span className="text-lg font-bold tabular-nums leading-none text-slate-800">
-              {contextualRiskRanking.length.toLocaleString('pt-BR')}
-            </span>
-            <span className="text-[10px] leading-tight text-slate-500">
-              splitters
-              <br />
-              no recorte
-            </span>
-          </div>
+          {showSplitterFilters ? (
+            <>
+              <select
+                value={riskBandFilter}
+                onChange={(e) =>
+                  setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
+                }
+                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+              >
+                <option value="all">Risco: todos</option>
+                <option value="critico">Risco crítico</option>
+                <option value="alto">Risco alto</option>
+                <option value="moderado">Risco moderado</option>
+                <option value="baixo">Risco baixo</option>
+              </select>
+              <select
+                value={ageFilter}
+                onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
+                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+              >
+                <option value="all">Idade: todas</option>
+                <option value="0-1">Idade: 0-1 ano</option>
+                <option value="1-3">Idade: 1-3 anos</option>
+                <option value="3-5">Idade: 3-5 anos</option>
+                <option value="5+">Idade: 5+ anos</option>
+              </select>
+              {/* Local — controle segmentado (mais rápido e legível que dropdown) */}
+              <div
+                role="group"
+                aria-label="Tipo de local"
+                className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white/90"
+              >
+                {([
+                  { id: 'all', label: 'Todos', icon: null },
+                  { id: 'CONDOMÍNIO', label: 'Condomínios', icon: Building2 },
+                  { id: 'UNIDADE', label: 'Ruas', icon: Home },
+                ] as Array<{ id: 'all' | 'CONDOMÍNIO' | 'UNIDADE'; label: string; icon: LucideIcon | null }>).map(
+                  (opt, idx) => {
+                    const active = locationFilter === opt.id
+                    const Icon = opt.icon
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setLocationFilter(opt.id)}
+                        aria-pressed={active}
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition',
+                          idx > 0 && 'border-l border-slate-200',
+                          active ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        {Icon ? <Icon className="size-3.5" aria-hidden /> : null}
+                        {opt.label}
+                      </button>
+                    )
+                  },
+                )}
+              </div>
+              {/* Contador de resultados do recorte atual */}
+              <div className="flex items-center gap-1.5 sm:ml-auto">
+                <span className="text-lg font-bold tabular-nums leading-none text-slate-800">
+                  {contextualRiskRanking.length.toLocaleString('pt-BR')}
+                </span>
+                <span className="text-[10px] leading-tight text-slate-500">
+                  splitters
+                  <br />
+                  no recorte
+                </span>
+              </div>
+            </>
+          ) : null}
           <button
             type="button"
-            onClick={clearAllFilters}
-            disabled={!hasActiveFilters}
+            onClick={clearContextualFilters}
+            disabled={!contextualHasActiveFilters}
             className={cn(
               'rounded-lg border px-2 py-1.5 text-xs font-bold transition',
-              hasActiveFilters
+              !showSplitterFilters && 'sm:ml-auto',
+              contextualHasActiveFilters
                 ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
                 : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
             )}
           >
-            Limpar filtros
+            {showSplitterFilters ? 'Limpar filtros' : 'Limpar busca'}
           </button>
         </div>
+        ) : null}
 
-        {/* Chips de filtros ativos + aviso de escopo */}
-        {activeFilterChips.length > 0 ? (
+        {/* Chips de filtros ativos (só nas abas por splitter) */}
+        {visibleFilterChips.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500">
               <Filter className="size-3" aria-hidden />
               Ativos:
             </span>
-            {activeFilterChips.map((chip) => (
+            {visibleFilterChips.map((chip) => (
               <span
                 key={chip.key}
                 className={cn(
@@ -1479,15 +1501,6 @@ export function NetworkIntelligencePage() {
             ))}
           </div>
         ) : null}
-
-        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-400">
-          <Info className="mt-0.5 size-3 shrink-0" aria-hidden />
-          <span>
-            Local, risco e idade recortam as abas por splitter: Priorização, Uso e Massivas, Mapa e
-            OLTs, e Idade. Panorama, Topologia, Sinais, Equipamentos e Cancelamentos usam dados
-            próprios.
-          </span>
-        </p>
 
         <details className="mt-2 border-t border-slate-200/40 pt-2">
           <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
@@ -3075,7 +3088,7 @@ export function NetworkIntelligencePage() {
         <>
           <p className="break-words text-[11px] leading-relaxed text-slate-600">
             Dados do Elleven/ERP no intervalo de datas. Protocolos podem incluir rompimento, troca de flat e outros tipos
-            mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita busca e filtros da barra superior.
+            mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita a busca da barra superior.
           </p>
           {maintenanceInsight ? (
             <div className="mt-3 space-y-2">
