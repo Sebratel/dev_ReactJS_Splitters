@@ -1480,9 +1480,13 @@ export function NetworkIntelligencePage() {
           </div>
         ) : null}
 
-        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-400">
-          <Info className="size-3" aria-hidden />
-          Os filtros valem para todas as abas (priorização, uso, mapa, topologia, cancelamentos…).
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-400">
+          <Info className="mt-0.5 size-3 shrink-0" aria-hidden />
+          <span>
+            Local, risco e idade recortam as abas por splitter: Priorização, Uso e Massivas, Mapa e
+            OLTs, e Idade. Panorama, Topologia, Sinais, Equipamentos e Cancelamentos usam dados
+            próprios.
+          </span>
         </p>
 
         <details className="mt-2 border-t border-slate-200/40 pt-2">
