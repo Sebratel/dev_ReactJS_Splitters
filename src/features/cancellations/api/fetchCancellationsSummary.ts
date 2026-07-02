@@ -1,6 +1,9 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
-import type { CancellationsSummary } from '@/features/cancellations/model/cancellationsSummary'
+import {
+  EMPTY_CANCELLATIONS_SUMMARY,
+  type CancellationsSummary,
+} from '@/features/cancellations/model/cancellationsSummary'
 
 type ApiResponse = {
   success: boolean
@@ -18,19 +21,7 @@ export async function fetchCancellationsSummary(
 ): Promise<CancellationsSummary> {
   const url = `${env.localBffUrl}/api/cancellations/summary?start=${encodeURIComponent(startIso)}`
   const res = await fetchWithSessionAuth(url)
-  if (res.status === 503) {
-    return {
-      total: 0,
-      totalsByCategory: {
-        rede: 0, tecnico: 0, financeiro: 0, pre_instalacao: 0,
-        mudanca: 0, operacional: 0, outros: 0,
-      },
-      byAccessPoint: [],
-      bySplitter: [],
-      byCity: [],
-      monthly: [],
-    }
-  }
+  if (res.status === 503) return EMPTY_CANCELLATIONS_SUMMARY
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = (await res.json()) as ApiResponse
   if (!json.success) throw new Error('API retornou success=false')

@@ -171,6 +171,8 @@ export function SplitterDetailScreen() {
           <SplitterCancellationsSection
             splitterTitle={state.splitter.title}
             latestMassivaAt={detailMassivaStats?.latestOpenedAt ?? null}
+            tipoLocal={state.splitter.tipoLocal}
+            nomeCondominio={state.splitter.nomeCondominio}
           />
 
           <section

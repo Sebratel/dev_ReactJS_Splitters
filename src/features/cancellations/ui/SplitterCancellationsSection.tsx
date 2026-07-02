@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertTriangle, TrendingDown, Zap } from 'lucide-react'
+import { AlertTriangle, Building2, Home, TrendingDown, Zap } from 'lucide-react'
 import { useSplitterCancellations } from '@/features/cancellations/hooks/useSplitterCancellations'
 import {
   CANCELLATION_CATEGORY_LABELS,
@@ -13,6 +13,9 @@ type SplitterCancellationsSectionProps = {
   splitterTitle?: string | null
   /** Data da última massiva do splitter (para correlação churn × evento). */
   latestMassivaAt?: Date | null
+  /** Classificação do local (do cadastro do splitter). */
+  tipoLocal?: 'CONDOMÍNIO' | 'UNIDADE'
+  nomeCondominio?: string | null
 }
 
 const WINDOW_DAYS = 30
@@ -49,6 +52,8 @@ function monthLabel(key: string): string {
 export function SplitterCancellationsSection({
   splitterTitle,
   latestMassivaAt,
+  tipoLocal,
+  nomeCondominio,
 }: SplitterCancellationsSectionProps) {
   const startIso = useMemo(startIso12mAgo, [])
   const title = splitterTitle?.trim() ?? ''
@@ -88,6 +93,17 @@ export function SplitterCancellationsSection({
             Cancelamentos deste splitter
           </h2>
         </div>
+        {tipoLocal === 'CONDOMÍNIO' ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/50 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+            <Building2 size={12} aria-hidden />
+            Condomínio{nomeCondominio ? `: ${nomeCondominio}` : ''}
+          </span>
+        ) : tipoLocal === 'UNIDADE' ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] font-semibold text-neutral-500">
+            <Home size={12} aria-hidden />
+            Rua / unidade
+          </span>
+        ) : null}
       </div>
       <div className="mt-3">{children}</div>
     </section>
