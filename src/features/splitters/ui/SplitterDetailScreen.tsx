@@ -14,6 +14,7 @@ import { SplitterClientesSection } from '@/features/splitters/ui/SplitterCliente
 import { SplitterDetailSummary } from '@/features/splitters/ui/SplitterDetailSummary'
 import { SplitterMapSection } from '@/features/splitters/ui/SplitterMapSection'
 import { SplitterOltSection } from '@/features/splitters/ui/SplitterOltSection'
+import { SplitterCancellationsSection } from '@/features/cancellations/ui/SplitterCancellationsSection'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -165,6 +166,11 @@ export function SplitterDetailScreen() {
             splitterTitle={state.splitter.title}
             capacity={state.splitter.outPorts}
             integrationCode={state.splitter.integrationCode}
+          />
+
+          <SplitterCancellationsSection
+            splitterTitle={state.splitter.title}
+            latestMassivaAt={detailMassivaStats?.latestOpenedAt ?? null}
           />
 
           <section

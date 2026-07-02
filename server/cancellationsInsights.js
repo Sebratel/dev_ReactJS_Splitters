@@ -172,6 +172,86 @@ export function aggregateCancellations(rows, options = {}) {
 }
 
 /**
+ * Agregação focada num único splitter (tela de detalhe). Além dos totais por categoria e
+ * série mensal, monta uma timeline enxuta e — se `eventAt` for informado (ex.: última
+ * massiva do splitter) — conta o churn na janela de `windowDays` após o evento.
+ *
+ * @param {Array<{ contractId: unknown, canceledAt: unknown, motive: unknown, city: unknown }>} rows
+ * @param {{ eventAt?: Date | null, windowDays?: number, timelineLimit?: number }} [options]
+ */
+export function aggregateSplitterCancellations(rows, options = {}) {
+  const windowDays = options.windowDays ?? 30;
+  const timelineLimit = options.timelineLimit ?? 50;
+  const eventAt =
+    options.eventAt instanceof Date && !Number.isNaN(options.eventAt.getTime())
+      ? options.eventAt
+      : null;
+
+  // Dedup por contrato: mantém a ocorrência mais recente.
+  const latestByContract = new Map();
+  for (const row of rows) {
+    const at = row.canceledAt ? new Date(row.canceledAt) : null;
+    if (at == null || Number.isNaN(at.getTime())) continue;
+    const contractId =
+      row.contractId == null ? `row-${latestByContract.size}` : Number(row.contractId);
+    const prev = latestByContract.get(contractId);
+    if (!prev || at.getTime() > prev._at.getTime()) {
+      latestByContract.set(contractId, { ...row, _at: at });
+    }
+  }
+
+  const totalsByCategory = emptyCategoryCounts();
+  const byMonth = new Map();
+  const timeline = [];
+  let total = 0;
+  let postEventRede = 0;
+  let postEventTotal = 0;
+  const windowMs = windowDays * 24 * 60 * 60 * 1000;
+
+  for (const row of latestByContract.values()) {
+    const category = categorizeCancellationMotive(row.motive);
+    total += 1;
+    totalsByCategory[category] += 1;
+
+    const mk = monthKey(row._at);
+    let m = byMonth.get(mk);
+    if (!m) {
+      m = { key: mk, total: 0, ...emptyCategoryCounts() };
+      byMonth.set(mk, m);
+    }
+    m.total += 1;
+    m[category] += 1;
+
+    timeline.push({
+      canceledAt: row._at.toISOString(),
+      category,
+      city: String(row.city ?? '').trim() || null,
+    });
+
+    if (eventAt) {
+      const t = row._at.getTime();
+      if (t >= eventAt.getTime() && t <= eventAt.getTime() + windowMs) {
+        postEventTotal += 1;
+        if (category === 'rede') postEventRede += 1;
+      }
+    }
+  }
+
+  timeline.sort((a, b) => b.canceledAt.localeCompare(a.canceledAt));
+  const monthly = [...byMonth.values()].sort((a, b) => a.key.localeCompare(b.key));
+
+  return {
+    total,
+    totalsByCategory,
+    monthly,
+    timeline: timeline.slice(0, timelineLimit),
+    postEvent: eventAt
+      ? { at: eventAt.toISOString(), windowDays, redeCount: postEventRede, totalCount: postEventTotal }
+      : null,
+  };
+}
+
+/**
  * Correlação churn × manutenção: conta cancelamentos "rede" numa janela após cada evento.
  *
  * @param {Array<{ canceledAt: Date, category: string, accessPoint: string }>} normalizedRows

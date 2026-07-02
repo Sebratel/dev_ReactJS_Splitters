@@ -22,7 +22,7 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
-import { aggregateCancellations } from './cancellationsInsights.js';
+import { aggregateCancellations, aggregateSplitterCancellations } from './cancellationsInsights.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
@@ -4548,6 +4548,79 @@ app.get('/api/cancellations/summary', async (req, res) => {
     return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
   } catch (error) {
     console.error('Erro ao agregar cancelamentos:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Cancelamentos de um único splitter (tela de detalhe) + correlação com a última massiva.
+const CANCELLATIONS_BY_SPLITTER_TTL_MS = 10 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = `${title}|${startIso}|${eventIso}|${windowDays}` */
+const cancellationsBySplitterCache = new Map();
+
+const CANCELLATIONS_BY_SPLITTER_SQL = `
+SELECT
+    aaco.contract_id  AS contract_id,
+    aaco.date         AS canceled_at,
+    c.cancellation_motive AS motive,
+    pa.city           AS city
+FROM authentication_contract_connection_occurrences aaco
+LEFT JOIN contracts c         ON c.id  = aaco.contract_id
+LEFT JOIN people_addresses pa ON pa.id = c.people_address_id
+WHERE aaco.date >= $1
+  AND c.v_status = 'Cancelado'
+  AND (aaco.authentication_splitter_port_data::json->'AuthenticationSplitter'->>'title') = $2
+`;
+
+app.get('/api/cancellations/by-splitter', async (req, res) => {
+  try {
+    const title = String(req.query.title ?? '').trim();
+    if (title === '') {
+      return res.status(400).json({ success: false, error: 'Parâmetro "title" obrigatório.' });
+    }
+
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const eventParam = String(req.query.eventAt ?? '').trim();
+    const eventAt = eventParam !== '' ? new Date(eventParam) : null;
+    const eventValid = eventAt != null && !Number.isNaN(eventAt.getTime());
+    const eventIso = eventValid ? eventAt.toISOString() : '';
+
+    const windowDaysRaw = Number.parseInt(String(req.query.windowDays ?? '30'), 10);
+    const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw > 0 ? windowDaysRaw : 30;
+
+    const cacheKey = `${title}|${startIso}|${eventIso}|${windowDays}`;
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsBySplitterCache.get(cacheKey);
+    if (!force && cached && now - cached.at < CANCELLATIONS_BY_SPLITTER_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_BY_SPLITTER_SQL, [startIso, title], {
+      retries: 1,
+      delayMs: 200,
+    });
+    const rows = result.rows.map((r) => ({
+      contractId: r.contract_id,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+      city: r.city,
+    }));
+    const payload = aggregateSplitterCancellations(rows, {
+      eventAt: eventValid ? eventAt : null,
+      windowDays,
+    });
+    cancellationsBySplitterCache.set(cacheKey, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao agregar cancelamentos do splitter:', error.message, error.code ?? '');
     return res.status(500).json({ success: false, error: error.message });
   }
 });
