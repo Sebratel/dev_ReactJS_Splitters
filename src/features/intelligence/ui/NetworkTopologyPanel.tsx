@@ -14,6 +14,7 @@ import {
   Users,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import type {
   TopologyMetrics,
@@ -27,6 +28,11 @@ type NetworkTopologyPanelProps = {
   topology: TopologyOltNode[]
   /** Rótulo do delta de referência ativo (Δ7d / Δ30d). */
   deltaReferenceLabel: string
+}
+
+/** Mesma nomenclatura de OLT dos cards de splitter (ex.: "BNG_01_SPSCE_NE8K" → "OLT 01 - SPSCE"). */
+function oltDisplayLabel(oltDescription: string): string {
+  return formatOltLabel(oltDescription) ?? oltDescription
 }
 
 const BAND_LABEL: Record<TopologyRiskBand, string> = {
@@ -326,7 +332,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
     if (topology.length === 0) return 'Nenhum equipamento no recorte filtrado.'
     const worst = topology[0]
     const totalCritical = topology.reduce((s, o) => s + o.criticalSplitters, 0)
-    return `${topology.length} OLT(s) no recorte · ${totalCritical} splitter(s) crítico(s). Maior pressão hoje: ${worst.oltDescription} (${worst.criticalSplitters} crítico(s)).`
+    return `${topology.length} OLT(s) no recorte · ${totalCritical} splitter(s) crítico(s). Maior pressão hoje: ${oltDisplayLabel(worst.oltDescription)} (${worst.criticalSplitters} crítico(s)).`
   }, [topology, selectedOlt, selectedSlot, selectedPon])
 
   return (
@@ -339,7 +345,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
             <>
               <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
               <Crumb
-                label={selectedOlt.oltDescription}
+                label={oltDisplayLabel(selectedOlt.oltDescription)}
                 onClick={() => goOlt(selectedOlt.oltCode)}
                 active={!selectedSlot}
               />
@@ -379,7 +385,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
               <NodeCard
                 key={olt.oltCode}
                 icon={Server}
-                title={olt.oltDescription}
+                title={oltDisplayLabel(olt.oltDescription)}
                 subtitle={olt.oltCode !== 'SEM_OLT' ? olt.oltCode : undefined}
                 metrics={olt}
                 deltaReferenceLabel={deltaReferenceLabel}
