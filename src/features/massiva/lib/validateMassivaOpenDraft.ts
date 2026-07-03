@@ -64,6 +64,8 @@ export function getMassivaOpenDraftIssues(
 
   if (forecastCloseDate.trim() === '') {
     issues.push('Informe a data prevista de normalização (prazo).')
+  } else if (forecastCloseTime.trim() === '') {
+    issues.push('Informe a hora prevista de normalização (prazo).')
   } else if (massivaOpenDraftFinalDateLocal(forecastCloseDate, forecastCloseTime) === null) {
     issues.push('Data/hora de encerramento inválida.')
   }
