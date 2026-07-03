@@ -285,7 +285,7 @@ export type MassivaConnectionBatchRoute = {
   apCode: string
   slot: number
   port: number
-  /** Enviado pelo preview; o BFF filtra só por AP/slot/porta (paridade com o pipeline cliente). */
+  /** O BFF filtra por AP/slot/porta E por estes splitterCodes (match normalizado em memória). */
   splitterCodes: string[]
 }
 

@@ -1446,6 +1446,57 @@ app.get('/api/massiva/connections', async (req, res) => {
   }
 });
 
+// Normaliza código/título de splitter para match tolerante a caixa/acentos/pontuação
+// (paridade EXATA com `filterConnectionsBySplitterCode` no frontend).
+function canonicalSplitterToken(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// A linha pertence a algum dos códigos de splitter selecionados? Set vazio = sem restrição.
+function rowMatchesAnySplitterCode(row, canonicalCodes) {
+  if (!canonicalCodes || canonicalCodes.size === 0) return true;
+  const code = canonicalSplitterToken(
+    row['CÓDIGO[SPLT.SECUNDARIO]'] ?? row['CÃ“DIGO[SPLT.SECUNDARIO]'],
+  );
+  if (code !== '' && canonicalCodes.has(code)) return true;
+  const title = canonicalSplitterToken(row['SPLT.SECUNDARIO']);
+  return title !== '' && canonicalCodes.has(title);
+}
+
+// Agrupa rotas por AP+slot+porta acumulando os splitterCodes (canônicos). Se alguma rota do
+// mesmo (AP,slot,porta) vier sem códigos, marca `all=true` (PON inteira, sem filtro de splitter).
+function buildMassivaRouteFilterMap(routes) {
+  const map = new Map();
+  const invalidIndexes = [];
+  for (const [routeIndex, r] of routes.entries()) {
+    const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
+    const slot = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
+    const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
+    const port = Number.parseInt(String(rawPort ?? ''), 10);
+    if (apCode === '' || !Number.isFinite(slot) || !Number.isFinite(port)) {
+      invalidIndexes.push(routeIndex);
+      continue;
+    }
+    const key = `${apCode}|${slot}|${port}`;
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { apCode, slot, port, codes: new Set(), all: false };
+      map.set(key, entry);
+    }
+    const codes = Array.isArray(r?.splitterCodes)
+      ? r.splitterCodes.map((c) => canonicalSplitterToken(c)).filter((c) => c !== '')
+      : [];
+    if (codes.length === 0) entry.all = true;
+    else for (const c of codes) entry.codes.add(c);
+  }
+  return { entries: [...map.values()], invalidIndexes };
+}
+
 app.post('/api/massiva/connections/batch', async (req, res) => {
   try {
     if (!Array.isArray(req.body?.routes)) {
@@ -1458,27 +1509,12 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     if (routes.length === 0) {
       return res.json({ success: true, count: 0, data: [] });
     }
-    // Uma query por (AP, slot, port). Não filtrar `splitterCodes` no SQL: o client usa
-    // `filterConnectionsBySplitterCode` (normaliza caixa/acentos) e `apCodesMatch` — o mesmo
-    // critério do GET completo. O `= ANY(códigos)` no Postgres é exato e zerava o preview.
-    const unique = new Map();
-    const invalidIndexes = [];
-    for (const [routeIndex, r] of routes.entries()) {
-      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
-      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
-      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
-      const portN = Number.parseInt(String(rawPort ?? ''), 10);
-      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
-        invalidIndexes.push(routeIndex);
-        continue;
-      }
-      const key = `${apCode}|${slotN}|${portN}`;
-      if (!unique.has(key)) {
-        unique.set(key, { apCode, slot: slotN, port: portN });
-      }
-    }
+    // Filtro em memória (não no SQL): AP+slot+porta e, quando a rota traz `splitterCodes`,
+    // também o splitter — normalizado (caixa/acentos/pontuação), igual ao pipeline do client.
+    // O `= ANY(códigos)` no Postgres é exato e zerava o preview; por isso o match canônico aqui.
+    const { entries: routeEntries, invalidIndexes } = buildMassivaRouteFilterMap(routes);
 
-    if (unique.size === 0) {
+    if (routeEntries.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Nenhuma rota válida recebida no lote.',
@@ -1488,16 +1524,15 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
 
     const merged = [];
     const seenKeys = new Set();
-    const uniqueRoutes = Array.from(unique.values());
 
-    // O SQL filtra apenas por apCode (slot/porta são filtrados em memória). Rotas do
-    // mesmo AP compartilham a MESMA query — então agrupamos por AP e consultamos UMA vez
-    // por AP, em vez de uma vez por rota (evita N queries idênticas e o timeout em
-    // massivas com muitas PONs do mesmo AP).
+    // O SQL filtra apenas por apCode (slot/porta/splitter em memória). Rotas do mesmo AP
+    // compartilham a MESMA query — agrupamos por AP e consultamos UMA vez por AP (evita N
+    // queries idênticas e timeout em massivas com muitas PONs do mesmo AP). Cada (slot,porta)
+    // carrega os splitterCodes selecionados para o filtro em memória.
     const slotPortsByAp = new Map();
-    for (const route of uniqueRoutes) {
+    for (const route of routeEntries) {
       const list = slotPortsByAp.get(route.apCode) ?? [];
-      list.push({ slot: route.slot, port: route.port });
+      list.push({ slot: route.slot, port: route.port, codes: route.codes, all: route.all });
       slotPortsByAp.set(route.apCode, list);
     }
     const apEntries = Array.from(slotPortsByAp.entries());
@@ -1528,7 +1563,8 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
           return {
             rows: result.rows.filter((row) =>
               slotPorts.some((sp) =>
-                rowMatchesMassivaOltRoute(sp.slot, sp.port, row),
+                rowMatchesMassivaOltRoute(sp.slot, sp.port, row) &&
+                (sp.all || rowMatchesAnySplitterCode(row, sp.codes)),
               ),
             ),
           };
@@ -1551,7 +1587,7 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       ignoredInvalidRoutes: invalidIndexes.length,
       invalidRouteIndexes: invalidIndexes,
       totalRoutesReceived: routes.length,
-      uniqueRoutesProcessed: uniqueRoutes.length,
+      uniqueRoutesProcessed: routeEntries.length,
       uniqueApsProcessed: apEntries.length,
       chunkSize,
       chunksProcessed,
@@ -1579,32 +1615,15 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
       });
     }
 
-    const unique = new Map();
-    const invalidIndexes = [];
-    for (const [routeIndex, r] of routes.entries()) {
-      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
-      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
-      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
-      const portN = Number.parseInt(String(rawPort ?? ''), 10);
-      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
-        invalidIndexes.push(routeIndex);
-        continue;
-      }
-      const key = `${apCode}|${slotN}|${portN}`;
-      if (!unique.has(key)) {
-        unique.set(key, { apCode, slot: slotN, port: portN });
-      }
-    }
+    const { entries: uniqueRoutes, invalidIndexes } = buildMassivaRouteFilterMap(routes);
 
-    if (unique.size === 0) {
+    if (uniqueRoutes.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Nenhuma rota válida recebida no lote.',
         invalidRouteIndexes: invalidIndexes,
       });
     }
-
-    const uniqueRoutes = Array.from(unique.values());
 
     // Uma única query para todos os APs do lote — CTEs pesados rodam uma só vez
     const apCodes = [...new Set(uniqueRoutes.map((r) => r.apCode))];
@@ -1625,7 +1644,8 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
       const matches = uniqueRoutes.some(
         (route) =>
           route.apCode === rowAp &&
-          rowMatchesMassivaOltRoute(route.slot, route.port, row),
+          rowMatchesMassivaOltRoute(route.slot, route.port, row) &&
+          (route.all || rowMatchesAnySplitterCode(row, route.codes)),
       );
       if (!matches) continue;
       const dk = massivaRowDedupeKey(row);
