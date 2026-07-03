@@ -83,9 +83,14 @@ function classifyMassivaRecordKind(ticket: MassivaTicket): MassivaRecordKind {
 }
 
 function expectedCloseDisplayForCard(ticket: MassivaTicket): string {
+  // Encerrada: mostra a data REAL de encerramento (closedAt). A previsão já não importa.
+  if (ticket.status === 'encerrada' && ticket.closedAt !== null) {
+    const closedLabel = formatMassivaListDateDisplay(ticket.closedAt)
+    if (closedLabel !== '—') return closedLabel
+  }
+  // Aberta (ou encerrada sem data real): mostra a PREVISÃO como DATA (dd/mm/aaaa hh:mm),
+  // não como duração em horas. Só cai para horas de SLA quando não há data válida.
   const closeAt = resolveExpectedCloseAtForDisplay(ticket) ?? ticket.expectedCloseAt
-  // Previsão de encerramento deve aparecer como DATA (dd/mm/aaaa hh:mm), não como
-  // duração em horas. Só cai para horas de restauração (SLA) quando não há data válida.
   const dateLabel = formatMassivaListDateDisplay(closeAt)
   if (closeAt !== null && dateLabel !== '—') return dateLabel
 
@@ -266,6 +271,7 @@ function CloseDescriptionDialog({
   const protocolLabel = ticket.protocol > 0 ? String(ticket.protocol) : '—'
   const text = ticket.closeDescription?.trim() ?? ''
   const closedBy = ticket.closedBy?.trim() ?? ''
+  const closedAtLabel = ticket.closedAt ? formatMassivaListDateDisplay(ticket.closedAt) : ''
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -296,8 +302,13 @@ function CloseDescriptionDialog({
           <p className="mt-0.5 font-mono text-xs text-neutral-500">
             #{protocolLabel}
           </p>
-          {closedBy !== '' ? (
+          {closedAtLabel !== '' && closedAtLabel !== '—' ? (
             <p className="mt-1 text-xs text-neutral-600">
+              Encerrado em <span className="font-semibold text-neutral-800">{closedAtLabel}</span>
+            </p>
+          ) : null}
+          {closedBy !== '' ? (
+            <p className="mt-0.5 text-xs text-neutral-600">
               Encerrado por <span className="font-semibold text-neutral-800">{closedBy}</span>
             </p>
           ) : null}
@@ -592,7 +603,11 @@ export function MassivaTicketCard({
         <div className="flex min-w-0 gap-2.5 text-xs">
           <Calendar className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-neutral-500">Previsão de encerramento</p>
+            <p className="font-semibold text-neutral-500">
+              {ticket.status === 'encerrada' && ticket.closedAt !== null
+                ? 'Encerrado em'
+                : 'Previsão de encerramento'}
+            </p>
             {editingExpectedClose && canEditExpectedClose ? (
               <div className="mt-1.5 space-y-2">
                 <input
