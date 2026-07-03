@@ -624,13 +624,15 @@ export function createMassivaHistoryStore(config) {
 
     const { rangeSql, extraParams } = buildMassivaPeriodRollupRangeClause(range);
 
+    // Em massiva_history_splitters as colunas são splitter_code e splitter_label
+    // (gravadas por attachSplitters); não há splitter_title aqui. O label é o título do splitter.
     const [rows] = await dataPool.query(
       `
         SELECT
           h.opened_at         AS openedAt,
           h.access_point_code AS accessPointCode,
           hs.splitter_code    AS splitterCode,
-          hs.splitter_title   AS splitterTitle
+          hs.splitter_label   AS splitterTitle
         FROM massiva_history h
         INNER JOIN massiva_history_splitters hs
           ON hs.massiva_history_id = h.id
