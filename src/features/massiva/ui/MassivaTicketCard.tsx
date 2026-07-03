@@ -26,7 +26,6 @@ import {
 import { exportElementToPdf } from '@/features/massiva/lib/exportElementToPdf'
 import {
   formatMassivaListDateDisplay,
-  formatPrevisaoEncerramentoDisplay,
   formatRestorationHoursLabel,
   pickRestorationHoursForDisplay,
   restorationHoursBetweenDates,
@@ -84,20 +83,18 @@ function classifyMassivaRecordKind(ticket: MassivaTicket): MassivaRecordKind {
 }
 
 function expectedCloseDisplayForCard(ticket: MassivaTicket): string {
-  const closeAt = resolveExpectedCloseAtForDisplay(ticket)
+  const closeAt = resolveExpectedCloseAtForDisplay(ticket) ?? ticket.expectedCloseAt
+  // Previsão de encerramento deve aparecer como DATA (dd/mm/aaaa hh:mm), não como
+  // duração em horas. Só cai para horas de restauração (SLA) quando não há data válida.
+  const dateLabel = formatMassivaListDateDisplay(closeAt)
+  if (closeAt !== null && dateLabel !== '—') return dateLabel
+
   const hours = pickRestorationHoursForDisplay(
     ticket.openedAt,
     closeAt,
     ticket.estimateTimeOfRestoration,
   )
-  const fromHours = formatRestorationHoursLabel(hours)
-  if (fromHours !== null) return fromHours
-
-  return formatPrevisaoEncerramentoDisplay(
-    closeAt ?? ticket.expectedCloseAt,
-    ticket.estimateTimeOfRestoration,
-    ticket.openedAt,
-  )
+  return formatRestorationHoursLabel(hours) ?? dateLabel
 }
 
 function ProtocolOccurrenceContent({ text }: { text: string }) {
