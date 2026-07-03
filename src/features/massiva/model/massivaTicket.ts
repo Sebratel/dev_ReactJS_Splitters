@@ -125,28 +125,33 @@ export function parseMassivaDate(value: unknown): Date | null {
   const text = String(value).trim()
   if (text === '') return null
 
+  // IMPORTANTE: o formato brasileiro DD/MM/YYYY é tratado ANTES do Date.parse, porque o
+  // Date.parse interpreta "02/07/2026" como MM/DD (7 de fev) e troca dia↔mês quando o dia ≤ 12.
+  const match =
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(
+      text,
+    )
+  if (match !== null) {
+    const day = Number.parseInt(match[1] ?? '', 10)
+    const month = Number.parseInt(match[2] ?? '', 10)
+    const year = Number.parseInt(match[3] ?? '', 10)
+    const hour = Number.parseInt(match[4] ?? '0', 10)
+    const minute = Number.parseInt(match[5] ?? '0', 10)
+    const second = Number.parseInt(match[6] ?? '0', 10)
+    if ([day, month, year].every((n) => Number.isFinite(n)) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(year, month - 1, day, hour, minute, second)
+      if (!Number.isNaN(d.getTime())) return d
+    }
+  }
+
+  // ISO 8601 e demais formatos que o Date.parse resolve corretamente (ex.: 2026-07-02T08:00).
   const isoTry = Date.parse(text)
   if (!Number.isNaN(isoTry)) {
     const d = new Date(isoTry)
     if (!Number.isNaN(d.getTime())) return d
   }
 
-  const match =
-    /^(\d{2})[/-](\d{2})[/-](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(
-      text,
-    )
-  if (match === null) return null
-
-  const day = Number.parseInt(match[1] ?? '', 10)
-  const month = Number.parseInt(match[2] ?? '', 10)
-  const year = Number.parseInt(match[3] ?? '', 10)
-  const hour = Number.parseInt(match[4] ?? '0', 10)
-  const minute = Number.parseInt(match[5] ?? '0', 10)
-  const second = Number.parseInt(match[6] ?? '0', 10)
-
-  if (![day, month, year].every((n) => Number.isFinite(n))) return null
-  const d = new Date(year, month - 1, day, hour, minute, second)
-  return Number.isNaN(d.getTime()) ? null : d
+  return null
 }
 
 function parseMassivaDateCandidates(
