@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Download, Filter, MapPin, Radio, Search, Zap } from 'lucide-react'
 import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
 import type { CancellationBucket } from '@/features/cancellations/model/cancellationsSummary'
 import type { MassivaImpactRow } from '@/features/cancellations/model/cancellationsExtras'
 import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
-import { ChurnHeatMap, type ChurnHeatPoint, type HeatMetric } from '@/features/cancellations/ui/ChurnHeatMap'
+import type { ChurnHeatPoint, HeatMetric } from '@/features/cancellations/ui/ChurnHeatMap'
+
+// Code-split do mapa: o bundle do Leaflet/leaflet.heat só é baixado quando o mapa monta.
+const ChurnHeatMap = lazy(async () => ({
+  default: (await import('@/features/cancellations/ui/ChurnHeatMap')).ChurnHeatMap,
+}))
+
+const MapPlaceholder = () => (
+  <div className="flex h-[min(460px,56vh)] w-full items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 text-sm text-neutral-400">
+    Carregando mapa…
+  </div>
+)
 
 type OnuLite = { total: number; degraded: number; offline: number }
 
@@ -56,6 +67,12 @@ export function CancellationsExplorer({
   const [pon, setPon] = useState('all')
   const [search, setSearch] = useState('')
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('churn')
+  // Monta o mapa só após o primeiro paint (tira o Leaflet do caminho crítico da aba).
+  const [mapMounted, setMapMounted] = useState(false)
+  useEffect(() => {
+    const id = window.setTimeout(() => setMapMounted(true), 250)
+    return () => window.clearTimeout(id)
+  }, [])
 
   const churnByTitle = useMemo(() => {
     const m = new Map<string, CancellationBucket>()
@@ -216,6 +233,9 @@ export function CancellationsExplorer({
     [filtered],
   )
 
+  // Adia o recomputo pesado do mapa para não travar troca de filtro/camada.
+  const deferredHeat = useDeferredValue(heatPoints)
+
   const hasFilter = olt !== 'all' || slot !== 'all' || pon !== 'all' || search.trim() !== ''
   const clearFilters = () => {
     setOlt('all'); setSlot('all'); setPon('all'); setSearch('')
@@ -342,7 +362,13 @@ export function CancellationsExplorer({
             ))}
           </div>
         </div>
-        <ChurnHeatMap points={heatPoints} metric={heatMetric} />
+        {mapMounted ? (
+          <Suspense fallback={<MapPlaceholder />}>
+            <ChurnHeatMap points={deferredHeat} metric={heatMetric} />
+          </Suspense>
+        ) : (
+          <MapPlaceholder />
+        )}
         <p className="mt-1.5 text-[11px] text-neutral-400">
           {heatMetric === 'churn'
             ? 'Intensidade = cancelamentos de rede por splitter.'
