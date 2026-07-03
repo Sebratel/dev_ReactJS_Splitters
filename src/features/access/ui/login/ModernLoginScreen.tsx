@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { AlertCircle, ChevronDown, ChevronUp, Loader2, Lock } from 'lucide-react'
 
-/** Caminho público do visual do painel esquerdo (imagem full-bleed). */
-export const LOGIN_HERO_IMAGE_SRC = '/login-hero.png'
+/** Caminho público do visual do painel esquerdo (imagem full-bleed). Salve o arquivo em public/. */
+export const LOGIN_HERO_IMAGE_SRC = '/login-cover.png'
 
 /** Variantes de fundo (compat com `?bg=` / `VITE_LOGIN_BACKGROUND`). O layout Sebratel é fixo. */
 export const LOGIN_BACKGROUND_VARIANTS = [
