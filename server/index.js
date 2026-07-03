@@ -44,6 +44,7 @@ import {
 import {
   addPlatformSuggestionComment,
   createPlatformSuggestion,
+  isPlatformSuggestionsReadOnly,
   listPlatformSuggestions,
   updatePlatformSuggestionStatus,
   voteOnPlatformSuggestion,
@@ -3045,6 +3046,7 @@ app.get('/api/platform-suggestions', async (req, res) => {
     return res.json({
       success: true,
       data: suggestions,
+      meta: { readOnly: isPlatformSuggestionsReadOnly() },
     });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
@@ -3058,6 +3060,12 @@ app.get('/api/platform-suggestions', async (req, res) => {
 
 app.post('/api/platform-suggestions', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Sugestoes so podem ser criadas no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await createPlatformSuggestion({
       title: req.body?.title,
@@ -3089,6 +3097,12 @@ app.post('/api/platform-suggestions', async (req, res) => {
 
 app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Votos em sugestoes so podem ser registrados no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await voteOnPlatformSuggestion({
       suggestionId: req.params?.suggestionId,
@@ -3118,6 +3132,12 @@ app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
 
 app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Comentarios em sugestoes so podem ser registrados no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await addPlatformSuggestionComment({
       suggestionId: req.params?.suggestionId,
@@ -3148,6 +3168,12 @@ app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) =>
 
 app.patch('/api/platform-suggestions/:suggestionId/status', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Status de sugestoes so pode ser alterado no Hub Apps.',
+      });
+    }
     const actor = await requireSplittersAdminAccess(
       req,
       'Somente administradores podem alterar o status das sugestoes.',

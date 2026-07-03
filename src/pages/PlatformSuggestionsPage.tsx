@@ -1,18 +1,13 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Lightbulb, Loader2, MessageSquareText, Search, Send, Sparkles } from 'lucide-react'
+import { ExternalLink, Lightbulb, Search, Sparkles } from 'lucide-react'
 import {
-  commentPlatformSuggestion,
-  createPlatformSuggestion,
   fetchPlatformSuggestions,
-  updatePlatformSuggestionStatus,
-  votePlatformSuggestion,
   type PlatformSuggestionStatus,
-  type PlatformSuggestionVoteType,
 } from '@/features/suggestions/api/platformSuggestions'
 import { SuggestionCard } from '@/features/suggestions/ui/SuggestionCard'
-import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { env } from '@/shared/config/env'
 import { cn } from '@/shared/lib/utils'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
@@ -38,15 +33,7 @@ function normalizeText(value: string): string {
 }
 
 export function PlatformSuggestionsPage() {
-  const queryClient = useQueryClient()
   const reduceMotion = useReducedMotion()
-  const profile = useAccessAuthStore((s) => s.profile)
-  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
-  const [title, setTitle] = useState('')
-  const [sector, setSector] = useState('')
-  const [category, setCategory] = useState('')
-  const [description, setDescription] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sectorFilter, setSectorFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<'all' | PlatformSuggestionStatus>('all')
@@ -58,54 +45,21 @@ export function PlatformSuggestionsPage() {
     staleTime: 20_000,
   })
 
-  const refreshSuggestions = async () => {
-    await queryClient.invalidateQueries({ queryKey: platformSuggestionsQueryKey })
-  }
-
-  const createMutation = useMutation({
-    mutationFn: createPlatformSuggestion,
-    onSuccess: async () => {
-      setTitle('')
-      setSector('')
-      setCategory('')
-      setDescription('')
-      setFormError(null)
-      await refreshSuggestions()
-    },
-    onError: (error) => {
-      setFormError(
-        error instanceof Error ? error.message : 'Nao foi possivel registrar a sugestao.',
-      )
-    },
-  })
-
-  const voteMutation = useMutation({
-    mutationFn: votePlatformSuggestion,
-    onSuccess: refreshSuggestions,
-  })
-
-  const commentMutation = useMutation({
-    mutationFn: commentPlatformSuggestion,
-    onSuccess: refreshSuggestions,
-  })
-
-  const statusMutation = useMutation({
-    mutationFn: updatePlatformSuggestionStatus,
-    onSuccess: refreshSuggestions,
-  })
+  const suggestions = suggestionsQuery.data?.suggestions ?? []
+  const hubSuggestionsUrl = `${env.hubOrigin.replace(/\/+$/, '')}/sugestoes`
 
   const sectors = useMemo(() => {
     const set = new Set<string>()
-    for (const suggestion of suggestionsQuery.data ?? []) {
+    for (const suggestion of suggestions) {
       const normalized = suggestion.sector.trim()
       if (normalized !== '') set.add(normalized)
     }
     return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [suggestionsQuery.data])
+  }, [suggestions])
 
   const visibleSuggestions = useMemo(() => {
     const text = normalizeText(searchQuery)
-    const rows = (suggestionsQuery.data ?? []).filter((suggestion) => {
+    const rows = suggestions.filter((suggestion) => {
       const sameSector = sectorFilter === 'all' || suggestion.sector === sectorFilter
       const sameStatus = statusFilter === 'all' || suggestion.status === statusFilter
       if (!sameSector || !sameStatus) return false
@@ -134,10 +88,10 @@ export function PlatformSuggestionsPage() {
       return (b.commentsCount ?? 0) - (a.commentsCount ?? 0)
     })
     return rows
-  }, [searchQuery, sectorFilter, sortMode, statusFilter, suggestionsQuery.data])
+  }, [searchQuery, sectorFilter, sortMode, statusFilter, suggestions])
 
   const totals = useMemo(() => {
-    const rows = suggestionsQuery.data ?? []
+    const rows = suggestions
     return rows.reduce(
       (acc, suggestion) => {
         acc.votes += suggestion.likesCount + suggestion.dislikesCount
@@ -146,20 +100,7 @@ export function PlatformSuggestionsPage() {
       },
       { votes: 0, comments: 0 },
     )
-  }, [suggestionsQuery.data])
-
-  const pendingVoteId =
-    voteMutation.isPending && typeof voteMutation.variables?.suggestionId === 'number'
-      ? voteMutation.variables.suggestionId
-      : null
-  const pendingCommentId =
-    commentMutation.isPending && typeof commentMutation.variables?.suggestionId === 'number'
-      ? commentMutation.variables.suggestionId
-      : null
-  const pendingStatusId =
-    statusMutation.isPending && typeof statusMutation.variables?.suggestionId === 'number'
-      ? statusMutation.variables.suggestionId
-      : null
+  }, [suggestions])
 
   return (
     <ResponsiveWrapper>
@@ -168,12 +109,12 @@ export function PlatformSuggestionsPage() {
           icon={Lightbulb}
           badge="Colaboração"
           title="Sugestões da plataforma"
-          description="Registre dores, melhorias e ideias. Agora com apoio visual, comentários e status para mostrar o que já entrou na fila do time."
+          description="Visualize as ideias da comunidade. Para enviar sugestões, votar ou comentar, acesse o Hub Apps."
           primaryAction={{ to: '/', label: 'Voltar ao painel' }}
           trailing={
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-white/85 px-3 py-2 text-xs font-semibold text-amber-950 shadow-sm">
-                {suggestionsQuery.data?.length ?? 0} ideias
+                {suggestions.length} ideias
               </span>
               <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white/85 px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm">
                 {totals.votes} votos
@@ -193,147 +134,31 @@ export function PlatformSuggestionsPage() {
             className="space-y-4"
           >
             <div className="rounded-[28px] border border-amber-200/70 bg-gradient-to-br from-white via-amber-50/45 to-white p-4 shadow-sm sm:p-5">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-900">
-                  <MessageSquareText className="size-5" aria-hidden />
-                </div>
                 <div>
-                  <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                    Nova sugestão
-                  </h2>
-                  <p className="mt-1 text-sm leading-relaxed text-neutral-600">
-                    Compartilhe sua visão para melhorar a plataforma e o dia a dia dos setores.
-                  </p>
-                </div>
-              </div>
-
-              <form
-                className="space-y-3"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  setFormError(null)
-
-                  const trimmedTitle = title.trim()
-                  const trimmedSector = sector.trim()
-                  const trimmedCategory = category.trim()
-                  const trimmedDescription = description.trim()
-
-                  if (trimmedTitle.length < 5) {
-                    setFormError('Use pelo menos 5 caracteres no título.')
-                    return
-                  }
-                  if (trimmedSector.length < 2) {
-                    setFormError('Informe o setor ou área impactada.')
-                    return
-                  }
-                  if (trimmedDescription.length < 15) {
-                    setFormError('Descreva a ideia com pelo menos 15 caracteres.')
-                    return
-                  }
-
-                  createMutation.mutate({
-                    title: trimmedTitle,
-                    sector: trimmedSector,
-                    category: trimmedCategory || undefined,
-                    description: trimmedDescription,
-                  })
-                }}
-              >
-                <div className="space-y-1.5">
-                  <label htmlFor="suggestion-title" className="text-xs font-semibold text-neutral-700">
-                    Título da sugestão
-                  </label>
-                  <input
-                    id="suggestion-title"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    maxLength={191}
-                    placeholder="Ex.: Atualização automática dos relatórios"
-                    className="min-h-[46px] w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
-                  />
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label htmlFor="suggestion-sector" className="text-xs font-semibold text-neutral-700">
-                      Departamento
-                    </label>
-                    <input
-                      id="suggestion-sector"
-                      value={sector}
-                      onChange={(event) => setSector(event.target.value)}
-                      maxLength={120}
-                      placeholder="Ex.: Operações, NOC, Comercial"
-                      className="min-h-[46px] w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
-                    />
+                  <div className="mb-4 flex items-start gap-3">
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-900">
+                      <ExternalLink className="size-5" aria-hidden />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">
+                        Somente leitura
+                      </h2>
+                      <p className="mt-1 text-sm leading-relaxed text-neutral-600">
+                        O mural de sugestões é centralizado no Hub Apps. Aqui você acompanha o que
+                        a comunidade propôs; para enviar ideias, votar ou comentar, use o Hub.
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label htmlFor="suggestion-category" className="text-xs font-semibold text-neutral-700">
-                      Categoria
-                    </label>
-                    <input
-                      id="suggestion-category"
-                      value={category}
-                      onChange={(event) => setCategory(event.target.value)}
-                      maxLength={120}
-                      placeholder="Ex.: Automação, UX, Infraestrutura"
-                      className="min-h-[46px] w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="suggestion-description"
-                    className="text-xs font-semibold text-neutral-700"
+                  <a
+                    href={hubSuggestionsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
                   >
-                    Descrição detalhada
-                  </label>
-                  <textarea
-                    id="suggestion-description"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    rows={6}
-                    maxLength={8000}
-                    placeholder="Descreva a dor atual, o impacto esperado e como isso ajudaria a equipe."
-                    className="min-h-[160px] w-full rounded-2xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
-                  />
+                    <ExternalLink className="size-4" aria-hidden />
+                    Abrir sugestões no Hub Apps
+                  </a>
                 </div>
-
-                {formError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                    {formError}
-                  </div>
-                ) : null}
-
-                {createMutation.isSuccess ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                    Sugestão enviada com sucesso.
-                  </div>
-                ) : null}
-
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <p className="text-xs text-neutral-500">
-                    Publicando como{' '}
-                    <span className="font-semibold text-neutral-700">
-                      {profile?.displayName || profile?.email || 'usuário autenticado'}
-                    </span>
-                    .
-                  </p>
-                  <button
-                    type="submit"
-                    disabled={createMutation.isPending}
-                    className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-neutral-950 shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {createMutation.isPending ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Send className="size-4" aria-hidden />
-                    )}
-                    Enviar sugestão
-                  </button>
-                </div>
-              </form>
             </div>
 
             <div className="rounded-[28px] border border-sky-200/70 bg-white/90 p-4 shadow-sm">
@@ -444,19 +269,14 @@ export function PlatformSuggestionsPage() {
                   >
                     <SuggestionCard
                       suggestion={suggestion}
-                      isAdmin={isAdmin}
-                      voteBusy={pendingVoteId === suggestion.id}
-                      commentBusy={pendingCommentId === suggestion.id}
-                      statusBusy={pendingStatusId === suggestion.id}
-                      onVote={(suggestionId, voteType) =>
-                        voteMutation.mutate({ suggestionId, voteType: voteType as PlatformSuggestionVoteType | 'none' })
-                      }
-                      onComment={(suggestionId, message) =>
-                        commentMutation.mutate({ suggestionId, message })
-                      }
-                      onStatusChange={(suggestionId, status) =>
-                        statusMutation.mutate({ suggestionId, status })
-                      }
+                      readOnly
+                      isAdmin={false}
+                      voteBusy={false}
+                      commentBusy={false}
+                      statusBusy={false}
+                      onVote={() => undefined}
+                      onComment={() => undefined}
+                      onStatusChange={() => undefined}
                     />
                   </motion.div>
                 ))}

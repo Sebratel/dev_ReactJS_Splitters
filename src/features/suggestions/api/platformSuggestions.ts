@@ -43,6 +43,11 @@ export type PlatformSuggestion = {
   updatedAt: string | null
 }
 
+export type PlatformSuggestionsListResult = {
+  suggestions: PlatformSuggestion[]
+  readOnly: boolean
+}
+
 function toCleanString(value: unknown): string {
   return String(value ?? '').trim()
 }
@@ -190,21 +195,32 @@ function normalizeSuggestionResponse(row: unknown, fallbackMessage: string): Pla
   return suggestion
 }
 
-export async function fetchPlatformSuggestions(): Promise<PlatformSuggestion[]> {
-  const rows = await requestSuggestionsApi<unknown[]>(
-    '/api/platform-suggestions',
-    {
-      method: 'GET',
-      headers: await buildLocalBffHeaders(),
-    },
-    'Falha ao carregar sugestoes da plataforma.',
-  )
+export async function fetchPlatformSuggestions(): Promise<PlatformSuggestionsListResult> {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/platform-suggestions`, {
+    method: 'GET',
+    headers: await buildLocalBffHeaders(),
+  })
 
-  return Array.isArray(rows)
-    ? rows
-        .map((row) => normalizeSuggestion(row))
-        .filter((row): row is PlatformSuggestion => row != null)
-    : []
+  const payload = await response.json().catch(() => null)
+  const root = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+
+  if (!response.ok || root.success !== true) {
+    throw new Error(
+      toCleanString(root.message) || 'Falha ao carregar sugestoes da plataforma.',
+    )
+  }
+
+  const rows = root.data
+  const meta = root.meta && typeof root.meta === 'object' ? (root.meta as Record<string, unknown>) : {}
+
+  return {
+    suggestions: Array.isArray(rows)
+      ? rows
+          .map((row) => normalizeSuggestion(row))
+          .filter((row): row is PlatformSuggestion => row != null)
+      : [],
+    readOnly: meta.readOnly === true,
+  }
 }
 
 export async function createPlatformSuggestion(input: {
