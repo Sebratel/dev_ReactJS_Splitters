@@ -21,11 +21,14 @@ import {
   TrendingDown,
   Zap,
 } from 'lucide-react'
+import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
 import { useCancellationsSummary } from '@/features/cancellations/hooks/useCancellationsSummary'
 import {
   useCancellationsActiveBase,
   useMassivaImpact,
 } from '@/features/cancellations/hooks/useCancellationsExtras'
+import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
+import { CancellationsExplorer } from '@/features/cancellations/ui/CancellationsExplorer'
 import {
   CANCELLATION_CATEGORY_LABELS,
   CANCELLATION_CATEGORY_ORDER,
@@ -88,7 +91,11 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' })
 }
 
-export function CancellationsPanel() {
+type CancellationsPanelProps = {
+  riskRanking?: IntelligenceRiskRankingRow[]
+}
+
+export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}) {
   const [preset, setPreset] = useState<PeriodPreset>('6m')
   const [dimension, setDimension] = useState<Dimension>('accessPoint')
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('all')
@@ -97,6 +104,7 @@ export function CancellationsPanel() {
   const query = useCancellationsSummary(startIso)
   const activeBaseQuery = useCancellationsActiveBase()
   const impactQuery = useMassivaImpact(startIso, WINDOW_DAYS)
+  const onuQuery = useOnuSummaryBySplitter()
 
   const rankingRows = useMemo((): CancellationBucket[] => {
     const data = query.data
@@ -488,6 +496,24 @@ export function CancellationsPanel() {
           )}
         </div>
       </div>
+
+      {/* Explorador da rede — filtro/drill OLT→Slot→PON→splitter + heatmap + correlações */}
+      {riskRanking && riskRanking.length > 0 ? (
+        <div className="space-y-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/30 p-3">
+          <p className="px-1 text-sm font-bold text-neutral-800">
+            Explorador da rede{' '}
+            <span className="font-normal text-neutral-500">
+              — filtre qualquer OLT, Slot, PON ou splitter e cruze com sinal, ocupação e massivas
+            </span>
+          </p>
+          <CancellationsExplorer
+            riskRanking={riskRanking}
+            bySplitter={data.bySplitter}
+            onuByCode={onuQuery.data}
+            massivaImpact={impact?.ranking}
+          />
+        </div>
+      ) : null}
 
       {/* Ranking por área */}
       <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">

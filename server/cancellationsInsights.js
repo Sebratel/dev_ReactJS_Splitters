@@ -240,10 +240,10 @@ export function aggregateCancellations(rows, options = {}) {
     }
   }
 
-  const topByRede = (map) =>
+  const topByRede = (map, limit = topLimit) =>
     [...map.values()]
       .sort((a, b) => (b.rede - a.rede) || (b.total - a.total))
-      .slice(0, topLimit);
+      .slice(0, limit);
 
   const monthly = [...byMonth.values()].sort((a, b) => a.key.localeCompare(b.key));
 
@@ -251,7 +251,8 @@ export function aggregateCancellations(rows, options = {}) {
     total,
     totalsByCategory,
     byAccessPoint: topByRede(byAp),
-    bySplitter: topByRede(bySplitter),
+    // Explorador precisa de TODOS os splitters com churn (não só top-100) para varrer a rede.
+    bySplitter: topByRede(bySplitter, options.splitterLimit ?? 20000),
     byCity: topByRede(byCity),
     monthly,
     byTipoLocal: [...byTipoLocal.values()].sort((a, b) => b.total - a.total),

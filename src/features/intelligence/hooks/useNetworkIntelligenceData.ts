@@ -150,6 +150,8 @@ export type IntelligenceRiskRankingRow = {
   /** Coordenadas do splitter (para mapas); null quando sem cadastro válido. */
   latitude: number | null
   longitude: number | null
+  /** Clientes ativos no splitter (ocupação real / busyCount) — denominador de taxas. */
+  activeClients: number
   tipoLocal: Splitter['tipoLocal']
   nomeCondominio: string | null
   /** Cidade no cadastro do splitter (regionalização para decisão). */
@@ -1156,6 +1158,7 @@ export function useNetworkIntelligenceData(
           street: meta?.street ?? null,
           latitude: geo.latitude,
           longitude: geo.longitude,
+          activeClients: Math.max(0, Math.round(Number(meta?.busyCount ?? 0)) || 0),
           tipoLocal: meta?.tipoLocal,
           nomeCondominio: meta?.nomeCondominio ?? null,
           cityCadastro: meta?.cityCadastro?.trim() ? meta.cityCadastro.trim() : null,

@@ -3442,7 +3442,7 @@ export function NetworkIntelligencePage() {
               </p>
             }
           >
-            <CancellationsPanel />
+            <CancellationsPanel riskRanking={riskRanking} />
           </Suspense>
         </motion.section>
       ) : null}
