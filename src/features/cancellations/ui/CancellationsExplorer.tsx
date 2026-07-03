@@ -4,7 +4,7 @@ import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/u
 import type { CancellationBucket } from '@/features/cancellations/model/cancellationsSummary'
 import type { MassivaImpactRow } from '@/features/cancellations/model/cancellationsExtras'
 import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
-import { ChurnHeatMap, type ChurnHeatPoint } from '@/features/cancellations/ui/ChurnHeatMap'
+import { ChurnHeatMap, type ChurnHeatPoint, type HeatMetric } from '@/features/cancellations/ui/ChurnHeatMap'
 
 type OnuLite = { total: number; degraded: number; offline: number }
 
@@ -55,6 +55,7 @@ export function CancellationsExplorer({
   const [slot, setSlot] = useState('all')
   const [pon, setPon] = useState('all')
   const [search, setSearch] = useState('')
+  const [heatMetric, setHeatMetric] = useState<HeatMetric>('churn')
 
   const churnByTitle = useMemo(() => {
     const m = new Map<string, CancellationBucket>()
@@ -167,10 +168,41 @@ export function CancellationsExplorer({
     [filtered],
   )
 
+  // Nível de agregação conforme o drill atual: OLT → Slot → PON → (splitter = ranking).
+  const level: 'olt' | 'slot' | 'pon' | 'splitter' =
+    pon !== 'all' ? 'splitter' : slot !== 'all' ? 'pon' : olt !== 'all' ? 'slot' : 'olt'
+
+  const levelGroups = useMemo(() => {
+    if (level === 'splitter') return []
+    const map = new Map<string, { key: string; label: string; rede: number; total: number; active: number; splitters: number; drill: () => void }>()
+    for (const r of filtered) {
+      let key: string
+      let label: string
+      let drill: () => void
+      if (level === 'olt') {
+        key = r.oltLabel; label = r.oltLabel
+        drill = () => { setOlt(r.oltLabel); setSlot('all'); setPon('all') }
+      } else if (level === 'slot') {
+        if (r.slot == null) continue
+        key = String(r.slot); label = `Slot ${r.slot}`
+        drill = () => { setSlot(String(r.slot)); setPon('all') }
+      } else {
+        if (r.pon == null) continue
+        key = String(r.pon); label = `PON ${r.pon}`
+        drill = () => setPon(String(r.pon))
+      }
+      let g = map.get(key)
+      if (!g) { g = { key, label, rede: 0, total: 0, active: 0, splitters: 0, drill }; map.set(key, g) }
+      g.rede += r.rede; g.total += r.total; g.active += r.activeClients
+      if (r.rede > 0) g.splitters += 1
+    }
+    return [...map.values()].sort((a, b) => b.rede - a.rede || b.total - a.total).slice(0, 15)
+  }, [filtered, level])
+
   const heatPoints = useMemo<ChurnHeatPoint[]>(
     () =>
       filtered
-        .filter((r) => r.rede > 0 && r.lat != null && r.lng != null)
+        .filter((r) => r.lat != null && r.lng != null)
         .map((r) => ({
           splitterTitle: r.splitterTitle,
           oltLabel: r.oltLabel,
@@ -284,14 +316,82 @@ export function CancellationsExplorer({
         </div>
       </div>
 
-      {/* Mapa de calor */}
+      {/* Mapa de calor com camadas */}
       <div className="rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-sm">
-        <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
-          <MapPin className="size-4 text-rose-500" aria-hidden />
-          Mapa de calor — churn de rede {hasFilter ? '(recorte filtrado)' : '(rede toda)'}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+            <MapPin className="size-4 text-rose-500" aria-hidden />
+            Mapa de calor {hasFilter ? '(recorte filtrado)' : '(rede toda)'}
+          </p>
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
+            {([
+              { id: 'churn', label: 'Churn de rede' },
+              { id: 'saturacao', label: 'Saturação' },
+              { id: 'sinal', label: 'Sinal' },
+            ] as Array<{ id: HeatMetric; label: string }>).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setHeatMetric(opt.id)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                  heatMetric === opt.id ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ChurnHeatMap points={heatPoints} metric={heatMetric} />
+        <p className="mt-1.5 text-[11px] text-neutral-400">
+          {heatMetric === 'churn'
+            ? 'Intensidade = cancelamentos de rede por splitter.'
+            : heatMetric === 'saturacao'
+              ? 'Intensidade = ocupação das portas (onde a rede está cheia).'
+              : 'Intensidade = % de ONUs degradadas/offline (onde o sinal está ruim).'}
         </p>
-        <ChurnHeatMap points={heatPoints} />
       </div>
+
+      {/* Resumo agregado por nível (acompanha o drill) */}
+      {levelGroups.length > 0 ? (
+        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
+          <div className="border-b border-neutral-100 px-4 py-2.5">
+            <p className="text-sm font-semibold text-neutral-900">
+              Churn por {level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}
+              <span className="ml-2 text-[11px] font-normal text-neutral-500">clique para descer o nível</span>
+            </p>
+          </div>
+          <div className="max-h-64 overflow-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="sticky top-0 z-[1] bg-white">
+                <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+                  <th className="px-4 py-2">{level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}</th>
+                  <th className="px-3 py-2 text-right">Splitters c/ churn</th>
+                  <th className="px-3 py-2 text-right">Rede</th>
+                  <th className="px-3 py-2 text-right">Total</th>
+                  <th className="px-3 py-2 text-right">Taxa/100</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {levelGroups.map((g) => {
+                  const rate = ratePer100(g.rede, g.active)
+                  return (
+                    <tr key={g.key} className="cursor-pointer hover:bg-indigo-50/50" onClick={g.drill}>
+                      <td className="px-4 py-2 font-medium text-indigo-700 hover:underline">{g.label}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-neutral-600">{g.splitters}</td>
+                      <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">{g.rede > 0 ? fmt(g.rede) : '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmt(g.total)}</td>
+                      <td className={`px-3 py-2 text-right tabular-nums ${rate != null && rate >= 2 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
+                        {rate != null ? rate.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {/* Ranking / drill */}
       <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
