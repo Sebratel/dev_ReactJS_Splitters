@@ -19,6 +19,7 @@ import { cn } from '@/shared/lib/utils'
 
 type SuggestionCardProps = {
   suggestion: PlatformSuggestion
+  readOnly?: boolean
   isAdmin: boolean
   voteBusy: boolean
   commentBusy: boolean
@@ -88,6 +89,7 @@ function buildNextVoteType(
 
 export function SuggestionCard({
   suggestion,
+  readOnly = false,
   isAdmin,
   voteBusy,
   commentBusy,
@@ -181,7 +183,9 @@ export function SuggestionCard({
                     : `${suggestion.likesCount} pessoas apoiaram`}
                 </span>
               ) : (
-                <span className="text-xs text-neutral-500">Seja a primeira pessoa a apoiar</span>
+                <span className="text-xs text-neutral-500">
+                  {readOnly ? 'Nenhum apoio registrado' : 'Seja a primeira pessoa a apoiar'}
+                </span>
               )}
             </div>
 
@@ -223,7 +227,7 @@ export function SuggestionCard({
             </p>
           </div>
 
-          {isAdmin ? (
+          {isAdmin && !readOnly ? (
             <label className="space-y-1">
               <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
                 Status
@@ -245,6 +249,8 @@ export function SuggestionCard({
             </label>
           ) : null}
 
+          {!readOnly ? (
+          <>
           <button
             type="button"
             disabled={voteBusy}
@@ -292,6 +298,17 @@ export function SuggestionCard({
             </span>
             <span>{suggestion.dislikesCount}</span>
           </button>
+          </>
+          ) : (
+            <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-center text-xs text-neutral-600">
+              <p>
+                <span className="font-semibold text-emerald-700">{suggestion.likesCount}</span> apoios
+              </p>
+              <p>
+                <span className="font-semibold text-rose-700">{suggestion.dislikesCount}</span> não apoios
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -309,7 +326,9 @@ export function SuggestionCard({
               <div className="space-y-2">
                 {suggestion.comments.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-neutral-300 bg-white/80 px-4 py-3 text-sm text-neutral-500">
-                    Ainda não há comentários. Seja a primeira pessoa a interagir.
+                    {readOnly
+                      ? 'Ainda não há comentários nesta sugestão.'
+                      : 'Ainda não há comentários. Seja a primeira pessoa a interagir.'}
                   </div>
                 ) : (
                   suggestion.comments.map((comment) => (
@@ -340,6 +359,7 @@ export function SuggestionCard({
                 )}
               </div>
 
+              {!readOnly ? (
               <form
                 className="space-y-2"
                 onSubmit={(event) => {
@@ -382,6 +402,7 @@ export function SuggestionCard({
                   </button>
                 </div>
               </form>
+              ) : null}
             </div>
           </motion.div>
         ) : null}
