@@ -26,6 +26,7 @@ function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTi
     estimateTimeOfRestoration: null,
     closedAt: row.closedAt,
     closeDescription: row.closeDescription ?? null,
+    closedBy: row.closedBy ?? null,
     affectedClients: row.affectedClients,
     affectedClientsResidential: null,
     affectedClientsCorporate: null,

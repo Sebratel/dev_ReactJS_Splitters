@@ -157,11 +157,31 @@ export function createMassivaHistoryStore(config) {
   let readyPromise = null;
 
   /** Sem DDL: schema deve existir no MySQL (criação/migração manual no banco). */
+  // Autor do encerramento — coluna opcional; detectada/criada no ensureReady sem quebrar nada.
+  let hasClosedByColumn = false;
+
   async function ensureReady() {
     if (readyPromise) return readyPromise;
 
     readyPromise = (async () => {
       await dataPool.query('SELECT 1');
+      // Migração idempotente da coluna closed_by (autor do encerramento). Falhas de
+      // privilégio/duplicidade são ignoradas; o flag garante que nenhuma query a referencie
+      // quando ela não existir.
+      try {
+        await dataPool.query('ALTER TABLE massiva_history ADD COLUMN closed_by VARCHAR(255) NULL');
+      } catch (alterErr) {
+        // 1060 = Duplicate column (já existe) — esperado; demais (ex.: sem ALTER) seguem sem a coluna.
+        if (alterErr?.errno !== 1060) {
+          console.warn('[massiva-history] closed_by não pôde ser criada:', alterErr?.message ?? alterErr);
+        }
+      }
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'closed_by'");
+        hasClosedByColumn = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasClosedByColumn = false;
+      }
     })().catch((error) => {
       readyPromise = null;
       throw error;
@@ -337,6 +357,7 @@ export function createMassivaHistoryStore(config) {
     const protocol = normalizePositiveInt(input?.protocol);
     const assignmentId = normalizePositiveInt(input?.assignmentId);
     const closeDescription = normalizeNullableText(input?.closeDescription);
+    const closedBy = normalizeNullableText(input?.closedBy);
     const closedAt = normalizeDate(input?.closedAt) ?? new Date();
 
     const existingId = await findExistingHistoryId(protocol, assignmentId);
@@ -344,17 +365,21 @@ export function createMassivaHistoryStore(config) {
       return { configured: true, updated: 0 };
     }
 
+    const closedByClause = hasClosedByColumn ? ', closed_by = COALESCE(?, closed_by)' : '';
+    const params = hasClosedByColumn
+      ? [closedAt, closeDescription, closedBy, existingId]
+      : [closedAt, closeDescription, existingId];
     const [result] = await dataPool.query(
       `
         UPDATE massiva_history
         SET
           status = 'encerrada',
           closed_at = ?,
-          close_description = COALESCE(?, close_description),
+          close_description = COALESCE(?, close_description)${closedByClause},
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
-      [closedAt, closeDescription, existingId],
+      params,
     );
 
     return {
@@ -1532,6 +1557,7 @@ export function createMassivaHistoryStore(config) {
           h.expected_close_at AS expectedCloseAt,
           h.closed_at AS closedAt,
           h.close_description AS closeDescription,
+          ${hasClosedByColumn ? 'h.closed_by AS closedBy,' : ''}
           h.updated_at AS updatedAt
         FROM massiva_history h
         ${whereSql}
@@ -1555,6 +1581,7 @@ export function createMassivaHistoryStore(config) {
       expectedCloseAt: serializeHistoryDate(row.expectedCloseAt),
       closedAt: serializeHistoryDate(row.closedAt),
       closeDescription: normalizeNullableText(row.closeDescription),
+      closedBy: normalizeNullableText(row.closedBy),
       updatedAt: serializeHistoryDate(row.updatedAt),
     }));
   }

@@ -1759,6 +1759,7 @@ app.post('/api/massiva/history/close', async (req, res) => {
       assignmentId: req.body?.assignmentId ?? null,
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
+      closedBy: String(req.body?.closedBy ?? '').trim(),
     });
 
     res.json({

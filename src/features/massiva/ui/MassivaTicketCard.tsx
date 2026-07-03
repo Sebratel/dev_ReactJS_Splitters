@@ -268,6 +268,7 @@ function CloseDescriptionDialog({
 }) {
   const protocolLabel = ticket.protocol > 0 ? String(ticket.protocol) : '—'
   const text = ticket.closeDescription?.trim() ?? ''
+  const closedBy = ticket.closedBy?.trim() ?? ''
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -298,6 +299,11 @@ function CloseDescriptionDialog({
           <p className="mt-0.5 font-mono text-xs text-neutral-500">
             #{protocolLabel}
           </p>
+          {closedBy !== '' ? (
+            <p className="mt-1 text-xs text-neutral-600">
+              Encerrado por <span className="font-semibold text-neutral-800">{closedBy}</span>
+            </p>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           {text !== '' ? (

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import {
@@ -304,6 +305,16 @@ export function MassivaTicketsSection({
   )
 
   const closeConfigured = env.massivaClosePath.trim() !== ''
+
+  // Autor do encerramento: usuário logado (nome ou e-mail) registrado no histórico local.
+  const authUser = useAccessAuthStore((s) => s.user)
+  const authProfile = useAccessAuthStore((s) => s.profile)
+  const closedByLabel = (
+    authProfile?.displayName ??
+    authUser?.displayName ??
+    authUser?.email ??
+    ''
+  ).trim()
 
   const [closeLocalWarning, setCloseLocalWarning] = useState<string | null>(null)
 
@@ -1198,6 +1209,7 @@ export function MassivaTicketsSection({
                     assignmentId: selectedClosingTicket.assignmentId,
                     protocol: selectedClosingTicket.protocol,
                     closeDescription: closeDescription.trim(),
+                    closedBy: closedByLabel,
                   })
                 }}
               >

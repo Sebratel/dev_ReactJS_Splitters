@@ -71,6 +71,7 @@ export function massivaTicketsFromOpenSuccess(
         estimateTimeOfRestoration: null,
         closedAt,
         closeDescription: null,
+        closedBy: null,
         affectedClients,
         affectedClientsResidential: null,
         affectedClientsCorporate: null,

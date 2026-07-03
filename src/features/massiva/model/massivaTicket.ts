@@ -55,6 +55,8 @@ export type MassivaTicket = {
   closedAt: Date | null
   /** Relato de encerramento preenchido pelo operador (null = não preenchido ou ticket aberto). */
   closeDescription: string | null
+  /** Autor do encerramento (usuário da plataforma). null quando não registrado localmente. */
+  closedBy: string | null
   affectedClients: number
   /**
    * Discriminação PF/PJ quando a listagem ou o GET `…/afetados/protocol/{id}` a expuserem.
@@ -796,6 +798,7 @@ export function parseMassivaTicketFromApi(
     estimateTimeOfRestoration,
     closedAt,
     closeDescription: null,
+    closedBy: null,
     affectedClients,
     affectedClientsResidential: hasListSplit ? affectedClientsResidential : null,
     affectedClientsCorporate: hasListSplit ? affectedClientsCorporate : null,
