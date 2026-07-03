@@ -27,11 +27,14 @@ export type MassivaImpactRow = {
 export type MassivaImpact = {
   windowDays: number
   eventsCount: number
+  /** false quando o histórico de massivas (MySQL) não pôde ser consultado. */
+  massivaAvailable: boolean
   ranking: MassivaImpactRow[]
 }
 
 export const EMPTY_MASSIVA_IMPACT: MassivaImpact = {
   windowDays: 30,
   eventsCount: 0,
+  massivaAvailable: false,
   ranking: [],
 }

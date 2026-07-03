@@ -447,9 +447,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         <div className="max-h-[22rem] overflow-auto">
           {impactQuery.isPending ? (
             <p className="px-4 py-8 text-center text-sm text-neutral-500">Correlacionando massivas…</p>
-          ) : impactQuery.isError ? (
+          ) : impactQuery.isError || impact?.massivaAvailable === false ? (
             <p className="px-4 py-8 text-center text-sm text-neutral-500">
-              Correlação indisponível (histórico de massivas não pôde ser carregado).
+              Histórico de massivas indisponível — verifique a integração de massivas (MySQL).
+              O restante do módulo não depende disso.
             </p>
           ) : impactRows.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-neutral-500">

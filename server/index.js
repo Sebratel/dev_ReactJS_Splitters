@@ -4735,10 +4735,17 @@ app.get('/api/cancellations/massiva-impact', async (req, res) => {
       return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
     }
 
-    // Eventos de massiva (MySQL local) desde `start`; churn (Voalle) no mesmo período.
-    const [events, cancelResult] = await Promise.all([
-      massivaHistoryStore.getMassivaEventsWithSplitterInPeriod({ openedAtFrom: start }),
+    // Churn (Voalle) é essencial; o histórico de massivas (MySQL) é best-effort — se falhar
+    // ou não estiver configurado, a seção degrada para vazio (com flag) em vez de dar erro.
+    const [cancelResult, eventsWrapped] = await Promise.all([
       queryWithTransientRetry(CANCELLATIONS_SELECT_SQL, [startIso], { retries: 1, delayMs: 200 }),
+      Promise.resolve()
+        .then(() => massivaHistoryStore.getMassivaEventsWithSplitterInPeriod({ openedAtFrom: start }))
+        .then((events) => ({ ok: true, events: Array.isArray(events) ? events : [] }))
+        .catch((err) => {
+          console.error('[massiva-impact] histórico de massivas indisponível:', err?.message ?? err, err?.code ?? '');
+          return { ok: false, events: [] };
+        }),
     ]);
 
     const cancelRows = cancelResult.rows.map((r) => ({
@@ -4747,10 +4754,12 @@ app.get('/api/cancellations/massiva-impact', async (req, res) => {
       motive: r.motive,
     }));
 
+    const events = eventsWrapped.events;
     const ranking = correlateMassivaChurn(cancelRows, events, { windowDays, topLimit: 50 });
     const payload = {
       windowDays,
-      eventsCount: Array.isArray(events) ? events.length : 0,
+      eventsCount: events.length,
+      massivaAvailable: eventsWrapped.ok,
       ranking,
     };
     cancellationsMassivaImpactCache.set(cacheKey, { at: now, payload });
