@@ -4509,7 +4509,7 @@ app.get('/api/onu-diagnostics/summary-by-splitter', async (req, res) => {
 });
 
 // Cancelamentos (churn) por área — agregado server-side a partir da Voalle.
-const CANCELLATIONS_SUMMARY_TTL_MS = 10 * 60_000;
+const CANCELLATIONS_SUMMARY_TTL_MS = 30 * 60_000;
 /** @type {Map<string, { at: number, payload: unknown }>} chave = data inicial (YYYY-MM-DD) */
 const cancellationsSummaryCache = new Map();
 
@@ -4647,7 +4647,7 @@ app.get('/api/cancellations/by-splitter', async (req, res) => {
 
 // Base ativa por tipo de local e condomínio — denominador para a taxa de churn normalizada.
 // Reaproveita a SPLITTERS_BASE_QUERY (comprovada) com DISTINCT por splitter; muda devagar → cache longo.
-const CANCELLATIONS_ACTIVE_BASE_TTL_MS = 30 * 60_000;
+const CANCELLATIONS_ACTIVE_BASE_TTL_MS = 60 * 60_000;
 /** @type {{ at: number, payload: unknown } | null} */
 let cancellationsActiveBaseCache = null;
 
@@ -4709,7 +4709,7 @@ app.get('/api/cancellations/active-base', async (req, res) => {
 });
 
 // Áreas/condomínios em risco: onde massiva foi seguida de churn de rede na janela pós-evento.
-const CANCELLATIONS_MASSIVA_IMPACT_TTL_MS = 10 * 60_000;
+const CANCELLATIONS_MASSIVA_IMPACT_TTL_MS = 30 * 60_000;
 /** @type {Map<string, { at: number, payload: unknown }>} chave = `${startIso}|${windowDays}` */
 const cancellationsMassivaImpactCache = new Map();
 

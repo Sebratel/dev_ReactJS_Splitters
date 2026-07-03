@@ -59,6 +59,8 @@ export type CancellationsSummary = {
   totalsByCategory: CancellationCategoryCounts
   byAccessPoint: CancellationBucket[]
   bySplitter: CancellationBucket[]
+  /** Lista compacta de TODOS os splitters com churn (para o explorador). Ausente em BFF antigo. */
+  churnBySplitterFull?: CancellationBucket[]
   byCity: CancellationBucket[]
   /** Série mensal ordenada (key = YYYY-MM). */
   monthly: CancellationBucket[]

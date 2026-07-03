@@ -251,8 +251,22 @@ export function aggregateCancellations(rows, options = {}) {
     total,
     totalsByCategory,
     byAccessPoint: topByRede(byAp),
-    // Explorador precisa de TODOS os splitters com churn (não só top-100) para varrer a rede.
-    bySplitter: topByRede(bySplitter, options.splitterLimit ?? 20000),
+    bySplitter: topByRede(bySplitter),
+    // Explorador: lista COMPACTA de todos os splitters com churn (só o necessário p/ o join;
+    // OLT/slot/pon/coords vêm do riskRanking no cliente). Reduz o payload do summary.
+    churnBySplitterFull: [...bySplitter.values()]
+      .sort((a, b) => (b.rede - a.rede) || (b.total - a.total))
+      .map((b) => ({
+        key: b.key,
+        total: b.total,
+        rede: b.rede,
+        tecnico: b.tecnico,
+        financeiro: b.financeiro,
+        pre_instalacao: b.pre_instalacao,
+        mudanca: b.mudanca,
+        operacional: b.operacional,
+        outros: b.outros,
+      })),
     byCity: topByRede(byCity),
     monthly,
     byTipoLocal: [...byTipoLocal.values()].sort((a, b) => b.total - a.total),

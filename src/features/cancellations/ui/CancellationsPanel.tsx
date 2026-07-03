@@ -508,7 +508,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
           </p>
           <CancellationsExplorer
             riskRanking={riskRanking}
-            bySplitter={data.bySplitter}
+            bySplitter={data.churnBySplitterFull ?? data.bySplitter}
             onuByCode={onuQuery.data}
             massivaImpact={impact?.ranking}
           />
