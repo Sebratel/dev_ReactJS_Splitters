@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, useReducedMotion } from 'framer-motion'
-import { ExternalLink, Lightbulb, Search, Sparkles } from 'lucide-react'
+import { ExternalLink, Lightbulb, Search } from 'lucide-react'
 import {
   fetchPlatformSuggestions,
   type PlatformSuggestionStatus,
@@ -126,7 +126,7 @@ export function PlatformSuggestionsPage() {
           }
         />
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(20rem,28rem)_minmax(0,1fr)]">
+        <section className="grid gap-4 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
           <motion.div
             initial={reduceMotion ? false : { opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
@@ -159,21 +159,6 @@ export function PlatformSuggestionsPage() {
                     Abrir sugestões no Hub Apps
                   </a>
                 </div>
-            </div>
-
-            <div className="rounded-[28px] border border-sky-200/70 bg-white/90 p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-800">
-                  <Sparkles className="size-4" aria-hidden />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-neutral-900">Dica de sucesso</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-neutral-600">
-                    Sugestões com contexto claro, impacto esperado e participação da comunidade
-                    ajudam a priorizar o que entra em desenvolvimento primeiro.
-                  </p>
-                </div>
-              </div>
             </div>
           </motion.div>
 
