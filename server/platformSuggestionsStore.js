@@ -57,8 +57,10 @@ function getMysqlConfig() {
       normalizePositiveInt(process.env.MASSIVA_MYSQL_PORT) ??
       3306,
     user: toCleanString(process.env.HUB_APPS_MYSQL_USER) || toCleanString(process.env.MASSIVA_MYSQL_USER),
+    // Usa '||' (nao '??'): o compose injeta HUB_APPS_MYSQL_PASSWORD='' (vazio) via ${...:-},
+    // e string vazia deve cair no fallback do massiva — mesmo criterio de host/user acima.
     password: String(
-      process.env.HUB_APPS_MYSQL_PASSWORD ?? process.env.MASSIVA_MYSQL_PASSWORD ?? '',
+      process.env.HUB_APPS_MYSQL_PASSWORD || process.env.MASSIVA_MYSQL_PASSWORD || '',
     ),
     database,
   };
