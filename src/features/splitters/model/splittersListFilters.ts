@@ -35,6 +35,13 @@ export type SplittersListFilterState = {
   /** Condomínios selecionados (multi-seleção). */
   condominiumSelections: string[]
   /**
+   * Tipo de local do splitter (classificação canônica por prefixo RES./COND./ED.):
+   * - `all`: indiferente
+   * - `CONDOMÍNIO`: somente splitters de condomínio
+   * - `UNIDADE`: somente splitters de rua/unidade
+   */
+  localKindFilter: 'all' | 'CONDOMÍNIO' | 'UNIDADE'
+  /**
    * Filtro de massiva:
    * - `all`: indiferente
    * - `with-open`: somente splitters com massiva aberta
@@ -69,6 +76,7 @@ export const initialSplittersListFilters: SplittersListFilterState = {
   streetSelections: [],
   citySelections: [],
   condominiumSelections: [],
+  localKindFilter: 'all',
   massivaOpenState: 'all',
   corporateClientFilter: 'all',
   maintenanceWindowDays: 30,
@@ -86,6 +94,7 @@ export function countActiveSplittersFilters(state: SplittersListFilterState): nu
   if (state.streetSelections.length > 0) n += 1
   if (state.citySelections.length > 0) n += 1
   if (state.condominiumSelections.length > 0) n += 1
+  if (state.localKindFilter !== 'all') n += 1
   if (state.massivaOpenState !== 'all') n += 1
   if (state.corporateClientFilter !== 'all') n += 1
   if (state.maintenanceFilter !== 'all') n += 1

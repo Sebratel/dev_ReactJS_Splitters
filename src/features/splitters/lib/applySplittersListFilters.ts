@@ -103,6 +103,28 @@ function matchesCondominium(
   return condominiumSelections.includes(name)
 }
 
+/** Prefixo canônico de condomínio no título (RES./COND./ED.) — paridade com condominiumClassifier.js. */
+const CONDOMINIUM_TITLE_PREFIX_REGEX = /\b(?:RES|COND|ED)\./i
+
+/**
+ * Classifica o splitter em CONDOMÍNIO × UNIDADE: usa `tipoLocal` do backend quando presente,
+ * senão cai no prefixo do título (fonte canônica), para o filtro nunca ficar cego.
+ */
+function resolveSplitterLocalKind(splitter: Splitter): 'CONDOMÍNIO' | 'UNIDADE' {
+  if (splitter.tipoLocal === 'CONDOMÍNIO' || splitter.tipoLocal === 'UNIDADE') {
+    return splitter.tipoLocal
+  }
+  return CONDOMINIUM_TITLE_PREFIX_REGEX.test(splitter.title) ? 'CONDOMÍNIO' : 'UNIDADE'
+}
+
+function matchesLocalKind(
+  splitter: Splitter,
+  localKindFilter: 'all' | 'CONDOMÍNIO' | 'UNIDADE',
+): boolean {
+  if (localKindFilter === 'all') return true
+  return resolveSplitterLocalKind(splitter) === localKindFilter
+}
+
 /**
  * Slot/porta derivados do nome/código do splitter (sem fallback SQL no modelo `Splitter`).
  * Sem dois números válidos no texto, não restringe no cliente.
@@ -184,6 +206,7 @@ export function applySplittersListFilters(
       continue
     }
     if (!matchesCondominium(splitter, condominiumSelections)) continue
+    if (!matchesLocalKind(splitter, filters.localKindFilter)) continue
     if (!matchesResolvedOltPon(splitter, filters)) continue
     out.push(splitter)
   }
