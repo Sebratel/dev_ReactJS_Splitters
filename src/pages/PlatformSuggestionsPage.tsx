@@ -126,42 +126,7 @@ export function PlatformSuggestionsPage() {
           }
         />
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-          <motion.div
-            initial={reduceMotion ? false : { opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.24 }}
-            className="space-y-4"
-          >
-            <div className="rounded-[28px] border border-amber-200/70 bg-gradient-to-br from-white via-amber-50/45 to-white p-4 shadow-sm sm:p-5">
-                <div>
-                  <div className="mb-4 flex items-start gap-3">
-                    <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-900">
-                      <ExternalLink className="size-5" aria-hidden />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-semibold tracking-tight text-neutral-900">
-                        Somente leitura
-                      </h2>
-                      <p className="mt-1 text-sm leading-relaxed text-neutral-600">
-                        O mural de sugestões é centralizado no Hub Apps. Aqui você acompanha o que
-                        a comunidade propôs; para enviar ideias, votar ou comentar, use o Hub.
-                      </p>
-                    </div>
-                  </div>
-                  <a
-                    href={hubSuggestionsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
-                  >
-                    <ExternalLink className="size-4" aria-hidden />
-                    Abrir sugestões no Hub Apps
-                  </a>
-                </div>
-            </div>
-          </motion.div>
-
+        <section>
           <div className="space-y-4">
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: -8 }}
@@ -196,6 +161,15 @@ export function PlatformSuggestionsPage() {
                       {option.label}
                     </button>
                   ))}
+                  <a
+                    href={hubSuggestionsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100"
+                  >
+                    <ExternalLink className="size-4" aria-hidden />
+                    Abrir no Hub Apps
+                  </a>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
