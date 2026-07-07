@@ -62,6 +62,7 @@ export async function ensureSuggestionsSchema(pool) {
         title VARCHAR(191) NOT NULL,
         description TEXT NOT NULL,
         sector VARCHAR(120) NOT NULL,
+        app_id VARCHAR(64) NOT NULL DEFAULT 'app-splitters-sebratel',
         category VARCHAR(120) NULL,
         status VARCHAR(24) NOT NULL DEFAULT 'open',
         author_uid VARCHAR(128) NOT NULL,
@@ -76,6 +77,7 @@ export async function ensureSuggestionsSchema(pool) {
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_${SUGGESTIONS_TABLE}_status (status),
         INDEX idx_${SUGGESTIONS_TABLE}_sector (sector),
+        INDEX idx_${SUGGESTIONS_TABLE}_app_id (app_id),
         INDEX idx_${SUGGESTIONS_TABLE}_score_created (score, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);

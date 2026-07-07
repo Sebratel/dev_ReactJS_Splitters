@@ -44,6 +44,7 @@ import {
 import {
   addPlatformSuggestionComment,
   createPlatformSuggestion,
+  getPlatformSuggestionsAppId,
   isPlatformSuggestionsReadOnly,
   listPlatformSuggestions,
   updatePlatformSuggestionStatus,
@@ -3046,7 +3047,10 @@ app.get('/api/platform-suggestions', async (req, res) => {
     return res.json({
       success: true,
       data: suggestions,
-      meta: { readOnly: isPlatformSuggestionsReadOnly() },
+      meta: {
+        readOnly: isPlatformSuggestionsReadOnly(),
+        appId: getPlatformSuggestionsAppId(),
+      },
     });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
