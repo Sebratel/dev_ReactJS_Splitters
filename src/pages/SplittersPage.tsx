@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { useReducedMotion } from 'framer-motion'
-import { Filter, Network, Search, X } from 'lucide-react'
+import { Building2, Filter, Network, Route, Search, X } from 'lucide-react'
 import { useOperationalMassivaTickets } from '@/features/massiva/hooks/useOperationalMassivaTickets'
 import { useOpenMassivaSplitterCodesForFilter } from '@/features/splitters/hooks/useOpenMassivaSplitterCodesForFilter'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -103,6 +103,7 @@ export function SplittersPage() {
     toggleCitySelection,
     toggleCondominiumSelection,
     toggleStreetSelection,
+    setLocalKindFilter,
     setMassivaOpenState,
     setCorporateClientFilter,
     setMaintenanceFilter,
@@ -184,6 +185,13 @@ export function SplittersPage() {
         onRemove: () => toggleStreetSelection(street),
       })
     }
+    if (state.localKindFilter !== 'all') {
+      chips.push({
+        key: 'local-kind',
+        label: `Tipo: ${state.localKindFilter === 'CONDOMÍNIO' ? 'Condomínio' : 'Rua'}`,
+        onRemove: () => setLocalKindFilter('all'),
+      })
+    }
     if (state.massivaOpenState === 'with-open') {
       chips.push({
         key: 'massiva:with',
@@ -241,6 +249,7 @@ export function SplittersPage() {
     state.citySelections,
     state.condominiumSelections,
     state.streetSelections,
+    state.localKindFilter,
     state.massivaOpenState,
     state.corporateClientFilter,
     oltLabelByCode,
@@ -251,6 +260,7 @@ export function SplittersPage() {
     toggleCitySelection,
     toggleCondominiumSelection,
     toggleStreetSelection,
+    setLocalKindFilter,
     setMassivaOpenState,
     setCorporateClientFilter,
     state.maintenanceFilter,
@@ -558,6 +568,46 @@ export function SplittersPage() {
               className="w-full rounded-xl border border-outline-variant bg-surface py-2.5 pl-10 pr-3 text-sm focus:border-primary/40 focus:outline-none"
               autoComplete="off"
             />
+          </div>
+          <div
+            className="inline-flex items-center gap-1 rounded-xl border border-outline-variant bg-surface p-1"
+            role="group"
+            aria-label="Filtrar por tipo de local"
+          >
+            <button
+              type="button"
+              aria-pressed={state.localKindFilter === 'UNIDADE'}
+              onClick={() =>
+                setLocalKindFilter(state.localKindFilter === 'UNIDADE' ? 'all' : 'UNIDADE')
+              }
+              title="Somente splitters de rua"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                state.localKindFilter === 'UNIDADE'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-on-surface-variant hover:bg-surface-container-low',
+              )}
+            >
+              <Route size={16} />
+              Rua
+            </button>
+            <button
+              type="button"
+              aria-pressed={state.localKindFilter === 'CONDOMÍNIO'}
+              onClick={() =>
+                setLocalKindFilter(state.localKindFilter === 'CONDOMÍNIO' ? 'all' : 'CONDOMÍNIO')
+              }
+              title="Somente splitters de condomínio"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+                state.localKindFilter === 'CONDOMÍNIO'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-on-surface-variant hover:bg-surface-container-low',
+              )}
+            >
+              <Building2 size={16} />
+              {'Condomínio'}
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-2 rounded-xl border border-outline-variant bg-surface px-3 py-2.5 text-sm text-on-surface-variant">

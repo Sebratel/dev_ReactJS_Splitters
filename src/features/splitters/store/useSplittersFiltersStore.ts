@@ -13,6 +13,7 @@ interface SplittersFiltersStore {
   setCitySelections: (cities: string[]) => void
   toggleCondominiumSelection: (name: string) => void
   setCondominiumSelections: (names: string[]) => void
+  setLocalKindFilter: (value: SplittersListFilterState['localKindFilter']) => void
   setMassivaOpenState: (
     value: SplittersListFilterState['massivaOpenState'],
   ) => void
@@ -79,6 +80,9 @@ export const useSplittersFiltersStore = create<SplittersFiltersStore>()(
         state: { ...s.state, condominiumSelections: sortTitles([...next]) },
       }
     }),
+  setLocalKindFilter: (value) =>
+    set((s) => ({ state: { ...s.state, localKindFilter: value } })),
+
   setMassivaOpenState: (value) =>
     set((s) => ({ state: { ...s.state, massivaOpenState: value } })),
 

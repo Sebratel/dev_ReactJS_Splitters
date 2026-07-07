@@ -44,13 +44,26 @@ function normalizeVoteType(value) {
   return '';
 }
 
+/** MySQL do Hub Apps — fonte da verdade das sugestoes da plataforma (todos os apps gravam aqui). */
 function getMysqlConfig() {
-  const host = toCleanString(process.env.MASSIVA_MYSQL_HOST);
-  const port = normalizePositiveInt(process.env.MASSIVA_MYSQL_PORT) ?? 3306;
-  const user = toCleanString(process.env.MASSIVA_MYSQL_USER);
-  const password = String(process.env.MASSIVA_MYSQL_PASSWORD ?? '');
-  const database = toCleanString(process.env.MASSIVA_MYSQL_DATABASE);
-  return { host, port, user, password, database };
+  const database = toCleanString(process.env.HUB_APPS_MYSQL_DATABASE);
+  if (database === '') {
+    return { host: '', port: 3306, user: '', password: '', database: '' };
+  }
+  return {
+    host: toCleanString(process.env.HUB_APPS_MYSQL_HOST) || toCleanString(process.env.MASSIVA_MYSQL_HOST),
+    port:
+      normalizePositiveInt(process.env.HUB_APPS_MYSQL_PORT) ??
+      normalizePositiveInt(process.env.MASSIVA_MYSQL_PORT) ??
+      3306,
+    user: toCleanString(process.env.HUB_APPS_MYSQL_USER) || toCleanString(process.env.MASSIVA_MYSQL_USER),
+    // Usa '||' (nao '??'): o compose injeta HUB_APPS_MYSQL_PASSWORD='' (vazio) via ${...:-},
+    // e string vazia deve cair no fallback do massiva — mesmo criterio de host/user acima.
+    password: String(
+      process.env.HUB_APPS_MYSQL_PASSWORD || process.env.MASSIVA_MYSQL_PASSWORD || '',
+    ),
+    database,
+  };
 }
 
 function isMysqlConfigured() {
@@ -65,16 +78,26 @@ function isSuggestionsAutoCreateEnabled() {
   );
 }
 
-function isMissingTableError(error) {
-  const code = String(error?.code ?? '').toUpperCase();
-  const errno = Number(error?.errno ?? 0);
-  return code === 'ER_NO_SUCH_TABLE' || errno === 1146;
+/**
+ * Apps consumidores (Splitters, etc.) ficam somente leitura; gravacao apenas no Hub Apps.
+ * Defina PLATFORM_SUGGESTIONS_READ_ONLY=false somente no backend do Hub.
+ */
+export function isPlatformSuggestionsReadOnly() {
+  const raw = toCleanString(process.env.PLATFORM_SUGGESTIONS_READ_ONLY).toLowerCase();
+  if (raw === 'false') return false;
+  return true;
 }
 
 function buildError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function isMissingTableError(error) {
+  const code = String(error?.code ?? '').toUpperCase();
+  const errno = Number(error?.errno ?? 0);
+  return code === 'ER_NO_SUCH_TABLE' || errno === 1146;
 }
 
 function getMysqlPool() {
@@ -180,7 +203,7 @@ async function ensureSuggestionsTables() {
 function assertConfigured() {
   if (!isMysqlConfigured()) {
     throw buildError(
-      'Sugestoes indisponiveis: MySQL DB_Massives nao configurado no backend.',
+      'Sugestoes indisponiveis: configure HUB_APPS_MYSQL_DATABASE (Hub Apps e a fonte da verdade).',
       503,
     );
   }
@@ -189,7 +212,7 @@ function assertConfigured() {
 function assertTablesAvailableError(error) {
   if (!isMissingTableError(error)) throw error;
   throw buildError(
-    `Estrutura de sugestoes incompleta no DB_Massives. Crie manualmente ${SUGGESTIONS_TABLE}, ${VOTES_TABLE} e ${COMMENTS_TABLE}, ou habilite PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE=true temporariamente.`,
+    `Estrutura de sugestoes incompleta no Hub Apps (DB_Hub_Apps). Crie manualmente ${SUGGESTIONS_TABLE}, ${VOTES_TABLE} e ${COMMENTS_TABLE}, ou habilite PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE=true temporariamente.`,
     503,
   );
 }

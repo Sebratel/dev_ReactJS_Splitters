@@ -46,7 +46,7 @@ function toTipoLocal(value: unknown): Splitter['tipoLocal'] {
  * Retorna `null` se nao encontrado (404).
  */
 export async function fetchSplitterByCode(code: string): Promise<Splitter | null> {
-  const url = new URL(`${env.localBffUrl}/api/splitters-by-code`)
+  const url = new URL(`${env.localBffUrl}/api/splitters-by-code`, window.location.origin)
   url.searchParams.set('code', code)
 
   const response = await fetchWithSessionAuth(url)

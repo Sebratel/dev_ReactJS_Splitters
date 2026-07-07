@@ -240,10 +240,14 @@ export function MassivaOpenDraftFields({
                 </div>
               </div>
               <div>
-                <FieldLabel htmlFor="massiva-forecast-date">Previsão de finalização</FieldLabel>
+                <FieldLabel htmlFor="massiva-forecast-date">
+                  Previsão de finalização <span className="text-red-500">*</span>
+                </FieldLabel>
                 <input
                   id="massiva-forecast-date"
                   type="date"
+                  required
+                  aria-required="true"
                   className={inputClassName}
                   value={assignmentForecastDate}
                   onChange={(e) => setAssignmentForecastDate(e.target.value)}
@@ -251,10 +255,14 @@ export function MassivaOpenDraftFields({
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-1">
-                <FieldLabel htmlFor="massiva-forecast-time">Hora da previsão</FieldLabel>
+                <FieldLabel htmlFor="massiva-forecast-time">
+                  Hora da previsão <span className="text-red-500">*</span>
+                </FieldLabel>
                 <input
                   id="massiva-forecast-time"
                   type="time"
+                  required
+                  aria-required="true"
                   className={inputClassName}
                   value={assignmentForecastTime}
                   onChange={(e) => setAssignmentForecastTime(e.target.value)}

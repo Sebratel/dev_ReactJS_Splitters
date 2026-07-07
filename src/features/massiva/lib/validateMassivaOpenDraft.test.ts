@@ -13,6 +13,8 @@ describe('validateMassivaOpenDraft', () => {
     expect(joined(getMassivaOpenDraftIssues('ok', 'not-a-date', '12:00'))).toContain(
       'inválida',
     )
+    // hora é obrigatória: data válida sem hora deve acusar erro
+    expect(joined(getMassivaOpenDraftIssues('ok', '2026-06-20', ''))).toContain('hora')
     expect(getMassivaOpenDraftIssues('ok', '2026-06-20', '10:00')).toEqual([])
   })
 

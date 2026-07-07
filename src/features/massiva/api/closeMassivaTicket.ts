@@ -6,6 +6,8 @@ type CloseMassivaInput = {
   assignmentId: number
   protocol: number
   closeDescription: string
+  /** Usuário logado que está encerrando (registrado como autor no histórico local). */
+  closedBy?: string
 }
 
 export type CloseMassivaResult = {
@@ -64,7 +66,12 @@ export async function closeMassivaTicket(input: CloseMassivaInput): Promise<Clos
   }
 
   try {
-    await registerClosedMassivaHistoryInLocalDb(input)
+    await registerClosedMassivaHistoryInLocalDb({
+      protocol: input.protocol,
+      assignmentId: input.assignmentId,
+      closeDescription: input.closeDescription,
+      closedBy: input.closedBy,
+    })
     return { ok: true }
   } catch (localError) {
     const msg =

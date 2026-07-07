@@ -157,6 +157,20 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
     currentParam++;
   }
 
+  // Filtro por tipo de local (Rua × Condomínio), usando a coluna já classificada
+  // pela regra canônica RES./COND./ED. (base."TIPO LOCAL").
+  const localKindRaw = String(req.query.localKind || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+  if (localKindRaw === 'CONDOMINIO' || localKindRaw === 'UNIDADE') {
+    const wanted = localKindRaw === 'CONDOMINIO' ? 'CONDOMÍNIO' : 'UNIDADE';
+    whereClauses.push(`TRIM(base."TIPO LOCAL") = $${currentParam}`);
+    values.push(wanted);
+    currentParam++;
+  }
+
   if (oltSlotFilter !== null || oltPortFilter !== null) {
     const { slotExpr, portExpr } = buildResolvedOltPonExpressions('base');
     if (oltSlotFilter !== null) {

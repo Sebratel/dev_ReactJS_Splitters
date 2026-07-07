@@ -22,6 +22,7 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
+import { aggregateCancellations, aggregateSplitterCancellations, correlateMassivaChurn } from './cancellationsInsights.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
@@ -43,6 +44,7 @@ import {
 import {
   addPlatformSuggestionComment,
   createPlatformSuggestion,
+  isPlatformSuggestionsReadOnly,
   listPlatformSuggestions,
   updatePlatformSuggestionStatus,
   voteOnPlatformSuggestion,
@@ -1445,6 +1447,57 @@ app.get('/api/massiva/connections', async (req, res) => {
   }
 });
 
+// Normaliza código/título de splitter para match tolerante a caixa/acentos/pontuação
+// (paridade EXATA com `filterConnectionsBySplitterCode` no frontend).
+function canonicalSplitterToken(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// A linha pertence a algum dos códigos de splitter selecionados? Set vazio = sem restrição.
+function rowMatchesAnySplitterCode(row, canonicalCodes) {
+  if (!canonicalCodes || canonicalCodes.size === 0) return true;
+  const code = canonicalSplitterToken(
+    row['CÓDIGO[SPLT.SECUNDARIO]'] ?? row['CÃ“DIGO[SPLT.SECUNDARIO]'],
+  );
+  if (code !== '' && canonicalCodes.has(code)) return true;
+  const title = canonicalSplitterToken(row['SPLT.SECUNDARIO']);
+  return title !== '' && canonicalCodes.has(title);
+}
+
+// Agrupa rotas por AP+slot+porta acumulando os splitterCodes (canônicos). Se alguma rota do
+// mesmo (AP,slot,porta) vier sem códigos, marca `all=true` (PON inteira, sem filtro de splitter).
+function buildMassivaRouteFilterMap(routes) {
+  const map = new Map();
+  const invalidIndexes = [];
+  for (const [routeIndex, r] of routes.entries()) {
+    const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
+    const slot = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
+    const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
+    const port = Number.parseInt(String(rawPort ?? ''), 10);
+    if (apCode === '' || !Number.isFinite(slot) || !Number.isFinite(port)) {
+      invalidIndexes.push(routeIndex);
+      continue;
+    }
+    const key = `${apCode}|${slot}|${port}`;
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { apCode, slot, port, codes: new Set(), all: false };
+      map.set(key, entry);
+    }
+    const codes = Array.isArray(r?.splitterCodes)
+      ? r.splitterCodes.map((c) => canonicalSplitterToken(c)).filter((c) => c !== '')
+      : [];
+    if (codes.length === 0) entry.all = true;
+    else for (const c of codes) entry.codes.add(c);
+  }
+  return { entries: [...map.values()], invalidIndexes };
+}
+
 app.post('/api/massiva/connections/batch', async (req, res) => {
   try {
     if (!Array.isArray(req.body?.routes)) {
@@ -1457,27 +1510,12 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
     if (routes.length === 0) {
       return res.json({ success: true, count: 0, data: [] });
     }
-    // Uma query por (AP, slot, port). Não filtrar `splitterCodes` no SQL: o client usa
-    // `filterConnectionsBySplitterCode` (normaliza caixa/acentos) e `apCodesMatch` — o mesmo
-    // critério do GET completo. O `= ANY(códigos)` no Postgres é exato e zerava o preview.
-    const unique = new Map();
-    const invalidIndexes = [];
-    for (const [routeIndex, r] of routes.entries()) {
-      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
-      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
-      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
-      const portN = Number.parseInt(String(rawPort ?? ''), 10);
-      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
-        invalidIndexes.push(routeIndex);
-        continue;
-      }
-      const key = `${apCode}|${slotN}|${portN}`;
-      if (!unique.has(key)) {
-        unique.set(key, { apCode, slot: slotN, port: portN });
-      }
-    }
+    // Filtro em memória (não no SQL): AP+slot+porta e, quando a rota traz `splitterCodes`,
+    // também o splitter — normalizado (caixa/acentos/pontuação), igual ao pipeline do client.
+    // O `= ANY(códigos)` no Postgres é exato e zerava o preview; por isso o match canônico aqui.
+    const { entries: routeEntries, invalidIndexes } = buildMassivaRouteFilterMap(routes);
 
-    if (unique.size === 0) {
+    if (routeEntries.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Nenhuma rota válida recebida no lote.',
@@ -1487,16 +1525,15 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
 
     const merged = [];
     const seenKeys = new Set();
-    const uniqueRoutes = Array.from(unique.values());
 
-    // O SQL filtra apenas por apCode (slot/porta são filtrados em memória). Rotas do
-    // mesmo AP compartilham a MESMA query — então agrupamos por AP e consultamos UMA vez
-    // por AP, em vez de uma vez por rota (evita N queries idênticas e o timeout em
-    // massivas com muitas PONs do mesmo AP).
+    // O SQL filtra apenas por apCode (slot/porta/splitter em memória). Rotas do mesmo AP
+    // compartilham a MESMA query — agrupamos por AP e consultamos UMA vez por AP (evita N
+    // queries idênticas e timeout em massivas com muitas PONs do mesmo AP). Cada (slot,porta)
+    // carrega os splitterCodes selecionados para o filtro em memória.
     const slotPortsByAp = new Map();
-    for (const route of uniqueRoutes) {
+    for (const route of routeEntries) {
       const list = slotPortsByAp.get(route.apCode) ?? [];
-      list.push({ slot: route.slot, port: route.port });
+      list.push({ slot: route.slot, port: route.port, codes: route.codes, all: route.all });
       slotPortsByAp.set(route.apCode, list);
     }
     const apEntries = Array.from(slotPortsByAp.entries());
@@ -1527,7 +1564,8 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
           return {
             rows: result.rows.filter((row) =>
               slotPorts.some((sp) =>
-                rowMatchesMassivaOltRoute(sp.slot, sp.port, row),
+                rowMatchesMassivaOltRoute(sp.slot, sp.port, row) &&
+                (sp.all || rowMatchesAnySplitterCode(row, sp.codes)),
               ),
             ),
           };
@@ -1550,7 +1588,7 @@ app.post('/api/massiva/connections/batch', async (req, res) => {
       ignoredInvalidRoutes: invalidIndexes.length,
       invalidRouteIndexes: invalidIndexes,
       totalRoutesReceived: routes.length,
-      uniqueRoutesProcessed: uniqueRoutes.length,
+      uniqueRoutesProcessed: routeEntries.length,
       uniqueApsProcessed: apEntries.length,
       chunkSize,
       chunksProcessed,
@@ -1578,32 +1616,15 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
       });
     }
 
-    const unique = new Map();
-    const invalidIndexes = [];
-    for (const [routeIndex, r] of routes.entries()) {
-      const apCode = String(r?.apCode ?? r?.apId ?? '').trim();
-      const slotN = Number.parseInt(String(r?.slot ?? r?.slotOlt ?? ''), 10);
-      const rawPort = r?.port ?? r?.porta ?? r?.portOlt;
-      const portN = Number.parseInt(String(rawPort ?? ''), 10);
-      if (apCode === '' || !Number.isFinite(slotN) || !Number.isFinite(portN)) {
-        invalidIndexes.push(routeIndex);
-        continue;
-      }
-      const key = `${apCode}|${slotN}|${portN}`;
-      if (!unique.has(key)) {
-        unique.set(key, { apCode, slot: slotN, port: portN });
-      }
-    }
+    const { entries: uniqueRoutes, invalidIndexes } = buildMassivaRouteFilterMap(routes);
 
-    if (unique.size === 0) {
+    if (uniqueRoutes.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Nenhuma rota válida recebida no lote.',
         invalidRouteIndexes: invalidIndexes,
       });
     }
-
-    const uniqueRoutes = Array.from(unique.values());
 
     // Uma única query para todos os APs do lote — CTEs pesados rodam uma só vez
     const apCodes = [...new Set(uniqueRoutes.map((r) => r.apCode))];
@@ -1624,7 +1645,8 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
       const matches = uniqueRoutes.some(
         (route) =>
           route.apCode === rowAp &&
-          rowMatchesMassivaOltRoute(route.slot, route.port, row),
+          rowMatchesMassivaOltRoute(route.slot, route.port, row) &&
+          (route.all || rowMatchesAnySplitterCode(row, route.codes)),
       );
       if (!matches) continue;
       const dk = massivaRowDedupeKey(row);
@@ -1738,6 +1760,7 @@ app.post('/api/massiva/history/close', async (req, res) => {
       assignmentId: req.body?.assignmentId ?? null,
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
+      closedBy: String(req.body?.closedBy ?? '').trim(),
     });
 
     res.json({
@@ -3023,6 +3046,7 @@ app.get('/api/platform-suggestions', async (req, res) => {
     return res.json({
       success: true,
       data: suggestions,
+      meta: { readOnly: isPlatformSuggestionsReadOnly() },
     });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
@@ -3036,6 +3060,12 @@ app.get('/api/platform-suggestions', async (req, res) => {
 
 app.post('/api/platform-suggestions', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Sugestoes so podem ser criadas no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await createPlatformSuggestion({
       title: req.body?.title,
@@ -3067,6 +3097,12 @@ app.post('/api/platform-suggestions', async (req, res) => {
 
 app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Votos em sugestoes so podem ser registrados no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await voteOnPlatformSuggestion({
       suggestionId: req.params?.suggestionId,
@@ -3096,6 +3132,12 @@ app.post('/api/platform-suggestions/:suggestionId/vote', async (req, res) => {
 
 app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Comentarios em sugestoes so podem ser registrados no Hub Apps.',
+      });
+    }
     const actor = await requireAuthenticatedSplittersUser(req);
     const suggestion = await addPlatformSuggestionComment({
       suggestionId: req.params?.suggestionId,
@@ -3126,6 +3168,12 @@ app.post('/api/platform-suggestions/:suggestionId/comments', async (req, res) =>
 
 app.patch('/api/platform-suggestions/:suggestionId/status', async (req, res) => {
   try {
+    if (isPlatformSuggestionsReadOnly()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Status de sugestoes so pode ser alterado no Hub Apps.',
+      });
+    }
     const actor = await requireSplittersAdminAccess(
       req,
       'Somente administradores podem alterar o status das sugestoes.',
@@ -4484,6 +4532,268 @@ app.get('/api/onu-diagnostics/summary-by-splitter', async (req, res) => {
     }
     console.error('Erro ao montar resumo ONU por splitter:', error.message, error.code ?? '', error.detail ?? '');
     return res.status(500).json({ success: false, error: error.message, code: error.code ?? null });
+  }
+});
+
+// Cancelamentos (churn) por área — agregado server-side a partir da Voalle.
+const CANCELLATIONS_SUMMARY_TTL_MS = 30 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = data inicial (YYYY-MM-DD) */
+const cancellationsSummaryCache = new Map();
+
+// Baseado na consulta validada com o planejamento. Filtra contrato Cancelado; o splitter
+// vem do JSON de authentication_splitter_port_data. Sem dados pessoais (só área + motivo).
+const CANCELLATIONS_SELECT_SQL = `
+SELECT
+    aaco.contract_id                                                                   AS contract_id,
+    aaco.date                                                                          AS canceled_at,
+    c.cancellation_motive                                                              AS motive,
+    acp.title                                                                          AS access_point,
+    pa.city                                                                            AS city,
+    (aaco.authentication_splitter_port_data::json->'AuthenticationSplitter'->>'title') AS splitter_title,
+    (aaco.authentication_splitter_port_data::json->'AuthenticationSplitterPort'->>'port') AS splitter_port
+FROM authentication_contract_connection_occurrences aaco
+LEFT JOIN contracts c                    ON c.id  = aaco.contract_id
+LEFT JOIN authentication_access_points acp ON acp.id = aaco.authentication_access_point_id
+LEFT JOIN people_addresses pa            ON pa.id = c.people_address_id
+WHERE aaco.date >= $1
+  AND c.v_status = 'Cancelado'
+`;
+
+app.get('/api/cancellations/summary', async (req, res) => {
+  try {
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsSummaryCache.get(startIso);
+    if (!force && cached && now - cached.at < CANCELLATIONS_SUMMARY_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_SELECT_SQL, [startIso], {
+      retries: 1,
+      delayMs: 200,
+    });
+    const rows = result.rows.map((r) => ({
+      contractId: r.contract_id,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+      accessPoint: r.access_point,
+      splitterTitle: r.splitter_title,
+      splitterPort: r.splitter_port,
+      city: r.city,
+    }));
+    const payload = aggregateCancellations(rows);
+    cancellationsSummaryCache.set(startIso, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao agregar cancelamentos:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Cancelamentos de um único splitter (tela de detalhe) + correlação com a última massiva.
+const CANCELLATIONS_BY_SPLITTER_TTL_MS = 10 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = `${title}|${startIso}|${eventIso}|${windowDays}` */
+const cancellationsBySplitterCache = new Map();
+
+const CANCELLATIONS_BY_SPLITTER_SQL = `
+SELECT
+    aaco.contract_id  AS contract_id,
+    aaco.date         AS canceled_at,
+    c.cancellation_motive AS motive,
+    pa.city           AS city
+FROM authentication_contract_connection_occurrences aaco
+LEFT JOIN contracts c         ON c.id  = aaco.contract_id
+LEFT JOIN people_addresses pa ON pa.id = c.people_address_id
+WHERE aaco.date >= $1
+  AND c.v_status = 'Cancelado'
+  AND (aaco.authentication_splitter_port_data::json->'AuthenticationSplitter'->>'title') = $2
+`;
+
+app.get('/api/cancellations/by-splitter', async (req, res) => {
+  try {
+    const title = String(req.query.title ?? '').trim();
+    if (title === '') {
+      return res.status(400).json({ success: false, error: 'Parâmetro "title" obrigatório.' });
+    }
+
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const eventParam = String(req.query.eventAt ?? '').trim();
+    const eventAt = eventParam !== '' ? new Date(eventParam) : null;
+    const eventValid = eventAt != null && !Number.isNaN(eventAt.getTime());
+    const eventIso = eventValid ? eventAt.toISOString() : '';
+
+    const windowDaysRaw = Number.parseInt(String(req.query.windowDays ?? '30'), 10);
+    const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw > 0 ? windowDaysRaw : 30;
+
+    const cacheKey = `${title}|${startIso}|${eventIso}|${windowDays}`;
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsBySplitterCache.get(cacheKey);
+    if (!force && cached && now - cached.at < CANCELLATIONS_BY_SPLITTER_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_BY_SPLITTER_SQL, [startIso, title], {
+      retries: 1,
+      delayMs: 200,
+    });
+    const rows = result.rows.map((r) => ({
+      contractId: r.contract_id,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+      city: r.city,
+    }));
+    const payload = aggregateSplitterCancellations(rows, {
+      eventAt: eventValid ? eventAt : null,
+      windowDays,
+    });
+    cancellationsBySplitterCache.set(cacheKey, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao agregar cancelamentos do splitter:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Base ativa por tipo de local e condomínio — denominador para a taxa de churn normalizada.
+// Reaproveita a SPLITTERS_BASE_QUERY (comprovada) com DISTINCT por splitter; muda devagar → cache longo.
+const CANCELLATIONS_ACTIVE_BASE_TTL_MS = 60 * 60_000;
+/** @type {{ at: number, payload: unknown } | null} */
+let cancellationsActiveBaseCache = null;
+
+const CANCELLATIONS_ACTIVE_BASE_SQL = `
+SELECT
+  s.tipo_local           AS tipo_local,
+  s.nome_condominio      AS nome_condominio,
+  COUNT(*)::int          AS splitters,
+  SUM(s.busy_count)::int AS active_clients
+FROM (
+  SELECT DISTINCT ON (base."ID[SPLT.SECUNDARIO]")
+    base."ID[SPLT.SECUNDARIO]"           AS id,
+    NULLIF(TRIM(base."TIPO LOCAL"), '')  AS tipo_local,
+    NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS nome_condominio,
+    COALESCE(base."BUSY_COUNT", 0)::int  AS busy_count
+  FROM (${SPLITTERS_BASE_QUERY}) base
+  WHERE base."ID[SPLT.SECUNDARIO]" IS NOT NULL
+  ORDER BY base."ID[SPLT.SECUNDARIO]" ASC
+) s
+GROUP BY s.tipo_local, s.nome_condominio
+`;
+
+app.get('/api/cancellations/active-base', async (req, res) => {
+  try {
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    if (!force && cancellationsActiveBaseCache && now - cancellationsActiveBaseCache.at < CANCELLATIONS_ACTIVE_BASE_TTL_MS) {
+      return res.json({ success: true, cached: true, data: cancellationsActiveBaseCache.payload });
+    }
+
+    const result = await queryWithTransientRetry(CANCELLATIONS_ACTIVE_BASE_SQL, [], {
+      retries: 1,
+      delayMs: 200,
+    });
+
+    let total = 0;
+    const byTipoLocal = { 'CONDOMÍNIO': 0, UNIDADE: 0 };
+    const byCondominio = {};
+    for (const row of result.rows) {
+      const active = Number(row.active_clients ?? 0) || 0;
+      total += active;
+      const tipo = String(row.tipo_local ?? '').trim().toUpperCase();
+      if (tipo === 'CONDOMÍNIO') {
+        byTipoLocal['CONDOMÍNIO'] += active;
+        const name = String(row.nome_condominio ?? '').trim();
+        if (name) byCondominio[name] = (byCondominio[name] ?? 0) + active;
+      } else {
+        byTipoLocal.UNIDADE += active;
+      }
+    }
+
+    const payload = { total, byTipoLocal, byCondominio };
+    cancellationsActiveBaseCache = { at: now, payload };
+    return res.json({ success: true, cached: false, data: payload });
+  } catch (error) {
+    console.error('Erro ao consultar base ativa por local:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Áreas/condomínios em risco: onde massiva foi seguida de churn de rede na janela pós-evento.
+const CANCELLATIONS_MASSIVA_IMPACT_TTL_MS = 30 * 60_000;
+/** @type {Map<string, { at: number, payload: unknown }>} chave = `${startIso}|${windowDays}` */
+const cancellationsMassivaImpactCache = new Map();
+
+app.get('/api/cancellations/massiva-impact', async (req, res) => {
+  try {
+    const startParam = String(req.query.start ?? '').trim();
+    const start = startParam !== ''
+      ? new Date(startParam)
+      : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ success: false, error: 'Parâmetro "start" inválido.' });
+    }
+    const startIso = start.toISOString().slice(0, 10);
+
+    const windowDaysRaw = Number.parseInt(String(req.query.windowDays ?? '30'), 10);
+    const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw > 0 ? windowDaysRaw : 30;
+
+    const cacheKey = `${startIso}|${windowDays}`;
+    const now = Date.now();
+    const force = String(req.query.force ?? '') === 'true';
+    const cached = cancellationsMassivaImpactCache.get(cacheKey);
+    if (!force && cached && now - cached.at < CANCELLATIONS_MASSIVA_IMPACT_TTL_MS) {
+      return res.json({ success: true, cached: true, window: { start: startIso }, data: cached.payload });
+    }
+
+    // Churn (Voalle) é essencial; o histórico de massivas (MySQL) é best-effort — se falhar
+    // ou não estiver configurado, a seção degrada para vazio (com flag) em vez de dar erro.
+    const [cancelResult, eventsWrapped] = await Promise.all([
+      queryWithTransientRetry(CANCELLATIONS_SELECT_SQL, [startIso], { retries: 1, delayMs: 200 }),
+      Promise.resolve()
+        .then(() => massivaHistoryStore.getMassivaEventsWithSplitterInPeriod({ openedAtFrom: start }))
+        .then((events) => ({ ok: true, events: Array.isArray(events) ? events : [] }))
+        .catch((err) => {
+          console.error('[massiva-impact] histórico de massivas indisponível:', err?.message ?? err, err?.code ?? '');
+          return { ok: false, events: [] };
+        }),
+    ]);
+
+    const cancelRows = cancelResult.rows.map((r) => ({
+      splitterTitle: r.splitter_title,
+      canceledAt: r.canceled_at,
+      motive: r.motive,
+    }));
+
+    const events = eventsWrapped.events;
+    const ranking = correlateMassivaChurn(cancelRows, events, { windowDays, topLimit: 50 });
+    const payload = {
+      windowDays,
+      eventsCount: events.length,
+      massivaAvailable: eventsWrapped.ok,
+      ranking,
+    };
+    cancellationsMassivaImpactCache.set(cacheKey, { at: now, payload });
+    return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
+  } catch (error) {
+    console.error('Erro ao correlacionar massiva × churn:', error.message, error.code ?? '');
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

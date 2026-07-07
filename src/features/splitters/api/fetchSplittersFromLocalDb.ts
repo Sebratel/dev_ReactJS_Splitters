@@ -20,6 +20,8 @@ export type SplittersFetchParams = {
   streets?: string[]
   cities?: string[]
   condominiums?: string[]
+  /** Tipo de local: 'CONDOMÍNIO' | 'UNIDADE' | null (sem filtro). */
+  localKind?: 'CONDOMÍNIO' | 'UNIDADE' | null
   withOpenMassiva?: boolean
   openMassivaSplitterCodes?: string[]
   corporateClientFilter?: 'all' | 'with-corporate' | 'without-corporate'
@@ -91,6 +93,7 @@ export async function fetchSplittersFromLocalDb({
   streets = [],
   cities = [],
   condominiums = [],
+  localKind = null,
   withOpenMassiva,
   openMassivaSplitterCodes = [],
   corporateClientFilter = 'all',
@@ -114,6 +117,10 @@ export async function fetchSplittersFromLocalDb({
   if (cities.length > 0) queryParams.append('cities', cities.join(','))
   if (condominiums.length > 0) {
     queryParams.append('condominiums', condominiums.join(','))
+  }
+  if (localKind === 'CONDOMÍNIO' || localKind === 'UNIDADE') {
+    // ASCII (sem acento) — o servidor normaliza de qualquer forma.
+    queryParams.append('localKind', localKind === 'CONDOMÍNIO' ? 'CONDOMINIO' : 'UNIDADE')
   }
   if (withOpenMassiva !== undefined) {
     queryParams.append('withOpenMassiva', withOpenMassiva ? '1' : '0')

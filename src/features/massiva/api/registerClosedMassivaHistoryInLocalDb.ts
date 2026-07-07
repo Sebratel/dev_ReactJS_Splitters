@@ -6,6 +6,8 @@ type RegisterClosedMassivaHistoryInput = {
   protocol: number
   assignmentId: number
   closeDescription: string
+  /** Quem encerrou (usuário logado na plataforma). */
+  closedBy?: string
 }
 
 export async function registerClosedMassivaHistoryInLocalDb(
@@ -22,6 +24,7 @@ export async function registerClosedMassivaHistoryInLocalDb(
       protocol: input.protocol,
       assignmentId: input.assignmentId,
       closeDescription: input.closeDescription,
+      closedBy: input.closedBy ?? '',
       closedAt: nowBrazil,
     }),
   })

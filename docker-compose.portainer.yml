@@ -43,6 +43,17 @@ services:
       MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD}
       ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE: ${ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE:-false}
       PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE: ${PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE:-false}
+      PLATFORM_SUGGESTIONS_READ_ONLY: ${PLATFORM_SUGGESTIONS_READ_ONLY:-true}
+      HUB_APPS_MYSQL_HOST: ${HUB_APPS_MYSQL_HOST:-}
+      HUB_APPS_MYSQL_PORT: ${HUB_APPS_MYSQL_PORT:-3306}
+      HUB_APPS_MYSQL_DATABASE: ${HUB_APPS_MYSQL_DATABASE:-DB_Hub_Apps}
+      HUB_APPS_MYSQL_USER: ${HUB_APPS_MYSQL_USER:-}
+      HUB_APPS_MYSQL_PASSWORD: ${HUB_APPS_MYSQL_PASSWORD:-}
+      SUGGESTIONS_REPLICA_MYSQL_HOST: ${SUGGESTIONS_REPLICA_MYSQL_HOST:-}
+      SUGGESTIONS_REPLICA_MYSQL_PORT: ${SUGGESTIONS_REPLICA_MYSQL_PORT:-3306}
+      SUGGESTIONS_REPLICA_MYSQL_DATABASE: ${SUGGESTIONS_REPLICA_MYSQL_DATABASE:-}
+      SUGGESTIONS_REPLICA_MYSQL_USER: ${SUGGESTIONS_REPLICA_MYSQL_USER:-}
+      SUGGESTIONS_REPLICA_MYSQL_PASSWORD: ${SUGGESTIONS_REPLICA_MYSQL_PASSWORD:-}
       # APIs externas
       HUB_BASE_URL: ${HUB_BASE_URL}
       GEOGRID_BASE_URL: ${GEOGRID_BASE_URL}
@@ -88,15 +99,20 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_BFF_BASE_URL=${VITE_BFF_BASE_URL}
-        - VITE_LOCAL_BFF_URL=${VITE_LOCAL_BFF_URL}
+        # IMPORTANTE: manter VAZIOS. O SPA chama `/api/...` no mesmo origin e o
+        # frontend-server.mjs faz proxy para BACKEND_ORIGIN (sem CORS). Preencher
+        # com a URL do backend faz o browser chamar cross-origin e cair em CORS.
+        - VITE_BFF_BASE_URL=
+        - VITE_LOCAL_BFF_URL=
         - VITE_GEOGRID_BASE_URL=${VITE_GEOGRID_BASE_URL}
         - VITE_GEOGRID_API_KEY=${VITE_GEOGRID_API_KEY}
         - VITE_BFF_PROXY_TARGET=${VITE_BFF_PROXY_TARGET}
-        - VITE_MASSIVA_LIST_PATH=${VITE_MASSIVA_LIST_PATH}
-        - VITE_MASSIVA_OPEN_PATH=${VITE_MASSIVA_OPEN_PATH}
-        - VITE_MASSIVA_CLOSE_PATH=${VITE_MASSIVA_CLOSE_PATH}
-        - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH}
+        # Paths padrão do gateway Elleven (roteados via /api/v1 → GATEWAY_ORIGIN).
+        # Sobrescreva pelo ambiente da stack só se o gateway usar outros paths.
+        - VITE_MASSIVA_LIST_PATH=${VITE_MASSIVA_LIST_PATH:-/api/v1/massivas/recuperar-pelo-banco}
+        - VITE_MASSIVA_OPEN_PATH=${VITE_MASSIVA_OPEN_PATH:-/api/v1/massivas/salvar-massiva-via-api}
+        - VITE_MASSIVA_CLOSE_PATH=${VITE_MASSIVA_CLOSE_PATH:-/api/v1/massivas/finalizar-chamado-via-api}
+        - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
         - VITE_AUTOISP_AUTH_ENDPOINT=${VITE_AUTOISP_AUTH_ENDPOINT}
         - VITE_AUTOISP_EVENTS_ENDPOINT=${VITE_AUTOISP_EVENTS_ENDPOINT}
         - VITE_AUTOISP_USERNAME=${VITE_AUTOISP_USERNAME}
@@ -113,6 +129,14 @@ services:
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
     container_name: react-frontend-portainer
     environment:
+      # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
+      # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
+      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados) — mesmo host usado
+      # em dev no VITE_BFF_PROXY_TARGET (ex.: https://api-gateway-bff.sebratel.net.br).
+      GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
+      # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
+      AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
       # Desenvolvimento local
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629

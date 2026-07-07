@@ -20,6 +20,8 @@ import {
   Building2,
   ChartSpline,
   Database,
+  Filter,
+  Home,
   Loader2,
   MapPin,
   Moon,
@@ -28,6 +30,7 @@ import {
   Sun,
   Sunrise,
   Wrench,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
@@ -75,6 +78,16 @@ const EquipmentFleetPanel = lazy(async () => {
 const NetworkTopologyPanel = lazy(async () => {
   const m = await import('@/features/intelligence/ui/NetworkTopologyPanel')
   return { default: m.NetworkTopologyPanel }
+})
+
+const CancellationsPanel = lazy(async () => {
+  const m = await import('@/features/cancellations/ui/CancellationsPanel')
+  return { default: m.CancellationsPanel }
+})
+
+const CondominiumsPanel = lazy(async () => {
+  const m = await import('@/features/condominiums/ui/CondominiumsPanel')
+  return { default: m.CondominiumsPanel }
 })
 
 function formatDateLabel(date: Date): string {
@@ -256,6 +269,8 @@ const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: str
   { id: 'manutencao', label: 'Manutenções ERP' },
   { id: 'sinais', label: 'Sinais ONU' },
   { id: 'equipamentos', label: 'Equipamentos' },
+  { id: 'cancelamentos', label: 'Cancelamentos' },
+  { id: 'condominios', label: 'Condomínios' },
 ]
 
 const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
@@ -267,6 +282,7 @@ function readNetworkIntelligenceUiState(): {
   activeWindow: IntelligenceWindow
   riskBandFilter: 'all' | 'critico' | 'alto' | 'moderado' | 'baixo'
   ageFilter: AgeFilter
+  locationFilter: 'all' | 'CONDOMÍNIO' | 'UNIDADE'
   splitterSearch: string
   geoTab: 'condominios' | 'ruas'
   selectedMatrixKey:
@@ -285,6 +301,7 @@ function readNetworkIntelligenceUiState(): {
       activeWindow: 'visao-geral',
       riskBandFilter: 'all',
       ageFilter: 'all',
+      locationFilter: 'all',
       splitterSearch: '',
       geoTab: 'condominios',
       selectedMatrixKey: null,
@@ -311,7 +328,9 @@ function readNetworkIntelligenceUiState(): {
         parsed.activeWindow === 'ciclo-vida' ||
         parsed.activeWindow === 'manutencao' ||
         parsed.activeWindow === 'sinais' ||
-        parsed.activeWindow === 'equipamentos'
+        parsed.activeWindow === 'equipamentos' ||
+        parsed.activeWindow === 'cancelamentos' ||
+        parsed.activeWindow === 'condominios'
           ? parsed.activeWindow
           : 'visao-geral',
       riskBandFilter:
@@ -327,6 +346,10 @@ function readNetworkIntelligenceUiState(): {
         parsed.ageFilter === '3-5' ||
         parsed.ageFilter === '5+'
           ? parsed.ageFilter
+          : 'all',
+      locationFilter:
+        parsed.locationFilter === 'CONDOMÍNIO' || parsed.locationFilter === 'UNIDADE'
+          ? parsed.locationFilter
           : 'all',
       splitterSearch: typeof parsed.splitterSearch === 'string' ? parsed.splitterSearch : '',
       geoTab: parsed.geoTab === 'ruas' ? 'ruas' : 'condominios',
@@ -347,6 +370,7 @@ function readNetworkIntelligenceUiState(): {
       activeWindow: 'visao-geral',
       riskBandFilter: 'all',
       ageFilter: 'all',
+      locationFilter: 'all',
       splitterSearch: '',
       geoTab: 'condominios',
       selectedMatrixKey: null,
@@ -374,6 +398,10 @@ const TAB_INTRO: Record<IntelligenceWindow, string> = {
     'Saúde de sinal das ONUs em tempo quase real (monitoramento): panorama online/atenuado/offline, distribuição de potência RX, piores clientes e mapa de calor geográfico. Atualiza a cada 60s.',
   equipamentos:
     'Frota de equipamentos (patrimônio) na rede: dimensão do parque, modelos mais presentes (curva de Pareto), composição por tipo, distribuição por cidade e bairro e qualidade de cadastro (serial, MAC, duplicidades).',
+  cancelamentos:
+    'Cancelamentos por área (Voalle) categorizados por motivo, com destaque para churn de rede/qualidade — insatisfação e migração para a concorrência. Cruze pontos de acesso, splitters e cidades para ver onde eventos de rede podem estar puxando cancelamento.',
+  condominios:
+    'Visão dedicada aos condomínios da rede: ocupação, saturação (candidatos a expansão), risco, massivas e churn de rede — tudo agregado por condomínio para priorizar monitoramento e investimento.',
 }
 
 function presetButtonLabel(p: IntelligenceDateRangePreset): string {
@@ -434,7 +462,7 @@ function trendBadgeClass(label: string): string {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200'
 }
 
-type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'topologia' | 'ciclo-vida' | 'manutencao' | 'sinais' | 'equipamentos'
+type IntelligenceWindow = 'visao-geral' | 'risco' | 'operacao' | 'geografico' | 'topologia' | 'ciclo-vida' | 'manutencao' | 'sinais' | 'equipamentos' | 'cancelamentos' | 'condominios'
 
 type AgeFilter = 'all' | '0-1' | '1-3' | '3-5' | '5+'
 
@@ -574,6 +602,7 @@ export function NetworkIntelligencePage() {
     activeWindow,
     riskBandFilter,
     ageFilter,
+    locationFilter,
     splitterSearch,
     geoTab,
     selectedMatrixKey,
@@ -591,6 +620,8 @@ export function NetworkIntelligencePage() {
     setUiState((prev) => ({ ...prev, riskBandFilter: value }))
   const setAgeFilter = (value: AgeFilter) =>
     setUiState((prev) => ({ ...prev, ageFilter: value }))
+  const setLocationFilter = (value: 'all' | 'CONDOMÍNIO' | 'UNIDADE') =>
+    setUiState((prev) => ({ ...prev, locationFilter: value }))
   const setSplitterSearch = (value: string) =>
     setUiState((prev) => ({ ...prev, splitterSearch: value }))
   const setGeoTab = (value: 'condominios' | 'ruas') =>
@@ -773,6 +804,9 @@ export function NetworkIntelligencePage() {
     if (riskBandFilter !== 'all') {
       rows = rows.filter((row) => row.riskBand === riskBandFilter)
     }
+    if (locationFilter !== 'all') {
+      rows = rows.filter((row) => (row.tipoLocal ?? 'UNIDADE') === locationFilter)
+    }
     const q = splitterSearch.trim().toLowerCase()
     if (q !== '') {
       rows = rows.filter((row) => {
@@ -786,7 +820,7 @@ export function NetworkIntelligencePage() {
       })
     }
     return rows
-  }, [riskRanking, ageFilter, selectedMatrixKey, riskBandFilter, splitterSearch])
+  }, [riskRanking, ageFilter, selectedMatrixKey, riskBandFilter, locationFilter, splitterSearch])
 
   const contextualOltDrilldown = useMemo(() => {
     const grouped = new Map<string, {
@@ -1190,14 +1224,90 @@ export function NetworkIntelligencePage() {
   }, [contextualMaintenanceRows])
 
   const hasActiveFilters =
-    selectedMatrixKey !== null || riskBandFilter !== 'all' || ageFilter !== 'all' || splitterSearch.trim() !== ''
+    selectedMatrixKey !== null ||
+    riskBandFilter !== 'all' ||
+    ageFilter !== 'all' ||
+    locationFilter !== 'all' ||
+    splitterSearch.trim() !== ''
 
   function clearAllFilters() {
     setSelectedMatrixKey(null)
     setRiskBandFilter('all')
     setAgeFilter('all')
+    setLocationFilter('all')
     setSplitterSearch('')
   }
+
+  const AGE_FILTER_LABELS: Record<Exclude<AgeFilter, 'all'>, string> = {
+    '0-1': 'Idade: 0–1 ano',
+    '1-3': 'Idade: 1–3 anos',
+    '3-5': 'Idade: 3–5 anos',
+    '5+': 'Idade: 5+ anos',
+  }
+  const MATRIX_CHIP_LABELS: Record<string, string> = {
+    altoImpactoAltaUrgencia: 'Alto impacto · alta urgência',
+    altoImpactoBaixaUrgencia: 'Alto impacto · baixa urgência',
+    baixoImpactoAltaUrgencia: 'Baixo impacto · alta urgência',
+    baixoImpactoBaixaUrgencia: 'Baixo impacto · baixa urgência',
+  }
+  const activeFilterChips: Array<{ key: string; label: string; tone: 'danger' | 'warning' | 'neutral'; onRemove: () => void }> = []
+  if (locationFilter !== 'all') {
+    activeFilterChips.push({
+      key: 'local',
+      label: locationFilter === 'CONDOMÍNIO' ? 'Condomínios' : 'Ruas / unidades',
+      tone: 'warning',
+      onRemove: () => setLocationFilter('all'),
+    })
+  }
+  if (riskBandFilter !== 'all') {
+    const bandLabel = { critico: 'crítico', alto: 'alto', moderado: 'moderado', baixo: 'baixo' }[riskBandFilter]
+    activeFilterChips.push({
+      key: 'risco',
+      label: `Risco ${bandLabel}`,
+      tone: 'danger',
+      onRemove: () => setRiskBandFilter('all'),
+    })
+  }
+  if (ageFilter !== 'all') {
+    activeFilterChips.push({
+      key: 'idade',
+      label: AGE_FILTER_LABELS[ageFilter],
+      tone: 'neutral',
+      onRemove: () => setAgeFilter('all'),
+    })
+  }
+  if (selectedMatrixKey) {
+    activeFilterChips.push({
+      key: 'matriz',
+      label: MATRIX_CHIP_LABELS[selectedMatrixKey] ?? 'Quadrante da matriz',
+      tone: 'neutral',
+      onRemove: () => setSelectedMatrixKey(null),
+    })
+  }
+  if (splitterSearch.trim() !== '') {
+    activeFilterChips.push({
+      key: 'busca',
+      label: `Busca: “${splitterSearch.trim()}”`,
+      tone: 'neutral',
+      onRemove: () => setSplitterSearch(''),
+    })
+  }
+
+  // Filtros contextuais: só aparecem nas abas onde de fato recortam os dados.
+  const showSplitterFilters =
+    activeWindow === 'risco' ||
+    activeWindow === 'operacao' ||
+    activeWindow === 'geografico' ||
+    activeWindow === 'ciclo-vida'
+  const showSearchOnly = activeWindow === 'manutencao'
+  const showFilterBar = showSplitterFilters || showSearchOnly
+  const visibleFilterChips = showSplitterFilters ? activeFilterChips : []
+  const contextualHasActiveFilters = showSplitterFilters
+    ? hasActiveFilters
+    : splitterSearch.trim() !== ''
+  const clearContextualFilters = showSplitterFilters
+    ? clearAllFilters
+    : () => setSplitterSearch('')
 
   return (
     <div className="min-w-0 space-y-5">
@@ -1268,51 +1378,138 @@ export function NetworkIntelligencePage() {
           </div>
         </div>
 
+        {showFilterBar ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/40 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <input
-            value={splitterSearch}
-            onChange={(e) => setSplitterSearch(e.target.value)}
-            placeholder="Buscar splitter/OLT..."
-            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-48 md:w-52"
-          />
-          <select
-            value={riskBandFilter}
-            onChange={(e) =>
-              setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
-            }
-            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-          >
-            <option value="all">Risco: todos</option>
-            <option value="critico">Risco crítico</option>
-            <option value="alto">Risco alto</option>
-            <option value="moderado">Risco moderado</option>
-            <option value="baixo">Risco baixo</option>
-          </select>
-          <select
-            value={ageFilter}
-            onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
-            className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-          >
-            <option value="all">Idade: todas</option>
-            <option value="0-1">Idade: 0-1 ano</option>
-            <option value="1-3">Idade: 1-3 anos</option>
-            <option value="3-5">Idade: 3-5 anos</option>
-            <option value="5+">Idade: 5+ anos</option>
-          </select>
+          <div className="relative w-full sm:w-48 md:w-52">
+            <MapPin className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+            <input
+              value={splitterSearch}
+              onChange={(e) => setSplitterSearch(e.target.value)}
+              placeholder="Buscar splitter/OLT..."
+              className="w-full rounded-lg border border-slate-200 bg-white/90 py-1.5 pl-7 pr-2 text-xs text-slate-700"
+            />
+          </div>
+          {showSplitterFilters ? (
+            <>
+              <select
+                value={riskBandFilter}
+                onChange={(e) =>
+                  setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
+                }
+                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+              >
+                <option value="all">Risco: todos</option>
+                <option value="critico">Risco crítico</option>
+                <option value="alto">Risco alto</option>
+                <option value="moderado">Risco moderado</option>
+                <option value="baixo">Risco baixo</option>
+              </select>
+              <select
+                value={ageFilter}
+                onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
+                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+              >
+                <option value="all">Idade: todas</option>
+                <option value="0-1">Idade: 0-1 ano</option>
+                <option value="1-3">Idade: 1-3 anos</option>
+                <option value="3-5">Idade: 3-5 anos</option>
+                <option value="5+">Idade: 5+ anos</option>
+              </select>
+              {/* Local — controle segmentado (mais rápido e legível que dropdown) */}
+              <div
+                role="group"
+                aria-label="Tipo de local"
+                className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white/90"
+              >
+                {([
+                  { id: 'all', label: 'Todos', icon: null },
+                  { id: 'CONDOMÍNIO', label: 'Condomínios', icon: Building2 },
+                  { id: 'UNIDADE', label: 'Ruas', icon: Home },
+                ] as Array<{ id: 'all' | 'CONDOMÍNIO' | 'UNIDADE'; label: string; icon: LucideIcon | null }>).map(
+                  (opt, idx) => {
+                    const active = locationFilter === opt.id
+                    const Icon = opt.icon
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setLocationFilter(opt.id)}
+                        aria-pressed={active}
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition',
+                          idx > 0 && 'border-l border-slate-200',
+                          active ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-50',
+                        )}
+                      >
+                        {Icon ? <Icon className="size-3.5" aria-hidden /> : null}
+                        {opt.label}
+                      </button>
+                    )
+                  },
+                )}
+              </div>
+              {/* Contador de resultados do recorte atual */}
+              <div className="flex items-center gap-1.5 sm:ml-auto">
+                <span className="text-lg font-bold tabular-nums leading-none text-slate-800">
+                  {contextualRiskRanking.length.toLocaleString('pt-BR')}
+                </span>
+                <span className="text-[10px] leading-tight text-slate-500">
+                  splitters
+                  <br />
+                  no recorte
+                </span>
+              </div>
+            </>
+          ) : null}
           <button
             type="button"
-            onClick={clearAllFilters}
-            disabled={!hasActiveFilters}
+            onClick={clearContextualFilters}
+            disabled={!contextualHasActiveFilters}
             className={cn(
-              'rounded-lg border px-2 py-1.5 text-xs font-bold transition sm:ml-auto',
-              hasActiveFilters
+              'rounded-lg border px-2 py-1.5 text-xs font-bold transition',
+              !showSplitterFilters && 'sm:ml-auto',
+              contextualHasActiveFilters
                 ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
                 : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
             )}
           >
-            Limpar filtros
+            {showSplitterFilters ? 'Limpar filtros' : 'Limpar busca'}
           </button>
         </div>
+        ) : null}
+
+        {/* Chips de filtros ativos (só nas abas por splitter) */}
+        {visibleFilterChips.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+              <Filter className="size-3" aria-hidden />
+              Ativos:
+            </span>
+            {visibleFilterChips.map((chip) => (
+              <span
+                key={chip.key}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold',
+                  chip.tone === 'danger'
+                    ? 'bg-rose-50 text-rose-700'
+                    : chip.tone === 'warning'
+                      ? 'bg-amber-50 text-amber-800'
+                      : 'bg-slate-100 text-slate-600',
+                )}
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={chip.onRemove}
+                  aria-label={`Remover filtro ${chip.label}`}
+                  className="inline-flex size-4 items-center justify-center rounded-full hover:bg-black/10"
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <details className="mt-2 border-t border-slate-200/40 pt-2">
           <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
@@ -2900,7 +3097,7 @@ export function NetworkIntelligencePage() {
         <>
           <p className="break-words text-[11px] leading-relaxed text-slate-600">
             Dados do Elleven/ERP no intervalo de datas. Protocolos podem incluir rompimento, troca de flat e outros tipos
-            mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita busca e filtros da barra superior.
+            mapeados na consulta. KPIs são globais ao período; a tabela abaixo respeita a busca da barra superior.
           </p>
           {maintenanceInsight ? (
             <div className="mt-3 space-y-2">
@@ -3228,6 +3425,42 @@ export function NetworkIntelligencePage() {
             }
           >
             <EquipmentFleetPanel />
+          </Suspense>
+        </motion.section>
+      ) : null}
+
+      {activeWindow === 'cancelamentos' ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+        >
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando painel de cancelamentos…
+              </p>
+            }
+          >
+            <CancellationsPanel riskRanking={riskRanking} />
+          </Suspense>
+        </motion.section>
+      ) : null}
+
+      {activeWindow === 'condominios' ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.02 }}
+        >
+          <Suspense
+            fallback={
+              <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                Carregando painel de condomínios…
+              </p>
+            }
+          >
+            <CondominiumsPanel riskRanking={riskRanking} />
           </Suspense>
         </motion.section>
       ) : null}
