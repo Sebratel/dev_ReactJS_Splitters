@@ -135,6 +135,9 @@ services:
       # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados) — mesmo host usado
       # em dev no VITE_BFF_PROXY_TARGET (ex.: https://api-gateway-bff.sebratel.net.br).
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
+      # Basic Auth do api-gateway-bff (ex.: admin/admin) — só no proxy server-side; evita popup no browser.
+      GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
+      GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
       # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
       AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
       # Desenvolvimento local
