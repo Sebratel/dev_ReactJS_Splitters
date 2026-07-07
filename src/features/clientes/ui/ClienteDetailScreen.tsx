@@ -20,7 +20,7 @@ export function ClienteDetailScreen() {
   const { state, refetch } = useClienteDetail(id)
 
   return (
-    <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-5 pb-10 animate-in fade-in slide-in-from-bottom-4 duration-700 min-w-0">
       <AppPageHeader
         icon={Server}
         badge="Assinante"

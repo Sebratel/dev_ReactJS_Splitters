@@ -151,7 +151,7 @@ export function ClienteDetailMaintenanceSection({
                 </p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={points} margin={{ top: 6, right: 12, left: -12, bottom: 0 }}>
+                  <LineChart data={points} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="label"

@@ -39,8 +39,8 @@ function Field({
       </dt>
       <dd
         className={cn(
-          'mt-0.5 truncate font-semibold leading-snug text-on-surface',
-          mono && 'font-mono text-[13px]',
+          'mt-0.5 font-semibold leading-snug text-on-surface',
+          mono ? 'break-all font-mono text-[13px]' : 'truncate',
         )}
         title={value ?? undefined}
       >

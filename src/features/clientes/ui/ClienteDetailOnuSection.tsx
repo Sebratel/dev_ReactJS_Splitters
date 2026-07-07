@@ -62,19 +62,27 @@ function Metric({
   value,
   icon: Icon,
   valueClassName,
+  breakAll,
 }: {
   label: string
   value: string
   icon?: typeof Gauge
   valueClassName?: string
+  breakAll?: boolean
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
         {Icon ? <Icon size={12} strokeWidth={1.75} /> : null}
         {label}
       </dt>
-      <dd className={cn('mt-1 font-semibold tabular-nums leading-snug text-on-surface', valueClassName)}>
+      <dd
+        className={cn(
+          'mt-1 font-semibold tabular-nums leading-snug text-on-surface',
+          breakAll && 'break-all font-mono text-xs tracking-normal',
+          valueClassName,
+        )}
+      >
         {value}
       </dd>
     </div>
@@ -133,22 +141,24 @@ export function ClienteDetailOnuSection({
       className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-onu-heading"
     >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.08] text-primary">
-          <Radio size={18} strokeWidth={1.75} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.08] text-primary">
+            <Radio size={18} strokeWidth={1.75} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
+              Monitoramento
+            </p>
+            <h2
+              id="cliente-detail-onu-heading"
+              className="mt-0.5 text-base font-semibold tracking-tight text-on-surface"
+            >
+              Diagnóstico da ONU
+            </h2>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
-            Monitoramento
-          </p>
-          <h2
-            id="cliente-detail-onu-heading"
-            className="mt-0.5 text-base font-semibold tracking-tight text-on-surface"
-          >
-            Diagnóstico da ONU
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 self-start">
           <OnuStatusBadge diagnostic={diagnostic} loading={query.isPending} />
           {query.isFetching && !query.isPending ? (
             <RefreshCw size={13} className="animate-spin text-on-surface-variant/40" aria-label="Atualizando" />
@@ -249,9 +259,9 @@ export function ClienteDetailOnuSection({
 
           {/* Barra de força do sinal de recepção (lado ONU). */}
           <div className="mt-4">
-            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
-              <span>Sinal de recepção (RX) — ONU</span>
-              <span className="tabular-nums text-on-surface">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
+              <span className="min-w-0">Sinal de recepção (RX) — ONU</span>
+              <span className="shrink-0 tabular-nums text-on-surface">
                 {noSignal ? 'Sem sinal' : fmtDbm(diagnostic.rxPower)}
               </span>
             </div>
@@ -283,13 +293,18 @@ export function ClienteDetailOnuSection({
               valueClassName={TEMP_VALUE_CLASS[tempLevel]}
             />
             <Metric label="Distância da OLT" value={fmtDistance(diagnostic.distance)} icon={Ruler} />
-            <Metric label="Modelo da ONU" value={diagnostic.onuModel ?? '—'} />
-            <Metric label="OLT" value={diagnostic.oltHostname ?? '—'} />
-            <Metric label="PON link" value={diagnostic.ponlink ?? diagnostic.relatedPonlink ?? '—'} />
-            <Metric label="MAC" value={diagnostic.mac ?? '—'} />
+            <Metric label="Modelo da ONU" value={diagnostic.onuModel ?? '—'} breakAll />
+            <Metric label="OLT" value={diagnostic.oltHostname ?? '—'} breakAll />
+            <Metric
+              label="PON link"
+              value={diagnostic.ponlink ?? diagnostic.relatedPonlink ?? '—'}
+              breakAll
+            />
+            <Metric label="MAC" value={diagnostic.mac ?? '—'} breakAll />
             <Metric
               label="Serial"
               value={diagnostic.serialNumber ?? diagnostic.relatedSerialNumber ?? '—'}
+              breakAll
             />
           </dl>
 
@@ -353,7 +368,7 @@ export function ClienteDetailOnuSection({
           {/* Frescor: o STATUS up/down é near-real-time (trap); as MÉTRICAS
               (rxPower etc.) são lidas em ciclos mais longos. Separados para não
               passar a impressão de dado velho. */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-on-surface-variant/55">
+          <div className="mt-3 flex flex-col items-start gap-1.5 text-[11px] text-on-surface-variant/55 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
             {statusFreshness ? (
               <span className="inline-flex items-center gap-1 font-medium text-on-surface-variant/75">
                 <span

@@ -65,7 +65,9 @@ export function AppPageHeader({
             </span>
             <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">{title}</h1>
             {description ? (
-              <p className="hidden max-w-2xl text-sm leading-relaxed text-neutral-600 md:block">{description}</p>
+              <p className="max-w-2xl text-xs leading-relaxed text-neutral-600 sm:text-sm md:block line-clamp-3 sm:line-clamp-none">
+                {description}
+              </p>
             ) : null}
           </div>
         </div>
@@ -83,7 +85,7 @@ export function AppPageHeader({
                 title={primaryAction.label}
               >
                 <ArrowLeft size={16} aria-hidden className="shrink-0 opacity-80" />
-                <span className="hidden md:inline">{primaryAction.label}</span>
+                <span className="inline max-w-[9.5rem] truncate sm:max-w-none">{primaryAction.label}</span>
               </Link>
             ) : null}
           </div>

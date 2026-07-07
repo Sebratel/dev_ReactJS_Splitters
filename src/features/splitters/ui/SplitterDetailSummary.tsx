@@ -440,13 +440,17 @@ export function SplitterDetailSummary({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
               Massivas
             </p>
-            <p
-              className={cn(
-                'mt-1 inline-flex items-center gap-1.5 text-3xl font-bold leading-tight',
-                hasOpenMassiva ? 'text-rose-600' : 'text-on-surface',
-              )}
-            >
-              {animatedMassivas}
+            <div className="mt-1 flex items-center gap-1.5">
+              <p
+                className="text-3xl font-bold leading-tight tabular-nums text-on-surface"
+                aria-label={
+                  animatedMassivas === 1
+                    ? `${animatedMassivas} registro no histórico deste splitter`
+                    : `${animatedMassivas} registros no histórico deste splitter`
+                }
+              >
+                {animatedMassivas}
+              </p>
               {hasOpenMassiva ? (
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600 ring-1 ring-rose-200 motion-safe:animate-pulse">
                   <BellRing size={13} strokeWidth={2.2} />
@@ -458,16 +462,28 @@ export function SplitterDetailSummary({
                   strokeWidth={2}
                 />
               )}
+            </div>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/55">
+              {animatedMassivas === 0
+                ? 'Nenhuma registrada'
+                : animatedMassivas === 1
+                  ? 'Registro no histórico'
+                  : 'Registros no histórico'}
             </p>
             {hasOpenMassiva ? (
-              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
-                {massivaStats.openTickets} aberta{massivaStats.openTickets === 1 ? '' : 's'} agora
+              <p
+                className="mt-1.5 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold leading-snug text-rose-700 ring-1 ring-inset ring-rose-100"
+                aria-live="polite"
+              >
+                {massivaStats.openTickets === 1
+                  ? '1 em aberto agora'
+                  : `${massivaStats.openTickets} em aberto agora`}
               </p>
-            ) : (
-              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant/55">
-                Sem aberta no momento
+            ) : animatedMassivas > 0 ? (
+              <p className="mt-1.5 text-[10px] font-medium text-on-surface-variant/55">
+                Sem massiva aberta no momento
               </p>
-            )}
+            ) : null}
           </div>
           {/* Card Sinal ONU — span completo, abaixo de Criticidade+Massivas */}
           <div className="col-span-2 rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm">

@@ -58,7 +58,7 @@ export function ClienteDetailClienteSection({
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
             Usuário PPPoE
           </dt>
-          <dd className="mt-1 font-mono text-sm font-semibold text-on-surface">
+          <dd className="mt-1 break-all font-mono text-sm font-semibold text-on-surface">
             {cliente.user || '—'}
           </dd>
         </div>
@@ -114,7 +114,7 @@ export function ClienteDetailClienteSection({
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
             ID autenticação
           </dt>
-          <dd className="mt-1 font-mono text-sm font-semibold text-on-surface">
+          <dd className="mt-1 break-all font-mono text-sm font-semibold text-on-surface">
             {cliente.authenticationId}
           </dd>
         </div>
@@ -123,7 +123,7 @@ export function ClienteDetailClienteSection({
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
             ID cliente
           </dt>
-          <dd className="mt-1 font-mono text-sm font-semibold text-on-surface">
+          <dd className="mt-1 break-all font-mono text-sm font-semibold text-on-surface">
             {cliente.clientId}
           </dd>
         </div>
@@ -133,7 +133,7 @@ export function ClienteDetailClienteSection({
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
               Splitter
             </dt>
-            <dd className="mt-1 font-mono text-sm font-semibold text-primary">
+            <dd className="mt-1 break-all font-mono text-sm font-semibold text-primary">
               {cliente.splitterCode}
             </dd>
           </div>
