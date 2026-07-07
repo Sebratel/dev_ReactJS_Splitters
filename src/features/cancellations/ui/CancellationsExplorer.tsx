@@ -5,6 +5,7 @@ import type { CancellationBucket } from '@/features/cancellations/model/cancella
 import type { MassivaImpactRow } from '@/features/cancellations/model/cancellationsExtras'
 import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 import type { ChurnHeatPoint, HeatMetric } from '@/features/cancellations/ui/ChurnHeatMap'
+import { describeSignalProblemRate } from '@/features/cancellations/lib/signalProblemRate'
 
 // Code-split do mapa: o bundle do Leaflet/leaflet.heat só é baixado quando o mapa monta.
 const ChurnHeatMap = lazy(async () => ({
@@ -220,17 +221,23 @@ export function CancellationsExplorer({
     () =>
       filtered
         .filter((r) => r.lat != null && r.lng != null)
-        .map((r) => ({
-          splitterTitle: r.splitterTitle,
-          oltLabel: r.oltLabel,
-          lat: r.lat as number,
-          lng: r.lng as number,
-          rede: r.rede,
-          total: r.total,
-          usage: r.usage,
-          signalPct: r.signalPct,
-        })),
-    [filtered],
+        .map((r) => {
+          const onu = onuByCode?.get(r.splitterCode)
+          return {
+            splitterTitle: r.splitterTitle,
+            oltLabel: r.oltLabel,
+            lat: r.lat as number,
+            lng: r.lng as number,
+            rede: r.rede,
+            total: r.total,
+            usage: r.usage,
+            signalPct: r.signalPct,
+            onuTotal: onu?.total ?? null,
+            onuDegraded: onu?.degraded ?? null,
+            onuOffline: onu?.offline ?? null,
+          }
+        }),
+    [filtered, onuByCode],
   )
 
   // Adia o recomputo pesado do mapa para não travar troca de filtro/camada.
@@ -444,7 +451,9 @@ export function CancellationsExplorer({
                 <th className="px-3 py-2.5">OLT</th>
                 <th className="px-3 py-2.5">Slot/PON</th>
                 <th className="px-3 py-2.5 text-right">Ocup.</th>
-                <th className="px-3 py-2.5 text-right">Sinal</th>
+                <th className="px-3 py-2.5 text-right" title="% de ONUs atenuadas ou offline (≥8% atenção, ≥15% crítico)">
+                  Sinal
+                </th>
                 <th className="px-3 py-2.5 text-right">Rede</th>
                 <th className="px-3 py-2.5 text-right">Total</th>
                 <th className="px-3 py-2.5 text-right">Pós-massiva</th>
@@ -469,8 +478,23 @@ export function CancellationsExplorer({
                   <td className={`px-3 py-2 text-right tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700' : 'text-neutral-600'}`}>
                     {Math.round(r.usage)}%
                   </td>
-                  <td className={`px-3 py-2 text-right tabular-nums ${r.signalPct != null && r.signalPct >= 15 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
-                    {r.signalPct != null ? `${r.signalPct.toFixed(1)}%` : '—'}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {r.signalPct != null ? (() => {
+                      const tone = describeSignalProblemRate(r.signalPct)
+                      const cellClass =
+                        tone.level === 'critical'
+                          ? 'font-bold text-rose-700'
+                          : tone.level === 'attention'
+                            ? 'font-semibold text-amber-700'
+                            : 'font-medium text-emerald-700'
+                      return (
+                        <span className={cellClass} title={`${tone.label} — ${tone.hint}`}>
+                          {r.signalPct.toFixed(1)}%
+                        </span>
+                      )
+                    })() : (
+                      <span className="text-neutral-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmt(r.total)}</td>
@@ -495,7 +519,7 @@ export function CancellationsExplorer({
         </div>
         <p className="flex items-center gap-1.5 border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400">
           <AlertTriangle className="size-3.5 text-amber-500" aria-hidden />
-          Clique na OLT ou no Slot/PON para descer o recorte. "Sinal" = % de ONUs degradadas/offline; "Pós-massiva" = churn de rede em até 30 dias após uma massiva do splitter.
+          Clique na OLT ou no Slot/PON para descer o recorte. &quot;Sinal&quot; = % de ONUs atenuadas ou offline (verde saudável, âmbar ≥8%, vermelho ≥15%). &quot;Pós-massiva&quot; = churn de rede em até 30 dias após uma massiva do splitter.
         </p>
       </div>
     </div>
