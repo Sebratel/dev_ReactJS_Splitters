@@ -40,7 +40,7 @@ export function ClienteSolicitationEntry({
           <dt className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/50">
             Protocolo
           </dt>
-          <dd className="mt-0.5 font-mono text-xs font-medium text-on-surface">
+          <dd className="mt-0.5 break-all font-mono text-xs font-medium text-on-surface">
             {solicitation.protocol || '—'}
           </dd>
         </div>

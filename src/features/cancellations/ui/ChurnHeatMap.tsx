@@ -2,6 +2,10 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { useEffect, useMemo } from 'react'
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet'
+import {
+  describeSignalProblemRate,
+  formatSignalProblemCount,
+} from '@/features/cancellations/lib/signalProblemRate'
 
 const OSM_ATTR =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -18,6 +22,9 @@ export type ChurnHeatPoint = {
   total: number
   usage: number | null
   signalPct: number | null
+  onuTotal?: number | null
+  onuDegraded?: number | null
+  onuOffline?: number | null
 }
 
 /** leaflet.heat é UMD e espera `global L`; garantimos antes do import dinâmico. */
@@ -61,6 +68,69 @@ function hasMetric(p: ChurnHeatPoint, metric: HeatMetric): boolean {
   if (metric === 'saturacao') return p.usage != null && p.usage > 0
   if (metric === 'sinal') return p.signalPct != null && p.signalPct > 0
   return p.rede > 0
+}
+
+function SignalProblemPopupBlock({ point }: { point: ChurnHeatPoint }) {
+  if (point.signalPct == null) return null
+  const tone = describeSignalProblemRate(point.signalPct)
+  const countLabel = formatSignalProblemCount(
+    point.onuDegraded,
+    point.onuOffline,
+    point.onuTotal,
+  )
+
+  return (
+    <tr>
+      <td colSpan={2} style={{ paddingTop: 6 }}>
+        <div
+          style={{
+            borderRadius: 8,
+            border: `1px solid ${tone.borderColor}`,
+            background: tone.backgroundColor,
+            padding: '8px 10px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', lineHeight: 1.3 }}>
+              ONUs atenuadas ou offline
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: tone.badgeColor,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {tone.label}
+            </span>
+          </div>
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 20,
+              fontWeight: 800,
+              lineHeight: 1.1,
+              textAlign: 'right',
+              color: tone.valueColor,
+            }}
+          >
+            {point.signalPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+          </p>
+          {countLabel ? (
+            <p style={{ margin: '2px 0 0', fontSize: 10, textAlign: 'right', color: '#64748b' }}>
+              {countLabel}
+            </p>
+          ) : null}
+          <p style={{ margin: '6px 0 0', fontSize: 9, lineHeight: 1.35, color: '#94a3b8' }}>
+            {tone.hint}
+          </p>
+        </div>
+      </td>
+    </tr>
+  )
 }
 
 function HeatLayer({ latlngs, gradient }: { latlngs: [number, number, number][]; gradient: Record<number, string> }) {
@@ -151,9 +221,7 @@ export function ChurnHeatMap({ points, metric }: { points: ChurnHeatPoint[]; met
                     {p.usage != null ? (
                       <tr><td style={{ color: '#64748b' }}>Ocupação</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{p.usage.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%</td></tr>
                     ) : null}
-                    {p.signalPct != null ? (
-                      <tr><td style={{ color: '#64748b' }}>Sinal deg.+off.</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{p.signalPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%</td></tr>
-                    ) : null}
+                    <SignalProblemPopupBlock point={p} />
                   </tbody>
                 </table>
               </div>

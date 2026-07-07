@@ -1,10 +1,18 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Download, Filter, MapPin, Radio, Search, Zap } from 'lucide-react'
 import type { IntelligenceRiskRankingRow } from '@/features/intelligence/hooks/useNetworkIntelligenceData'
-import type { CancellationBucket } from '@/features/cancellations/model/cancellationsSummary'
+import type { CancellationBucket, CancellationCategory } from '@/features/cancellations/model/cancellationsSummary'
 import type { MassivaImpactRow } from '@/features/cancellations/model/cancellationsExtras'
 import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 import type { ChurnHeatPoint, HeatMetric } from '@/features/cancellations/ui/ChurnHeatMap'
+import { describeSignalProblemRate } from '@/features/cancellations/lib/signalProblemRate'
+import {
+  aggregateMix,
+  bucketMatchesCategories,
+  redeCountForCategories,
+  sumBucketCategories,
+} from '@/features/cancellations/lib/cancellationCategoryFilter'
+import { CancellationMotiveFilter } from '@/features/cancellations/ui/CancellationMotiveFilter'
 
 // Code-split do mapa: o bundle do Leaflet/leaflet.heat só é baixado quando o mapa monta.
 const ChurnHeatMap = lazy(async () => ({
@@ -24,6 +32,8 @@ type CancellationsExplorerProps = {
   bySplitter: CancellationBucket[]
   onuByCode?: Map<string, OnuLite>
   massivaImpact?: MassivaImpactRow[]
+  categoryFilter?: CancellationCategory[]
+  onCategoryFilterChange?: (next: CancellationCategory[]) => void
 }
 
 type ExplorerRow = {
@@ -61,12 +71,17 @@ export function CancellationsExplorer({
   bySplitter,
   onuByCode,
   massivaImpact,
+  categoryFilter: categoryFilterProp,
+  onCategoryFilterChange,
 }: CancellationsExplorerProps) {
   const [olt, setOlt] = useState('all')
   const [slot, setSlot] = useState('all')
   const [pon, setPon] = useState('all')
   const [search, setSearch] = useState('')
   const [heatMetric, setHeatMetric] = useState<HeatMetric>('churn')
+  const [internalCategoryFilter, setInternalCategoryFilter] = useState<CancellationCategory[]>([])
+  const categoryFilter = categoryFilterProp ?? internalCategoryFilter
+  const setCategoryFilter = onCategoryFilterChange ?? setInternalCategoryFilter
   // Monta o mapa só após o primeiro paint (tira o Leaflet do caminho crítico da aba).
   const [mapMounted, setMapMounted] = useState(false)
   useEffect(() => {
@@ -136,7 +151,7 @@ export function CancellationsExplorer({
     return [...set].sort((a, b) => a - b)
   }, [rows, olt, slot])
 
-  const filtered = useMemo(() => {
+  const geoFiltered = useMemo(() => {
     const q = norm(search)
     return rows.filter((r) => {
       if (olt !== 'all' && r.oltLabel !== olt) return false
@@ -149,6 +164,32 @@ export function CancellationsExplorer({
       return true
     })
   }, [rows, olt, slot, pon, search])
+
+  const motiveCounts = useMemo(() => {
+    const buckets: CancellationBucket[] = []
+    for (const r of geoFiltered) {
+      const b = churnByTitle.get(norm(r.splitterTitle))
+      if (b) buckets.push(b)
+    }
+    return aggregateMix(buckets, [])
+  }, [geoFiltered, churnByTitle])
+
+  const filtered = useMemo(() => {
+    return geoFiltered
+      .map((r) => {
+        const bucket = churnByTitle.get(norm(r.splitterTitle))
+        if (!bucket) return { ...r, rede: 0, total: 0, postMassivaRede: 0 }
+        if (!bucketMatchesCategories(bucket, categoryFilter)) {
+          return { ...r, rede: 0, total: 0, postMassivaRede: 0 }
+        }
+        const total = sumBucketCategories(bucket, categoryFilter)
+        const rede = redeCountForCategories(bucket, categoryFilter)
+        const postMassivaRede =
+          categoryFilter.length === 0 || categoryFilter.includes('rede') ? r.postMassivaRede : 0
+        return { ...r, rede, total, postMassivaRede }
+      })
+      .filter((r) => r.total > 0)
+  }, [geoFiltered, churnByTitle, categoryFilter])
 
   const scope = useMemo(() => {
     let rede = 0
@@ -163,27 +204,28 @@ export function CancellationsExplorer({
       if (r.rede > 0) churnedSplitters += 1
       postMassiva += r.postMassivaRede
     }
-    // Mix de motivos (categorias) do recorte — soma dos buckets de churn dos splitters filtrados.
-    const mix = { rede: 0, tecnico: 0, financeiro: 0, pre_instalacao: 0, mudanca: 0, operacional: 0, outros: 0 }
+    const buckets: CancellationBucket[] = []
     for (const r of filtered) {
       const b = churnByTitle.get(norm(r.splitterTitle))
-      if (!b) continue
-      mix.rede += b.rede; mix.tecnico += b.tecnico; mix.financeiro += b.financeiro
-      mix.pre_instalacao += b.pre_instalacao; mix.mudanca += b.mudanca
-      mix.operacional += b.operacional; mix.outros += b.outros
+      if (b) buckets.push(b)
     }
+    const mix = aggregateMix(buckets, categoryFilter)
     return {
       rede, total, active, churnedSplitters, postMassiva,
       splitters: filtered.length,
       rate: ratePer100(rede, active),
       mix,
     }
-  }, [filtered, churnByTitle])
+  }, [filtered, churnByTitle, categoryFilter])
 
-  const ranking = useMemo(
-    () => [...filtered].filter((r) => r.total > 0).sort((a, b) => b.rede - a.rede || b.total - a.total).slice(0, 100),
-    [filtered],
-  )
+  const ranking = useMemo(() => {
+    const redeSort = categoryFilter.length === 0 || categoryFilter.includes('rede')
+    return [...filtered]
+      .sort((a, b) =>
+        redeSort ? b.rede - a.rede || b.total - a.total : b.total - a.total || b.rede - a.rede,
+      )
+      .slice(0, 100)
+  }, [filtered, categoryFilter])
 
   // Nível de agregação conforme o drill atual: OLT → Slot → PON → (splitter = ranking).
   const level: 'olt' | 'slot' | 'pon' | 'splitter' =
@@ -220,25 +262,32 @@ export function CancellationsExplorer({
     () =>
       filtered
         .filter((r) => r.lat != null && r.lng != null)
-        .map((r) => ({
-          splitterTitle: r.splitterTitle,
-          oltLabel: r.oltLabel,
-          lat: r.lat as number,
-          lng: r.lng as number,
-          rede: r.rede,
-          total: r.total,
-          usage: r.usage,
-          signalPct: r.signalPct,
-        })),
-    [filtered],
+        .map((r) => {
+          const onu = onuByCode?.get(r.splitterCode)
+          return {
+            splitterTitle: r.splitterTitle,
+            oltLabel: r.oltLabel,
+            lat: r.lat as number,
+            lng: r.lng as number,
+            rede: r.rede,
+            total: r.total,
+            usage: r.usage,
+            signalPct: r.signalPct,
+            onuTotal: onu?.total ?? null,
+            onuDegraded: onu?.degraded ?? null,
+            onuOffline: onu?.offline ?? null,
+          }
+        }),
+    [filtered, onuByCode],
   )
 
   // Adia o recomputo pesado do mapa para não travar troca de filtro/camada.
   const deferredHeat = useDeferredValue(heatPoints)
 
-  const hasFilter = olt !== 'all' || slot !== 'all' || pon !== 'all' || search.trim() !== ''
+  const hasFilter =
+    olt !== 'all' || slot !== 'all' || pon !== 'all' || search.trim() !== '' || categoryFilter.length > 0
   const clearFilters = () => {
-    setOlt('all'); setSlot('all'); setPon('all'); setSearch('')
+    setOlt('all'); setSlot('all'); setPon('all'); setSearch(''); setCategoryFilter([])
   }
 
   const exportCsv = () => {
@@ -306,6 +355,12 @@ export function CancellationsExplorer({
             Limpar
           </button>
         </div>
+        <CancellationMotiveFilter
+          className="mt-3 border-t border-neutral-100 pt-3"
+          selected={categoryFilter}
+          onChange={setCategoryFilter}
+          counts={motiveCounts}
+        />
       </div>
 
       {/* KPIs do recorte + mix de motivos */}
@@ -324,11 +379,27 @@ export function CancellationsExplorer({
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Mix de motivos no recorte</p>
           {scope.total > 0 ? (
             <div className="space-y-1">
-              <MixBar label="Rede/qualidade" value={scope.mix.rede} total={scope.total} color="bg-rose-500" />
-              <MixBar label="Financeiro" value={scope.mix.financeiro} total={scope.total} color="bg-slate-400" />
-              <MixBar label="Mudança" value={scope.mix.mudanca} total={scope.total} color="bg-violet-400" />
-              <MixBar label="Técnico" value={scope.mix.tecnico} total={scope.total} color="bg-amber-500" />
-              <MixBar label="Outros" value={scope.mix.pre_instalacao + scope.mix.operacional + scope.mix.outros} total={scope.total} color="bg-neutral-300" />
+              {(categoryFilter.length === 0 || categoryFilter.includes('rede')) && scope.mix.rede > 0 ? (
+                <MixBar label="Rede/qualidade" value={scope.mix.rede} total={scope.total} color="bg-rose-500" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('financeiro')) && scope.mix.financeiro > 0 ? (
+                <MixBar label="Financeiro" value={scope.mix.financeiro} total={scope.total} color="bg-slate-400" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('mudanca')) && scope.mix.mudanca > 0 ? (
+                <MixBar label="Mudança" value={scope.mix.mudanca} total={scope.total} color="bg-violet-400" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('tecnico')) && scope.mix.tecnico > 0 ? (
+                <MixBar label="Técnico" value={scope.mix.tecnico} total={scope.total} color="bg-amber-500" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('pre_instalacao')) && scope.mix.pre_instalacao > 0 ? (
+                <MixBar label="Pré-instalação" value={scope.mix.pre_instalacao} total={scope.total} color="bg-sky-400" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('operacional')) && scope.mix.operacional > 0 ? (
+                <MixBar label="Operacional" value={scope.mix.operacional} total={scope.total} color="bg-neutral-400" />
+              ) : null}
+              {(categoryFilter.length === 0 || categoryFilter.includes('outros')) && scope.mix.outros > 0 ? (
+                <MixBar label="Outros" value={scope.mix.outros} total={scope.total} color="bg-neutral-300" />
+              ) : null}
             </div>
           ) : (
             <p className="text-xs text-neutral-400">Sem cancelamentos no recorte.</p>
@@ -444,7 +515,9 @@ export function CancellationsExplorer({
                 <th className="px-3 py-2.5">OLT</th>
                 <th className="px-3 py-2.5">Slot/PON</th>
                 <th className="px-3 py-2.5 text-right">Ocup.</th>
-                <th className="px-3 py-2.5 text-right">Sinal</th>
+                <th className="px-3 py-2.5 text-right" title="% de ONUs atenuadas ou offline (≥8% atenção, ≥15% crítico)">
+                  Sinal
+                </th>
                 <th className="px-3 py-2.5 text-right">Rede</th>
                 <th className="px-3 py-2.5 text-right">Total</th>
                 <th className="px-3 py-2.5 text-right">Pós-massiva</th>
@@ -469,8 +542,23 @@ export function CancellationsExplorer({
                   <td className={`px-3 py-2 text-right tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700' : 'text-neutral-600'}`}>
                     {Math.round(r.usage)}%
                   </td>
-                  <td className={`px-3 py-2 text-right tabular-nums ${r.signalPct != null && r.signalPct >= 15 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
-                    {r.signalPct != null ? `${r.signalPct.toFixed(1)}%` : '—'}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {r.signalPct != null ? (() => {
+                      const tone = describeSignalProblemRate(r.signalPct)
+                      const cellClass =
+                        tone.level === 'critical'
+                          ? 'font-bold text-rose-700'
+                          : tone.level === 'attention'
+                            ? 'font-semibold text-amber-700'
+                            : 'font-medium text-emerald-700'
+                      return (
+                        <span className={cellClass} title={`${tone.label} — ${tone.hint}`}>
+                          {r.signalPct.toFixed(1)}%
+                        </span>
+                      )
+                    })() : (
+                      <span className="text-neutral-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmt(r.total)}</td>
@@ -495,7 +583,7 @@ export function CancellationsExplorer({
         </div>
         <p className="flex items-center gap-1.5 border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400">
           <AlertTriangle className="size-3.5 text-amber-500" aria-hidden />
-          Clique na OLT ou no Slot/PON para descer o recorte. "Sinal" = % de ONUs degradadas/offline; "Pós-massiva" = churn de rede em até 30 dias após uma massiva do splitter.
+          Clique na OLT ou no Slot/PON para descer o recorte. &quot;Sinal&quot; = % de ONUs atenuadas ou offline (verde saudável, âmbar ≥8%, vermelho ≥15%). &quot;Pós-massiva&quot; = churn de rede em até 30 dias após uma massiva do splitter.
         </p>
       </div>
     </div>

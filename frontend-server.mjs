@@ -16,9 +16,46 @@ const backendOrigin = String(process.env.BACKEND_ORIGIN || '').replace(/\/$/, ''
 // afetados). É um destino DIFERENTE do backend Node — por isso o roteamento por prefixo.
 const gatewayOrigin = String(process.env.GATEWAY_ORIGIN || '').replace(/\/$/, '')
 const autoIspOrigin = String(process.env.AUTOISP_ORIGIN || '').replace(/\/$/, '')
+const gatewayBasicAuthUser = String(process.env.GATEWAY_BASIC_AUTH_USER || '').trim()
+const gatewayBasicAuthPassword = String(process.env.GATEWAY_BASIC_AUTH_PASSWORD || '').trim()
+const gatewayBasicAuthEnabled =
+  gatewayBasicAuthUser !== '' && gatewayBasicAuthPassword !== ''
+
+/** Remove `WWW-Authenticate` para o browser não abrir o popup nativo de Basic Auth. */
+function filterProxyResponseHeaders(upstreamHeaders) {
+  const filtered = { ...upstreamHeaders }
+  for (const key of Object.keys(filtered)) {
+    if (key.toLowerCase() === 'www-authenticate') {
+      delete filtered[key]
+    }
+  }
+  return filtered
+}
+
+/**
+ * Basic Auth do gateway fica no proxy (server-side). O JWT Google do usuário segue em
+ * `X-Forwarded-Authorization` para o BFF validar o Bearer sem popup no browser.
+ */
+function buildGatewayProxyHeaders(reqHeaders) {
+  const headers = { ...reqHeaders }
+  const incomingAuth =
+    typeof headers.authorization === 'string' ? headers.authorization.trim() : ''
+
+  if (gatewayBasicAuthEnabled) {
+    const token = Buffer.from(`${gatewayBasicAuthUser}:${gatewayBasicAuthPassword}`).toString(
+      'base64',
+    )
+    headers.authorization = `Basic ${token}`
+    if (/^Bearer /i.test(incomingAuth)) {
+      headers['x-forwarded-authorization'] = incomingAuth
+    }
+  }
+
+  return headers
+}
 
 /** Encaminha a requisição atual para `originBase`, opcionalmente reescrevendo o path. */
-const proxyRequest = (req, res, originBase, rewrite) => {
+const proxyRequest = (req, res, originBase, rewrite, options = {}) => {
   let target
   try {
     const rawPath = rewrite ? rewrite(req.url || '/') : req.url || '/'
@@ -30,7 +67,9 @@ const proxyRequest = (req, res, originBase, rewrite) => {
   }
   const isHttps = target.protocol === 'https:'
   const client = isHttps ? https : http
-  const headers = { ...req.headers, host: target.host }
+  const baseHeaders = options.gatewayAuth ? buildGatewayProxyHeaders(req.headers) : req.headers
+  const headers = { ...baseHeaders, host: target.host }
+  const stripWwwAuthenticate = options.stripWwwAuthenticate === true
   const proxyReq = client.request(
     {
       protocol: target.protocol,
@@ -42,7 +81,10 @@ const proxyRequest = (req, res, originBase, rewrite) => {
       servername: isHttps ? target.hostname : undefined,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers)
+      const responseHeaders = stripWwwAuthenticate
+        ? filterProxyResponseHeaders(proxyRes.headers)
+        : proxyRes.headers
+      res.writeHead(proxyRes.statusCode || 502, responseHeaders)
       proxyRes.pipe(res)
     },
   )
@@ -106,7 +148,10 @@ const server = http.createServer(async (req, res) => {
   // Rotas do gateway ERP (massivas/afetados) → GATEWAY_ORIGIN. Precede o /api genérico.
   if (url.pathname.startsWith('/api/v1/')) {
     if (gatewayOrigin) {
-      proxyRequest(req, res, gatewayOrigin)
+      proxyRequest(req, res, gatewayOrigin, undefined, {
+        gatewayAuth: true,
+        stripWwwAuthenticate: true,
+      })
     } else {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
       res.end(JSON.stringify({ error: 'bad_gateway', message: 'GATEWAY_ORIGIN não configurado no frontend.' }))

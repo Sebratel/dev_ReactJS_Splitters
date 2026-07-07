@@ -33,7 +33,15 @@ import {
   CANCELLATION_CATEGORY_LABELS,
   CANCELLATION_CATEGORY_ORDER,
   type CancellationBucket,
+  type CancellationCategory,
 } from '@/features/cancellations/model/cancellationsSummary'
+import {
+  aggregateMix,
+  bucketMatchesCategories,
+  redeCountForCategories,
+  sumBucketCategories,
+} from '@/features/cancellations/lib/cancellationCategoryFilter'
+import { CancellationMotiveFilter } from '@/features/cancellations/ui/CancellationMotiveFilter'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
@@ -99,6 +107,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
   const [preset, setPreset] = useState<PeriodPreset>('6m')
   const [dimension, setDimension] = useState<Dimension>('accessPoint')
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('all')
+  const [categoryFilter, setCategoryFilter] = useState<CancellationCategory[]>([])
   const startIso = useMemo(() => startIsoForPreset(preset), [preset])
 
   const query = useCancellationsSummary(startIso)
@@ -117,7 +126,30 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
     if (tipoFilter !== 'all' && dimension === 'splitter') {
       rows = rows.filter((r) => (r.tipoLocal ?? 'UNIDADE') === tipoFilter)
     }
+    if (categoryFilter.length > 0) {
+      rows = rows
+        .filter((r) => bucketMatchesCategories(r, categoryFilter))
+        .map((r) => ({
+          ...r,
+          total: sumBucketCategories(r, categoryFilter),
+          rede: redeCountForCategories(r, categoryFilter),
+        }))
+    }
     return rows
+  }, [query.data, dimension, tipoFilter, categoryFilter])
+
+  const rankingMotiveCounts = useMemo(() => {
+    const data = query.data
+    if (!data) return undefined
+    let rows: CancellationBucket[]
+    if (dimension === 'splitter') rows = data.bySplitter
+    else if (dimension === 'city') rows = data.byCity
+    else if (dimension === 'condominio') rows = data.byCondominio
+    else rows = data.byAccessPoint
+    if (tipoFilter !== 'all' && dimension === 'splitter') {
+      rows = rows.filter((r) => (r.tipoLocal ?? 'UNIDADE') === tipoFilter)
+    }
+    return aggregateMix(rows, [])
   }, [query.data, dimension, tipoFilter])
 
   const chartData = useMemo(
@@ -504,7 +536,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
           <p className="px-1 text-sm font-bold text-neutral-800">
             Explorador da rede{' '}
             <span className="font-normal text-neutral-500">
-              — filtre qualquer OLT, Slot, PON ou splitter e cruze com sinal, ocupação e massivas
+              — filtre por OLT, Slot, PON, splitter ou motivo de cancelamento
             </span>
           </p>
           <CancellationsExplorer
@@ -512,6 +544,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             bySplitter={data.churnBySplitterFull ?? data.bySplitter}
             onuByCode={onuQuery.data}
             massivaImpact={impact?.ranking}
+            categoryFilter={categoryFilter}
+            onCategoryFilterChange={setCategoryFilter}
           />
         </div>
       ) : null}
@@ -565,6 +599,13 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             </div>
           </div>
         </div>
+        <div className="border-b border-neutral-100 px-4 py-3">
+          <CancellationMotiveFilter
+            selected={categoryFilter}
+            onChange={setCategoryFilter}
+            counts={rankingMotiveCounts}
+          />
+        </div>
         <div className="max-h-[28rem] overflow-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="sticky top-0 z-[1] bg-white">
@@ -577,7 +618,14 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {rankingRows.slice(0, 50).map((row) => (
+              {rankingRows
+                .slice(0, 50)
+                .sort((a, b) =>
+                  categoryFilter.length === 0 || categoryFilter.includes('rede')
+                    ? b.rede - a.rede || b.total - a.total
+                    : b.total - a.total || b.rede - a.rede,
+                )
+                .map((row) => (
                 <tr key={row.key} className="hover:bg-neutral-50/70">
                   <td className="px-4 py-2 font-medium text-neutral-900">{row.key}</td>
                   {dimension === 'splitter' ? (
@@ -586,13 +634,13 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                     </td>
                   ) : null}
                   <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
-                    {row.rede.toLocaleString('pt-BR')}
+                    {row.rede > 0 ? row.rede.toLocaleString('pt-BR') : '—'}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
                     {row.total.toLocaleString('pt-BR')}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
-                    {pct(row.rede, row.total)}
+                    {row.rede > 0 ? pct(row.rede, row.total) : '—'}
                   </td>
                 </tr>
               ))}

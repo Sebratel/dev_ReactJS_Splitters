@@ -168,9 +168,27 @@ export function SplitterCard({
                 />
                 <span className="sr-only">{`Score ${operationalScore.score}`}</span>
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-low/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70">
+              <span
+                className={cn(
+                  'inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
+                  massivaStats.openTickets > 0
+                    ? 'border-rose-200 bg-rose-50 text-rose-800'
+                    : 'border-outline-variant bg-surface-container-low/70 text-on-surface-variant/70',
+                )}
+                title={
+                  massivaStats.openTickets > 0
+                    ? `${massivaStats.openTickets} em aberto agora · ${massivaStats.totalTickets} no histórico`
+                    : `${massivaStats.totalTickets} no histórico · sem aberta agora`
+                }
+              >
                 <Siren size={12} strokeWidth={2} />
-                {massivaStats.totalTickets} massivas
+                {massivaStats.openTickets > 0 ? (
+                  <>
+                    {massivaStats.openTickets} aberta · {massivaStats.totalTickets} hist.
+                  </>
+                ) : (
+                  <>{massivaStats.totalTickets} no histórico</>
+                )}
               </span>
             </div>
 

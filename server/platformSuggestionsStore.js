@@ -88,6 +88,11 @@ export function isPlatformSuggestionsReadOnly() {
   return true;
 }
 
+/** App do Hub Apps cujas sugestoes este consumidor pode listar/alterar. */
+export function getPlatformSuggestionsAppId() {
+  return toCleanString(process.env.PLATFORM_SUGGESTIONS_APP_ID) || 'app-splitters-sebratel';
+}
+
 function buildError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -136,6 +141,7 @@ async function ensureSuggestionsTables() {
         title VARCHAR(191) NOT NULL,
         description TEXT NOT NULL,
         sector VARCHAR(120) NOT NULL,
+        app_id VARCHAR(64) NOT NULL DEFAULT 'app-splitters-sebratel',
         category VARCHAR(120) NULL,
         status VARCHAR(24) NOT NULL DEFAULT 'open',
         author_uid VARCHAR(128) NOT NULL,
@@ -150,6 +156,7 @@ async function ensureSuggestionsTables() {
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_${SUGGESTIONS_TABLE}_status (status),
         INDEX idx_${SUGGESTIONS_TABLE}_sector (sector),
+        INDEX idx_${SUGGESTIONS_TABLE}_app_id (app_id),
         INDEX idx_${SUGGESTIONS_TABLE}_score_created (score, created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
@@ -191,6 +198,12 @@ async function ensureSuggestionsTables() {
 
     await ensureColumnExists(pool, SUGGESTIONS_TABLE, 'author_photo_url', 'VARCHAR(1024) NULL');
     await ensureColumnExists(pool, SUGGESTIONS_TABLE, 'comments_count', 'INT NOT NULL DEFAULT 0');
+    await ensureColumnExists(
+      pool,
+      SUGGESTIONS_TABLE,
+      'app_id',
+      "VARCHAR(64) NOT NULL DEFAULT 'app-splitters-sebratel'",
+    );
     await ensureColumnExists(pool, VOTES_TABLE, 'user_photo_url', 'VARCHAR(1024) NULL');
   })().catch((error) => {
     readyPromise = null;
@@ -359,8 +372,9 @@ async function fetchSuggestionRowsByIds(connectionOrPool, suggestionIds, viewerU
         ON v.suggestion_id = s.id
        AND v.user_uid = ?
       WHERE s.id IN (?)
+        AND s.app_id = ?
     `,
-    [toCleanString(viewerUid), ids],
+    [toCleanString(viewerUid), ids, getPlatformSuggestionsAppId()],
   );
 
   const rowList = Array.isArray(rows) ? rows : [];
@@ -386,8 +400,8 @@ async function fetchSuggestionById(connectionOrPool, suggestionId, viewerUid = n
 
 async function ensureSuggestionExists(connection, suggestionId) {
   const [rows] = await connection.query(
-    `SELECT id FROM ${SUGGESTIONS_TABLE} WHERE id = ? LIMIT 1 FOR UPDATE`,
-    [suggestionId],
+    `SELECT id FROM ${SUGGESTIONS_TABLE} WHERE id = ? AND app_id = ? LIMIT 1 FOR UPDATE`,
+    [suggestionId, getPlatformSuggestionsAppId()],
   );
   if (!Array.isArray(rows) || rows.length === 0) {
     throw buildError('Sugestao nao encontrada.', 404);
@@ -426,10 +440,11 @@ export async function listPlatformSuggestions(input = {}) {
         LEFT JOIN ${VOTES_TABLE} v
           ON v.suggestion_id = s.id
          AND v.user_uid = ?
+        WHERE s.app_id = ?
         ORDER BY s.score DESC, s.likes_count DESC, s.created_at DESC
         LIMIT ?
       `,
-      [viewerUid, limit],
+      [viewerUid, getPlatformSuggestionsAppId(), limit],
     );
 
     const rowList = Array.isArray(rows) ? rows : [];
@@ -481,6 +496,7 @@ export async function createPlatformSuggestion(input) {
           title,
           description,
           sector,
+          app_id,
           category,
           status,
           author_uid,
@@ -488,12 +504,13 @@ export async function createPlatformSuggestion(input) {
           author_name,
           author_photo_url
         )
-        VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
       `,
       [
         title.slice(0, 191),
         description.slice(0, 8000),
         sector.slice(0, 120),
+        toCleanString(input?.appId) || getPlatformSuggestionsAppId(),
         category ? category.slice(0, 120) : null,
         authorUid.slice(0, 128),
         authorEmail.slice(0, 191),
@@ -719,8 +736,9 @@ export async function updatePlatformSuggestionStatus(input) {
         UPDATE ${SUGGESTIONS_TABLE}
         SET status = ?
         WHERE id = ?
+          AND app_id = ?
       `,
-      [status, suggestionId],
+      [status, suggestionId, getPlatformSuggestionsAppId()],
     );
     if (Number(result?.affectedRows ?? 0) === 0) {
       throw buildError('Sugestao nao encontrada.', 404);

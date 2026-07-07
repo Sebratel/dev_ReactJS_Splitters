@@ -59,7 +59,7 @@ import { env } from '@/shared/config/env'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { Download, RefreshCw } from 'lucide-react'
+import { ChevronLeft, Download, RefreshCw } from 'lucide-react'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { MassivaTicketCard } from '@/features/massiva/ui/MassivaTicketCard'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
@@ -790,8 +790,8 @@ export function MassivaTicketsSection({
         <div
           className={
             embedded
-              ? 'grid grid-cols-1 gap-2 sm:grid-cols-2'
-              : 'grid gap-3 md:grid-cols-4'
+              ? 'grid grid-cols-1 items-center gap-2 sm:grid-cols-2'
+              : 'grid items-center gap-3 md:grid-cols-4'
           }
         >
           <div
@@ -822,40 +822,52 @@ export function MassivaTicketsSection({
             placeholder="Pesquisar…"
             className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
-          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            {([
-              { id: '7d', label: '7d' },
-              { id: '30d', label: '30d' },
-              { id: '90d', label: '90d' },
-              { id: '6m', label: '6m' },
-              { id: '12m', label: '12m' },
-              { id: 'month', label: 'Mês' },
-            ] as Array<{ id: PeriodPreset; label: string }>).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setUiState((prev) => ({ ...prev, periodPreset: opt.id }))}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                  periodPreset === opt.id
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-600 hover:bg-neutral-50'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex min-h-10 items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             {periodPreset === 'month' ? (
-              <select
-                value={selectedMonth}
-                onChange={(e) => setUiState((prev) => ({ ...prev, selectedMonth: e.target.value }))}
-                className="ml-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-neutral-400 focus:outline-none"
-                aria-label="Selecionar mês"
-              >
-                {monthOptions.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            ) : null}
+              <>
+                <button
+                  type="button"
+                  onClick={() => setUiState((prev) => ({ ...prev, periodPreset: '30d' }))}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+                  aria-label="Voltar aos períodos rápidos"
+                  title="Voltar aos períodos"
+                >
+                  <ChevronLeft className="size-4" aria-hidden />
+                </button>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setUiState((prev) => ({ ...prev, selectedMonth: e.target.value }))}
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                  aria-label="Selecionar mês"
+                >
+                  {monthOptions.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              ([
+                { id: '7d', label: '7d' },
+                { id: '30d', label: '30d' },
+                { id: '90d', label: '90d' },
+                { id: '6m', label: '6m' },
+                { id: '12m', label: '12m' },
+                { id: 'month', label: 'Mês' },
+              ] as Array<{ id: PeriodPreset; label: string }>).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setUiState((prev) => ({ ...prev, periodPreset: opt.id }))}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+                    periodPreset === opt.id
+                      ? 'bg-neutral-900 text-white'
+                      : 'text-neutral-600 hover:bg-neutral-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))
+            )}
           </div>
           <select
             value={impactRange}
