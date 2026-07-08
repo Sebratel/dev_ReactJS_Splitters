@@ -95,6 +95,8 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     oltCode: toStringValue(row['CONCENTRADOR_CODE']),
     oltIntegrationCode: toStringValue(row['CONCENTRADOR_CODE']),
     oltDescription: toStringValue(row['CONCENTRADOR']),
+    accessPointCode: toNullableString(pickRowValue(row, 'PONTO DE ACESSO CODE')),
+    accessPointTitle: toNullableString(pickRowValue(row, 'PONTO DE ACESSO')),
     busyCount: toNumber(row['BUSY_COUNT']),
     tipoLocal: toTipoLocal(row['TIPO LOCAL']),
     nomeCondominio: toNullableString(
@@ -103,6 +105,8 @@ export async function fetchSplitterByCode(code: string): Promise<Splitter | null
     cityCadastro: toNullableString(row['CIDADE[SPLT.SECUNDARIO]']),
     neighborhoodCadastro: toNullableString(row['BAIRRO[SPLT.SECUNDARIO]']),
     hasCorporateClients: row['TEM_CORPORATIVO_SPLITTER'] === true,
+    oltSlot: null,
+    oltPort: null,
     createdAt: null,
   }
 }

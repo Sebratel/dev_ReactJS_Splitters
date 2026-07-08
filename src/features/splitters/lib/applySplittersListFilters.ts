@@ -48,7 +48,7 @@ function matchesOlt(
   oltSet: ReadonlySet<string> | null,
 ): boolean {
   if (oltSet === null) return true
-  const code = splitter.oltCode?.trim()
+  const code = splitter.accessPointCode?.trim()
   if (!code) return false
   return oltSet.has(code)
 }
