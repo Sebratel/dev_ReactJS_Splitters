@@ -5,6 +5,8 @@ type RiskRowForMassivaInsights = {
   splitterTitle: string
   oltCode: string | null
   oltDescription: string | null
+  accessPointCode: string | null
+  accessPointTitle: string | null
   street: string | null
   cityCadastro: string | null
   totalTickets: number
@@ -77,7 +79,7 @@ function compareRanking(a: RiskRowForMassivaInsights, b: RiskRowForMassivaInsigh
 }
 
 function oltLabel(row: RiskRowForMassivaInsights): string {
-  return formatOltLabel(row.oltDescription ?? row.oltCode) ?? '—'
+  return formatOltLabel(row.accessPointTitle ?? row.accessPointCode) ?? '—'
 }
 
 function locationLabel(row: RiskRowForMassivaInsights): string {
