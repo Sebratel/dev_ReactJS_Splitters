@@ -1778,6 +1778,35 @@ app.post('/api/massiva/history/close', async (req, res) => {
   }
 });
 
+app.post('/api/massiva/history/update-expected-close', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.updateExpectedClose({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      expectedCloseAt: req.body?.expectedCloseAt ?? null,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar previsão de encerramento local de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao atualizar previsão de encerramento local de massiva.',
+      error: error.message,
+    });
+  }
+});
+
 app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
   try {
     if (!massivaHistoryStore.configured) {

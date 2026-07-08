@@ -82,6 +82,9 @@ export function createMassivaHistoryStore(config) {
       async registerClose() {
         return { configured: false, updated: 0 };
       },
+      async updateExpectedClose() {
+        return { configured: false, updated: 0 };
+      },
       async markClosedByProtocols() {
         return { configured: false, updated: 0 };
       },
@@ -380,6 +383,44 @@ export function createMassivaHistoryStore(config) {
         WHERE id = ?
       `,
       params,
+    );
+
+    return {
+      configured: true,
+      updated: Number(result?.affectedRows ?? 0),
+    };
+  }
+
+  /**
+   * Atualiza a previsão de encerramento (expected_close_at) de uma massiva já registrada.
+   * Fonte de verdade da data exibida no painel para massivas abertas (o merge prioriza o
+   * valor local sobre o Elleven), então a edição da previsão precisa gravar aqui.
+   */
+  async function updateExpectedClose(input) {
+    await ensureReady();
+
+    const protocol = normalizePositiveInt(input?.protocol);
+    const assignmentId = normalizePositiveInt(input?.assignmentId);
+    const expectedCloseAt = normalizeMysqlNaiveDateInput(input?.expectedCloseAt);
+
+    if (expectedCloseAt === null) {
+      return { configured: true, updated: 0 };
+    }
+
+    const existingId = await findExistingHistoryId(protocol, assignmentId);
+    if (existingId === null) {
+      return { configured: true, updated: 0 };
+    }
+
+    const [result] = await dataPool.query(
+      `
+        UPDATE massiva_history
+        SET
+          expected_close_at = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [expectedCloseAt, existingId],
     );
 
     return {
@@ -1595,6 +1636,7 @@ export function createMassivaHistoryStore(config) {
     ensureReady,
     registerOpenBatch,
     registerClose,
+    updateExpectedClose,
     markClosedByProtocols,
     getSplitterStats,
     getMassivaPeriodRollup,
