@@ -198,6 +198,8 @@ export async function fetchSplittersFromLocalDb({
       oltCode: toStringValue(row['CONCENTRADOR_CODE']),
       oltIntegrationCode: toStringValue(row['CONCENTRADOR_CODE']),
       oltDescription: toStringValue(row['CONCENTRADOR']),
+      accessPointCode: toNullableString(pickRowValue(row, 'PONTO DE ACESSO CODE')),
+      accessPointTitle: toNullableString(pickRowValue(row, 'PONTO DE ACESSO')),
       createdAt: toNullableDate(row['CRIADO EM[SPLT.SECUNDARIO]']),
       busyCount: toNumber(row['BUSY_COUNT']),
       tipoLocal: toTipoLocal(row['TIPO LOCAL']),

@@ -144,9 +144,9 @@ export function SplitterCard({
           <h3 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-on-surface sm:text-lg">
             {titleLine}
           </h3>
-          {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) ? (
+          {formatOltLabel(splitter.accessPointTitle ?? splitter.accessPointCode ?? splitter.oltDescription ?? splitter.oltCode) ? (
             <p className="mt-0.5 truncate text-[11px] font-medium text-on-surface-variant/60">
-              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode)}
+              {formatOltLabel(splitter.accessPointTitle ?? splitter.accessPointCode ?? splitter.oltDescription ?? splitter.oltCode)}
             </p>
           ) : null}
 

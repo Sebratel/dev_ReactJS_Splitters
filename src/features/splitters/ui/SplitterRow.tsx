@@ -39,9 +39,9 @@ export function SplitterRow({ splitter }: SplitterRowProps) {
               )}
             </div>
             <div className="mt-1 flex items-center gap-4 text-sm text-on-surface-variant/70">
-              {formatOltLabel(splitter.oltDescription ?? splitter.oltCode) && (
+              {formatOltLabel(splitter.accessPointTitle ?? splitter.accessPointCode ?? splitter.oltDescription ?? splitter.oltCode) && (
                 <span className="flex items-center gap-1">
-                  OLT: <span className="font-semibold">{formatOltLabel(splitter.oltDescription ?? splitter.oltCode)}</span>
+                  OLT: <span className="font-semibold">{formatOltLabel(splitter.accessPointTitle ?? splitter.accessPointCode ?? splitter.oltDescription ?? splitter.oltCode)}</span>
                 </span>
               )}
               <span className="h-1 w-1 rounded-full bg-outline-variant" />

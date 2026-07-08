@@ -22,6 +22,9 @@ export type Splitter = {
   oltCode: string | null
   oltIntegrationCode: string | null
   oltDescription: string | null
+  /** Ponto de acesso (PON) do splitter primário — mais específico que o concentrador. */
+  accessPointCode?: string | null
+  accessPointTitle?: string | null
   createdAt: Date | null
   /** Informação de ocupação real vinda do banco local. */
   busyCount: number
