@@ -15,20 +15,28 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  Activity,
   AlertTriangle,
   Briefcase,
   Building2,
   ChartSpline,
+  Clock,
   Database,
   Filter,
   Home,
+  LayoutGrid,
   Loader2,
+  Map as MapIcon,
   MapPin,
   Moon,
   MoonStar,
   Network,
+  Radio,
+  Server,
   Sun,
   Sunrise,
+  Target,
+  UserMinus,
   Wrench,
   X,
 } from 'lucide-react'
@@ -259,20 +267,64 @@ const TREND_SLICE_HELP: Record<TrendLabel, string> = {
   'Quase saturando': 'Próximo do limite de portas — alto risco operacional.',
 }
 
-/** Rótulos da barra de abas — alinhados ao que cada vista mostra no painel. */
-const INTELLIGENCE_TAB_ITEMS: ReadonlyArray<{ id: IntelligenceWindow; label: string }> = [
-  { id: 'visao-geral', label: 'Panorama' },
-  { id: 'risco', label: 'Priorização' },
-  { id: 'operacao', label: 'Uso e massivas' },
-  { id: 'geografico', label: 'Mapa e OLTs' },
-  { id: 'topologia', label: 'Topologia' },
-  { id: 'ciclo-vida', label: 'Idade e cohorts' },
-  { id: 'manutencao', label: 'Manutenções ERP' },
-  { id: 'sinais', label: 'Sinais ONU' },
-  { id: 'equipamentos', label: 'Equipamentos' },
-  { id: 'cancelamentos', label: 'Cancelamentos' },
-  { id: 'condominios', label: 'Condomínios' },
+/**
+ * Navegação em dois níveis: categorias (nível 1) → abas/módulos (nível 2).
+ * Cada aba carrega seu ícone para o menu horizontal.
+ */
+const INTELLIGENCE_CATEGORIES: ReadonlyArray<{
+  id: string
+  label: string
+  tabs: ReadonlyArray<{ id: IntelligenceWindow; label: string; icon: LucideIcon }>
+}> = [
+  {
+    id: 'operacional',
+    label: 'Análise operacional',
+    tabs: [
+      { id: 'visao-geral', label: 'Panorama', icon: LayoutGrid },
+      { id: 'risco', label: 'Priorização', icon: Target },
+      { id: 'operacao', label: 'Uso e massivas', icon: Activity },
+      { id: 'topologia', label: 'Topologia', icon: Network },
+    ],
+  },
+  {
+    id: 'infra',
+    label: 'Infraestrutura',
+    tabs: [
+      { id: 'geografico', label: 'Mapa e OLTs', icon: MapIcon },
+      { id: 'ciclo-vida', label: 'Idade e cohorts', icon: Clock },
+      { id: 'manutencao', label: 'Manutenções ERP', icon: Wrench },
+      { id: 'sinais', label: 'Sinais ONU', icon: Radio },
+      { id: 'equipamentos', label: 'Equipamentos', icon: Server },
+      { id: 'condominios', label: 'Condomínios', icon: Building2 },
+    ],
+  },
+  {
+    id: 'mercado',
+    label: 'Mercado',
+    tabs: [{ id: 'cancelamentos', label: 'Cancelamentos', icon: UserMinus }],
+  },
 ]
+
+/**
+ * Filtros que cada aba realmente usa. Só exibimos (e aplicamos) o que recorta os
+ * dados daquela aba — um filtro oculto nunca afeta silenciosamente outra vista.
+ */
+const TAB_FILTER_CONFIG: Record<
+  IntelligenceWindow,
+  { period: boolean; risk: boolean; age: boolean; loc: boolean; search: boolean }
+> = {
+  'visao-geral': { period: true, risk: false, age: false, loc: false, search: false },
+  risco: { period: true, risk: true, age: true, loc: true, search: true },
+  operacao: { period: true, risk: false, age: false, loc: false, search: false },
+  geografico: { period: true, risk: true, age: false, loc: true, search: true },
+  topologia: { period: true, risk: false, age: false, loc: false, search: false },
+  'ciclo-vida': { period: true, risk: false, age: true, loc: true, search: false },
+  manutencao: { period: true, risk: false, age: false, loc: false, search: true },
+  sinais: { period: false, risk: false, age: false, loc: false, search: false },
+  equipamentos: { period: false, risk: false, age: false, loc: false, search: false },
+  cancelamentos: { period: false, risk: false, age: false, loc: false, search: false },
+  condominios: { period: true, risk: false, age: false, loc: false, search: false },
+}
 
 const NETWORK_INTELLIGENCE_UI_STATE_KEY = 'nexaview.intelligence.ui.v1'
 
@@ -790,8 +842,10 @@ export function NetworkIntelligencePage() {
   const trendDeltaReference = deltaReferenceLabel === 'Δ30d' ? '30d' : '7d'
 
   const contextualRiskRanking = useMemo(() => {
+    // Só aplica cada filtro na aba que o expõe (ver TAB_FILTER_CONFIG).
+    const cfg = TAB_FILTER_CONFIG[activeWindow]
     let rows = riskRanking
-    if (ageFilter !== 'all') {
+    if (cfg.age && ageFilter !== 'all') {
       rows = rows.filter((row) => {
         if (ageFilter === '0-1') return row.ageYears < 1
         if (ageFilter === '1-3') return row.ageYears >= 1 && row.ageYears < 3
@@ -799,29 +853,31 @@ export function NetworkIntelligencePage() {
         return row.ageYears >= 5
       })
     }
-    if (selectedMatrixKey) {
+    if (activeWindow === 'risco' && selectedMatrixKey) {
       rows = rows.filter((row) => matrixKeyForRiskRow(row) === selectedMatrixKey)
     }
-    if (riskBandFilter !== 'all') {
+    if (cfg.risk && riskBandFilter !== 'all') {
       rows = rows.filter((row) => row.riskBand === riskBandFilter)
     }
-    if (locationFilter !== 'all') {
+    if (cfg.loc && locationFilter !== 'all') {
       rows = rows.filter((row) => (row.tipoLocal ?? 'UNIDADE') === locationFilter)
     }
     const q = splitterSearch.trim().toLowerCase()
-    if (q !== '') {
+    if (cfg.search && q !== '') {
       rows = rows.filter((row) => {
         const title = row.splitterTitle.trim().toLowerCase()
         return (
           row.splitterCode.toLowerCase().includes(q) ||
           title.includes(q) ||
+          (row.accessPointCode ?? '').toLowerCase().includes(q) ||
+          (row.accessPointTitle ?? '').toLowerCase().includes(q) ||
           (row.oltCode ?? '').toLowerCase().includes(q) ||
           (row.oltDescription ?? '').toLowerCase().includes(q)
         )
       })
     }
     return rows
-  }, [riskRanking, ageFilter, selectedMatrixKey, riskBandFilter, locationFilter, splitterSearch])
+  }, [riskRanking, activeWindow, ageFilter, selectedMatrixKey, riskBandFilter, locationFilter, splitterSearch])
 
   const contextualOltDrilldown = useMemo(() => {
     const grouped = new Map<string, {
@@ -1225,21 +1281,6 @@ export function NetworkIntelligencePage() {
     }
   }, [contextualMaintenanceRows])
 
-  const hasActiveFilters =
-    selectedMatrixKey !== null ||
-    riskBandFilter !== 'all' ||
-    ageFilter !== 'all' ||
-    locationFilter !== 'all' ||
-    splitterSearch.trim() !== ''
-
-  function clearAllFilters() {
-    setSelectedMatrixKey(null)
-    setRiskBandFilter('all')
-    setAgeFilter('all')
-    setLocationFilter('all')
-    setSplitterSearch('')
-  }
-
   const AGE_FILTER_LABELS: Record<Exclude<AgeFilter, 'all'>, string> = {
     '0-1': 'Idade: 0–1 ano',
     '1-3': 'Idade: 1–3 anos',
@@ -1295,21 +1336,32 @@ export function NetworkIntelligencePage() {
     })
   }
 
-  // Filtros contextuais: só aparecem nas abas onde de fato recortam os dados.
-  const showSplitterFilters =
-    activeWindow === 'risco' ||
-    activeWindow === 'operacao' ||
-    activeWindow === 'geografico' ||
-    activeWindow === 'ciclo-vida'
-  const showSearchOnly = activeWindow === 'manutencao'
-  const showFilterBar = showSplitterFilters || showSearchOnly
-  const visibleFilterChips = showSplitterFilters ? activeFilterChips : []
-  const contextualHasActiveFilters = showSplitterFilters
-    ? hasActiveFilters
-    : splitterSearch.trim() !== ''
-  const clearContextualFilters = showSplitterFilters
-    ? clearAllFilters
-    : () => setSplitterSearch('')
+  // ── Navegação em dois níveis + filtros por aba ──
+  const tabFilterCfg = TAB_FILTER_CONFIG[activeWindow]
+  const activeCategory =
+    INTELLIGENCE_CATEGORIES.find((c) => c.tabs.some((t) => t.id === activeWindow)) ??
+    INTELLIGENCE_CATEGORIES[0]
+  // A aba usa algum filtro que recorta o riskRanking (fora período)?
+  const hasContextualDimension =
+    tabFilterCfg.risk || tabFilterCfg.age || tabFilterCfg.loc || tabFilterCfg.search
+  const showFilterBar = tabFilterCfg.period || hasContextualDimension
+  // Chips só das dimensões que esta aba expõe.
+  const visibleFilterChips = activeFilterChips.filter((chip) => {
+    if (chip.key === 'local') return tabFilterCfg.loc
+    if (chip.key === 'risco') return tabFilterCfg.risk
+    if (chip.key === 'idade') return tabFilterCfg.age
+    if (chip.key === 'matriz') return activeWindow === 'risco'
+    if (chip.key === 'busca') return tabFilterCfg.search
+    return false
+  })
+  const contextualHasActiveFilters = visibleFilterChips.length > 0
+  const clearContextualFilters = () => {
+    if (tabFilterCfg.risk) setRiskBandFilter('all')
+    if (tabFilterCfg.age) setAgeFilter('all')
+    if (tabFilterCfg.loc) setLocationFilter('all')
+    if (tabFilterCfg.search) setSplitterSearch('')
+    if (activeWindow === 'risco') setSelectedMatrixKey(null)
+  }
 
   return (
     <div className="min-w-0 space-y-5">
@@ -1317,7 +1369,7 @@ export function NetworkIntelligencePage() {
         icon={ChartSpline}
         badge="Inteligência de rede"
         title="Painel da rede"
-        description="Cruza ocupação de portas, tendência por splitter, massivas e, nas outras abas, risco, geografia e manutenções. Escolha o período abaixo e use busca e filtros para focar OLT, faixa de risco ou idade; os números respondem sempre à mesma janela."
+        description="Cruza ocupação de portas, tendência por splitter, massivas e, nas outras abas, risco, geografia e manutenções. Escolha uma categoria e o módulo; cada aba traz apenas os filtros que recortam os próprios dados (período, busca, risco, idade ou tipo de local)."
         trailing={
           <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
             {showBackgroundRefresh ? (
@@ -1340,116 +1392,156 @@ export function NetworkIntelligencePage() {
       />
 
       <section className="rounded-2xl border border-white/45 bg-white/70 p-3 shadow-md shadow-amber-500/10 backdrop-blur-xl md:p-3.5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Período
-            </span>
-            <DateRangePresetButtons
-              preset={preset}
-              onPresetChange={setPreset}
-              customStart={customStart}
-              customEnd={customEnd}
-              onCustomStartChange={setCustomStart}
-              onCustomEndChange={setCustomEnd}
-            />
-          </div>
-          <div className="min-w-0 flex-1 lg:max-w-none">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 lg:text-right">
-              Aba
-            </p>
-            <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:thin] lg:flex lg:justify-end">
-              <div className="inline-flex items-center gap-1.5 lg:flex-wrap lg:justify-end">
-                {INTELLIGENCE_TAB_ITEMS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setActiveWindow(item.id)}
-                    className={cn(
-                      'shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs',
-                      activeWindow === item.id
-                        ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md shadow-amber-500/25'
-                        : 'bg-white/80 text-slate-600 hover:bg-amber-50 hover:text-amber-700',
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+        {/* Nível 1 — categorias */}
+        <div className="-mx-1 flex items-center gap-1 overflow-x-auto border-b-2 border-slate-200/60 px-1 [scrollbar-width:thin]">
+          {INTELLIGENCE_CATEGORIES.map((cat) => {
+            const active = cat.id === activeCategory.id
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  if (!cat.tabs.some((t) => t.id === activeWindow)) setActiveWindow(cat.tabs[0].id)
+                }}
+                className={cn(
+                  'relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-bold transition sm:text-[13px]',
+                  active ? 'text-amber-700' : 'text-slate-500 hover:text-slate-800',
+                )}
+              >
+                {cat.label}
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums',
+                    active ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500',
+                  )}
+                >
+                  {cat.tabs.length}
+                </span>
+                {active ? (
+                  <span className="absolute inset-x-2 -bottom-[2px] h-[3px] rounded-t bg-gradient-to-r from-amber-500 to-yellow-500" />
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Nível 2 — abas da categoria ativa */}
+        <div className="-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 [scrollbar-width:thin]">
+          {activeCategory.tabs.map((tab) => {
+            const active = tab.id === activeWindow
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveWindow(tab.id)}
+                className={cn(
+                  'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition',
+                  active
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-md shadow-amber-500/25'
+                    : 'border border-slate-200 bg-white/80 text-slate-600 hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700',
+                )}
+              >
+                <Icon className="size-3.5 shrink-0" aria-hidden />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
 
         {showFilterBar ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-slate-200/40 pt-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative w-full sm:w-48 md:w-52">
-            <MapPin className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
-            <input
-              value={splitterSearch}
-              onChange={(e) => setSplitterSearch(e.target.value)}
-              placeholder="Buscar splitter/OLT..."
-              className="w-full rounded-lg border border-slate-200 bg-white/90 py-1.5 pl-7 pr-2 text-xs text-slate-700"
-            />
-          </div>
-          {showSplitterFilters ? (
+          {tabFilterCfg.period ? (
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Período
+              </span>
+              <DateRangePresetButtons
+                preset={preset}
+                onPresetChange={setPreset}
+                customStart={customStart}
+                customEnd={customEnd}
+                onCustomStartChange={setCustomStart}
+                onCustomEndChange={setCustomEnd}
+              />
+            </div>
+          ) : null}
+          {tabFilterCfg.search ? (
+            <div className="relative w-full sm:w-48 md:w-52">
+              <MapPin className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+              <input
+                value={splitterSearch}
+                onChange={(e) => setSplitterSearch(e.target.value)}
+                placeholder="Buscar splitter/OLT..."
+                className="w-full rounded-lg border border-slate-200 bg-white/90 py-1.5 pl-7 pr-2 text-xs text-slate-700"
+              />
+            </div>
+          ) : null}
+          {tabFilterCfg.risk ? (
+            <select
+              value={riskBandFilter}
+              onChange={(e) =>
+                setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+            >
+              <option value="all">Risco: todos</option>
+              <option value="critico">Risco crítico</option>
+              <option value="alto">Risco alto</option>
+              <option value="moderado">Risco moderado</option>
+              <option value="baixo">Risco baixo</option>
+            </select>
+          ) : null}
+          {tabFilterCfg.age ? (
+            <select
+              value={ageFilter}
+              onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
+              className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
+            >
+              <option value="all">Idade: todas</option>
+              <option value="0-1">Idade: 0-1 ano</option>
+              <option value="1-3">Idade: 1-3 anos</option>
+              <option value="3-5">Idade: 3-5 anos</option>
+              <option value="5+">Idade: 5+ anos</option>
+            </select>
+          ) : null}
+          {tabFilterCfg.loc ? (
+            /* Local — controle segmentado (mais rápido e legível que dropdown) */
+            <div
+              role="group"
+              aria-label="Tipo de local"
+              className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white/90"
+            >
+              {([
+                { id: 'all', label: 'Todos', icon: null },
+                { id: 'CONDOMÍNIO', label: 'Condomínios', icon: Building2 },
+                { id: 'UNIDADE', label: 'Ruas', icon: Home },
+              ] as Array<{ id: 'all' | 'CONDOMÍNIO' | 'UNIDADE'; label: string; icon: LucideIcon | null }>).map(
+                (opt, idx) => {
+                  const active = locationFilter === opt.id
+                  const Icon = opt.icon
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setLocationFilter(opt.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition',
+                        idx > 0 && 'border-l border-slate-200',
+                        active ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-50',
+                      )}
+                    >
+                      {Icon ? <Icon className="size-3.5" aria-hidden /> : null}
+                      {opt.label}
+                    </button>
+                  )
+                },
+              )}
+            </div>
+          ) : null}
+          {hasContextualDimension ? (
             <>
-              <select
-                value={riskBandFilter}
-                onChange={(e) =>
-                  setRiskBandFilter(e.target.value as 'all' | 'critico' | 'alto' | 'moderado' | 'baixo')
-                }
-                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-              >
-                <option value="all">Risco: todos</option>
-                <option value="critico">Risco crítico</option>
-                <option value="alto">Risco alto</option>
-                <option value="moderado">Risco moderado</option>
-                <option value="baixo">Risco baixo</option>
-              </select>
-              <select
-                value={ageFilter}
-                onChange={(e) => setAgeFilter(e.target.value as AgeFilter)}
-                className="w-full rounded-lg border border-slate-200 bg-white/90 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
-              >
-                <option value="all">Idade: todas</option>
-                <option value="0-1">Idade: 0-1 ano</option>
-                <option value="1-3">Idade: 1-3 anos</option>
-                <option value="3-5">Idade: 3-5 anos</option>
-                <option value="5+">Idade: 5+ anos</option>
-              </select>
-              {/* Local — controle segmentado (mais rápido e legível que dropdown) */}
-              <div
-                role="group"
-                aria-label="Tipo de local"
-                className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white/90"
-              >
-                {([
-                  { id: 'all', label: 'Todos', icon: null },
-                  { id: 'CONDOMÍNIO', label: 'Condomínios', icon: Building2 },
-                  { id: 'UNIDADE', label: 'Ruas', icon: Home },
-                ] as Array<{ id: 'all' | 'CONDOMÍNIO' | 'UNIDADE'; label: string; icon: LucideIcon | null }>).map(
-                  (opt, idx) => {
-                    const active = locationFilter === opt.id
-                    const Icon = opt.icon
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setLocationFilter(opt.id)}
-                        aria-pressed={active}
-                        className={cn(
-                          'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition',
-                          idx > 0 && 'border-l border-slate-200',
-                          active ? 'bg-amber-100 text-amber-800' : 'text-slate-600 hover:bg-slate-50',
-                        )}
-                      >
-                        {Icon ? <Icon className="size-3.5" aria-hidden /> : null}
-                        {opt.label}
-                      </button>
-                    )
-                  },
-                )}
-              </div>
               {/* Contador de resultados do recorte atual */}
               <div className="flex items-center gap-1.5 sm:ml-auto">
                 <span className="text-lg font-bold tabular-nums leading-none text-slate-800">
@@ -1461,26 +1553,25 @@ export function NetworkIntelligencePage() {
                   no recorte
                 </span>
               </div>
+              <button
+                type="button"
+                onClick={clearContextualFilters}
+                disabled={!contextualHasActiveFilters}
+                className={cn(
+                  'rounded-lg border px-2 py-1.5 text-xs font-bold transition',
+                  contextualHasActiveFilters
+                    ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                    : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
+                )}
+              >
+                Limpar filtros
+              </button>
             </>
           ) : null}
-          <button
-            type="button"
-            onClick={clearContextualFilters}
-            disabled={!contextualHasActiveFilters}
-            className={cn(
-              'rounded-lg border px-2 py-1.5 text-xs font-bold transition',
-              !showSplitterFilters && 'sm:ml-auto',
-              contextualHasActiveFilters
-                ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
-                : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
-            )}
-          >
-            {showSplitterFilters ? 'Limpar filtros' : 'Limpar busca'}
-          </button>
         </div>
         ) : null}
 
-        {/* Chips de filtros ativos (só nas abas por splitter) */}
+        {/* Chips de filtros ativos (só das dimensões que esta aba expõe) */}
         {visibleFilterChips.length > 0 ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500">
@@ -1516,13 +1607,15 @@ export function NetworkIntelligencePage() {
         <details className="mt-2 border-t border-slate-200/40 pt-2">
           <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-600 [&::-webkit-details-marker]:hidden">
             <span className="underline decoration-slate-300 underline-offset-2 hover:text-slate-800">
-              Ajuda: período, filtros e o que esta aba mostra
+              Ajuda: filtros e o que esta aba mostra
             </span>
           </summary>
           <div className="mt-2 space-y-2 rounded-lg border border-white/50 bg-white/50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
             <p>
-              Todo o painel usa a mesma janela de datas. Em{' '}
-              <span className="font-semibold">Personalizado</span>, defina início e fim inclusivos.
+              Cada aba exibe apenas os filtros que recortam os próprios dados — período, busca,
+              risco, idade e tipo de local aparecem só onde fazem efeito. No{' '}
+              <span className="font-semibold">Período personalizado</span>, defina início e fim
+              inclusivos.
             </p>
             <p>
               <span className="font-bold text-slate-800">Esta aba:</span> {TAB_INTRO[activeWindow]}
