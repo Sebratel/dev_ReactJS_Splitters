@@ -299,8 +299,8 @@ const INTELLIGENCE_CATEGORIES: ReadonlyArray<{
     ],
   },
   {
-    id: 'mercado',
-    label: 'Mercado',
+    id: 'retencao',
+    label: 'Retenção',
     tabs: [{ id: 'cancelamentos', label: 'Cancelamentos', icon: UserMinus }],
   },
 ]
