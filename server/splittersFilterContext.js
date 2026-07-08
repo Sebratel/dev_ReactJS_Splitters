@@ -80,6 +80,10 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
   const maintenanceSplitterCodes = req.query.maintenanceSplitterCodes
     ? req.query.maintenanceSplitterCodes.split(',')
     : [];
+  const signalLevelActive = String(req.query.signalLevelActive || '').trim() === '1';
+  const signalLevelSplitterCodes = req.query.signalLevelSplitterCodes
+    ? req.query.signalLevelSplitterCodes.split(',')
+    : [];
   const primarySplitters = req.query.primarySplitters
     ? req.query.primarySplitters.split(',')
     : [];
@@ -223,6 +227,21 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
           : `base."CÓDIGO[SPLT.SECUNDARIO]" <> ALL($${currentParam})`,
       );
       values.push(normalizedMaintenanceSplitterCodes);
+      currentParam++;
+    }
+  }
+
+  // Nível de sinal (crítico/atenuado/offline): filtra pela lista de códigos que o
+  // cliente calculou a partir do resumo ONU. Ativo com lista vazia = nenhum resultado.
+  if (signalLevelActive) {
+    const normalizedSignalLevelCodes = signalLevelSplitterCodes
+      .map((code) => String(code || '').trim())
+      .filter((code) => code !== '');
+    if (normalizedSignalLevelCodes.length === 0) {
+      whereClauses.push('1 = 0');
+    } else {
+      whereClauses.push(`base."CÓDIGO[SPLT.SECUNDARIO]" = ANY($${currentParam})`);
+      values.push(normalizedSignalLevelCodes);
       currentParam++;
     }
   }

@@ -36,6 +36,7 @@ export function SplittersFiltersDrawer({
     toggleCondominiumSelection,
     toggleStreetSelection,
     setMassivaOpenState,
+    setSignalLevelFilter,
     setCorporateClientFilter,
     setMaintenanceWindowDays,
     setMaintenanceFilter,
@@ -499,6 +500,33 @@ export function SplittersFiltersDrawer({
                       name="massiva-open"
                       checked={state.massivaOpenState === opt.id}
                       onChange={() => setMassivaOpenState(opt.id)}
+                    />
+                    <span className="text-sm">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <SectionTitle>Nível de sinal (ONU)</SectionTitle>
+              <div className="space-y-1 rounded-xl border border-outline-variant/50 bg-surface p-3">
+                {(
+                  [
+                    { id: 'all' as const, label: 'Todos' },
+                    { id: 'critico' as const, label: 'Crítico' },
+                    { id: 'atenuado' as const, label: 'Atenuado' },
+                    { id: 'offline' as const, label: 'Offline (sem leitura)' },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-surface-container-low"
+                  >
+                    <input
+                      type="radio"
+                      name="signal-level"
+                      checked={state.signalLevelFilter === opt.id}
+                      onChange={() => setSignalLevelFilter(opt.id)}
                     />
                     <span className="text-sm">{opt.label}</span>
                   </label>

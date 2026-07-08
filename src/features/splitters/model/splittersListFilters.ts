@@ -66,6 +66,14 @@ export type SplittersListFilterState = {
   oltSlot: number | null
   /** Filtro por porta da OLT (mesma regra que `oltSlot`). */
   oltPort: number | null
+  /**
+   * Filtro por nível de sinal ONU (RX médio do splitter):
+   * - `all`: indiferente
+   * - `critico` / `atenuado`: pela faixa de RX médio
+   * - `offline`: tem ONU mas sem leitura válida
+   * "Normal" e "sem medição" ficam de fora de propósito (seriam quase toda a base).
+   */
+  signalLevelFilter: 'all' | 'critico' | 'atenuado' | 'offline'
 }
 
 export const initialSplittersListFilters: SplittersListFilterState = {
@@ -83,6 +91,7 @@ export const initialSplittersListFilters: SplittersListFilterState = {
   maintenanceFilter: 'all',
   oltSlot: null,
   oltPort: null,
+  signalLevelFilter: 'all',
 }
 
 export function countActiveSplittersFilters(state: SplittersListFilterState): number {
@@ -101,6 +110,7 @@ export function countActiveSplittersFilters(state: SplittersListFilterState): nu
   const hasOltSlot = typeof state.oltSlot === 'number' && Number.isFinite(state.oltSlot)
   const hasOltPort = typeof state.oltPort === 'number' && Number.isFinite(state.oltPort)
   if (hasOltSlot || hasOltPort) n += 1
+  if (state.signalLevelFilter !== 'all') n += 1
   return n
 }
 

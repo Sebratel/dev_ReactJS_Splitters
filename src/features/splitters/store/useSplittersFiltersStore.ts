@@ -28,6 +28,9 @@ interface SplittersFiltersStore {
   ) => void
   setOltSlot: (value: number | null) => void
   setOltPort: (value: number | null) => void
+  setSignalLevelFilter: (
+    value: SplittersListFilterState['signalLevelFilter'],
+  ) => void
   toggleOltCode: (oltCode: string) => void
   setOltCodes: (codes: string[]) => void
   togglePrimarySplitterTitle: (title: string) => void
@@ -100,6 +103,9 @@ export const useSplittersFiltersStore = create<SplittersFiltersStore>()(
 
   setOltPort: (value) =>
     set((s) => ({ state: { ...s.state, oltPort: value } })),
+
+  setSignalLevelFilter: (value) =>
+    set((s) => ({ state: { ...s.state, signalLevelFilter: value } })),
 
   setOltCodes: (codes) =>
     set((s) => ({ state: { ...s.state, oltCodes: sortCodes(codes) } })),
