@@ -59,6 +59,7 @@ import {
   PP_TOOLTIP_DELTA_PERIOD,
 } from '@/features/intelligence/lib/percentagePointsHelp'
 import { buildTopStreetsByNormalizedStreet } from '@/features/intelligence/lib/geoStreetAggregation'
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
 
 const IntelligenceSaturationMap = lazy(async () => {
   const m = await import('@/features/intelligence/ui/IntelligenceSaturationMap')
@@ -1137,7 +1138,8 @@ export function NetworkIntelligencePage() {
     const top = contextualRiskRanking[0]
     if (!top) return null
     let text = `Prioridade nº1: ${top.splitterTitle || top.splitterCode}`
-    if (top.oltCode) text += ` (OLT ${top.oltCode})`
+    const oltLabel = formatOltLabel(top.oltDescription ?? top.oltCode)
+    if (oltLabel) text += ` (${oltLabel})`
     text += ` — score ${top.riskScore.toFixed(1)}, ${top.currentUsagePercent.toFixed(1)}% de uso`
     if (top.openTickets > 0) text += `, ${top.openTickets} massiva(s) aberta(s)`
     text += '.'

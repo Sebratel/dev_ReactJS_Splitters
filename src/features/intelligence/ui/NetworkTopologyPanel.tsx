@@ -386,7 +386,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
                 key={olt.oltCode}
                 icon={Server}
                 title={oltDisplayLabel(olt.oltDescription)}
-                subtitle={olt.oltCode !== 'SEM_OLT' ? olt.oltCode : undefined}
+                subtitle={undefined}
                 metrics={olt}
                 deltaReferenceLabel={deltaReferenceLabel}
                 onClick={() => goOlt(olt.oltCode)}

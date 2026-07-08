@@ -1,3 +1,5 @@
+import { formatOltLabel } from '@/features/splitters/lib/formatOltLabel'
+
 type RiskRowForMassivaInsights = {
   splitterCode: string
   splitterTitle: string
@@ -75,10 +77,7 @@ function compareRanking(a: RiskRowForMassivaInsights, b: RiskRowForMassivaInsigh
 }
 
 function oltLabel(row: RiskRowForMassivaInsights): string {
-  const code = (row.oltCode ?? '').trim()
-  const desc = (row.oltDescription ?? '').trim()
-  if (code !== '' && desc !== '') return `${code} · ${desc}`
-  return code || desc || '—'
+  return formatOltLabel(row.oltDescription ?? row.oltCode) ?? '—'
 }
 
 function locationLabel(row: RiskRowForMassivaInsights): string {
