@@ -1155,9 +1155,9 @@ export function NetworkIntelligencePage() {
     if (topN.length < 3) return null
     const byOlt = new Map<string, { label: string; count: number }>()
     for (const row of topN) {
-      const key = row.oltCode?.trim() || row.oltDescription?.trim()
+      const key = row.accessPointCode?.trim() || row.accessPointTitle?.trim()
       if (!key) continue
-      const label = row.oltDescription?.trim() || row.oltCode?.trim() || key
+      const label = formatOltLabel(row.accessPointTitle?.trim() || row.accessPointCode?.trim() || key) ?? key
       const cur = byOlt.get(key) ?? { label, count: 0 }
       cur.count += 1
       byOlt.set(key, cur)
