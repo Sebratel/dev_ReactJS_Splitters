@@ -135,7 +135,9 @@ export function SplitterCard({
           <div className="mt-2">
             <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <WifiOff size={11} strokeWidth={2} />
-              Sem sinal
+              {/* Sem cliente: 0 portas ocupadas → não há ONU nem como medir/projetar.
+                  Com cliente mas sem ONU monitorada, segue "Sem sinal". */}
+              {splitter.busyCount > 0 ? 'Sem sinal' : 'Sem cliente'}
             </span>
           </div>
         )}
