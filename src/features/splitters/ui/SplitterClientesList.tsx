@@ -12,7 +12,6 @@ import {
   Lock,
   Building2,
 } from 'lucide-react'
-import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
 import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
 import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
@@ -24,6 +23,28 @@ type SplitterClientesListProps = {
   capacity: number
   geogridRows?: GeogridReservaRow[]
   portStates?: SplitterPortState[]
+}
+
+/** Cor do badge por status real do contrato (texto v_status: Ativo/Suspenso/Bloqueado/…). */
+const CONTRACT_STATUS_TONE: Record<string, string> = {
+  ativo: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  suspenso: 'border-amber-200 bg-amber-50 text-amber-800',
+  bloqueado: 'border-rose-200 bg-rose-50 text-rose-800',
+  cancelado: 'border-rose-200 bg-rose-50 text-rose-800',
+}
+
+function contractStatusToneClass(status: string): string {
+  const key = status.trim().toLowerCase()
+  return (
+    CONTRACT_STATUS_TONE[key] ??
+    'border-outline-variant bg-surface-container-low text-on-surface-variant'
+  )
+}
+
+/** Texto do status do contrato a exibir; `null` quando não há descrição confiável. */
+function contractStatusLabel(cliente: SplitterCliente): string | null {
+  const desc = cliente.contract?.statusDescription?.trim()
+  return desc && desc !== '' ? desc : null
 }
 
 function formatReservaDias(dataReserva: string | null): string {
@@ -270,11 +291,21 @@ export function SplitterClientesList({
                       <span className="flex items-center bg-primary/[0.12] px-2.5 py-1 text-primary">Porta</span>
                       <span className="flex items-center bg-primary px-2.5 py-1 font-extrabold text-white">{portNum}</span>
                     </span>
-                  <SplitterStatusBadge
-                    active={c.status === 1}
-                    labels={{ active: 'Contrato ativo', inactive: 'Contrato suspenso' }}
-                    variant="neutral"
-                  />
+                  {(() => {
+                    const statusLabel = contractStatusLabel(c)
+                    if (!statusLabel) return null
+                    return (
+                      <span
+                        className={cn(
+                          'inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
+                          contractStatusToneClass(statusLabel),
+                        )}
+                        title={`Status do contrato: ${statusLabel}`}
+                      >
+                        {statusLabel}
+                      </span>
+                    )
+                  })()}
                     <OnuStatusBadge
                       diagnostic={onuForCliente(c)}
                       loading={onuQuery.isPending}
