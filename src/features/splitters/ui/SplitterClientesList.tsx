@@ -11,6 +11,12 @@ import {
   Hash,
   Lock,
   Building2,
+  CheckCircle2,
+  PauseCircle,
+  Ban,
+  XCircle,
+  Circle,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
@@ -39,6 +45,16 @@ function contractStatusToneClass(status: string): string {
     CONTRACT_STATUS_TONE[key] ??
     'border-outline-variant bg-surface-container-low text-on-surface-variant'
   )
+}
+
+/** Ícone por status do contrato — check para ativo (como antes), demais conforme o estado. */
+function contractStatusIcon(status: string): LucideIcon {
+  const key = status.trim().toLowerCase()
+  if (key === 'ativo') return CheckCircle2
+  if (key === 'suspenso') return PauseCircle
+  if (key === 'bloqueado') return Ban
+  if (key === 'cancelado') return XCircle
+  return Circle
 }
 
 /** Texto do status do contrato a exibir; `null` quando não há descrição confiável. */
@@ -294,14 +310,16 @@ export function SplitterClientesList({
                   {(() => {
                     const statusLabel = contractStatusLabel(c)
                     if (!statusLabel) return null
+                    const StatusIcon = contractStatusIcon(statusLabel)
                     return (
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
+                          'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
                           contractStatusToneClass(statusLabel),
                         )}
                         title={`Status do contrato: ${statusLabel}`}
                       >
+                        <StatusIcon size={13} strokeWidth={2.25} aria-hidden />
                         {statusLabel}
                       </span>
                     )
