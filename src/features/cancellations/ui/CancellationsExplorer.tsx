@@ -113,7 +113,10 @@ export function CancellationsExplorer({
       return {
         splitterTitle: r.splitterTitle || r.splitterCode,
         splitterCode: r.splitterCode,
-        oltLabel: formatOltLabel(r.oltDescription ?? r.oltCode) ?? '—',
+        oltLabel:
+          formatOltLabel(
+            r.accessPointTitle ?? r.accessPointCode ?? r.oltDescription ?? r.oltCode,
+          ) ?? '—',
         slot: r.oltSlot,
         pon: r.oltPort,
         lat: r.latitude,
