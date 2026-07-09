@@ -548,8 +548,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                   <th className="px-4 py-2.5">Splitter / condomínio</th>
                   <th className="px-3 py-2.5">Tipo</th>
                   <th className="px-3 py-2.5">Última massiva</th>
-                  <th className="px-3 py-2.5 text-right">Rede pós-evento</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
+                  <th className="px-3 py-2.5 text-center">Rede pós-evento</th>
+                  <th className="px-3 py-2.5 text-center">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -569,10 +569,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                       {row.tipoLocal === 'CONDOMÍNIO' ? 'Condomínio' : 'Rua'}
                     </td>
                     <td className="px-3 py-2 text-xs text-neutral-500">{fmtDate(row.eventAt)}</td>
-                    <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
+                    <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
                       {row.redeCount.toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
                       {row.totalCount.toLocaleString('pt-BR')}
                     </td>
                   </tr>
@@ -665,9 +665,9 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
               <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
                 <th className="px-4 py-2.5">{dimension === 'condominio' ? 'Condomínio' : 'Área'}</th>
                 {dimension === 'splitter' ? <th className="px-3 py-2.5">Slot/PON</th> : null}
-                <th className="px-3 py-2.5 text-right">Rede</th>
-                <th className="px-3 py-2.5 text-right">Total</th>
-                <th className="px-3 py-2.5 text-right">% rede</th>
+                <th className="px-3 py-2.5 text-center">Rede</th>
+                <th className="px-3 py-2.5 text-center">Total</th>
+                <th className="px-3 py-2.5 text-center">% rede</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -686,13 +686,13 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                       {row.slot != null && row.pon != null ? `${row.slot} / ${row.pon}` : '—'}
                     </td>
                   ) : null}
-                  <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
+                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
                     {row.rede > 0 ? row.rede.toLocaleString('pt-BR') : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
+                  <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
                     {row.total.toLocaleString('pt-BR')}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                  <td className="px-3 py-2 text-center tabular-nums text-neutral-500">
                     {row.rede > 0 ? pct(row.rede, row.total) : '—'}
                   </td>
                 </tr>
