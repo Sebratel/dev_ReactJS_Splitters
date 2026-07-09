@@ -11,11 +11,10 @@ import {
   Hash,
   Lock,
   Building2,
-  CheckCircle2,
-  PauseCircle,
-  Ban,
-  XCircle,
-  Circle,
+  Check,
+  Pause,
+  X,
+  Minus,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -31,31 +30,23 @@ type SplitterClientesListProps = {
   portStates?: SplitterPortState[]
 }
 
-/** Cor do badge por status real do contrato (texto v_status: Ativo/Suspenso/Bloqueado/…). */
-const CONTRACT_STATUS_TONE: Record<string, string> = {
-  normal: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  ativo: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  suspenso: 'border-amber-200 bg-amber-50 text-amber-800',
-  bloqueado: 'border-rose-200 bg-rose-50 text-rose-800',
-  cancelado: 'border-rose-200 bg-rose-50 text-rose-800',
+/** Cor da bolacha (círculo preenchido) por status real do contrato (v_status). */
+function contractStatusCircleClass(status: string): string {
+  const key = status.trim().toLowerCase()
+  if (key === 'normal' || key === 'ativo') return 'bg-emerald-500'
+  if (key === 'suspenso') return 'bg-amber-500'
+  if (key === 'bloqueado' || key === 'cancelado') return 'bg-rose-500'
+  return 'bg-slate-400'
 }
 
-function contractStatusToneClass(status: string): string {
+/** Glifo branco dentro do círculo — check p/ contrato ok (como antes), demais conforme o estado. */
+function contractStatusGlyph(status: string): LucideIcon {
   const key = status.trim().toLowerCase()
-  return (
-    CONTRACT_STATUS_TONE[key] ??
-    'border-outline-variant bg-surface-container-low text-on-surface-variant'
-  )
-}
-
-/** Ícone por status do contrato — check para ativo (como antes), demais conforme o estado. */
-function contractStatusIcon(status: string): LucideIcon {
-  const key = status.trim().toLowerCase()
-  if (key === 'normal' || key === 'ativo') return CheckCircle2
-  if (key === 'suspenso') return PauseCircle
-  if (key === 'bloqueado') return Ban
-  if (key === 'cancelado') return XCircle
-  return Circle
+  if (key === 'normal' || key === 'ativo') return Check
+  if (key === 'suspenso') return Pause
+  if (key === 'bloqueado') return Lock
+  if (key === 'cancelado') return X
+  return Minus
 }
 
 /** Texto do status do contrato a exibir; `null` quando não há descrição confiável. */
@@ -311,16 +302,20 @@ export function SplitterClientesList({
                   {(() => {
                     const statusLabel = contractStatusLabel(c)
                     if (!statusLabel) return null
-                    const StatusIcon = contractStatusIcon(statusLabel)
+                    const StatusGlyph = contractStatusGlyph(statusLabel)
                     return (
                       <span
-                        className={cn(
-                          'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
-                          contractStatusToneClass(statusLabel),
-                        )}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-low/60 py-1 pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant"
                         title={`Status do contrato: ${statusLabel}`}
                       >
-                        <StatusIcon size={13} strokeWidth={2.25} aria-hidden />
+                        <span
+                          className={cn(
+                            'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full',
+                            contractStatusCircleClass(statusLabel),
+                          )}
+                        >
+                          <StatusGlyph size={11} strokeWidth={3} className="text-white" aria-hidden />
+                        </span>
                         {`Contrato ${statusLabel}`}
                       </span>
                     )
