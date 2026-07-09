@@ -33,6 +33,7 @@ type SplitterClientesListProps = {
 
 /** Cor do badge por status real do contrato (texto v_status: Ativo/Suspenso/Bloqueado/…). */
 const CONTRACT_STATUS_TONE: Record<string, string> = {
+  normal: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   ativo: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   suspenso: 'border-amber-200 bg-amber-50 text-amber-800',
   bloqueado: 'border-rose-200 bg-rose-50 text-rose-800',
@@ -50,7 +51,7 @@ function contractStatusToneClass(status: string): string {
 /** Ícone por status do contrato — check para ativo (como antes), demais conforme o estado. */
 function contractStatusIcon(status: string): LucideIcon {
   const key = status.trim().toLowerCase()
-  if (key === 'ativo') return CheckCircle2
+  if (key === 'normal' || key === 'ativo') return CheckCircle2
   if (key === 'suspenso') return PauseCircle
   if (key === 'bloqueado') return Ban
   if (key === 'cancelado') return XCircle
