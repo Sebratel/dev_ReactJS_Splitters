@@ -321,7 +321,7 @@ export function SplitterClientesList({
                         title={`Status do contrato: ${statusLabel}`}
                       >
                         <StatusIcon size={13} strokeWidth={2.25} aria-hidden />
-                        {statusLabel}
+                        {`Contrato ${statusLabel}`}
                       </span>
                     )
                   })()}
