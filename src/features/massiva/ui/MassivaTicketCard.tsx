@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { getOidcUserDisplayName } from '@/app/auth/oidcUserDisplayName'
 import { updateMassivaExpectedClose } from '@/features/massiva/api/updateMassivaExpectedClose'
+import { registerMassivaExpectedCloseInLocalDb } from '@/features/massiva/api/registerMassivaExpectedCloseInLocalDb'
 import {
   recordMassivaPrevisaoEncerramentoEdit,
   resolveExpectedCloseAtForDisplay,
@@ -388,6 +389,20 @@ export function MassivaTicketCard({
         closeAt: savedAt,
         editorName,
       })
+      // Persiste no banco local (massiva_history) — fonte de verdade da data exibida
+      // para massivas abertas. Sem isto a edição só apareceria neste navegador.
+      // Falha aqui não deve derrubar o fluxo (o PATCH no Elleven já ocorreu).
+      try {
+        await registerMassivaExpectedCloseInLocalDb({
+          protocol: ticket.protocol,
+          assignmentId: ticket.assignmentId ?? null,
+          expectedCloseAt: savedAt,
+        })
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('[Massiva] Falha ao gravar previsão no banco local:', err)
+        }
+      }
       queryClient.setQueryData<MassivaTicket[]>(massivaKeys.list(), (prev) => {
         if (prev == null) return prev
         return prev.map((t) => {
@@ -400,7 +415,12 @@ export function MassivaTicketCard({
           }
         })
       })
-      await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: massivaKeys.list() }),
+        // Recarrega a listagem do histórico local (chave prefixada) para a nova data
+        // aparecer sem esperar o staleTime.
+        queryClient.invalidateQueries({ queryKey: [...massivaKeys.all, 'history-list'] }),
+      ])
     },
   })
 

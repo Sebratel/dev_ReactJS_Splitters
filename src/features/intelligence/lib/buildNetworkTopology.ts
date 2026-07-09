@@ -16,8 +16,9 @@ export type TopologyRiskBand = 'critico' | 'alto' | 'moderado' | 'baixo'
 export type TopologyInputRow = {
   splitterCode: string
   splitterTitle: string
-  oltCode: string | null
-  oltDescription: string | null
+  /** Ponto de acesso (PON específica) — chave de agrupamento da topologia. */
+  accessPointCode: string | null
+  accessPointTitle: string | null
   oltSlot: number | null
   oltPort: number | null
   currentUsagePercent: number
@@ -73,8 +74,8 @@ export type TopologySlotNode = TopologyMetrics & {
 }
 
 export type TopologyOltNode = TopologyMetrics & {
-  oltCode: string
-  oltDescription: string
+  accessPointCode: string
+  accessPointTitle: string
   slots: TopologySlotNode[]
 }
 
@@ -205,18 +206,18 @@ export function buildNetworkTopology(
   signalByCode?: ReadonlyMap<string, TopologySignalInput>,
 ): TopologyOltNode[] {
   type SlotBucket = { slot: string; hasSlot: boolean; acc: Accumulator; pons: Map<string, { pon: string; hasPon: boolean; acc: Accumulator; rows: TopologyInputRow[] }> }
-  type OltBucket = { oltCode: string; oltDescription: string; acc: Accumulator; slots: Map<string, SlotBucket> }
+  type OltBucket = { accessPointCode: string; accessPointTitle: string; acc: Accumulator; slots: Map<string, SlotBucket> }
 
   const olts = new Map<string, OltBucket>()
 
   for (const row of rows) {
     const signal = signalByCode?.get(row.splitterCode)
-    const oltKey = row.oltCode?.trim() || row.oltDescription?.trim() || NO_OLT
+    const oltKey = row.accessPointCode?.trim() || row.accessPointTitle?.trim() || NO_OLT
     let olt = olts.get(oltKey)
     if (!olt) {
       olt = {
-        oltCode: row.oltCode?.trim() || NO_OLT,
-        oltDescription: row.oltDescription?.trim() || 'OLT não informada',
+        accessPointCode: row.accessPointCode?.trim() || NO_OLT,
+        accessPointTitle: row.accessPointTitle?.trim() || 'Ponto de acesso não informado',
         acc: newAccumulator(),
         slots: new Map(),
       }
@@ -246,8 +247,8 @@ export function buildNetworkTopology(
 
   return [...olts.values()]
     .map((olt) => ({
-      oltCode: olt.oltCode,
-      oltDescription: olt.oltDescription,
+      accessPointCode: olt.accessPointCode,
+      accessPointTitle: olt.accessPointTitle,
       ...toMetrics(olt.acc),
       slots: [...olt.slots.values()]
         .map((slot) => ({

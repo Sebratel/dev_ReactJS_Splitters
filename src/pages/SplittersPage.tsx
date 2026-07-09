@@ -33,6 +33,7 @@ import {
   occupancyPercent,
 } from '@/features/splitters/lib/splitterOperationalPriorityCompare'
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
+import { classifySplitterSignalLevel } from '@/features/onu/model/onuSplitterSummary'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -110,6 +111,7 @@ export function SplittersPage() {
     clearAll,
     setOltSlot,
     setOltPort,
+    setSignalLevelFilter,
   } = useSplittersFiltersStore()
   const { data: accessPoints } = useAccessPointsForFilters()
   const canViewMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
@@ -240,6 +242,18 @@ export function SplittersPage() {
         },
       })
     }
+    if (state.signalLevelFilter !== 'all') {
+      const label = {
+        critico: 'Crítico',
+        atenuado: 'Atenuado',
+        offline: 'Offline',
+      }[state.signalLevelFilter]
+      chips.push({
+        key: 'signal-level',
+        label: `Sinal: ${label}`,
+        onRemove: () => setSignalLevelFilter('all'),
+      })
+    }
     return chips
   }, [
     state.searchQuery,
@@ -269,6 +283,8 @@ export function SplittersPage() {
     state.oltPort,
     setOltSlot,
     setOltPort,
+    state.signalLevelFilter,
+    setSignalLevelFilter,
   ])
 
   const activeFilterCount = countActiveSplittersFilters(state)
@@ -359,11 +375,30 @@ export function SplittersPage() {
     [maintenanceStatsByCode],
   )
 
+  // Sinal ONU por splitter — usado tanto no card quanto no filtro por nível de sinal.
+  const onuSummaryBySplitter = useOnuSummaryBySplitter()
+  // Códigos que casam com o nível selecionado (crítico/atenuado/offline). Conjuntos
+  // pequenos → enviados ao servidor como lista (respeita paginação/contagem).
+  const signalLevelSplitterCodes = useMemo(() => {
+    if (state.signalLevelFilter === 'all') return []
+    const codes: string[] = []
+    for (const [code, summary] of onuSummaryBySplitter.data ?? []) {
+      if (classifySplitterSignalLevel(summary) === state.signalLevelFilter) {
+        codes.push(code)
+      }
+    }
+    return codes
+  }, [state.signalLevelFilter, onuSummaryBySplitter.data])
+  // Enquanto o resumo ONU carrega, não dispara a lista (evita "0 resultados" piscando).
+  const signalFilterReady =
+    state.signalLevelFilter === 'all' || onuSummaryBySplitter.isSuccess
+
   const splittersQuery = useSplittersList(page, {
     openMassivaSplitterCodes,
     maintenanceSplitterCodes:
       state.maintenanceFilter === 'with-maintenance' ? maintenanceSplitterCodes : [],
-    enabled: massivaOpenFilterReady,
+    signalLevelSplitterCodes,
+    enabled: massivaOpenFilterReady && signalFilterReady,
   })
 
   const splittersTotalCount = splittersQuery.data?.totalCount ?? 0
@@ -519,7 +554,6 @@ export function SplittersPage() {
       latestCreatedAt: null,
     }
 
-  const onuSummaryBySplitter = useOnuSummaryBySplitter()
   const getOnuSignal = (splitter: Splitter) =>
     onuSummaryBySplitter.data?.get(String(splitter.code ?? '')) ?? null
 

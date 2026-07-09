@@ -140,8 +140,12 @@ export type IntelligenceDecisionKpis = {
 export type IntelligenceRiskRankingRow = {
   splitterCode: string
   splitterTitle: string
+  /** Concentrador (máquina OLT física) — para rastreabilidade interna. */
   oltCode: string | null
   oltDescription: string | null
+  /** Ponto de acesso (PON específica) — chave de agrupamento da topologia. */
+  accessPointCode: string | null
+  accessPointTitle: string | null
   /** Slot da OLT (extraído do cadastro do splitter); null se ausente. */
   oltSlot: number | null
   /** Porta/PON da OLT (extraída do cadastro); null se ausente. */
@@ -182,8 +186,8 @@ export type IntelligenceImpactUrgencyCell = {
 }
 
 export type IntelligenceOltDrilldownRow = {
-  oltCode: string
-  oltDescription: string
+  accessPointCode: string
+  accessPointTitle: string
   splitters: number
   criticalSplitters: number
   avgUsagePercent: number
@@ -1153,6 +1157,8 @@ export function useNetworkIntelligenceData(
           splitterTitle: trend.splitterTitle,
           oltCode: meta?.oltCode ?? null,
           oltDescription: meta?.oltDescription ?? null,
+          accessPointCode: meta?.accessPointCode ?? null,
+          accessPointTitle: meta?.accessPointTitle ?? null,
           oltSlot: resolvedOlt.slot ?? meta?.oltSlot ?? null,
           oltPort: resolvedOlt.port ?? meta?.oltPort ?? null,
           street: meta?.street ?? null,
@@ -1240,8 +1246,8 @@ export function useNetworkIntelligenceData(
 
   const oltDrilldown = useMemo<IntelligenceOltDrilldownRow[]>(() => {
     const grouped = new Map<string, {
-      oltCode: string
-      oltDescription: string
+      accessPointCode: string
+      accessPointTitle: string
       splitters: number
       criticalSplitters: number
       sumUsage: number
@@ -1251,10 +1257,10 @@ export function useNetworkIntelligenceData(
       affectedClientsTotal: number
     }>()
     for (const row of riskRanking) {
-      const key = row.oltCode?.trim() || row.oltDescription?.trim() || 'SEM_OLT'
+      const key = row.accessPointCode?.trim() || row.accessPointTitle?.trim() || 'SEM_OLT'
       const current = grouped.get(key) ?? {
-        oltCode: row.oltCode?.trim() || 'SEM_OLT',
-        oltDescription: row.oltDescription?.trim() || 'OLT não informada',
+        accessPointCode: row.accessPointCode?.trim() || 'SEM_OLT',
+        accessPointTitle: row.accessPointTitle?.trim() || 'Ponto de acesso não informado',
         splitters: 0,
         criticalSplitters: 0,
         sumUsage: 0,
@@ -1275,8 +1281,8 @@ export function useNetworkIntelligenceData(
 
     return [...grouped.values()]
       .map((entry) => ({
-        oltCode: entry.oltCode,
-        oltDescription: entry.oltDescription,
+        accessPointCode: entry.accessPointCode,
+        accessPointTitle: entry.accessPointTitle,
         splitters: entry.splitters,
         criticalSplitters: entry.criticalSplitters,
         avgUsagePercent: Number((entry.sumUsage / Math.max(1, entry.splitters)).toFixed(1)),

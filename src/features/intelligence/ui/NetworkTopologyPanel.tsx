@@ -271,7 +271,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
   const signalByCode = useOnuSummaryBySplitter().data
 
   const selectedOlt = useMemo<TopologyOltNode | null>(
-    () => (oltCode == null ? null : topology.find((o) => o.oltCode === oltCode) ?? null),
+    () => (oltCode == null ? null : topology.find((o) => o.accessPointCode === oltCode) ?? null),
     [topology, oltCode],
   )
   const selectedSlot = useMemo<TopologySlotNode | null>(
@@ -332,7 +332,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
     if (topology.length === 0) return 'Nenhum equipamento no recorte filtrado.'
     const worst = topology[0]
     const totalCritical = topology.reduce((s, o) => s + o.criticalSplitters, 0)
-    return `${topology.length} OLT(s) no recorte · ${totalCritical} splitter(s) crítico(s). Maior pressão hoje: ${oltDisplayLabel(worst.oltDescription)} (${worst.criticalSplitters} crítico(s)).`
+    return `${topology.length} OLT(s) no recorte · ${totalCritical} splitter(s) crítico(s). Maior pressão hoje: ${oltDisplayLabel(worst.accessPointTitle)} (${worst.criticalSplitters} crítico(s)).`
   }, [topology, selectedOlt, selectedSlot, selectedPon])
 
   return (
@@ -345,8 +345,8 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
             <>
               <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
               <Crumb
-                label={oltDisplayLabel(selectedOlt.oltDescription)}
-                onClick={() => goOlt(selectedOlt.oltCode)}
+                label={oltDisplayLabel(selectedOlt.accessPointTitle)}
+                onClick={() => goOlt(selectedOlt.accessPointCode)}
                 active={!selectedSlot}
               />
             </>
@@ -383,13 +383,13 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
           >
             {topology.map((olt) => (
               <NodeCard
-                key={olt.oltCode}
+                key={olt.accessPointCode}
                 icon={Server}
-                title={oltDisplayLabel(olt.oltDescription)}
-                subtitle={olt.oltCode !== 'SEM_OLT' ? olt.oltCode : undefined}
+                title={oltDisplayLabel(olt.accessPointTitle)}
+                subtitle={undefined}
                 metrics={olt}
                 deltaReferenceLabel={deltaReferenceLabel}
-                onClick={() => goOlt(olt.oltCode)}
+                onClick={() => goOlt(olt.accessPointCode)}
               />
             ))}
           </motion.div>
@@ -399,7 +399,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
       {/* Nível 1 — Slots da OLT */}
       {selectedOlt && !selectedSlot ? (
         <motion.div
-          key={`slots-${selectedOlt.oltCode}`}
+          key={`slots-${selectedOlt.accessPointCode}`}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
@@ -421,7 +421,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
       {/* Nível 2 — PONs do Slot */}
       {selectedSlot && !selectedPon ? (
         <motion.div
-          key={`pons-${selectedOlt?.oltCode}-${selectedSlot.slot}`}
+          key={`pons-${selectedOlt?.accessPointCode}-${selectedSlot.slot}`}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
