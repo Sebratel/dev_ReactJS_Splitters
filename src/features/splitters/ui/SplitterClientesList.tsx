@@ -11,8 +11,12 @@ import {
   Hash,
   Lock,
   Building2,
+  Check,
+  Pause,
+  X,
+  Minus,
+  type LucideIcon,
 } from 'lucide-react'
-import { SplitterStatusBadge } from '@/features/splitters/ui/SplitterStatusBadge'
 import { cn } from '@/shared/lib/utils'
 import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
 import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
@@ -24,6 +28,31 @@ type SplitterClientesListProps = {
   capacity: number
   geogridRows?: GeogridReservaRow[]
   portStates?: SplitterPortState[]
+}
+
+/** Cor da bolacha (círculo preenchido) por status real do contrato (v_status). */
+function contractStatusCircleClass(status: string): string {
+  const key = status.trim().toLowerCase()
+  if (key === 'normal' || key === 'ativo') return 'bg-emerald-500'
+  if (key === 'suspenso') return 'bg-amber-500'
+  if (key === 'bloqueado' || key === 'cancelado') return 'bg-rose-500'
+  return 'bg-slate-400'
+}
+
+/** Glifo branco dentro do círculo — check p/ contrato ok (como antes), demais conforme o estado. */
+function contractStatusGlyph(status: string): LucideIcon {
+  const key = status.trim().toLowerCase()
+  if (key === 'normal' || key === 'ativo') return Check
+  if (key === 'suspenso') return Pause
+  if (key === 'bloqueado') return Lock
+  if (key === 'cancelado') return X
+  return Minus
+}
+
+/** Texto do status do contrato a exibir; `null` quando não há descrição confiável. */
+function contractStatusLabel(cliente: SplitterCliente): string | null {
+  const desc = cliente.contract?.statusDescription?.trim()
+  return desc && desc !== '' ? desc : null
 }
 
 function formatReservaDias(dataReserva: string | null): string {
@@ -270,11 +299,27 @@ export function SplitterClientesList({
                       <span className="flex items-center bg-primary/[0.12] px-2.5 py-1 text-primary">Porta</span>
                       <span className="flex items-center bg-primary px-2.5 py-1 font-extrabold text-white">{portNum}</span>
                     </span>
-                  <SplitterStatusBadge
-                    active={c.status === 1}
-                    labels={{ active: 'Contrato ativo', inactive: 'Contrato suspenso' }}
-                    variant="neutral"
-                  />
+                  {(() => {
+                    const statusLabel = contractStatusLabel(c)
+                    if (!statusLabel) return null
+                    const StatusGlyph = contractStatusGlyph(statusLabel)
+                    return (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-low/60 py-1 pl-1 pr-2.5 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant"
+                        title={`Status do contrato: ${statusLabel}`}
+                      >
+                        <span
+                          className={cn(
+                            'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full',
+                            contractStatusCircleClass(statusLabel),
+                          )}
+                        >
+                          <StatusGlyph size={11} strokeWidth={3} className="text-white" aria-hidden />
+                        </span>
+                        {`Contrato ${statusLabel}`}
+                      </span>
+                    )
+                  })()}
                     <OnuStatusBadge
                       diagnostic={onuForCliente(c)}
                       loading={onuQuery.isPending}

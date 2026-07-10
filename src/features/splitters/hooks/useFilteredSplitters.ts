@@ -49,6 +49,7 @@ export function useFilteredSplitters(
       maintenanceFilter,
       oltSlot,
       oltPort,
+      signalLevelFilter: filters.signalLevelFilter,
     }
     return applySplittersListFilters(splitters, filterSlice, {
       clientNamesIndex,

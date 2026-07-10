@@ -780,46 +780,46 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             <thead className="sticky top-0 z-[1] bg-white">
               <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
                 <th className="px-4 py-2.5">Condomínio</th>
-                <th className="px-3 py-2.5 text-right">Splitters</th>
-                <th className="px-3 py-2.5 text-right">Clientes</th>
+                <th className="px-3 py-2.5 text-center">Splitters</th>
+                <th className="px-3 py-2.5 text-center">Clientes</th>
                 {view === 'saturacao' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">Ocup. média</th>
-                    <th className="px-3 py-2.5 text-right">Saturados</th>
+                    <th className="px-3 py-2.5 text-center">Ocup. média</th>
+                    <th className="px-3 py-2.5 text-center">Saturados</th>
                   </>
                 ) : null}
                 {view === 'capacidade' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">Ocup. média</th>
-                    <th className="px-3 py-2.5 text-right">Crescimento</th>
-                    <th className="px-3 py-2.5 text-right">Satura em</th>
-                    <th className="px-3 py-2.5 text-right">Idade média</th>
+                    <th className="px-3 py-2.5 text-center">Ocup. média</th>
+                    <th className="px-3 py-2.5 text-center">Crescimento</th>
+                    <th className="px-3 py-2.5 text-center">Satura em</th>
+                    <th className="px-3 py-2.5 text-center">Idade média</th>
                   </>
                 ) : null}
                 {view === 'churn' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">Churn rede</th>
-                    <th className="px-3 py-2.5 text-right">Churn total</th>
+                    <th className="px-3 py-2.5 text-center">Churn rede</th>
+                    <th className="px-3 py-2.5 text-center">Churn total</th>
                   </>
                 ) : null}
                 {view === 'massivas' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">Massivas</th>
-                    <th className="px-3 py-2.5 text-right">Afetados</th>
-                    <th className="px-3 py-2.5 text-right">Churn pós-massiva</th>
+                    <th className="px-3 py-2.5 text-center">Massivas</th>
+                    <th className="px-3 py-2.5 text-center">Afetados</th>
+                    <th className="px-3 py-2.5 text-center">Churn pós-massiva</th>
                   </>
                 ) : null}
                 {view === 'risco' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">Score médio</th>
-                    <th className="px-3 py-2.5 text-right">Críticos</th>
+                    <th className="px-3 py-2.5 text-center">Score médio</th>
+                    <th className="px-3 py-2.5 text-center">Críticos</th>
                   </>
                 ) : null}
                 {view === 'sinal' ? (
                   <>
-                    <th className="px-3 py-2.5 text-right">ONUs</th>
-                    <th className="px-3 py-2.5 text-right">Deg.+off.</th>
-                    <th className="px-3 py-2.5 text-right">Offline</th>
+                    <th className="px-3 py-2.5 text-center">ONUs</th>
+                    <th className="px-3 py-2.5 text-center">Deg.+off.</th>
+                    <th className="px-3 py-2.5 text-center">Offline</th>
                   </>
                 ) : null}
               </tr>
@@ -864,33 +864,33 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{c.splitters}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{c.splitters}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
                       {c.activeClients > 0 ? fmt(c.activeClients) : '—'}
                     </td>
                     {view === 'saturacao' ? (
                       <>
-                        <td className={`px-3 py-2 text-right font-bold tabular-nums ${usageTone(c.avgUsage)}`}>
+                        <td className={`px-3 py-2 text-center font-bold tabular-nums ${usageTone(c.avgUsage)}`}>
                           {fmt1(c.avgUsage)}%
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
                           {c.saturatedSplitters}/{c.splitters}
                         </td>
                       </>
                     ) : null}
                     {view === 'capacidade' ? (
                       <>
-                        <td className={`px-3 py-2 text-right font-semibold tabular-nums ${usageTone(c.avgUsage)}`}>
+                        <td className={`px-3 py-2 text-center font-semibold tabular-nums ${usageTone(c.avgUsage)}`}>
                           {fmt1(c.avgUsage)}%
                         </td>
                         <td
-                          className={`px-3 py-2 text-right tabular-nums ${
+                          className={`px-3 py-2 text-center tabular-nums ${
                             c.avgDelta > 0 ? 'text-amber-700' : c.avgDelta < 0 ? 'text-emerald-700' : 'text-neutral-500'
                           }`}
                         >
                           {c.avgDelta > 0 ? '+' : ''}{fmt1(c.avgDelta)} pp
                         </td>
-                        <td className={`px-3 py-2 text-right font-bold tabular-nums ${etaTone(c.etaSoonestDays)}`}>
+                        <td className={`px-3 py-2 text-center font-bold tabular-nums ${etaTone(c.etaSoonestDays)}`}>
                           {fmtEta(c.etaSoonestDays)}
                           {c.splittersSaturatingSoon > 0 ? (
                             <span className="ml-1 text-[9px] font-normal text-neutral-400">
@@ -898,31 +898,31 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                             </span>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
                           {c.avgAge > 0 ? `${fmt1(c.avgAge)} a` : '—'}
                         </td>
                       </>
                     ) : null}
                     {view === 'churn' ? (
                       <>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
                           {c.redeChurn > 0 ? fmt(c.redeChurn) : '—'}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
                           {c.totalChurn > 0 ? fmt(c.totalChurn) : '—'}
                         </td>
                       </>
                     ) : null}
                     {view === 'massivas' ? (
                       <>
-                        <td className="px-3 py-2 text-right tabular-nums text-neutral-800">
+                        <td className="px-3 py-2 text-center tabular-nums text-neutral-800">
                           {c.totalTickets > 0 ? `${c.openTickets} / ${c.totalTickets}` : '—'}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
                           {c.affectedClients > 0 ? fmt(c.affectedClients) : '—'}
                         </td>
                         <td
-                          className={`px-3 py-2 text-right font-bold tabular-nums ${
+                          className={`px-3 py-2 text-center font-bold tabular-nums ${
                             c.postMassivaChurn > 0 ? 'text-rose-700' : 'text-neutral-400'
                           }`}
                           title={
@@ -937,10 +937,10 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                     ) : null}
                     {view === 'risco' ? (
                       <>
-                        <td className="px-3 py-2 text-right font-bold tabular-nums text-neutral-900">
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-neutral-900">
                           {fmt(c.avgRisk)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums text-rose-700">
+                        <td className="px-3 py-2 text-center tabular-nums text-rose-700">
                           {c.criticalSplitters > 0 ? c.criticalSplitters : '—'}
                         </td>
                       </>
@@ -951,11 +951,11 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         const lowSample = c.onuTotal > 0 && c.onuTotal < SIGNAL_MIN_SAMPLE
                         return (
                           <>
-                            <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                            <td className="px-3 py-2 text-center tabular-nums text-neutral-500">
                               {c.onuTotal > 0 ? fmt(c.onuTotal) : '—'}
                             </td>
                             <td
-                              className={`px-3 py-2 text-right font-bold tabular-nums ${
+                              className={`px-3 py-2 text-center font-bold tabular-nums ${
                                 lowSample
                                   ? 'text-neutral-300'
                                   : p != null && p >= SIGNAL_PROBLEM_THRESHOLD
@@ -967,7 +967,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                               {p != null ? `${fmt1(p)}%` : '—'}
                               {lowSample ? <span className="ml-1 text-[9px] font-normal">amostra baixa</span> : null}
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-neutral-600">
+                            <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
                               {c.onuTotal > 0 ? c.onuOffline : '—'}
                             </td>
                           </>

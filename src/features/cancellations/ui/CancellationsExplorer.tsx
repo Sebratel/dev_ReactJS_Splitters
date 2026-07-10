@@ -113,7 +113,10 @@ export function CancellationsExplorer({
       return {
         splitterTitle: r.splitterTitle || r.splitterCode,
         splitterCode: r.splitterCode,
-        oltLabel: formatOltLabel(r.oltDescription ?? r.oltCode) ?? '—',
+        oltLabel:
+          formatOltLabel(
+            r.accessPointTitle ?? r.accessPointCode ?? r.oltDescription ?? r.oltCode,
+          ) ?? '—',
         slot: r.oltSlot,
         pon: r.oltPort,
         lat: r.latitude,
@@ -463,10 +466,10 @@ export function CancellationsExplorer({
               <thead className="sticky top-0 z-[1] bg-white">
                 <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
                   <th className="px-4 py-2">{level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}</th>
-                  <th className="px-3 py-2 text-right">Splitters c/ churn</th>
-                  <th className="px-3 py-2 text-right">Rede</th>
-                  <th className="px-3 py-2 text-right">Total</th>
-                  <th className="px-3 py-2 text-right">Taxa/100</th>
+                  <th className="px-3 py-2 text-center">Splitters c/ churn</th>
+                  <th className="px-3 py-2 text-center">Rede</th>
+                  <th className="px-3 py-2 text-center">Total</th>
+                  <th className="px-3 py-2 text-center">Taxa/100</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -475,10 +478,10 @@ export function CancellationsExplorer({
                   return (
                     <tr key={g.key} className="cursor-pointer hover:bg-indigo-50/50" onClick={g.drill}>
                       <td className="px-4 py-2 font-medium text-indigo-700 hover:underline">{g.label}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-neutral-600">{g.splitters}</td>
-                      <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">{g.rede > 0 ? fmt(g.rede) : '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmt(g.total)}</td>
-                      <td className={`px-3 py-2 text-right tabular-nums ${rate != null && rate >= 2 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
+                      <td className="px-3 py-2 text-center tabular-nums text-neutral-600">{g.splitters}</td>
+                      <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">{g.rede > 0 ? fmt(g.rede) : '—'}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{fmt(g.total)}</td>
+                      <td className={`px-3 py-2 text-center tabular-nums ${rate != null && rate >= 2 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
                         {rate != null ? rate.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—'}
                       </td>
                     </tr>
@@ -514,13 +517,13 @@ export function CancellationsExplorer({
                 <th className="px-4 py-2.5">Splitter</th>
                 <th className="px-3 py-2.5">OLT</th>
                 <th className="px-3 py-2.5">Slot/PON</th>
-                <th className="px-3 py-2.5 text-right">Ocup.</th>
-                <th className="px-3 py-2.5 text-right" title="% de ONUs atenuadas ou offline (≥8% atenção, ≥15% crítico)">
+                <th className="px-3 py-2.5 text-center">Ocup.</th>
+                <th className="px-3 py-2.5 text-center" title="% de ONUs atenuadas ou offline (≥8% atenção, ≥15% crítico)">
                   Sinal
                 </th>
-                <th className="px-3 py-2.5 text-right">Rede</th>
-                <th className="px-3 py-2.5 text-right">Total</th>
-                <th className="px-3 py-2.5 text-right">Pós-massiva</th>
+                <th className="px-3 py-2.5 text-center">Rede</th>
+                <th className="px-3 py-2.5 text-center">Total</th>
+                <th className="px-3 py-2.5 text-center">Pós-massiva</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -539,10 +542,10 @@ export function CancellationsExplorer({
                       </button>
                     ) : '—'}
                   </td>
-                  <td className={`px-3 py-2 text-right tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700' : 'text-neutral-600'}`}>
+                  <td className={`px-3 py-2 text-center tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700' : 'text-neutral-600'}`}>
                     {Math.round(r.usage)}%
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td className="px-3 py-2 text-center tabular-nums">
                     {r.signalPct != null ? (() => {
                       const tone = describeSignalProblemRate(r.signalPct)
                       const cellClass =
@@ -560,9 +563,9 @@ export function CancellationsExplorer({
                       <span className="text-neutral-400">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-700">{fmt(r.total)}</td>
-                  <td className={`px-3 py-2 text-right tabular-nums ${r.postMassivaRede > 0 ? 'font-semibold text-amber-700' : 'text-neutral-400'}`}>
+                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
+                  <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{fmt(r.total)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${r.postMassivaRede > 0 ? 'font-semibold text-amber-700' : 'text-neutral-400'}`}>
                     {r.postMassivaRede > 0 ? (
                       <span className="inline-flex items-center gap-1" title="Churn de rede em até 30d após massiva">
                         <Zap className="size-3" aria-hidden />{r.postMassivaRede}

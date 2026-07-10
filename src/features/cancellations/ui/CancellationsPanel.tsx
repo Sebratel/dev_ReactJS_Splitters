@@ -17,7 +17,6 @@ import {
   Lightbulb,
   Minus,
   Router,
-  Target,
   TrendingDown,
   Zap,
 } from 'lucide-react'
@@ -200,24 +199,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
   const impact = impactQuery.data
   const impactRows = (impact?.ranking ?? []).filter((r) => r.redeCount > 0).slice(0, 25)
 
-  // ---- Narrativa "Leitura rápida": interpreta os números em linguagem simples ----
+  // ---- Narrativas para o planejamento ----
   const periodLabel = preset === '3m' ? '3 meses' : preset === '6m' ? '6 meses' : '12 meses'
-
-  const trendStory: { tone: 'bad' | 'good' | 'neutral'; text: string } =
-    trend.deltaPct >= 15
-      ? {
-          tone: 'bad',
-          text: `O churn de rede está subindo: +${trend.deltaPct}% frente aos ${trend.windowDays} dias anteriores. Vale atenção.`,
-        }
-      : trend.deltaPct <= -15
-        ? {
-            tone: 'good',
-            text: `O churn de rede está caindo: ${trend.deltaPct}% frente aos ${trend.windowDays} dias anteriores.`,
-          }
-        : {
-            tone: 'neutral',
-            text: `O churn de rede está estável frente aos ${trend.windowDays} dias anteriores (${trend.deltaPct > 0 ? '+' : ''}${trend.deltaPct}%).`,
-          }
 
   const condoStory =
     rateVerdict ??
@@ -227,15 +210,57 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         ? 'Em volume, os condomínios concentram mais churn de rede que as ruas.'
         : 'Em volume, as ruas concentram mais churn de rede que os condomínios.')
 
-  const concStory =
+  // ---- Síntese objetiva para o planejamento (nomes + números concretos) ----
+  // Área nº1 de campo = ponto de acesso com mais churn de rede (unidade de intervenção).
+  const topRedeArea =
+    [...(data.byAccessPoint ?? [])].sort((a, b) => b.rede - a.rede).find((a) => a.rede > 0) ?? null
+  const topAreaShare =
+    topRedeArea && totalRede > 0 ? Math.round((topRedeArea.rede / totalRede) * 100) : 0
+
+  // Causa predominante dentro de rede/qualidade: insatisfação (planta) × concorrência (preço).
+  const submotiveTop = Math.max(sub.insatisfacao, sub.concorrencia)
+  const submotiveShare = totalRede > 0 ? Math.round((submotiveTop / totalRede) * 100) : 0
+  const submotiveDominant: 'insatisfacao' | 'concorrencia' | null =
+    submotiveTop <= 0 ? null : sub.insatisfacao >= sub.concorrencia ? 'insatisfacao' : 'concorrencia'
+
+  // Pior indício de causa massiva→churn.
+  const worstMassiva =
+    impactRows.length > 0 ? impactRows.reduce((a, b) => (b.redeCount > a.redeCount ? b : a)) : null
+
+  // Conclusão nº1 (ação de campo de maior retorno).
+  const topPriority: { tone: 'bad' | 'good'; text: string } = topRedeArea
+    ? {
+        tone: 'bad',
+        text: `Comece por ${topRedeArea.key}: ${topRedeArea.rede.toLocaleString('pt-BR')} cancelamento(s) de rede (${topAreaShare}% de todo o churn de rede do período). Inspecionar a planta/OLT dessa área é o passo de maior retorno.`,
+      }
+    : {
+        tone: 'good',
+        text: 'Nenhuma área concentra churn de rede relevante no período — sem alvo prioritário de campo no momento.',
+      }
+
+  const concStoryFull =
     conc.redeTotal > 0
-      ? `${conc.areasFor80pct} área(s) concentram 80% do churn de rede (as 5 maiores já somam ${conc.top5Share}%). É onde focar o esforço.`
+      ? `Foco enxuto: ${conc.areasFor80pct} área(s) respondem por 80% do churn de rede e as 5 maiores já somam ${conc.top5Share}%. Resolver essas poucas cobre a maior parte do problema.`
       : null
 
-  const massivaStory = impactQuery.isSuccess
-    ? impactRows.length > 0
-      ? `Em ${impactRows.length} área(s), uma massiva foi seguida de cancelamentos de rede em até ${WINDOW_DAYS} dias — investigue se o evento causou o churn (lista no fim).`
-      : `Nenhuma massiva recente foi seguida de churn de rede na janela de ${WINDOW_DAYS} dias — bom sinal.`
+  const causeStory =
+    submotiveDominant === 'insatisfacao'
+      ? `Causa predominante: insatisfação com a qualidade (${submotiveShare}% do churn de rede). O gargalo é técnico/planta — ação de engenharia retém melhor que desconto.`
+      : submotiveDominant === 'concorrencia'
+        ? `Causa predominante: migração para a concorrência (${submotiveShare}% do churn de rede). Há forte componente de preço — alinhe com o comercial, além da rede.`
+        : null
+
+  const trendStoryFull =
+    trend.deltaPct >= 15
+      ? `Ritmo em ALTA: churn de rede +${trend.deltaPct}% vs. ${trend.windowDays}d anteriores (${trend.redeRecent} vs. ${trend.redePrevious}). Tratar como alerta e reavaliar semanalmente.`
+      : trend.deltaPct <= -15
+        ? `Ritmo em QUEDA: churn de rede ${trend.deltaPct}% vs. ${trend.windowDays}d anteriores. As ações recentes parecem surtir efeito — manter.`
+        : `Ritmo ESTÁVEL (${trend.deltaPct > 0 ? '+' : ''}${trend.deltaPct}% vs. ${trend.windowDays}d anteriores) — sem mudança relevante no churn de rede.`
+
+  const massivaStoryFull = impactQuery.isSuccess
+    ? worstMassiva
+      ? `Indício de causa: em ${worstMassiva.nomeCondominio || worstMassiva.splitterTitle}, uma massiva (${fmtDate(worstMassiva.eventAt)}) foi seguida de ${worstMassiva.redeCount.toLocaleString('pt-BR')} cancelamento(s) de rede em ${WINDOW_DAYS}d. Revisar a qualidade da resolução dessa massiva.`
+      : `Nenhuma massiva recente foi seguida de churn de rede em ${WINDOW_DAYS}d — eventos não estão gerando cancelamento (bom sinal).`
     : null
 
   return (
@@ -294,43 +319,71 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         </div>
       </div>
 
-      {/* Leitura rápida — o "e daí?" em linguagem simples */}
+      {/* Conclusões para o planejamento — decisões objetivas, em ordem de prioridade */}
       <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
           <Lightbulb className="size-4 text-amber-500" aria-hidden />
-          Leitura rápida
+          Conclusões para o planejamento
           <span className="ml-1 font-medium normal-case tracking-normal text-neutral-400">
-            · últimos {periodLabel}
+            · o que fazer, em ordem · últimos {periodLabel}
           </span>
         </p>
-        <ul className="space-y-2 text-sm leading-snug text-neutral-700">
-          <li className="flex items-start gap-2">
-            {trendStory.tone === 'bad' ? (
-              <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
-            ) : trendStory.tone === 'good' ? (
-              <ArrowDownRight className="mt-0.5 size-4 shrink-0 text-emerald-500" aria-hidden />
-            ) : (
-              <Minus className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
-            )}
-            <span>{trendStory.text}</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Building2 className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden />
-            <span>{condoStory}</span>
-          </li>
-          {concStory ? (
-            <li className="flex items-start gap-2">
-              <Target className="mt-0.5 size-4 shrink-0 text-neutral-500" aria-hidden />
-              <span>{concStory}</span>
-            </li>
-          ) : null}
-          {massivaStory ? (
-            <li className="flex items-start gap-2">
-              <Zap className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
-              <span>{massivaStory}</span>
-            </li>
-          ) : null}
-        </ul>
+
+        {/* Prioridade nº 1 — ação de campo de maior retorno */}
+        <div
+          className={`flex items-start gap-3 rounded-xl border p-3 ${
+            topPriority.tone === 'bad'
+              ? 'border-rose-300 bg-rose-50/70 ring-1 ring-rose-200'
+              : 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-200'
+          }`}
+        >
+          <span
+            className={`inline-flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-black text-white ${
+              topPriority.tone === 'bad' ? 'bg-rose-600' : 'bg-emerald-600'
+            }`}
+          >
+            1
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+              Prioridade de campo
+            </p>
+            <p className="mt-0.5 text-sm font-medium leading-snug text-neutral-800">
+              {topPriority.text}
+            </p>
+          </div>
+        </div>
+
+        {/* Conclusões de apoio — completas, sem deixar dúvida */}
+        <ol className="mt-3 space-y-2.5">
+          {([
+            { icon: <Router className="size-4 text-indigo-500" aria-hidden />, text: concStoryFull },
+            { icon: <AlertTriangle className="size-4 text-amber-500" aria-hidden />, text: causeStory },
+            {
+              icon:
+                trend.deltaPct >= 15 ? (
+                  <ArrowUpRight className="size-4 text-rose-500" aria-hidden />
+                ) : trend.deltaPct <= -15 ? (
+                  <ArrowDownRight className="size-4 text-emerald-500" aria-hidden />
+                ) : (
+                  <Minus className="size-4 text-neutral-400" aria-hidden />
+                ),
+              text: trendStoryFull,
+            },
+            { icon: <Building2 className="size-4 text-rose-400" aria-hidden />, text: condoStory },
+            { icon: <Zap className="size-4 text-amber-500" aria-hidden />, text: massivaStoryFull },
+          ] as Array<{ icon: React.ReactNode; text: string | null }>)
+            .filter((c): c is { icon: React.ReactNode; text: string } => Boolean(c.text))
+            .map((c, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm leading-snug text-neutral-700">
+                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-bold text-neutral-500">
+                  {i + 2}
+                </span>
+                <span className="mt-0.5 shrink-0">{c.icon}</span>
+                <span>{c.text}</span>
+              </li>
+            ))}
+        </ol>
       </div>
 
       {/* Condomínio × Rua — distinção central */}
@@ -495,8 +548,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                   <th className="px-4 py-2.5">Splitter / condomínio</th>
                   <th className="px-3 py-2.5">Tipo</th>
                   <th className="px-3 py-2.5">Última massiva</th>
-                  <th className="px-3 py-2.5 text-right">Rede pós-evento</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
+                  <th className="px-3 py-2.5 text-center">Rede pós-evento</th>
+                  <th className="px-3 py-2.5 text-center">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -516,10 +569,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                       {row.tipoLocal === 'CONDOMÍNIO' ? 'Condomínio' : 'Rua'}
                     </td>
                     <td className="px-3 py-2 text-xs text-neutral-500">{fmtDate(row.eventAt)}</td>
-                    <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
+                    <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
                       {row.redeCount.toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
+                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
                       {row.totalCount.toLocaleString('pt-BR')}
                     </td>
                   </tr>
@@ -612,9 +665,9 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
               <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
                 <th className="px-4 py-2.5">{dimension === 'condominio' ? 'Condomínio' : 'Área'}</th>
                 {dimension === 'splitter' ? <th className="px-3 py-2.5">Slot/PON</th> : null}
-                <th className="px-3 py-2.5 text-right">Rede</th>
-                <th className="px-3 py-2.5 text-right">Total</th>
-                <th className="px-3 py-2.5 text-right">% rede</th>
+                <th className="px-3 py-2.5 text-center">Rede</th>
+                <th className="px-3 py-2.5 text-center">Total</th>
+                <th className="px-3 py-2.5 text-center">% rede</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -633,13 +686,13 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                       {row.slot != null && row.pon != null ? `${row.slot} / ${row.pon}` : '—'}
                     </td>
                   ) : null}
-                  <td className="px-3 py-2 text-right font-bold tabular-nums text-rose-700">
+                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
                     {row.rede > 0 ? row.rede.toLocaleString('pt-BR') : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-700">
+                  <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
                     {row.total.toLocaleString('pt-BR')}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                  <td className="px-3 py-2 text-center tabular-nums text-neutral-500">
                     {row.rede > 0 ? pct(row.rede, row.total) : '—'}
                   </td>
                 </tr>
@@ -656,11 +709,16 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         </div>
       </div>
 
-      <p className="flex items-center gap-1.5 px-1 text-[11px] text-neutral-500">
-        <AlertTriangle className="size-3.5 text-amber-500" aria-hidden />
-        "Rede/Qualidade" = insatisfação com o serviço + migração para a concorrência — o churn que
-        uma manutenção pode influenciar. A taxa normaliza pelo nº de clientes ativos, permitindo
-        comparar áreas de tamanhos diferentes.
+      <p className="flex items-start gap-1.5 px-1 text-[11px] leading-relaxed text-neutral-500">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" aria-hidden />
+        <span>
+          <span className="font-semibold text-neutral-600">"Rede/Qualidade"</span> = insatisfação com
+          o serviço + migração para a concorrência — o único churn que a rede/manutenção influencia, e
+          por isso o foco do planejamento. Motivos como financeiro, mudança de endereço e pré-instalação{' '}
+          <span className="font-semibold text-neutral-600">não são acionáveis pela rede</span> e servem
+          só de contexto. A taxa por 100 ativos normaliza o tamanho da base, permitindo comparar áreas
+          diferentes de forma justa.
+        </span>
       </p>
     </div>
   )
