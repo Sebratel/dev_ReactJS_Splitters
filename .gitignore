@@ -20,6 +20,18 @@ coverage
 .env.test.local
 .env.production.local
 .env.docker
+.env.*.local
+
+# Secrets / service accounts — NUNCA versionar
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceAccount*.json
+*.pem
+*.key
+*.p12
+*.p8
+secrets/
+changelog-splitters-*.docx
 
 # Editor directories and files
 .vscode/*
