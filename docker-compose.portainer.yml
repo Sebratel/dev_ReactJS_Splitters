@@ -105,8 +105,8 @@ services:
         # com a URL do backend faz o browser chamar cross-origin e cair em CORS.
         - VITE_BFF_BASE_URL=
         - VITE_LOCAL_BFF_URL=
+        # Só a base URL (sinal de habilitado). A api-key fica no backend (GEOGRID_API_KEY).
         - VITE_GEOGRID_BASE_URL=${VITE_GEOGRID_BASE_URL}
-        - VITE_GEOGRID_API_KEY=${VITE_GEOGRID_API_KEY}
         - VITE_BFF_PROXY_TARGET=${VITE_BFF_PROXY_TARGET}
         # Paths padrão do gateway Elleven (roteados via /api/v1 → GATEWAY_ORIGIN).
         # Sobrescreva pelo ambiente da stack só se o gateway usar outros paths.

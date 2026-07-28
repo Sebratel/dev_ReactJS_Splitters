@@ -1,4 +1,4 @@
-import { env, isLocalDevHostname } from '@/shared/config/env'
+import { env } from '@/shared/config/env'
 
 const GEOGRID_FETCH_TIMEOUT_MS = 10_000
 
@@ -12,17 +12,15 @@ function normalizeBaseUrl(base: string): string {
 }
 
 /**
- * GET JSON na API GeoGrid com `api-key` e timeout (fora do BFF).
+ * GET JSON GeoGrid SEMPRE via BFF (`/api/geogrid/...`). A `api-key` fica no backend
+ * (env `GEOGRID_API_KEY`) — nunca no bundle do frontend.
  */
 export async function geogridGetJson(
   path: string,
   options?: AbortSignal | GeogridGetJsonOptions,
 ): Promise<unknown> {
   const rel = path.startsWith('/') ? path : `/${path}`
-  const useLocalProxy = isLocalDevHostname() && env.localBffUrl.trim().length > 0
-  const url = useLocalProxy
-    ? `${normalizeBaseUrl(env.localBffUrl)}/api/geogrid${rel}`
-    : `${normalizeBaseUrl(env.geogridBaseUrl)}${rel}`
+  const url = `${normalizeBaseUrl(env.localBffUrl)}/api/geogrid${rel}`
 
   const signal =
     options instanceof AbortSignal || options === undefined
@@ -46,14 +44,9 @@ export async function geogridGetJson(
     const response = await fetch(url, {
       method: 'GET',
       signal: controller.signal,
-      headers: useLocalProxy
-        ? {
-            Accept: 'application/json',
-          }
-        : {
-            Accept: 'application/json',
-            'api-key': env.geogridApiKey,
-          },
+      headers: {
+        Accept: 'application/json',
+      },
     })
 
     if (!response.ok) {

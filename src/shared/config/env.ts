@@ -124,14 +124,13 @@ export const env = {
   ),
   devSessionToken: str(import.meta.env.VITE_DEV_SESSION_TOKEN, ''),
   /**
-   * GeoGrid API (paridade `GEOGRID_BASE_URL` / `GEOGRID_API_KEY` no Flutter — `main.dart`).
-   * Chamadas diretas com header `api-key`; não passam pelo BFF.
+   * GeoGrid: só a base URL (sinal de "habilitado", não é segredo). As chamadas passam
+   * sempre pelo BFF (`/api/geogrid`), que injeta a `api-key` no backend (`GEOGRID_API_KEY`).
    */
   geogridBaseUrl: str(
     import.meta.env.VITE_GEOGRID_BASE_URL,
     'https://eros.geogridmaps.com.br/sebratel/api/v3',
   ),
-  geogridApiKey: str(import.meta.env.VITE_GEOGRID_API_KEY, ''),
   /**
    * GET no BFF — listagem de massivas (paridade `MASSIVA_API_GATEWAY_LIST_ENDPOINT` no Flutter,
    * mas sempre como path relativo ao `bffBaseUrl`). Ex.: `/api/v1/massivas/recuperar-pelo-banco`
