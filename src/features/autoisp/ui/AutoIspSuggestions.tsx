@@ -107,10 +107,11 @@ export function AutoIspSuggestions({
     return (
       <p className="text-xs text-neutral-600">
         AutoISP inativo: defina{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_AUTH_ENDPOINT</code>,{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_EVENTS_ENDPOINT</code>,{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_USERNAME</code> e{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_PASSWORD</code>.
+        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_EVENTS_ENDPOINT</code> no
+        frontend e as credenciais{' '}
+        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_AUTH_ENDPOINT</code>,{' '}
+        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_USERNAME</code> e{' '}
+        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_PASSWORD</code> no backend.
       </p>
     )
   }
