@@ -10,7 +10,10 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: react-backend-portainer
+    mem_limit: 1.5g
+    memswap_limit: 1.5g
     environment:
+      NODE_OPTIONS: "--max-old-space-size=1200"
       TZ: America/Sao_Paulo
       NODE_ENV: production
       LOG_LEVEL: debug
@@ -129,6 +132,8 @@ services:
         - VITE_ACCESS_ALLOWED_EMAILS=${VITE_ACCESS_ALLOWED_EMAILS}
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
     container_name: react-frontend-portainer
+    mem_limit: 512m
+    memswap_limit: 512m
     environment:
       # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
