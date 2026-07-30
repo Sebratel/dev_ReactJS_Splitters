@@ -7,7 +7,6 @@ import {
   type PlatformSuggestionStatus,
 } from '@/features/suggestions/api/platformSuggestions'
 import { SuggestionCard } from '@/features/suggestions/ui/SuggestionCard'
-import { env } from '@/shared/config/env'
 import { cn } from '@/shared/lib/utils'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
@@ -46,7 +45,7 @@ export function PlatformSuggestionsPage() {
   })
 
   const suggestions = suggestionsQuery.data?.suggestions ?? []
-  const hubSuggestionsUrl = `${env.hubOrigin.replace(/\/+$/, '')}/sugestoes`
+  const hubSuggestionsUrl = 'https://hub-apps.sebratel.net.br/sugestoes'
 
   const sectors = useMemo(() => {
     const set = new Set<string>()

@@ -124,14 +124,13 @@ export const env = {
   ),
   devSessionToken: str(import.meta.env.VITE_DEV_SESSION_TOKEN, ''),
   /**
-   * GeoGrid API (paridade `GEOGRID_BASE_URL` / `GEOGRID_API_KEY` no Flutter — `main.dart`).
-   * Chamadas diretas com header `api-key`; não passam pelo BFF.
+   * GeoGrid: só a base URL (sinal de "habilitado", não é segredo). As chamadas passam
+   * sempre pelo BFF (`/api/geogrid`), que injeta a `api-key` no backend (`GEOGRID_API_KEY`).
    */
   geogridBaseUrl: str(
     import.meta.env.VITE_GEOGRID_BASE_URL,
     'https://eros.geogridmaps.com.br/sebratel/api/v3',
   ),
-  geogridApiKey: str(import.meta.env.VITE_GEOGRID_API_KEY, ''),
   /**
    * GET no BFF — listagem de massivas (paridade `MASSIVA_API_GATEWAY_LIST_ENDPOINT` no Flutter,
    * mas sempre como path relativo ao `bffBaseUrl`). Ex.: `/api/v1/massivas/recuperar-pelo-banco`
@@ -168,13 +167,9 @@ export const env = {
   ),
   /** Base da API de afetados para limpeza pós-encerramento (`.../protocol/{id}`). */
   massivaAffectedUsersPath: str(import.meta.env.VITE_MASSIVA_AFFECTED_USERS_PATH, ''),
-  /** Endpoint de autenticação do AutoISP (paridade `AUTOISP_AUTH_ENDPOINT` no Flutter). */
-  autoIspAuthEndpoint: str(import.meta.env.VITE_AUTOISP_AUTH_ENDPOINT, ''),
-  /** Endpoint de listagem de eventos do AutoISP (paridade `AUTOISP_EVENTS_ENDPOINT` no Flutter). */
+  /** Endpoint de listagem de eventos do AutoISP (não é segredo — só a URL). A autenticação
+   * é feita no backend (`AUTOISP_*`), que devolve o token via `GET /api/autoisp/token`. */
   autoIspEventsEndpoint: str(import.meta.env.VITE_AUTOISP_EVENTS_ENDPOINT, ''),
-  /** Credenciais de serviço do AutoISP (paridade `AUTOISP_USERNAME` / `AUTOISP_PASSWORD`). */
-  autoIspUsername: str(import.meta.env.VITE_AUTOISP_USERNAME, ''),
-  autoIspPassword: str(import.meta.env.VITE_AUTOISP_PASSWORD, ''),
   /** BFF operacional para queries SQL/auxiliares (local no dev, remoto em staging/prod). */
   localBffUrl: localBffUrlResolved(),
   /**
@@ -241,15 +236,14 @@ export function isFirebaseAuthConfigured(): boolean {
   )
 }
 
-/** AutoISP só é consultado no browser quando as quatro variáveis estão definidas. */
+/**
+ * AutoISP aparece no browser quando o endpoint de eventos está definido. As credenciais
+ * ficam no backend (`AUTOISP_*`); se o backend não estiver configurado, o token endpoint
+ * responde 503 e a UI mostra "indisponível".
+ */
 export function isAutoIspConfigured(): boolean {
   if (isAuthMockEnabled()) return false
-  return (
-    env.autoIspAuthEndpoint.trim() !== '' &&
-    env.autoIspEventsEndpoint.trim() !== '' &&
-    env.autoIspUsername.trim() !== '' &&
-    env.autoIspPassword.trim() !== ''
-  )
+  return env.autoIspEventsEndpoint.trim() !== ''
 }
 
 export function isGoogleIdentityConfigured(): boolean {
@@ -267,11 +261,8 @@ export function isGoogleIdentityConfigured(): boolean {
  */
 export function isAutoIspBrowserReady(): boolean {
   if (!isAutoIspConfigured()) return false
-  const auth = env.autoIspAuthEndpoint.trim()
   const ev = env.autoIspEventsEndpoint.trim()
-  const authOk = auth.includes('://') || auth.startsWith('/__autoisp')
-  const evOk = ev.includes('://') || ev.startsWith('/__autoisp')
-  return authOk && evOk
+  return ev.includes('://') || ev.startsWith('/__autoisp')
 }
 
 /**

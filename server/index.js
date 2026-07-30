@@ -23,6 +23,7 @@ import {
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
 import { aggregateCancellations, aggregateSplitterCancellations, correlateMassivaChurn } from './cancellationsInsights.js';
+import { isAutoIspAuthConfigured, getAutoIspToken } from './autoIspAuth.js';
 import {
   buildSplitterOperationalScore,
   compareRiskEntries,
@@ -1775,6 +1776,24 @@ app.post('/api/massiva/history/close', async (req, res) => {
       message: 'Erro interno ao registrar encerramento local de massiva.',
       error: error.message,
     });
+  }
+});
+
+// Auth AutoISP no backend — credenciais ficam no servidor; o front pede só o token.
+app.get('/api/autoisp/config', (req, res) => {
+  res.json({ success: true, data: { enabled: isAutoIspAuthConfigured() } });
+});
+
+app.get('/api/autoisp/token', async (req, res) => {
+  try {
+    if (!isAutoIspAuthConfigured()) {
+      return res.status(503).json({ success: false, message: 'AutoISP não configurado no backend.' });
+    }
+    const { token, expiresInSec } = await getAutoIspToken();
+    res.json({ success: true, data: { token, expiresIn: expiresInSec } });
+  } catch (error) {
+    console.error('Erro ao autenticar no AutoISP:', error.message);
+    res.status(502).json({ success: false, message: 'Falha ao autenticar no AutoISP.', error: error.message });
   }
 });
 
