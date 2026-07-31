@@ -154,7 +154,7 @@ const ISA_DECISAO_OPERACIONAL = new Set<string>([
 ])
 
 export function normalizeIsaDecisaoOperacional(raw: unknown): IsaDecisaoOperacional {
-  let s = toCleanString(raw)
+  const s = toCleanString(raw)
     .toUpperCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
