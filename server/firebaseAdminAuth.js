@@ -158,11 +158,21 @@ async function resolveIdentityFromHubSession(authorizationHeader) {
     },
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    console.error(
+      `[auth] resolveIdentityFromHubSession: ${hubBaseUrl}/auth/session respondeu ${response.status}`,
+      body.slice(0, 300),
+    );
+    return null;
+  }
 
   const payload = await response.json().catch(() => null);
   const email = normalizeEmail(payload?.email);
-  if (!email) return null;
+  if (!email) {
+    console.error('[auth] resolveIdentityFromHubSession: resposta sem email', JSON.stringify(payload)?.slice(0, 300));
+    return null;
+  }
 
   return {
     googleSubject: '',
@@ -210,7 +220,8 @@ export async function requireAuthenticatedSplittersUser(req) {
 
   try {
     identity = await verifyFirebaseIdToken(token);
-  } catch {
+  } catch (error) {
+    console.error('[auth] verifyFirebaseIdToken falhou:', error?.message);
     identity = null;
   }
 
@@ -218,12 +229,18 @@ export async function requireAuthenticatedSplittersUser(req) {
     if (getGoogleClientId() !== '') {
       identity = identity ?? (await verifyGoogleIdentityToken(token));
     }
-  } catch {
+  } catch (error) {
+    console.error('[auth] verifyGoogleIdentityToken falhou:', error?.message);
     identity = identity ?? null;
   }
 
   if (!identity) {
-    identity = await resolveIdentityFromHubSession(authorizationHeader);
+    try {
+      identity = await resolveIdentityFromHubSession(authorizationHeader);
+    } catch (error) {
+      console.error('[auth] resolveIdentityFromHubSession falhou:', error?.message);
+      identity = null;
+    }
   }
 
   if (!identity?.email) {
