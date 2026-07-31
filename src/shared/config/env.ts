@@ -105,7 +105,7 @@ function localBffUrlResolved(): string {
 export const env = {
   hubOrigin: str(
     import.meta.env.VITE_HUB_ORIGIN,
-    'https://sebratel-hub.web.app',
+    'https://hub-apps.sebratel.net.br',
   ),
   bffBaseUrl: bffBaseUrlResolved(),
   /** Endpoint opcional de perfil do Hub (paridade com HUB_SESSION_ENDPOINT no Flutter). */

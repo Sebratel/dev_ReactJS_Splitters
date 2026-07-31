@@ -5,54 +5,23 @@ import type {
   SplitterPortState,
 } from '@/features/splitters/model/splitterCliente'
 import type { GeogridReservaRow } from '@/features/splitters/model/geogridReservaRow'
-import {
-  User,
-  ArrowRight,
-  Hash,
-  Lock,
-  Building2,
-  Check,
-  Pause,
-  X,
-  Minus,
-  type LucideIcon,
-} from 'lucide-react'
+import { User, ArrowRight, Hash, Lock, Building2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
 import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
 import { OnuStatusBadge } from '@/features/onu/ui/OnuStatusBadge'
 import { normalizeClientName } from '@/features/onu/model/projectedSignal'
+import {
+  contractStatusCircleClass,
+  contractStatusGlyph,
+  contractStatusLabel,
+} from '@/features/splitters/lib/contractStatus'
 
 type SplitterClientesListProps = {
   clientes: SplitterCliente[]
   capacity: number
   geogridRows?: GeogridReservaRow[]
   portStates?: SplitterPortState[]
-}
-
-/** Cor da bolacha (círculo preenchido) por status real do contrato (v_status). */
-function contractStatusCircleClass(status: string): string {
-  const key = status.trim().toLowerCase()
-  if (key === 'normal' || key === 'ativo') return 'bg-emerald-500'
-  if (key === 'suspenso') return 'bg-amber-500'
-  if (key === 'bloqueado' || key === 'cancelado') return 'bg-rose-500'
-  return 'bg-slate-400'
-}
-
-/** Glifo branco dentro do círculo — check p/ contrato ok (como antes), demais conforme o estado. */
-function contractStatusGlyph(status: string): LucideIcon {
-  const key = status.trim().toLowerCase()
-  if (key === 'normal' || key === 'ativo') return Check
-  if (key === 'suspenso') return Pause
-  if (key === 'bloqueado') return Lock
-  if (key === 'cancelado') return X
-  return Minus
-}
-
-/** Texto do status do contrato a exibir; `null` quando não há descrição confiável. */
-function contractStatusLabel(cliente: SplitterCliente): string | null {
-  const desc = cliente.contract?.statusDescription?.trim()
-  return desc && desc !== '' ? desc : null
 }
 
 function formatReservaDias(dataReserva: string | null): string {

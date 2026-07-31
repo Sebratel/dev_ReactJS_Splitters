@@ -12,11 +12,11 @@ const hubBaseUrl = (
 
 let oauthClient = null;
 
-function toCleanString(value) {
+export function toCleanString(value) {
   return String(value ?? '').trim();
 }
 
-function normalizeEmail(value) {
+export function normalizeEmail(value) {
   return toCleanString(value).toLowerCase();
 }
 
@@ -101,7 +101,7 @@ function getFirebaseAdminAuthClient() {
   return getFirebaseAdminAuth(getFirebaseAdminApp());
 }
 
-function extractBearerToken(req) {
+export function extractBearerToken(req) {
   const authorization = toCleanString(req?.headers?.authorization);
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match?.[1]) {

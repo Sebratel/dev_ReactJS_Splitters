@@ -120,6 +120,11 @@ services:
         # Só o endpoint de eventos (URL, não é segredo) vai para o frontend.
         # Auth AutoISP é feita no backend via AUTOISP_* (usuário/senha nunca no bundle).
         - VITE_AUTOISP_EVENTS_ENDPOINT=${VITE_AUTOISP_EVENTS_ENDPOINT}
+        # Origem do Hub Apps para a sessão do usuário no browser (fetchHubSessionProfile).
+        # Sem isso o bundle cai no fallback antigo (sebratel-hub.web.app), que não libera
+        # CORS para o domínio atual e quebra /auth/session + endpoints autenticados no BFF.
+        - VITE_HUB_ORIGIN=${VITE_HUB_ORIGIN:-https://hub-apps.sebratel.net.br}
+        - VITE_HUB_SESSION_ENDPOINT=${VITE_HUB_SESSION_ENDPOINT:-}
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
         - VITE_GOOGLE_REDIRECT_URI=${VITE_GOOGLE_REDIRECT_URI}
         - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
