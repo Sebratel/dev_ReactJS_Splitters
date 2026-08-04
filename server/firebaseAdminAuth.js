@@ -4,11 +4,6 @@ import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const FIRESTORE_USERS_COLLECTION = 'splitters_users';
-const hubBaseUrl = (
-  process.env.HUB_BASE_URL ||
-  process.env.VITE_HUB_ORIGIN ||
-  'https://sebratel-hub.web.app'
-).replace(/\/+$/, '');
 
 let oauthClient = null;
 
@@ -20,6 +15,35 @@ export function normalizeEmail(value) {
   return toCleanString(value).toLowerCase();
 }
 
+/**
+ * Remove aspas envolventes de um valor de variavel de ambiente (ex.: `"algo"` -> `algo`).
+ * Paineis como o do Portainer nao interpretam aspas como o `dotenv` faz ao ler um .env
+ * local — se alguem colar `FOO="valor"` la, o processo recebe a aspa como parte literal
+ * do valor. Isso corrompe segredos como a private key do Firebase Admin (torna o PEM
+ * invalido) silenciosamente, sem erro obvio. Aplicar isso nos valores sensiveis evita
+ * depender de como cada ambiente (local/staging/producao) foi configurado.
+ */
+export function stripWrappingQuotes(value) {
+  const trimmed = toCleanString(value);
+  if (trimmed.length < 2) return trimmed;
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function cleanEnvValue(value) {
+  return stripWrappingQuotes(toCleanString(value));
+}
+
+const hubBaseUrl = (
+  cleanEnvValue(process.env.HUB_BASE_URL) ||
+  cleanEnvValue(process.env.VITE_HUB_ORIGIN) ||
+  'https://hub-apps.sebratel.net.br'
+).replace(/\/+$/, '');
+
 function buildError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -28,19 +52,19 @@ function buildError(message, statusCode) {
 
 function getGoogleClientId() {
   return (
-    toCleanString(process.env.GOOGLE_CLIENT_ID) ||
-    toCleanString(process.env.VITE_GOOGLE_CLIENT_ID)
+    cleanEnvValue(process.env.GOOGLE_CLIENT_ID) ||
+    cleanEnvValue(process.env.VITE_GOOGLE_CLIENT_ID)
   );
 }
 
 function getFirebaseAdminCredentialConfig() {
   const projectId =
-    toCleanString(process.env.FIREBASE_ADMIN_PROJECT_ID) ||
-    toCleanString(process.env.VITE_FIREBASE_PROJECT_ID);
-  const clientEmail = toCleanString(process.env.FIREBASE_ADMIN_CLIENT_EMAIL);
+    cleanEnvValue(process.env.FIREBASE_ADMIN_PROJECT_ID) ||
+    cleanEnvValue(process.env.VITE_FIREBASE_PROJECT_ID);
+  const clientEmail = cleanEnvValue(process.env.FIREBASE_ADMIN_CLIENT_EMAIL);
   const rawPrivateKey =
-    toCleanString(process.env.FIREBASE_ADMIN_PRIVATE_KEY) ||
-    toCleanString(process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64);
+    cleanEnvValue(process.env.FIREBASE_ADMIN_PRIVATE_KEY) ||
+    cleanEnvValue(process.env.FIREBASE_ADMIN_PRIVATE_KEY_BASE64);
   const privateKey = rawPrivateKey.includes('-----BEGIN')
     ? rawPrivateKey.replace(/\\n/g, '\n')
     : rawPrivateKey
@@ -81,6 +105,13 @@ function getFirebaseAdminApp() {
     throw buildError(
       'Protecao admin da ISA nao configurada no servidor (credenciais Firebase Admin ausentes).',
       503,
+    );
+  }
+
+  if (!privateKey.startsWith('-----BEGIN') || !privateKey.trimEnd().endsWith('-----')) {
+    console.error(
+      '[auth] FIREBASE_ADMIN_PRIVATE_KEY parece malformada (nao comeca com -----BEGIN ou nao termina com -----). ' +
+        'Verifique se a env var no Portainer nao tem aspas ou caracteres extras colados por engano.',
     );
   }
 
@@ -158,11 +189,21 @@ async function resolveIdentityFromHubSession(authorizationHeader) {
     },
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    console.error(
+      `[auth] resolveIdentityFromHubSession: ${hubBaseUrl}/auth/session respondeu ${response.status}`,
+      body.slice(0, 300),
+    );
+    return null;
+  }
 
   const payload = await response.json().catch(() => null);
   const email = normalizeEmail(payload?.email);
-  if (!email) return null;
+  if (!email) {
+    console.error('[auth] resolveIdentityFromHubSession: resposta sem email', JSON.stringify(payload)?.slice(0, 300));
+    return null;
+  }
 
   return {
     googleSubject: '',
@@ -210,7 +251,8 @@ export async function requireAuthenticatedSplittersUser(req) {
 
   try {
     identity = await verifyFirebaseIdToken(token);
-  } catch {
+  } catch (error) {
+    console.error('[auth] verifyFirebaseIdToken falhou:', error?.message);
     identity = null;
   }
 
@@ -218,12 +260,18 @@ export async function requireAuthenticatedSplittersUser(req) {
     if (getGoogleClientId() !== '') {
       identity = identity ?? (await verifyGoogleIdentityToken(token));
     }
-  } catch {
+  } catch (error) {
+    console.error('[auth] verifyGoogleIdentityToken falhou:', error?.message);
     identity = identity ?? null;
   }
 
   if (!identity) {
-    identity = await resolveIdentityFromHubSession(authorizationHeader);
+    try {
+      identity = await resolveIdentityFromHubSession(authorizationHeader);
+    } catch (error) {
+      console.error('[auth] resolveIdentityFromHubSession falhou:', error?.message);
+      identity = null;
+    }
   }
 
   if (!identity?.email) {

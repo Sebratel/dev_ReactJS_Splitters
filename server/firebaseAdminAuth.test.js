@@ -4,6 +4,7 @@ import {
   extractBearerToken,
   normalizeEmail,
   toCleanString,
+  stripWrappingQuotes,
   isFirebaseAdminAccessConfigured,
 } from './firebaseAdminAuth.js';
 
@@ -65,6 +66,33 @@ describe('toCleanString', () => {
 
   it('remove espacos nas bordas', () => {
     assert.equal(toCleanString('  valor  '), 'valor');
+  });
+});
+
+describe('stripWrappingQuotes', () => {
+  it('remove aspas duplas envolventes', () => {
+    assert.equal(stripWrappingQuotes('"valor"'), 'valor');
+  });
+
+  it('remove aspas simples envolventes', () => {
+    assert.equal(stripWrappingQuotes("'valor'"), 'valor');
+  });
+
+  it('remove aspas envolvendo uma chave PEM multi-linha (caso real do Portainer)', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----';
+    assert.equal(stripWrappingQuotes(`"${pem}\n"`), pem);
+  });
+
+  it('nao altera valor sem aspas', () => {
+    assert.equal(stripWrappingQuotes('valor sem aspas'), 'valor sem aspas');
+  });
+
+  it('nao remove aspa unica no meio do valor', () => {
+    assert.equal(stripWrappingQuotes('valor "com aspas" no meio'), 'valor "com aspas" no meio');
+  });
+
+  it('nao remove quando so um lado tem aspa', () => {
+    assert.equal(stripWrappingQuotes('"valor incompleto'), '"valor incompleto');
   });
 });
 

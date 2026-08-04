@@ -42,6 +42,7 @@ import {
   resetIsaPromptConfig,
   saveIsaPromptConfig,
 } from './isaPromptConfigStore.js';
+import { pruneExpiredCacheEntries } from './lib/cacheUtils.js';
 import {
   addPlatformSuggestionComment,
   createPlatformSuggestion,
@@ -4643,6 +4644,7 @@ app.get('/api/cancellations/summary', async (req, res) => {
       city: r.city,
     }));
     const payload = aggregateCancellations(rows);
+    pruneExpiredCacheEntries(cancellationsSummaryCache, CANCELLATIONS_SUMMARY_TTL_MS, now);
     cancellationsSummaryCache.set(startIso, { at: now, payload });
     return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
   } catch (error) {
@@ -4716,6 +4718,7 @@ app.get('/api/cancellations/by-splitter', async (req, res) => {
       eventAt: eventValid ? eventAt : null,
       windowDays,
     });
+    pruneExpiredCacheEntries(cancellationsBySplitterCache, CANCELLATIONS_BY_SPLITTER_TTL_MS, now);
     cancellationsBySplitterCache.set(cacheKey, { at: now, payload });
     return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
   } catch (error) {
@@ -4841,6 +4844,7 @@ app.get('/api/cancellations/massiva-impact', async (req, res) => {
       massivaAvailable: eventsWrapped.ok,
       ranking,
     };
+    pruneExpiredCacheEntries(cancellationsMassivaImpactCache, CANCELLATIONS_MASSIVA_IMPACT_TTL_MS, now);
     cancellationsMassivaImpactCache.set(cacheKey, { at: now, payload });
     return res.json({ success: true, cached: false, window: { start: startIso }, data: payload });
   } catch (error) {
