@@ -1,3 +1,5 @@
+// Primeiro import de propósito: arranca o agente Elastic APM antes de `node:http`.
+import './frontend-server.apm.mjs'
 import fs from 'node:fs/promises'
 import http from 'node:http'
 import https from 'node:https'

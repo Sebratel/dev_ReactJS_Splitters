@@ -81,6 +81,11 @@ services:
       REVERSE_GEOCODE_TIMEOUT_MS: ${REVERSE_GEOCODE_TIMEOUT_MS:-}
       REVERSE_GEOCODE_NEIGHBORS_MAX: ${REVERSE_GEOCODE_NEIGHBORS_MAX:-}
       REVERSE_GEOCODE_NEIGHBORS_DELAY_MS: ${REVERSE_GEOCODE_NEIGHBORS_DELAY_MS:-}
+      # Elastic APM (stack `elk`). Sem ELASTIC_APM_SERVER_URL o agente não arranca.
+      # Se este stack não estiver na rede `es_network`, use o IP/host alcançável do APM Server.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-}
+      ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     ports:
       - "${BACKEND_PORT:-3004}:3001"
     expose:
@@ -132,6 +137,13 @@ services:
         - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
         - VITE_ACCESS_ALLOWED_EMAILS=${VITE_ACCESS_ALLOWED_EMAILS}
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
+        # Elastic APM RUM (browser). Deixe VAZIO enquanto o APM Server não tiver endereço
+        # público: o navegador do utilizador é quem envia os dados, `http://apm-server:8200`
+        # não é alcançável a partir dele. Vazio = agente nem entra no bundle.
+        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL:-}
+        - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
+        - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
+        - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
     container_name: react-frontend-portainer
     environment:
       # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
@@ -149,6 +161,11 @@ services:
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
+      # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
+      # Este processo está no servidor, por isso pode usar o host interno do APM Server.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-}
+      ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
       - "3177"
     ports:

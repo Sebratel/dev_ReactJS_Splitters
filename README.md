@@ -8,6 +8,10 @@ npm run dev
 
 Variáveis: um único [`.env.example`](.env.example) documenta tudo; em dev use `.env.local` (gitignored) para sobrepor.
 
+## Observabilidade (Elastic APM)
+
+O BFF, o servidor do SPA e o browser estão instrumentados para o Elastic APM, **desligados por omissão** — cada agente só arranca com a respetiva variável de ambiente. Ver [`docs/observabilidade-apm.md`](docs/observabilidade-apm.md).
+
 ## Docker / Portainer
 
 O deploy é feito pelo **Portainer**, criando a stack a partir do Git e apontando o compose path para **`docker-compose.portainer.yml`** (ver [`README-DOCKER.md`](README-DOCKER.md)). As variáveis (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.) são definidas no painel *Environment variables* da stack — a secção *Docker* de [`.env.example`](.env.example) documenta todas. O compose passa as `VITE_*` como *build args* do frontend; o Vite **não** lê ficheiro dentro da imagem.
