@@ -35,6 +35,23 @@ function filterProxyResponseHeaders(upstreamHeaders) {
 }
 
 /**
+ * Remove os cabeçalhos de tracing distribuído (W3C `traceparent` e afins) que o agente APM RUM
+ * acrescenta às chamadas same-origin do SPA. Só o nosso BFF está instrumentado e sabe o que
+ * fazer com eles; para upstreams externos (gateway ERP/Elleven, AutoISP) seriam cabeçalhos
+ * novos e inúteis num contrato de integração que já funciona.
+ */
+function withoutTracingHeaders(reqHeaders) {
+  const headers = { ...reqHeaders }
+  for (const key of Object.keys(headers)) {
+    const lower = key.toLowerCase()
+    if (lower === 'traceparent' || lower === 'tracestate' || lower === 'elastic-apm-traceparent') {
+      delete headers[key]
+    }
+  }
+  return headers
+}
+
+/**
  * Basic Auth do gateway fica no proxy (server-side). O JWT Google do usuário segue em
  * `X-Forwarded-Authorization` para o BFF validar o Bearer sem popup no browser.
  */
@@ -69,7 +86,8 @@ const proxyRequest = (req, res, originBase, rewrite, options = {}) => {
   }
   const isHttps = target.protocol === 'https:'
   const client = isHttps ? https : http
-  const baseHeaders = options.gatewayAuth ? buildGatewayProxyHeaders(req.headers) : req.headers
+  const authHeaders = options.gatewayAuth ? buildGatewayProxyHeaders(req.headers) : req.headers
+  const baseHeaders = options.stripTracing ? withoutTracingHeaders(authHeaders) : authHeaders
   const headers = { ...baseHeaders, host: target.host }
   const stripWwwAuthenticate = options.stripWwwAuthenticate === true
   const proxyReq = client.request(
@@ -153,6 +171,7 @@ const server = http.createServer(async (req, res) => {
       proxyRequest(req, res, gatewayOrigin, undefined, {
         gatewayAuth: true,
         stripWwwAuthenticate: true,
+        stripTracing: true,
       })
     } else {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -171,7 +190,9 @@ const server = http.createServer(async (req, res) => {
     return
   }
   if (url.pathname.startsWith('/__autoisp/') && autoIspOrigin) {
-    proxyRequest(req, res, autoIspOrigin, (u) => u.replace(/^\/__autoisp/, ''))
+    proxyRequest(req, res, autoIspOrigin, (u) => u.replace(/^\/__autoisp/, ''), {
+      stripTracing: true,
+    })
     return
   }
 

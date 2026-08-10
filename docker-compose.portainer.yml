@@ -81,9 +81,10 @@ services:
       REVERSE_GEOCODE_TIMEOUT_MS: ${REVERSE_GEOCODE_TIMEOUT_MS:-}
       REVERSE_GEOCODE_NEIGHBORS_MAX: ${REVERSE_GEOCODE_NEIGHBORS_MAX:-}
       REVERSE_GEOCODE_NEIGHBORS_DELAY_MS: ${REVERSE_GEOCODE_NEIGHBORS_DELAY_MS:-}
-      # Elastic APM (stack `elk`). Sem ELASTIC_APM_SERVER_URL o agente não arranca.
-      # Se este stack não estiver na rede `es_network`, use o IP/host alcançável do APM Server.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-}
+      # Elastic APM. Resolve `apm-server` pelo nome porque este serviço também está na rede
+      # do stack `elk` (ver `networks` no fim do ficheiro). Alternativa sem rede partilhada:
+      # ELASTIC_APM_SERVER_URL=https://apm.sebratel.net.br. Vazio = agente desligado.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
       ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     ports:
@@ -92,6 +93,8 @@ services:
       - "3001"
     networks:
       - nexaview-network
+      # Só para alcançar `apm-server:8200`; o tráfego do app continua na nexaview-network.
+      - elk-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 10s
@@ -137,10 +140,10 @@ services:
         - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
         - VITE_ACCESS_ALLOWED_EMAILS=${VITE_ACCESS_ALLOWED_EMAILS}
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
-        # Elastic APM RUM (browser). Deixe VAZIO enquanto o APM Server não tiver endereço
-        # público: o navegador do utilizador é quem envia os dados, `http://apm-server:8200`
-        # não é alcançável a partir dele. Vazio = agente nem entra no bundle.
-        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL:-}
+        # Elastic APM RUM (browser). Tem de ser o endereço PÚBLICO (é o navegador do
+        # utilizador que envia os dados; `apm-server:8200` só existe dentro do Docker).
+        # Vazio = agente nem chega a ser descarregado pelo browser.
+        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL:-https://apm.sebratel.net.br}
         - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
         - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
         - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
@@ -162,8 +165,8 @@ services:
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
       # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
-      # Este processo está no servidor, por isso pode usar o host interno do APM Server.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-}
+      # Corre no servidor, por isso usa o endereço interno — não o público do RUM acima.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
       ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
@@ -175,8 +178,18 @@ services:
         condition: service_healthy
     networks:
       - nexaview-network
+      # Só para alcançar `apm-server:8200`; o proxy para o backend continua na rede do stack.
+      - elk-network
     restart: unless-stopped
 
 networks:
   nexaview-network:
     driver: bridge
+  # Rede do stack `elk` (Elasticsearch, Kibana, APM Server), criada fora deste compose — é o
+  # que permite ao backend e ao frontend resolverem `apm-server:8200` pelo nome. Tem de existir
+  # no host: se não existir, o deploy falha (`network ... declared as external, but could not
+  # be found`). Confirme com `docker network ls` e, se o nome for outro, defina ELK_NETWORK_NAME
+  # no painel Environment da stack.
+  elk-network:
+    external: true
+    name: ${ELK_NETWORK_NAME:-elk_es_network}

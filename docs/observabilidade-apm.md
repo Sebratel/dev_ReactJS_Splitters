@@ -50,8 +50,13 @@ mesma sem APM (o bootstrap tolera a ausência do pacote).
 `isApmRumConfigured()`: sem `VITE_APM_SERVER_URL`, o chunk do agente (~66 kB / 22 kB gzip) é
 gerado mas **nunca descarregado** pelo browser — o carregamento da página não muda.
 
-`distributedTracingOrigins` fica no padrão (só o mesmo origin). Propagar `traceparent` para o
-gateway, GeoGrid ou AutoISP obrigaria a preflight e a CORS extra nesses serviços.
+`distributedTracingOrigins` fica no padrão (só o mesmo origin), o que dá tracing ligado entre
+browser → servidor do SPA → BFF sem CORS extra em lado nenhum.
+
+Mas "same origin" inclui as rotas que o `frontend-server.mjs` encaminha para fora: `/api/v1/*`
+(gateway ERP/Elleven) e `/__autoisp/*`. Esses upstreams são integrações de terceiros que já
+funcionam, e não ganham nada com cabeçalhos novos — por isso o proxy remove `traceparent` /
+`tracestate` nesses dois caminhos (`stripTracing`) e mantém-nos só a caminho do BFF.
 
 ## Variáveis
 
@@ -72,8 +77,10 @@ VITE_APM_SERVICE_VERSION=
 VITE_APM_ENVIRONMENT=production
 ```
 
-No Portainer, todas elas vivem no painel **Environment** da stack — o
-[docker-compose.portainer.yml](../docker-compose.portainer.yml) já as repassa.
+O [docker-compose.portainer.yml](../docker-compose.portainer.yml) já traz estes valores como
+padrão, por isso **não é preciso definir nada no painel Environment** da stack para ligar o APM.
+Defina lá apenas para sobrepor (ou `ELASTIC_APM_SERVER_URL=` / `VITE_APM_SERVER_URL=` vazio para
+desligar um dos agentes).
 
 Qualquer `ELASTIC_APM_*` suportada pelo agente tem precedência sobre os padrões do código
 (ex.: `ELASTIC_APM_TRANSACTION_SAMPLE_RATE`, `ELASTIC_APM_LOG_LEVEL`).
@@ -90,26 +97,34 @@ Não há `secret_token` nem API key: a segurança do Elasticsearch está desativ
 Ruído já filtrado: `/api/health` (healthcheck do compose, de 10 em 10 s) nos dois serviços, e
 `/assets/*` + `/favicon.ico` no servidor do SPA.
 
-## Pendente — decisão de rede (infra, não código)
+## Rede (resolvido em 10/08/2026)
 
-O APM Server escuta em `8200` mas essa porta não está exposta fora do host; só o Kibana tem
-proxy reverso HTTPS. Consequências práticas:
+Os dois caminhos existem e estão ligados por omissão no compose:
 
-- **Backend**: `http://apm-server:8200` só resolve se os containers do NexaView estiverem na
-  rede `es_network` do stack `elk`. Hoje a stack usa a sua própria rede `nexaview-network`, por
-  isso é preciso ou juntar a rede externa ao compose, ou usar um endereço do host alcançável a
-  partir dos containers.
-- **RUM**: precisa de URL pública (ex.: `apm.sebratel.net.br` com proxy reverso, à semelhança do
-  Kibana). Enquanto não existir, deixe `VITE_APM_SERVER_URL` vazia — a instrumentação fica no
-  código, pronta, sem tentar enviar nada.
+- **Backend** → `http://apm-server:8200`, pela rede do stack `elk`. O compose declara-a como
+  externa (`elk-network`, nome real `elk_es_network`) e liga-a ao `backend` e ao `frontend`. Se
+  o nome da rede mudar, defina `ELK_NETWORK_NAME` no painel Environment da stack — **se o nome
+  não existir no host, o deploy falha** com `network ... declared as external, but could not be
+  found`.
+- **RUM** → `https://apm.sebratel.net.br` (proxy reverso HTTPS, à semelhança do Kibana).
 
-Quando a rede estiver resolvida, basta preencher as variáveis e refazer o deploy (o frontend
-precisa de rebuild, porque as `VITE_*` entram no bundle em tempo de build).
+Verificado a partir de fora da rede: `GET /` devolve `200` com a versão 8.15.0 e
+`publish_ready: true`; o preflight de `POST /intake/v2/rum/events` devolve
+`Access-Control-Allow-Origin` a refletir a origem pedida; e um payload RUM mínimo foi aceite
+com `202`, o que prova o caminho completo (proxy → apm-server → Elasticsearch).
+
+Atenção: juntar-se à rede do `elk` também dá a estes containers acesso ao Elasticsearch em
+`9200`, que neste ambiente está sem autenticação (`xpack.security.enabled=false`).
+
+Nota de deploy: o frontend precisa de **rebuild**, não só restart — as `VITE_*` entram no
+bundle em tempo de build.
 
 ## Validação depois de ligar
 
 1. Gerar tráfego no app.
 2. Kibana → Observability → APM → os serviços aparecem sozinhos, sem configuração extra.
+   Nota: existe também um serviço `splitters-apm-smoke` (environment `smoke`), do teste de
+   ingestão feito em 10/08/2026 — é descartável, ignore ou apague.
 3. Se não aparecerem, ver os logs do container: o agente escreve o arranque
    (`Elastic APM Node.js Agent`, com `activationMethod: preload` no BFF) e os erros de ligação
    (`APM Server transport error`) em stdout. No browser, a consola mostra falhas do RUM.
