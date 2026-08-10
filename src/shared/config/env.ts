@@ -212,6 +212,18 @@ export const env = {
    * Retrato ISA no hero da home (`public/` ou URL absoluta). Se vazio, usa `/isa-hero.png`.
    */
   isaHeroImage: str(import.meta.env.VITE_ISA_HERO_IMAGE, ''),
+  /**
+   * Elastic APM RUM (browser). Vazio = desligado, e o agente nem chega a ser descarregado
+   * (o import é dinâmico). O endereço tem de ser alcançável pelo NAVEGADOR do utilizador —
+   * um host interno do Docker (`http://apm-server:8200`) não serve aqui.
+   */
+  apmServerUrl: str(import.meta.env.VITE_APM_SERVER_URL, ''),
+  apmServiceName: str(import.meta.env.VITE_APM_SERVICE_NAME, 'splitters-web'),
+  apmServiceVersion: str(import.meta.env.VITE_APM_SERVICE_VERSION, ''),
+  apmEnvironment: str(
+    import.meta.env.VITE_APM_ENVIRONMENT,
+    import.meta.env.DEV ? 'development' : 'production',
+  ),
 } as const
 
 
@@ -263,6 +275,15 @@ export function isAutoIspBrowserReady(): boolean {
   if (!isAutoIspConfigured()) return false
   const ev = env.autoIspEventsEndpoint.trim()
   return ev.includes('://') || ev.startsWith('/__autoisp')
+}
+
+/**
+ * O RUM só liga quando há um `serverUrl` absoluto: enquanto o APM Server não tiver endereço
+ * público (decisão de rede/proxy reverso), a instrumentação fica no código sem enviar nada.
+ */
+export function isApmRumConfigured(): boolean {
+  const url = env.apmServerUrl.trim()
+  return url.startsWith('http://') || url.startsWith('https://')
 }
 
 /**
