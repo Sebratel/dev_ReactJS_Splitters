@@ -97,27 +97,50 @@ Não há `secret_token` nem API key: a segurança do Elasticsearch está desativ
 Ruído já filtrado: `/api/health` (healthcheck do compose, de 10 em 10 s) nos dois serviços, e
 `/assets/*` + `/favicon.ico` no servidor do SPA.
 
-## Rede (resolvido em 10/08/2026)
+## Rede
 
-Os dois caminhos existem e estão ligados por omissão no compose:
+**Os três agentes usam o endereço público `https://apm.sebratel.net.br`** (proxy reverso HTTPS,
+à semelhança do Kibana), e o compose não declara nenhuma rede externa.
 
-- **Backend** → `http://apm-server:8200`, pela rede do stack `elk`. O compose declara-a como
-  externa (`elk-network`, nome real `elk_es_network`) e liga-a ao `backend` e ao `frontend`. Se
-  o nome da rede mudar, defina `ELK_NETWORK_NAME` no painel Environment da stack — **se o nome
-  não existir no host, o deploy falha** com `network ... declared as external, but could not be
-  found`.
-- **RUM** → `https://apm.sebratel.net.br` (proxy reverso HTTPS, à semelhança do Kibana).
+É uma escolha deliberada: produção e testes correm em **hosts diferentes**, e o nome interno
+`apm-server` só resolve no host do stack `elk`. Pior, uma rede `external: true` que não exista
+no host faz o **deploy falhar** (`network ... declared as external, but could not be found`) —
+o mesmo compose deixaria de servir os dois ambientes. O custo é a telemetria sair e voltar pelo
+proxy reverso em vez de ficar na rede interna; para este volume não se nota.
+
+Num host que esteja na rede do `elk`, dá para poupar esse salto: junte a rede ao compose e
+defina `ELASTIC_APM_SERVER_URL=http://apm-server:8200` no painel Environment dessa stack.
 
 Verificado a partir de fora da rede: `GET /` devolve `200` com a versão 8.15.0 e
 `publish_ready: true`; o preflight de `POST /intake/v2/rum/events` devolve
 `Access-Control-Allow-Origin` a refletir a origem pedida; e um payload RUM mínimo foi aceite
 com `202`, o que prova o caminho completo (proxy → apm-server → Elasticsearch).
 
-Atenção: juntar-se à rede do `elk` também dá a estes containers acesso ao Elasticsearch em
-`9200`, que neste ambiente está sem autenticação (`xpack.security.enabled=false`).
+Se um dia juntar a stack à rede do `elk`, note que isso também dá a esses containers acesso ao
+Elasticsearch em `9200`, que neste ambiente está sem autenticação (`xpack.security.enabled=false`).
 
-Nota de deploy: o frontend precisa de **rebuild**, não só restart — as `VITE_*` entram no
-bundle em tempo de build.
+Nota de deploy: **rebuild, não restart** — o frontend porque as `VITE_*` entram no bundle em
+tempo de build, e o backend porque o `CMD` e as dependências da imagem mudaram.
+
+## Servidor de testes
+
+Mesmo APM Server, ambiente diferente. No painel Environment da stack de testes, só isto:
+
+```env
+ELASTIC_APM_ENVIRONMENT=staging
+VITE_APM_ENVIRONMENT=staging
+```
+
+O Kibana passa a ter um seletor de ambiente e os mesmos serviços aparecem uma vez só, com
+produção e testes comparáveis lado a lado (latência, taxa de erro) e alertas por ambiente.
+
+**Não mude os `SERVICE_NAME` por ambiente** (`splitters-bff-staging` e afins): ficam serviços
+duplicados no Kibana e perde-se exatamente essa comparação.
+
+Um APM Server separado para testes só compensa com isolamento a sério em vista — não sujar os
+índices de produção, retenção diferente, ou poupar o Elasticsearch de produção ao ruído. Nesse
+caso é na mesma só configuração: `ELASTIC_APM_SERVER_URL` e `VITE_APM_SERVER_URL` a apontar
+para o outro endereço.
 
 ## Validação depois de ligar
 

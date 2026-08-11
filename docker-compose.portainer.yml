@@ -84,10 +84,13 @@ services:
       REVERSE_GEOCODE_TIMEOUT_MS: ${REVERSE_GEOCODE_TIMEOUT_MS:-}
       REVERSE_GEOCODE_NEIGHBORS_MAX: ${REVERSE_GEOCODE_NEIGHBORS_MAX:-}
       REVERSE_GEOCODE_NEIGHBORS_DELAY_MS: ${REVERSE_GEOCODE_NEIGHBORS_DELAY_MS:-}
-      # Elastic APM. Resolve `apm-server` pelo nome porque este serviço também está na rede
-      # do stack `elk` (ver `networks` no fim do ficheiro). Alternativa sem rede partilhada:
-      # ELASTIC_APM_SERVER_URL=https://apm.sebratel.net.br. Vazio = agente desligado.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
+      # Elastic APM. Endereço público de propósito: este compose corre em hosts diferentes
+      # (produção e testes) e o nome interno `apm-server` só resolveria no host do stack `elk`.
+      # Nesse host pode sobrepor com ELASTIC_APM_SERVER_URL=http://apm-server:8200 (exige juntar
+      # a stack à rede do elk). Vazio = agente desligado.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-https://apm.sebratel.net.br}
+      # Separa os ambientes no Kibana mantendo o MESMO serviço (não mude o SERVICE_NAME por
+      # ambiente, senão perde a comparação entre eles). Em testes: ELASTIC_APM_ENVIRONMENT=staging.
       ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     ports:
@@ -96,8 +99,6 @@ services:
       - "3001"
     networks:
       - nexaview-network
-      # Só para alcançar `apm-server:8200`; o tráfego do app continua na nexaview-network.
-      - elk-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 10s
@@ -170,8 +171,7 @@ services:
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
       # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
-      # Corre no servidor, por isso usa o endereço interno — não o público do RUM acima.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-https://apm.sebratel.net.br}
       ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
@@ -183,18 +183,12 @@ services:
         condition: service_healthy
     networks:
       - nexaview-network
-      # Só para alcançar `apm-server:8200`; o proxy para o backend continua na rede do stack.
-      - elk-network
     restart: unless-stopped
 
+# Sem rede externa de propósito: este compose corre em hosts diferentes (produção e testes) e
+# uma rede `external: true` que não exista no host faz o deploy FALHAR. O APM é alcançado pelo
+# endereço público. Para usar a rede interna do `elk` num host onde ela exista, junte-a aqui e
+# defina ELASTIC_APM_SERVER_URL=http://apm-server:8200 no painel Environment dessa stack.
 networks:
   nexaview-network:
     driver: bridge
-  # Rede do stack `elk` (Elasticsearch, Kibana, APM Server), criada fora deste compose — é o
-  # que permite ao backend e ao frontend resolverem `apm-server:8200` pelo nome. Tem de existir
-  # no host: se não existir, o deploy falha (`network ... declared as external, but could not
-  # be found`). Confirme com `docker network ls` e, se o nome for outro, defina ELK_NETWORK_NAME
-  # no painel Environment da stack.
-  elk-network:
-    external: true
-    name: ${ELK_NETWORK_NAME:-elk_es_network}
