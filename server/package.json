@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node -r ./apm.cjs index.js",
-    "dev": "node --watch -r ./apm.cjs index.js"
+    "dev": "node --watch -r ./apm.cjs index.js",
+    "test": "node --test \"*.test.js\" \"lib/*.test.js\""
   },
   "dependencies": {
     "cors": "^2.8.5",
