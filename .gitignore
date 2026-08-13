@@ -11,7 +11,12 @@ dist-ssr
 coverage
 *.tsbuildinfo
 .firebase/
+# Artefactos: o tsconfig.node.json tem `declaration: true`, por isso o `tsc -b` emite .d.ts
+# soltos na raiz. É esse lixo que esta regra existe para apanhar — não o código-fonte.
 **/*.d.ts
+# ...e as declarações escritas à mão (tipos do Vite, libs sem tipos) TÊM de ir para o repo,
+# senão o `tsc -b` falha em qualquer clone limpo e o CI nasce vermelho.
+!src/**/*.d.ts
 
 # Environment variables
 .env

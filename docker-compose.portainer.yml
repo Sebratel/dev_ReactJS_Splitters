@@ -88,7 +88,9 @@ services:
       # (produção e testes) e o nome interno `apm-server` só resolveria no host do stack `elk`.
       # Nesse host pode sobrepor com ELASTIC_APM_SERVER_URL=http://apm-server:8200 (exige juntar
       # a stack à rede do elk). Vazio = agente desligado.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-https://apm.sebratel.net.br}
+      # `-` e não `:-` de propósito: com `:-` o Compose trata um valor VAZIO como não definido
+      # e cai no default, o que tornava impossível desligar o agente pelo painel da stack.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
       # Separa os ambientes no Kibana mantendo o MESMO serviço (não mude o SERVICE_NAME por
       # ambiente, senão perde a comparação entre eles). Em testes: ELASTIC_APM_ENVIRONMENT=staging.
       ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
@@ -146,8 +148,9 @@ services:
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
         # Elastic APM RUM (browser). Tem de ser o endereço PÚBLICO (é o navegador do
         # utilizador que envia os dados; `apm-server:8200` só existe dentro do Docker).
-        # Vazio = agente nem chega a ser descarregado pelo browser.
-        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL:-https://apm.sebratel.net.br}
+        # Vazio = agente nem chega a ser descarregado pelo browser (`-` e não `:-`, senão o
+        # vazio caía no default e o RUM não se conseguia desligar pelo painel da stack).
+        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL-https://apm.sebratel.net.br}
         - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
         - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
         - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
@@ -171,7 +174,8 @@ services:
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
       # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-https://apm.sebratel.net.br}
+      # `-` e não `:-`: ver a nota no serviço backend — vazio tem de significar desligado.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
       ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
