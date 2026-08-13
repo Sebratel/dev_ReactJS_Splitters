@@ -1,6 +1,6 @@
 # Docker Compose para Portainer
 
-## Como usar
+## Como usar....
 
 1. **Faça upload do `docker-compose.portainer.yml`** no Portainer (stack a partir do Git).
 2. **Deploy o stack**
