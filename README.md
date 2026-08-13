@@ -1,4 +1,4 @@
-# NexaView Web (Splitters)
+# NexaView Web (Splitters).
 
 ## Desenvolvimento
 
