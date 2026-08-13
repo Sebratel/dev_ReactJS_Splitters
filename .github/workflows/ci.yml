@@ -152,7 +152,9 @@ jobs:
   # Check único para a proteção de branch apontar. `if: always()` ao nível do job, senão
   # é saltado quando um `needs` falha e o check nunca chega a reportar nada.
   ci-ok:
-    name: CI
+    # É ESTE o nome a marcar como required status check na ruleset da branch. Não lhe chame
+    # "CI" para não colidir com o nome do workflow — no ecrã do GitHub ficavam dois "CI".
+    name: ci-ok
     runs-on: ubuntu-latest
     needs: [web, bff, imagem]
     if: always()
