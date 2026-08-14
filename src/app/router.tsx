@@ -16,8 +16,14 @@ const SplitterDetailPage = lazy(() =>
 const ClienteDetailPage = lazy(() =>
   import('@/pages/ClienteDetailPage').then((m) => ({ default: m.ClienteDetailPage })),
 )
+const MassivaLayoutPage = lazy(() =>
+  import('@/pages/MassivaLayoutPage').then((m) => ({ default: m.MassivaLayoutPage })),
+)
 const MassivaPage = lazy(() =>
   import('@/pages/MassivaPage').then((m) => ({ default: m.MassivaPage })),
+)
+const MassivaDashboardPage = lazy(() =>
+  import('@/pages/MassivaDashboardPage').then((m) => ({ default: m.MassivaDashboardPage })),
 )
 const NetworkIntelligencePage = lazy(() =>
   import('@/pages/NetworkIntelligencePage').then((m) => ({ default: m.NetworkIntelligencePage })),
@@ -67,9 +73,13 @@ export const router = createBrowserRouter([
                 permission="canViewMassiva"
                 description="Seu perfil não possui acesso ao módulo de massivas."
               >
-                <Page><MassivaPage /></Page>
+                <Page><MassivaLayoutPage /></Page>
               </PermissionGuard>
             ),
+            children: [
+              { index: true, element: <Page><MassivaPage /></Page> },
+              { path: 'dashboard', element: <Page><MassivaDashboardPage /></Page> },
+            ],
           },
           {
             path: 'intelligence',
