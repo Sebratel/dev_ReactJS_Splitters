@@ -1,15 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
+import { cancelMassivaTicket } from '@/features/massiva/api/cancelMassivaTicket'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
@@ -25,12 +17,12 @@ import {
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import { collectMassivaPanelAbertasTickets } from '@/features/massiva/lib/massivaPanelAbertasList'
 import {
+  isMassivaCancelledForCounts,
+  isMassivaCancelledForPanelList,
   isMassivaClosedForCounts,
   isMassivaClosedForPanelList,
-  isMassivaEligibleForDashboardCounts,
   isMassivaOpenForGlobalDashboard,
   isMassivaOpenForPanelList,
-  summarizeMassivaPeriodCounts,
 } from '@/features/massiva/lib/massivaDashboardEligibility'
 import { pruneRecentOpensClosedByBff } from '@/features/massiva/lib/pruneRecentOpensAgainstBff'
 import {
@@ -41,12 +33,6 @@ import {
   formatMassivaStatusLabel,
   type MassivaTicket,
 } from '@/features/massiva/model/massivaTicket'
-import {
-  buildMassivaChartSeries,
-  percentChange,
-  rankMassivaAccessPoints,
-  summarizeMassivaSla,
-} from '@/features/massiva/lib/massivaInsights'
 import {
   listRecentMonths,
   massivaHistoryLimitForRange,
@@ -59,7 +45,7 @@ import { env } from '@/shared/config/env'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { ChevronLeft, Download, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Download, RefreshCw } from 'lucide-react'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { MassivaTicketCard } from '@/features/massiva/ui/MassivaTicketCard'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
@@ -73,7 +59,7 @@ function ticketKey(t: MassivaTicket, index: number): string {
 }
 
 type ImpactRange = 'all' | 'none' | 'low' | 'medium' | 'high'
-type MassivaListScope = 'abertas' | 'encerradas' | 'todas'
+type MassivaListScope = 'abertas' | 'encerradas' | 'canceladas' | 'todas'
 type PeriodPreset = MassivaPeriodPreset
 type ChartMetric = 'afetados' | 'protocolos'
 type MassivaRecordTypeFilter = 'all' | 'incidente' | 'evento'
@@ -84,34 +70,23 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase()
 }
 
-function formatHoursLabel(hours: number | null): string {
-  if (hours === null || !Number.isFinite(hours)) return '—'
-  if (hours < 24) return `${hours.toFixed(1)}h`
-  const days = hours / 24
-  return `${days.toFixed(1)}d`
+/** Formata o tempo restante (ou vencido) em relação a um prazo de SLA. */
+function formatSlaRisk(expectedCloseAt: Date): string {
+  const diffMs = expectedCloseAt.getTime() - Date.now()
+  const diffMin = Math.round(diffMs / 60_000)
+  if (diffMin < 0) {
+    const abs = Math.abs(diffMin)
+    if (abs < 60) return `venceu há ${abs}min`
+    const h = Math.floor(abs / 60)
+    const m = abs % 60
+    return m > 0 ? `venceu há ${h}h ${m}min` : `venceu há ${h}h`
+  }
+  if (diffMin < 60) return `vence em ${diffMin}min`
+  const h = Math.floor(diffMin / 60)
+  const m = diffMin % 60
+  return m > 0 ? `vence em ${h}h ${m}min` : `vence em ${h}h`
 }
 
-/** Badge de variação vs. período anterior. Para massivas, alta = ruim (vermelho). */
-function DeltaBadge({ delta }: { delta: number | null }) {
-  if (delta === null) return null
-  const rounded = Math.round(delta)
-  const tone =
-    rounded === 0
-      ? 'bg-neutral-100 text-neutral-600'
-      : rounded > 0
-        ? 'bg-rose-100 text-rose-700'
-        : 'bg-emerald-100 text-emerald-700'
-  const arrow = rounded > 0 ? '▲' : rounded < 0 ? '▼' : '•'
-  const sign = rounded > 0 ? '+' : ''
-  return (
-    <span
-      title="vs. período anterior de mesmo tamanho"
-      className={`ml-2 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tone}`}
-    >
-      {arrow} {sign}{rounded}%
-    </span>
-  )
-}
 
 function matchesImpactRange(ticket: MassivaTicket, range: ImpactRange): boolean {
   const affected = ticket.affectedClients
@@ -153,7 +128,21 @@ function escapeCsvCell(value: string): string {
   return needsQuotes ? `"${escaped}"` : escaped
 }
 
-function buildMassivasCsv(rows: MassivaTicket[]): string {
+type HistoryClassifEntry = {
+  tipoIncidente: string | null
+  impacto: string | null
+  area: string | null
+  tecnologia: string | null
+  classificacao: string | null
+  cnl: string | null
+  mttdMinutes: number | null
+  mttrMinutes: number | null
+}
+
+function buildMassivasCsv(
+  rows: MassivaTicket[],
+  classifLookup?: Map<number, HistoryClassifEntry>,
+): string {
   const header = [
     'protocolo',
     'assignment_id',
@@ -168,28 +157,47 @@ function buildMassivasCsv(rows: MassivaTicket[]): string {
     'equipe',
     'solicitado_por',
     'responsavel',
+    'tipo_incidente',
+    'impacto',
+    'area',
+    'tecnologia',
+    'classificacao',
+    'cnl',
+    'mttd_minutos',
+    'mttr_minutos',
     'descricao',
   ]
-  const lines = rows.map((row) => [
-    String(row.protocol > 0 ? row.protocol : ''),
-    row.assignmentId !== null ? String(row.assignmentId) : '',
-    formatMassivaStatusLabel(row.status),
-    row.title.trim(),
-    isExpectedMassivaCatalogTitle(row.title) ? 'SIM' : 'NAO',
-    formatMassivaListDateDisplay(row.openedAt),
-    formatPrevisaoEncerramentoDisplay(
-      row.expectedCloseAt,
-      row.estimateTimeOfRestoration,
-      row.openedAt,
-    ),
-    row.apCode,
-    row.splitterCode,
-    String(row.affectedClients),
-    row.team,
-    row.createdBy,
-    row.responsible,
-    row.description.trim() || row.title,
-  ].map(escapeCsvCell).join(','))
+  const lines = rows.map((row) => {
+    const classif = classifLookup?.get(row.protocol) ?? null
+    return [
+      String(row.protocol > 0 ? row.protocol : ''),
+      row.assignmentId !== null ? String(row.assignmentId) : '',
+      formatMassivaStatusLabel(row.status),
+      row.title.trim(),
+      isExpectedMassivaCatalogTitle(row.title) ? 'SIM' : 'NAO',
+      formatMassivaListDateDisplay(row.openedAt),
+      formatPrevisaoEncerramentoDisplay(
+        row.expectedCloseAt,
+        row.estimateTimeOfRestoration,
+        row.openedAt,
+      ),
+      row.apCode,
+      row.splitterCode,
+      String(row.affectedClients),
+      row.team,
+      row.createdBy,
+      row.responsible,
+      String(classif?.tipoIncidente ?? ''),
+      String(classif?.impacto ?? ''),
+      String(classif?.area ?? ''),
+      String(classif?.tecnologia ?? ''),
+      String(classif?.classificacao ?? ''),
+      String(classif?.cnl ?? ''),
+      classif?.mttdMinutes != null ? String(classif.mttdMinutes) : '',
+      classif?.mttrMinutes != null ? String(classif.mttrMinutes) : '',
+      row.description.trim() || row.title,
+    ].map(escapeCsvCell).join(',')
+  })
   return [header.join(','), ...lines].join('\n')
 }
 
@@ -212,6 +220,8 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
   impactRange: ImpactRange
   recordTypeFilter: MassivaRecordTypeFilter
   catalogFilter: MassivaCatalogFilter
+  classifTipoFilter: string
+  classifImpactoFilter: string
   visibleCount: number
 } {
   const initialState = {
@@ -223,6 +233,8 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
     impactRange: 'all' as ImpactRange,
     recordTypeFilter: 'all' as MassivaRecordTypeFilter,
     catalogFilter: 'all' as MassivaCatalogFilter,
+    classifTipoFilter: '',
+    classifImpactoFilter: '',
     visibleCount: MASSIVA_PAGE_SIZE,
   }
   if (typeof window === 'undefined') return initialState
@@ -233,7 +245,9 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
     return {
       query: typeof parsed.query === 'string' ? parsed.query : initialState.query,
       scope:
-        parsed.scope === 'encerradas' || parsed.scope === 'todas'
+        parsed.scope === 'encerradas' ||
+        parsed.scope === 'canceladas' ||
+        parsed.scope === 'todas'
           ? parsed.scope
           : initialState.scope,
       periodPreset:
@@ -262,6 +276,10 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
         parsed.catalogFilter === 'catalogo_esperado' || parsed.catalogFilter === 'fora_catalogo'
           ? parsed.catalogFilter
           : initialState.catalogFilter,
+      classifTipoFilter:
+        typeof parsed.classifTipoFilter === 'string' ? parsed.classifTipoFilter : '',
+      classifImpactoFilter:
+        typeof parsed.classifImpactoFilter === 'string' ? parsed.classifImpactoFilter : '',
       visibleCount:
         typeof parsed.visibleCount === 'number' && parsed.visibleCount >= MASSIVA_PAGE_SIZE
           ? Math.trunc(parsed.visibleCount)
@@ -286,6 +304,8 @@ export function MassivaTicketsSection({
     impactRange,
     recordTypeFilter,
     catalogFilter,
+    classifTipoFilter,
+    classifImpactoFilter,
     visibleCount,
   } = uiState
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
@@ -318,12 +338,50 @@ export function MassivaTicketsSection({
 
   const [closeLocalWarning, setCloseLocalWarning] = useState<string | null>(null)
 
+  const CLOSE_CLASSIF_RESET = {
+    tipoIncidente: '',
+    impacto: '',
+    area: '',
+    tecnologia: '',
+    classificacao: '',
+    cnl: '',
+  } as const
+  const [closeClassif, setCloseClassif] = useState({ ...CLOSE_CLASSIF_RESET })
+
   const closeMutation = useMutation({
     mutationFn: closeMassivaTicket,
     onSuccess: async (result, variables) => {
       setClosingProtocol(null)
       setCloseDescription('')
+      setCloseClassif({ ...CLOSE_CLASSIF_RESET })
       setCloseLocalWarning(result?.localHistoryWarning ?? null)
+      if (variables.protocol > 0) {
+        removeRecentOpenTicketFromStorage(variables.protocol)
+        void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
+      }
+      await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
+      await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
+      await queryClient.invalidateQueries({ queryKey: splittersKeys.all })
+      void historyQuery.refetch()
+    },
+  })
+
+  const [cancellingProtocol, setCancellingProtocol] = useState<number | null>(null)
+  const [cancelDescription, setCancelDescription] = useState('')
+  const [cancelLocalWarning, setCancelLocalWarning] = useState<string | null>(null)
+  const selectedCancellingTicket = useMemo(
+    () => view.status === 'success'
+      ? view.tickets.find((t) => t.protocol === cancellingProtocol) ?? null
+      : null,
+    [view, cancellingProtocol],
+  )
+
+  const cancelMutation = useMutation({
+    mutationFn: cancelMassivaTicket,
+    onSuccess: async (result, variables) => {
+      setCancellingProtocol(null)
+      setCancelDescription('')
+      setCancelLocalWarning(result?.localHistoryWarning ?? null)
       if (variables.protocol > 0) {
         removeRecentOpenTicketFromStorage(variables.protocol)
         void queryClient.invalidateQueries({ queryKey: massivaKeys.recentOpens() })
@@ -370,7 +428,7 @@ export function MassivaTicketsSection({
     refetchOnMount: 'always',
   })
 
-  const { data: recentOpenTickets = [] } = useQuery({
+const { data: recentOpenTickets = [] } = useQuery({
     queryKey: massivaKeys.recentOpens(),
     queryFn: () => readRecentOpenTicketsFromStorage(),
     staleTime: 0,
@@ -428,6 +486,11 @@ export function MassivaTicketsSection({
           ? isMassivaClosedForPanelList(ticket, recentProtocolSet)
           : isMassivaClosedForCounts(ticket, recentProtocolSet)
       }
+      if (scope === 'canceladas') {
+        return monitorOutOfCatalog
+          ? isMassivaCancelledForPanelList(ticket, recentProtocolSet)
+          : isMassivaCancelledForCounts(ticket, recentProtocolSet)
+      }
       return true
     })
   }, [tickets, scope, catalogFilter, recentProtocolSet])
@@ -441,32 +504,6 @@ export function MassivaTicketsSection({
     })
   }, [tickets, periodStart, periodEnd])
 
-  const metricsTicketsInPeriod = useMemo(() => {
-    return ticketsInPeriod
-      .filter((ticket) => matchesRecordType(ticket, recordTypeFilter))
-      .filter((ticket) => matchesMassivaCatalogFilter(ticket, catalogFilter))
-  }, [ticketsInPeriod, recordTypeFilter, catalogFilter])
-
-  const kpiTicketsInPeriod = useMemo(() => {
-    return metricsTicketsInPeriod.filter((ticket) =>
-      isMassivaEligibleForDashboardCounts(ticket, recentProtocolSet),
-    )
-  }, [metricsTicketsInPeriod, recentProtocolSet])
-
-  /** KPIs e médias seguem a aba Abertas / Encerradas / Todas (antes era sempre o período inteiro). */
-  const kpiTicketsForScope = useMemo(() => {
-    return kpiTicketsInPeriod.filter((ticket) => {
-      if (scope === 'abertas') {
-        return catalogFilter === 'fora_catalogo'
-          ? isMassivaOpenForPanelList(ticket, recentProtocolSet)
-          : isMassivaOpenForGlobalDashboard(ticket, recentProtocolSet)
-      }
-      if (scope === 'encerradas') {
-        return isMassivaClosedForCounts(ticket, recentProtocolSet)
-      }
-      return true
-    })
-  }, [kpiTicketsInPeriod, scope, catalogFilter, recentProtocolSet])
 
   const scopedTicketsInWindow = useMemo(() => {
     const s = periodStart.getTime()
@@ -563,128 +600,85 @@ export function MassivaTicketsSection({
     catalogScopedTicketsInWindow,
   ])
 
-  const chartSourceTickets = useMemo(() => {
-    if (scope !== 'abertas') return catalogScopedTicketsInWindow
+
+  /**
+   * Lookup rápido: protocol → dados de classificação + MTTD/MTTR do histórico local.
+   * Usado para enriquecer o CSV e os gráficos de distribuição.
+   */
+  const historyClassificationByProtocol = useMemo(() => {
+    const map = new Map<number, HistoryClassifEntry>()
+    for (const row of historyQuery.data ?? []) {
+      if (row.protocol != null && row.protocol > 0) {
+        map.set(row.protocol, {
+          tipoIncidente: row.tipoIncidente,
+          impacto: row.impacto,
+          area: row.area,
+          tecnologia: row.tecnologia,
+          classificacao: row.classificacao,
+          cnl: row.cnl,
+          mttdMinutes: row.mttdMinutes,
+          mttrMinutes: row.mttrMinutes,
+        })
+      }
+    }
+    return map
+  }, [historyQuery.data])
+
+  /**
+   * Opções disponíveis para os filtros de classificação — derivadas dos dados reais
+   * do historyQuery no período. Só exibe opções que existam na data selecionada.
+   */
+  const classifOptions = useMemo(() => {
     const s = periodStart.getTime()
     const e = periodEnd.getTime()
-    return collectMassivaPanelAbertasTickets(panelAbertasListInput, {
-      periodDays: abertasPeriodDays,
-      catalogFilter,
-      recordTypeFilter,
-      impactRange: 'all',
-      query: '',
-    }).filter((t) => {
-      const ts = t.openedAt?.getTime()
-      return ts != null && ts >= s && ts <= e
-    })
-  }, [
-    scope,
-    panelAbertasListInput,
-    abertasPeriodDays,
-    periodStart,
-    periodEnd,
-    catalogFilter,
-    recordTypeFilter,
-    catalogScopedTicketsInWindow,
-  ])
-
-  const chartSeries = useMemo(
-    () =>
-      buildMassivaChartSeries(chartSourceTickets, {
-        granularity: range.bucket,
-        start: periodStart,
-        end: periodEnd,
-        recentProtocols: recentProtocolSet,
-      }),
-    [chartSourceTickets, range.bucket, periodStart, periodEnd, recentProtocolSet],
-  )
-
-  const chartTotalAffected = useMemo(
-    () => chartSeries.reduce((sum, day) => sum + day.affectedTotal, 0),
-    [chartSeries],
-  )
-  const chartTotalProtocols = useMemo(
-    () => chartSeries.reduce((sum, day) => sum + day.protocols, 0),
-    [chartSeries],
-  )
-  const chartHasOtherType = useMemo(
-    () => chartSeries.some((day) => day.affectedOther > 0),
-    [chartSeries],
-  )
-  const bucketLabel = range.bucket === 'month' ? 'mês' : range.bucket === 'week' ? 'semana' : 'dia'
-
-  /** Recorrência: pontos de acesso com mais protocolos no período/escopo. */
-  const topAccessPoints = useMemo(
-    () => rankMassivaAccessPoints(chartSourceTickets, 5),
-    [chartSourceTickets],
-  )
-
-  /** Janela imediatamente anterior (mesmo tamanho) — base de comparação de tendência. */
-  const previousScopedTickets = useMemo(() => {
-    const ps = range.previousStart.getTime()
-    const pe = range.previousEnd.getTime()
-    return scopedTickets.filter((ticket) => {
-      const t = ticket.openedAt?.getTime()
-      return t != null && t >= ps && t <= pe
-    })
-  }, [scopedTickets, range.previousStart, range.previousEnd])
-  const periodKpis = useMemo(() => {
-    const periodCounts = summarizeMassivaPeriodCounts(kpiTicketsForScope, {
-      recentProtocols: recentProtocolSet,
-    })
-    const openNow = periodCounts.openCount
-    const closedNow = periodCounts.closedCount
-    const totalProtocols = periodCounts.totalProtocols
-    const affectedInPeriod = kpiTicketsForScope.reduce(
-      (sum, ticket) => sum + Math.max(0, ticket.affectedClients),
-      0,
-    )
-    const affectedAvg =
-      totalProtocols > 0 ? affectedInPeriod / totalProtocols : 0
-    const topDay = chartSeries.reduce<{ label: string; value: number } | null>(
-      (max, day) => {
-        if (!max || day.affectedTotal > max.value) {
-          return { label: day.label, value: day.affectedTotal }
-        }
-        return max
-      },
-      null,
-    )
-    const closedWithCycle = kpiTicketsForScope.filter(
-      (t) => isMassivaClosedForCounts(t) && t.openedAt && t.closedAt,
-    )
-    const avgClosureHours =
-      closedWithCycle.length > 0
-        ? closedWithCycle.reduce((sum, t) => {
-          const cycleHours = ((t.closedAt as Date).getTime() - (t.openedAt as Date).getTime()) / (1000 * 60 * 60)
-          return sum + Math.max(0, cycleHours)
-        }, 0) / closedWithCycle.length
-        : null
-
-    const sla = summarizeMassivaSla(kpiTicketsForScope)
-
-    const prevCounts = summarizeMassivaPeriodCounts(previousScopedTickets, {
-      recentProtocols: recentProtocolSet,
-    })
-    const prevAffected = previousScopedTickets.reduce(
-      (sum, ticket) => sum + Math.max(0, ticket.affectedClients),
-      0,
-    )
-
-    return {
-      openNow,
-      closedNow,
-      totalProtocols,
-      affectedInPeriod,
-      affectedAvg,
-      topDay,
-      avgClosureHours,
-      sla,
-      totalProtocolsDelta: percentChange(totalProtocols, prevCounts.totalProtocols),
-      affectedDelta: percentChange(affectedInPeriod, prevAffected),
-      previousTotalProtocols: prevCounts.totalProtocols,
+    const tipos = new Set<string>()
+    const impactos = new Set<string>()
+    for (const r of historyQuery.data ?? []) {
+      const t = r.openedAt?.getTime()
+      if (t == null || t < s || t > e) continue
+      if (r.tipoIncidente) tipos.add(r.tipoIncidente)
+      if (r.impacto) impactos.add(r.impacto)
     }
-  }, [kpiTicketsForScope, chartSeries, recentProtocolSet, previousScopedTickets])
+    return {
+      tipos: [...tipos].sort(),
+      impactos: [...impactos].sort(),
+    }
+  }, [historyQuery.data, periodStart, periodEnd])
+
+  /**
+   * Lista final de tickets após aplicar o filtro de classificação.
+   * Quando algum filtro de classificação está ativo, mantém apenas tickets cujo
+   * protocolo consta no histórico com a classificação correspondente.
+   * Tickets sem protocolo (protocol <= 0) são excluídos quando o filtro está ativo.
+   */
+  const classifFilteredTickets = useMemo(() => {
+    if (classifTipoFilter === '' && classifImpactoFilter === '') return filteredTickets
+    const matchingProtocols = new Set<number>()
+    for (const row of historyQuery.data ?? []) {
+      if (row.protocol == null || row.protocol <= 0) continue
+      const tipoMatch = classifTipoFilter === '' || row.tipoIncidente === classifTipoFilter
+      const impactoMatch = classifImpactoFilter === '' || row.impacto === classifImpactoFilter
+      if (tipoMatch && impactoMatch) matchingProtocols.add(row.protocol)
+    }
+    return filteredTickets.filter((t) => t.protocol > 0 && matchingProtocols.has(t.protocol))
+  }, [filteredTickets, classifTipoFilter, classifImpactoFilter, historyQuery.data])
+
+  /**
+   * Tickets abertos em risco de SLA: já vencidos ou com menos de 2h para o prazo.
+   * Ordenados do mais urgente para o menos urgente.
+   */
+  const SLA_RISK_WARNING_MS = 2 * 60 * 60 * 1_000
+  const slaAtRiskTickets = useMemo(() => {
+    if (scope !== 'abertas') return []
+    const now = Date.now()
+    return classifFilteredTickets
+      .filter((t) => {
+        if (!t.expectedCloseAt) return false
+        return t.expectedCloseAt.getTime() <= now + SLA_RISK_WARNING_MS
+      })
+      .sort((a, b) => a.expectedCloseAt!.getTime() - b.expectedCloseAt!.getTime())
+      .slice(0, 10)
+  }, [scope, classifFilteredTickets])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -700,15 +694,15 @@ export function MassivaTicketsSection({
       return
     }
     setUiState((prev) => ({ ...prev, visibleCount: MASSIVA_PAGE_SIZE }))
-  }, [scope, periodPreset, selectedMonth, query, impactRange, recordTypeFilter, catalogFilter])
+  }, [scope, periodPreset, selectedMonth, query, impactRange, recordTypeFilter, catalogFilter, classifTipoFilter, classifImpactoFilter])
 
   const visibleTickets = useMemo(
-    () => filteredTickets.slice(0, visibleCount),
-    [filteredTickets, visibleCount],
+    () => classifFilteredTickets.slice(0, visibleCount),
+    [classifFilteredTickets, visibleCount],
   )
 
   const handleExportCsv = async () => {
-    const csv = buildMassivasCsv(filteredTickets)
+    const csv = buildMassivasCsv(classifFilteredTickets, historyClassificationByProtocol)
     try {
       await navigator.clipboard.writeText(csv)
       setCsvCopied(true)
@@ -800,6 +794,7 @@ export function MassivaTicketsSection({
             {([
               { id: 'abertas', label: 'Abertas' },
               { id: 'encerradas', label: 'Encerradas' },
+              { id: 'canceladas', label: 'Canceladas' },
               { id: 'todas', label: 'Todas' },
             ] as Array<{ id: MassivaListScope; label: string }>).map((opt) => (
               <button
@@ -902,6 +897,43 @@ export function MassivaTicketsSection({
             <option value="catalogo_esperado">Catálogo: só esperados</option>
             <option value="fora_catalogo">Catálogo: fora do padrão (monitorar)</option>
           </select>
+          {/* Filtros de classificação — só aparecem quando existem dados no período */}
+          {classifOptions.tipos.length > 0 ? (
+            <select
+              value={classifTipoFilter}
+              onChange={(e) =>
+                setUiState((prev) => ({ ...prev, classifTipoFilter: e.target.value }))}
+              className={`rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifTipoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 focus:border-sky-500/80'}`}
+            >
+              <option value="">Tipo incidente: todos</option>
+              {classifOptions.tipos.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          ) : null}
+          {classifOptions.impactos.length > 0 ? (
+            <select
+              value={classifImpactoFilter}
+              onChange={(e) =>
+                setUiState((prev) => ({ ...prev, classifImpactoFilter: e.target.value }))}
+              className={`rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifImpactoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 focus:border-sky-500/80'}`}
+            >
+              <option value="">Impacto: todos</option>
+              {classifOptions.impactos.map((i) => (
+                <option key={i} value={i}>{i}</option>
+              ))}
+            </select>
+          ) : null}
+          {/* Botão limpar filtros de classificação — aparece quando algum está ativo */}
+          {(classifTipoFilter !== '' || classifImpactoFilter !== '') ? (
+            <button
+              type="button"
+              onClick={() => setUiState((prev) => ({ ...prev, classifTipoFilter: '', classifImpactoFilter: '' }))}
+              className="rounded-xl border border-sky-200/80 bg-sky-50/60 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100/70"
+            >
+              ✕ Limpar classificação
+            </button>
+          ) : null}
         </div>
         <div className={`flex flex-wrap items-center gap-2 ${embedded ? 'mt-2' : 'mt-3'}`}>
           <button
@@ -921,10 +953,11 @@ export function MassivaTicketsSection({
             CSV
           </button>
           <span className="text-[11px] text-neutral-500">
-            {filteredTickets.length}/{kpiTicketsForScope.length} no período
-            {scope === 'todas' && metricsTicketsInPeriod.length > kpiTicketsInPeriod.length
-              ? ` (${metricsTicketsInPeriod.length} com filtros de tipo/catálogo)`
-              : ''}
+            {classifFilteredTickets.length}
+            {classifFilteredTickets.length !== filteredTickets.length
+              ? `/${filteredTickets.length}`
+              : ''}{' '}
+            no período
           </span>
           {historyQuery.isFetching ? (
             <span className="text-[11px] text-neutral-500">sincronizando histórico…</span>
@@ -933,159 +966,6 @@ export function MassivaTicketsSection({
             <span className="text-[11px] font-semibold text-emerald-700">
               CSV copiado
             </span>
-          ) : null}
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <div className="rounded-xl border border-neutral-200/80 bg-white px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-              {scope === 'abertas'
-                ? 'Protocolos abertos no período'
-                : scope === 'encerradas'
-                  ? 'Protocolos encerrados no período'
-                  : 'Protocolos no período'}
-            </p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900">
-              {periodKpis.totalProtocols.toLocaleString('pt-BR')}
-              <DeltaBadge delta={periodKpis.totalProtocolsDelta} />
-            </p>
-          </div>
-          {scope === 'todas' ? (
-            <>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800/90">Abertas no período</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-amber-900">
-                  {periodKpis.openNow.toLocaleString('pt-BR')}
-                </p>
-              </div>
-              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Encerradas no período</p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">
-                  {periodKpis.closedNow.toLocaleString('pt-BR')}
-                </p>
-              </div>
-            </>
-          ) : null}
-          <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Afetados no período</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-rose-800">
-              {periodKpis.affectedInPeriod.toLocaleString('pt-BR')}
-              <DeltaBadge delta={periodKpis.affectedDelta} />
-            </p>
-          </div>
-          <div className="rounded-xl border border-rose-200/80 bg-rose-50/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Média afetados/protocolo</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-rose-800">
-              {periodKpis.affectedAvg.toFixed(1)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Dentro da previsão (SLA)</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-emerald-800">
-              {periodKpis.sla.pct === null ? '—' : `${Math.round(periodKpis.sla.pct)}%`}
-            </p>
-            <p className="text-[10px] text-emerald-700/70">
-              {periodKpis.sla.within}/{periodKpis.sla.evaluated} encerradas
-            </p>
-          </div>
-          <div className="rounded-xl border border-sky-200/80 bg-sky-50/60 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Tempo médio de fechamento</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-sky-800">
-              {formatHoursLabel(periodKpis.avgClosureHours)}
-            </p>
-          </div>
-        </div>
-        <div className={`mt-3 rounded-xl border border-neutral-200/80 bg-white px-3 py-3 ${embedded ? '' : 'shadow-[0_1px_2px_rgba(15,23,42,0.04)]'}`}>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-neutral-800">
-              Total por {bucketLabel} ({chartMetric === 'afetados' ? 'afetados' : 'protocolos'}) — massivas{' '}
-              {scope === 'todas' ? 'selecionadas' : scope}
-            </p>
-            <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
-              {([
-                { id: 'afetados', label: 'Afetados' },
-                { id: 'protocolos', label: 'Protocolos' },
-              ] as Array<{ id: ChartMetric; label: string }>).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setUiState((prev) => ({ ...prev, chartMetric: opt.id }))}
-                  className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                    chartMetric === opt.id
-                      ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-600 hover:bg-neutral-50'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="mb-2 text-[11px] text-neutral-500">
-            {chartMetric === 'afetados' ? 'Total afetados' : 'Total protocolos'}:{' '}
-            <span className="font-bold text-neutral-800">
-              {(chartMetric === 'afetados' ? chartTotalAffected : chartTotalProtocols).toLocaleString('pt-BR')}
-            </span>
-            {periodKpis.topDay && chartMetric === 'afetados' ? (
-              <>
-                {' · '}Pico por {bucketLabel}:{' '}
-                <span className="font-semibold text-neutral-700">{periodKpis.topDay.label}</span>{' '}
-                ({periodKpis.topDay.value.toLocaleString('pt-BR')})
-              </>
-            ) : null}
-          </p>
-          <div className="h-44">
-            {chartSeries.length === 0 ? (
-              <p className="flex h-full items-center justify-center text-center text-xs text-neutral-500">
-                Sem dados no período/filtro atual para montar o gráfico.
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartSeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#6b7280" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 10, borderColor: '#e5e7eb' }}
-                    formatter={(value: unknown, name: unknown) => [
-                      Number(value ?? 0).toLocaleString('pt-BR'),
-                      String(name ?? ''),
-                    ]}
-                  />
-                  {chartMetric === 'afetados' ? (
-                    <>
-                      <Bar stackId="afetados" dataKey="affectedIncident" name="Afetados (incidente)" fill="#fb7185" radius={[0, 0, 0, 0]} />
-                      <Bar stackId="afetados" dataKey="affectedEvent" name="Afetados (evento)" fill="#38bdf8" radius={[0, 0, 0, 0]} />
-                      {chartHasOtherType ? (
-                        <Bar stackId="afetados" dataKey="affectedOther" name="Afetados (outros)" fill="#94a3b8" radius={[3, 3, 0, 0]} />
-                      ) : null}
-                    </>
-                  ) : (
-                    <Bar dataKey="protocols" name="Protocolos" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-          {topAccessPoints.length > 0 ? (
-            <div className="mt-3 border-t border-neutral-100 pt-2">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
-                Pontos de acesso recorrentes no período
-              </p>
-              <ul className="flex flex-wrap gap-1.5">
-                {topAccessPoints.map((ap) => (
-                  <li
-                    key={ap.apCode}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-neutral-50 px-2 py-1 text-[11px]"
-                    title={`${ap.affected.toLocaleString('pt-BR')} afetados`}
-                  >
-                    <span className="font-semibold text-neutral-800">{ap.apCode}</span>
-                    <span className="rounded-full bg-amber-100 px-1.5 font-bold text-amber-800">
-                      {ap.protocols}×
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
           ) : null}
         </div>
         {!closeConfigured ? (
@@ -1104,35 +984,73 @@ export function MassivaTicketsSection({
             : 'border-t border-neutral-100/80 bg-neutral-50/20 px-4 py-5'
         }
       >
-        {filteredTickets.length === 0 ? (
+        {/* Painel de abertas em risco de SLA */}
+        {slaAtRiskTickets.length > 0 ? (
+          <div className="mb-4 rounded-xl border border-rose-200/80 bg-rose-50/60 px-4 py-3">
+            <p className="mb-2 text-xs font-semibold text-rose-800">
+              ⚠ {slaAtRiskTickets.length} massiva{slaAtRiskTickets.length > 1 ? 's' : ''} em risco de SLA
+            </p>
+            <div className="space-y-1.5">
+              {slaAtRiskTickets.map((t) => {
+                const isPast = t.expectedCloseAt != null && t.expectedCloseAt.getTime() < Date.now()
+                return (
+                  <div
+                    key={t.protocol}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-[11px] ${isPast ? 'bg-rose-100/80' : 'bg-amber-50/80'}`}
+                  >
+                    <span className="font-semibold text-neutral-800">
+                      #{t.protocol > 0 ? t.protocol : '—'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-neutral-600">
+                      {t.apCode || t.title}
+                    </span>
+                    <span className={`shrink-0 font-bold ${isPast ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {t.expectedCloseAt ? formatSlaRisk(t.expectedCloseAt) : '—'}
+                    </span>
+                    <span className="shrink-0 text-neutral-400">
+                      {t.affectedClients.toLocaleString('pt-BR')} af.
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {classifFilteredTickets.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-500">
             Nenhuma massiva corresponde aos filtros aplicados.
           </p>
         ) : (
           <>
-             <ul className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
+            <ul className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
               {visibleTickets.map((t, i) => (
-              <li key={ticketKey(t, i)} className="h-full">
-                <MassivaTicketCard
-                  ticket={t}
-                  closeConfigured={closeConfigured}
-                  onRequestClose={(protocol) => {
-                    setClosingProtocol(protocol)
-                    setCloseDescription('')
-                    setCloseLocalWarning(null)
-                  }}
-                />
-              </li>
+                <li key={ticketKey(t, i)} className="h-full">
+                  <MassivaTicketCard
+                    ticket={t}
+                    closeConfigured={closeConfigured}
+                    onRequestClose={(protocol) => {
+                      setClosingProtocol(protocol)
+                      setCloseDescription('')
+                      setCloseLocalWarning(null)
+                    }}
+                    onRequestCancel={(protocol) => {
+                      setCancellingProtocol(protocol)
+                      setCancelDescription('')
+                      setCancelLocalWarning(null)
+                    }}
+                  />
+                </li>
               ))}
             </ul>
-            {visibleTickets.length < filteredTickets.length ? (
+            {visibleTickets.length < classifFilteredTickets.length ? (
               <div className="mt-4 flex justify-center">
                 <button
                   type="button"
                   onClick={() => setUiState((prev) => ({ ...prev, visibleCount: prev.visibleCount + MASSIVA_PAGE_SIZE }))}
                   className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
                 >
-                  Carregar mais ({visibleTickets.length}/{filteredTickets.length})
+                  Carregar mais ({visibleTickets.length}/{classifFilteredTickets.length})
                 </button>
               </div>
             ) : null}
@@ -1142,7 +1060,7 @@ export function MassivaTicketsSection({
 
       {selectedClosingTicket !== null ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
             <h3 className="text-lg font-bold text-neutral-900">Encerrar massiva</h3>
             <p className="mt-1 text-sm text-neutral-600">
               Protocolo <span className="font-mono font-semibold">{selectedClosingTicket.protocol}</span>
@@ -1191,6 +1109,173 @@ export function MassivaTicketsSection({
                     ⚠️ {closeLocalWarning}
                   </p>
                 ) : null}
+
+                {/* Classificação do incidente */}
+                <div className="border-t border-neutral-100 pt-3">
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-neutral-700">Classificação do incidente</p>
+                    <span className="text-[10px] text-neutral-400">Opcional</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {/* Tipo */}
+                    <div>
+                      <label htmlFor="close-tipo" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tipo</label>
+                      <div className="relative">
+                        <select
+                          id="close-tipo"
+                          value={closeClassif.tipoIncidente}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, tipoIncidente: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="Externa">Externa</option>
+                          <option value="Interna">Interna</option>
+                          <option value="Parceira">Parceira</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                    {/* Impacto */}
+                    <div>
+                      <label htmlFor="close-impacto" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Impacto</label>
+                      <div className="relative">
+                        <select
+                          id="close-impacto"
+                          value={closeClassif.impacto}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, impacto: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="Indisponibilidade">Indisponibilidade</option>
+                          <option value="Degradação">Degradação</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                    {/* Tecnologia */}
+                    <div>
+                      <label htmlFor="close-tecnologia" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tecnologia</label>
+                      <div className="relative">
+                        <select
+                          id="close-tecnologia"
+                          value={closeClassif.tecnologia}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, tecnologia: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="Fibra">Fibra</option>
+                          <option value="Rádio">Rádio</option>
+                          <option value="Ambos">Ambos</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                    {/* CNL */}
+                    <div>
+                      <label htmlFor="close-cnl" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">CNL</label>
+                      <div className="relative">
+                        <select
+                          id="close-cnl"
+                          value={closeClassif.cnl}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, cnl: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="SLE">SLE</option>
+                          <option value="CAN">CAN</option>
+                          <option value="SPS">SPS</option>
+                          <option value="NHO">NHO</option>
+                          <option value="TNF">TNF</option>
+                          <option value="EIO">EIO</option>
+                          <option value="NSR">NSR</option>
+                          <option value="PAE">PAE</option>
+                          <option value="BCR">BCR</option>
+                          <option value="CHN">CHN</option>
+                          <option value="CBM">CBM</option>
+                          <option value="BREEQ">BREEQ</option>
+                          <option value="POA">POA</option>
+                          <option value="SRT">SRT</option>
+                          <option value="NSRCA">NSRCA</option>
+                          <option value="GTI">GTI</option>
+                          <option value="BRE">BRE</option>
+                          <option value="Geral">Geral</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                    {/* Área */}
+                    <div>
+                      <label htmlFor="close-area" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Área</label>
+                      <div className="relative">
+                        <select
+                          id="close-area"
+                          value={closeClassif.area}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, area: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="Acesso">Acesso</option>
+                          <option value="Backbone">Backbone</option>
+                          <option value="Infra">Infra</option>
+                          <option value="IP">IP</option>
+                          <option value="Telefonia">Telefonia</option>
+                          <option value="TI / Servidores">TI / Servidores</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                    {/* Classificação — linha inteira */}
+                    <div className="col-span-2 sm:col-span-3">
+                      <label htmlFor="close-classificacao" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Classificação</label>
+                      <div className="relative">
+                        <select
+                          id="close-classificacao"
+                          value={closeClassif.classificacao}
+                          onChange={(e) => setCloseClassif((p) => ({ ...p, classificacao: e.target.value }))}
+                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                        >
+                          <option value="">— selecione —</option>
+                          <option value="Atenuação">Atenuação</option>
+                          <option value="Carga Alta">Carga Alta</option>
+                          <option value="Capilar quebrado">Capilar quebrado</option>
+                          <option value="Conector">Conector</option>
+                          <option value="CTO Indisponível">CTO Indisponível</option>
+                          <option value="DDoS">DDoS</option>
+                          <option value="Equip. Hardware">Equip. Hardware</option>
+                          <option value="Erro Humano">Erro Humano</option>
+                          <option value="Erro de Abertura">Erro de Abertura</option>
+                          <option value="Evento climático">Evento climático</option>
+                          <option value="Falha de configuração">Falha de configuração</option>
+                          <option value="Falha em operadora">Falha em operadora</option>
+                          <option value="Fogo em poste">Fogo em poste</option>
+                          <option value="Formigas">Formigas</option>
+                          <option value="Infra-energia site">Infra-energia site</option>
+                          <option value="Link Loss / Led Loss">Link Loss / Led Loss</option>
+                          <option value="Migração">Migração</option>
+                          <option value="Migração de CTO">Migração de CTO</option>
+                          <option value="OLT/SITE Indisponível">OLT/SITE Indisponível</option>
+                          <option value="Poda de árvore">Poda de árvore</option>
+                          <option value="Queda de poste">Queda de poste</option>
+                          <option value="Readequação">Readequação</option>
+                          <option value="Readequação CTO">Readequação CTO</option>
+                          <option value="Reiniciado ONU/Roteador">Reiniciado ONU/Roteador</option>
+                          <option value="Rompimento">Rompimento</option>
+                          <option value="Sinal Elevado CTO/Splitter/Cabo">Sinal Elevado CTO/Splitter/Cabo</option>
+                          <option value="Troca de Antena">Troca de Antena</option>
+                          <option value="Troca de Conector">Troca de Conector</option>
+                          <option value="Troca de Equipamento">Troca de Equipamento</option>
+                          <option value="Troca de fonte/baterias">Troca de fonte/baterias</option>
+                          <option value="Troca de porta">Troca de porta</option>
+                          <option value="Troca de poste">Troca de poste</option>
+                          <option value="Troca de splitter">Troca de splitter</option>
+                          <option value="Vandalismo">Vandalismo</option>
+                          <option value="Outros">Outros</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1201,6 +1286,7 @@ export function MassivaTicketsSection({
                 onClick={() => {
                   setClosingProtocol(null)
                   setCloseDescription('')
+                  setCloseClassif({ ...CLOSE_CLASSIF_RESET })
                   setCloseLocalWarning(null)
                 }}
               >
@@ -1222,10 +1308,106 @@ export function MassivaTicketsSection({
                     protocol: selectedClosingTicket.protocol,
                     closeDescription: closeDescription.trim(),
                     closedBy: closedByLabel,
+                    tipoIncidente: closeClassif.tipoIncidente || null,
+                    impacto: closeClassif.impacto || null,
+                    area: closeClassif.area || null,
+                    tecnologia: closeClassif.tecnologia || null,
+                    classificacao: closeClassif.classificacao || null,
+                    cnl: closeClassif.cnl || null,
                   })
                 }}
               >
                 {closeMutation.isPending ? 'Encerrando...' : 'Confirmar encerramento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedCancellingTicket !== null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-neutral-900">Cancelar protocolo</h3>
+            <p className="mt-1 text-sm text-neutral-600">
+              Protocolo <span className="font-mono font-semibold">{selectedCancellingTicket.protocol}</span>
+              {selectedCancellingTicket.assignmentId !== null
+                ? (
+                  <>
+                    {' e Assignment '}
+                    <span className="font-mono font-semibold">{selectedCancellingTicket.assignmentId}</span>
+                  </>
+                )
+                : null}
+            </p>
+            <p className="mt-2 rounded-lg border border-rose-200/70 bg-rose-50/60 px-3 py-2 text-[11px] leading-snug text-rose-700">
+              O cancelamento marca o protocolo como <strong>Cancelado</strong> na Voalle (não é
+              encerramento). Use para aberturas equivocadas ou duplicadas.
+            </p>
+
+            {selectedCancellingTicket.assignmentId === null ? (
+              <p className="mt-3 text-sm text-red-700">
+                Não é possível cancelar sem o identificador do atendimento (assignment) neste
+                protocolo.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-semibold text-neutral-700">
+                  Motivo do cancelamento
+                </label>
+                <textarea
+                  value={cancelDescription}
+                  onChange={(e) => setCancelDescription(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
+                  placeholder="Descreva por que o protocolo está sendo cancelado…"
+                />
+                <p className="text-[11px] text-neutral-500">
+                  Mínimo de {CLOSE_DESCRIPTION_MIN_LEN} caracteres (
+                  {cancelDescription.trim().length}/{CLOSE_DESCRIPTION_MIN_LEN}).
+                </p>
+                {cancelMutation.isError ? (
+                  <p className="text-xs text-red-700">
+                    {formatQueryError(cancelMutation.error)}
+                  </p>
+                ) : null}
+                {cancelLocalWarning !== null ? (
+                  <p className="text-xs text-amber-700">⚠️ {cancelLocalWarning}</p>
+                ) : null}
+              </div>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                onClick={() => {
+                  setCancellingProtocol(null)
+                  setCancelDescription('')
+                  setCancelLocalWarning(null)
+                }}
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                disabled={
+                  !closeConfigured ||
+                  cancelMutation.isPending ||
+                  cancelDescription.trim().length < CLOSE_DESCRIPTION_MIN_LEN ||
+                  selectedCancellingTicket.assignmentId === null
+                }
+                onClick={() => {
+                  if (selectedCancellingTicket.assignmentId === null) return
+                  void cancelMutation.mutateAsync({
+                    assignmentId: selectedCancellingTicket.assignmentId,
+                    protocol: selectedCancellingTicket.protocol,
+                    cancelDescription: cancelDescription.trim(),
+                    cancelledBy: closedByLabel,
+                  })
+                }}
+              >
+                {cancelMutation.isPending ? 'Cancelando...' : 'Confirmar cancelamento'}
               </button>
             </div>
           </div>

@@ -1,10 +1,17 @@
-import { ellevenStatusTextsIndicateClosed } from '@/features/massiva/lib/massivaEllevenStatusText'
+import {
+  ellevenStatusTextsIndicateCancelled,
+  ellevenStatusTextsIndicateClosed,
+} from '@/features/massiva/lib/massivaEllevenStatusText'
 import type { MassivaStatus, MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 /**
  * Status efetivo para filtros/UI: encerramento/cancelamento no Elleven prevalece sobre texto ambíguo.
+ * Cancelamento tem PRECEDÊNCIA sobre encerramento (é um subtipo distinto de "não aberto").
  */
 export function effectiveMassivaStatus(ticket: MassivaTicket): MassivaStatus {
+  // Cancelado vence: seja pelo status local persistido, seja pelos textos de situação do Elleven.
+  if (ticket.status === 'cancelada') return 'cancelada'
+  if (ellevenStatusTextsIndicateCancelled(ticket.ellevenStatusTexts ?? [])) return 'cancelada'
   if (ticket.ellevenLifecycle === 'closed') return 'encerrada'
   if (ellevenStatusTextsIndicateClosed(ticket.ellevenStatusTexts ?? [])) return 'encerrada'
   if (ticket.closedAt != null) return 'encerrada'

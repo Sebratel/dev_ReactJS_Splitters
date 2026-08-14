@@ -54,6 +54,7 @@ type MassivaTicketCardProps = {
   ticket: MassivaTicket
   closeConfigured: boolean
   onRequestClose: (protocol: number) => void
+  onRequestCancel: (protocol: number) => void
 }
 
 function displayOrDash(value: string, emptyLabel = 'Não informado'): string {
@@ -348,6 +349,7 @@ export function MassivaTicketCard({
   ticket,
   closeConfigured,
   onRequestClose,
+  onRequestCancel,
 }: MassivaTicketCardProps) {
   const queryClient = useQueryClient()
   const auth = useAuth()
@@ -433,11 +435,11 @@ export function MassivaTicketCard({
   const statusStyles =
     displayStatus === 'aberta'
       ? 'border-emerald-300/80 bg-emerald-50 text-emerald-900'
-      : displayStatus === 'encerrada'
-        ? statusLabel === 'Cancelada'
-          ? 'border-neutral-200 bg-neutral-100 text-neutral-600'
-          : 'border-neutral-200 bg-neutral-100 text-neutral-700'
-        : 'border-amber-200 bg-amber-50 text-amber-900'
+      : displayStatus === 'cancelada'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : displayStatus === 'encerrada'
+          ? 'border-neutral-200 bg-neutral-100 text-neutral-700'
+          : 'border-amber-200 bg-amber-50 text-amber-900'
 
   const apKnown = ticket.apCode.trim() !== ''
   const splitterKnown = ticket.splitterCode.trim() !== ''
@@ -472,9 +474,11 @@ export function MassivaTicketCard({
                   ? 'bg-sky-100 text-sky-800 ring-sky-200/70'
                   : displayStatus === 'aberta'
                     ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                    : displayStatus === 'encerrada'
-                      ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
-                      : 'bg-amber-100 text-amber-800 ring-amber-200/70',
+                    : displayStatus === 'cancelada'
+                      ? 'bg-rose-100 text-rose-700 ring-rose-200/70'
+                      : displayStatus === 'encerrada'
+                        ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
+                        : 'bg-amber-100 text-amber-800 ring-amber-200/70',
             )}
           >
             {recordKind === 'incidente' ? (
@@ -736,16 +740,26 @@ export function MassivaTicketCard({
           </p>
         ) : null}
         <div className="pt-0.5 sm:col-span-2">
-          <div className="flex min-h-[34px] items-center justify-center">
+          <div className="flex min-h-[34px] flex-wrap items-center justify-center gap-2">
             {displayStatus === 'aberta' ? (
-              <button
-                type="button"
-                disabled={!closeConfigured}
-                onClick={() => onRequestClose(ticket.protocol)}
-                className="mx-auto inline-flex min-w-[165px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-              >
-                Encerrar massiva
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={!closeConfigured}
+                  onClick={() => onRequestClose(ticket.protocol)}
+                  className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                >
+                  Encerrar massiva
+                </button>
+                <button
+                  type="button"
+                  disabled={!closeConfigured}
+                  onClick={() => onRequestCancel(ticket.protocol)}
+                  className="inline-flex min-w-[110px] items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </>
             ) : (
               <span aria-hidden="true" className="invisible inline-flex min-w-[165px] px-3.5 py-2 text-xs">
                 placeholder

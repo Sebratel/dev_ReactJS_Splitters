@@ -80,6 +80,24 @@ export function isMassivaClosedForPanelList(
   return isMassivaClosedForCounts(ticket, recentProtocols)
 }
 
+export function isMassivaCancelledForCounts(
+  ticket: MassivaTicket,
+  recentProtocols?: ReadonlySet<number>,
+): boolean {
+  if (!isMassivaEligibleForDashboardCounts(ticket, recentProtocols)) return false
+  return effectiveMassivaStatus(ticket) === 'cancelada'
+}
+
+/** Listagem do painel (aba Canceladas): canceladas fora do catálogo também aparecem. */
+export function isMassivaCancelledForPanelList(
+  ticket: MassivaTicket,
+  recentProtocols?: ReadonlySet<number>,
+): boolean {
+  if (effectiveMassivaStatus(ticket) !== 'cancelada') return false
+  if (isMassivaMonitoringOutOfCatalogTitle(ticket.title)) return true
+  return isMassivaCancelledForCounts(ticket, recentProtocols)
+}
+
 export function ticketOpenedInDashboardPeriod(
   ticket: MassivaTicket,
   periodStart: Date,
