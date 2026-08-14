@@ -133,6 +133,9 @@ export async function registerOpenedMassivaHistoryInLocalDb(
       closedAt: result.autoClosedWithoutClients === true
         ? nowBrazil
         : null,
+      eventStartAt: context.assignmentBeginningDateLocal || null,
+      infraProtocol: result.infraProtocol ?? null,
+      infraAssignmentId: result.infraAssignmentId ?? null,
     }),
   })
 

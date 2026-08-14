@@ -1732,6 +1732,15 @@ app.post('/api/massiva/history/open', async (req, res) => {
       autoClosedWithoutClients: req.body?.autoClosedWithoutClients === true,
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
+      eventStartAt: req.body?.eventStartAt ?? null,
+      infraProtocol: req.body?.infraProtocol ?? null,
+      infraAssignmentId: req.body?.infraAssignmentId ?? null,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
@@ -1764,6 +1773,12 @@ app.post('/api/massiva/history/close', async (req, res) => {
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
       closedBy: String(req.body?.closedBy ?? '').trim(),
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
     });
 
     res.json({
@@ -1775,6 +1790,37 @@ app.post('/api/massiva/history/close', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao registrar encerramento local de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+app.post('/api/massiva/history/cancel', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.registerCancel({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      closeDescription: String(req.body?.closeDescription ?? '').trim(),
+      closedAt: req.body?.closedAt ?? null,
+      closedBy: String(req.body?.closedBy ?? '').trim(),
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao registrar cancelamento local de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar cancelamento local de massiva.',
       error: error.message,
     });
   }
@@ -2161,6 +2207,27 @@ app.get('/api/massiva/history/list', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao consultar listagem histórica local de massivas.',
+      error: error.message,
+    });
+  }
+});
+
+app.get('/api/massiva/history/mttd-mttr-kpis', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const monthsRaw = Number.parseInt(String(req.query.months ?? '6'), 10);
+    const months = Number.isFinite(monthsRaw) && monthsRaw > 0 ? monthsRaw : 6;
+
+    const data = await massivaHistoryStore.getMttdMttrMonthlyKpis({ months });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Erro ao consultar KPIs MTTD/MTTR mensais:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar KPIs MTTD/MTTR mensais.',
       error: error.message,
     });
   }

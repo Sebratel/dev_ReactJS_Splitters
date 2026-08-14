@@ -20,6 +20,14 @@ function normalizePositiveInt(value) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Status do histórico: 'encerrada' | 'cancelada' | (fallback) 'aberta'. */
+function normalizeMassivaHistoryStatus(value) {
+  const s = normalizeText(value).toLowerCase();
+  if (s === 'encerrada') return 'encerrada';
+  if (s === 'cancelada') return 'cancelada';
+  return 'aberta';
+}
+
 function normalizeNonNegativeInt(value, fallback = 0) {
   const n = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -82,6 +90,9 @@ export function createMassivaHistoryStore(config) {
       async registerClose() {
         return { configured: false, updated: 0 };
       },
+      async registerCancel() {
+        return { configured: false, updated: 0 };
+      },
       async updateExpectedClose() {
         return { configured: false, updated: 0 };
       },
@@ -141,6 +152,9 @@ export function createMassivaHistoryStore(config) {
       async getHistoryList() {
         return [];
       },
+      async getMttdMttrMonthlyKpis() {
+        return [];
+      },
       async end() {},
     };
   }
@@ -160,30 +174,72 @@ export function createMassivaHistoryStore(config) {
   let readyPromise = null;
 
   /** Sem DDL: schema deve existir no MySQL (criação/migração manual no banco). */
-  // Autor do encerramento — coluna opcional; detectada/criada no ensureReady sem quebrar nada.
+  // Colunas opcionais detectadas/criadas no ensureReady sem quebrar nada.
   let hasClosedByColumn = false;
+  let hasClassificationColumns = false;
+  let hasEventStartColumn = false;
+  let hasInfraProtocolColumns = false;
+
+  /**
+   * Adiciona uma coluna idempotentemente via ALTER TABLE.
+   * errno 1060 = Duplicate column — esperado quando a coluna já existe.
+   */
+  async function addColumnIfMissing(columnDef) {
+    try {
+      await dataPool.query(`ALTER TABLE massiva_history ADD COLUMN ${columnDef}`);
+    } catch (alterErr) {
+      if (alterErr?.errno !== 1060) {
+        console.warn(`[massiva-history] coluna não pôde ser criada (${columnDef.split(' ')[0]}):`, alterErr?.message ?? alterErr);
+      }
+    }
+  }
 
   async function ensureReady() {
     if (readyPromise) return readyPromise;
 
     readyPromise = (async () => {
       await dataPool.query('SELECT 1');
-      // Migração idempotente da coluna closed_by (autor do encerramento). Falhas de
-      // privilégio/duplicidade são ignoradas; o flag garante que nenhuma query a referencie
-      // quando ela não existir.
-      try {
-        await dataPool.query('ALTER TABLE massiva_history ADD COLUMN closed_by VARCHAR(255) NULL');
-      } catch (alterErr) {
-        // 1060 = Duplicate column (já existe) — esperado; demais (ex.: sem ALTER) seguem sem a coluna.
-        if (alterErr?.errno !== 1060) {
-          console.warn('[massiva-history] closed_by não pôde ser criada:', alterErr?.message ?? alterErr);
-        }
-      }
+
+      // Migração idempotente: closed_by
+      await addColumnIfMissing('closed_by VARCHAR(255) NULL');
       try {
         const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'closed_by'");
         hasClosedByColumn = Array.isArray(cols) && cols.length > 0;
       } catch {
         hasClosedByColumn = false;
+      }
+
+      // Migração idempotente: campos de classificação operacional
+      await addColumnIfMissing('tipo_incidente VARCHAR(50) NULL');
+      await addColumnIfMissing('impacto VARCHAR(50) NULL');
+      await addColumnIfMissing('area VARCHAR(100) NULL');
+      await addColumnIfMissing('tecnologia VARCHAR(50) NULL');
+      await addColumnIfMissing('classificacao VARCHAR(150) NULL');
+      await addColumnIfMissing('cnl VARCHAR(30) NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'cnl'");
+        hasClassificationColumns = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasClassificationColumns = false;
+      }
+
+      // Migração idempotente: event_start_at (necessário para calcular MTTD)
+      await addColumnIfMissing('event_start_at DATETIME NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'event_start_at'");
+        hasEventStartColumn = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasEventStartColumn = false;
+      }
+
+      // Migração idempotente: protocolo de infraestrutura vinculado (opcional, 1 por evento)
+      await addColumnIfMissing('infra_protocol BIGINT NULL');
+      await addColumnIfMissing('infra_assignment_id BIGINT NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'infra_protocol'");
+        hasInfraProtocolColumns = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasInfraProtocolColumns = false;
       }
     })().catch((error) => {
       readyPromise = null;
@@ -250,6 +306,21 @@ export function createMassivaHistoryStore(config) {
         : null;
     const closedAt = autoClosed ? normalizeDate(input?.closedAt) ?? new Date() : null;
 
+    // Campos de classificação operacional (opcionais — presentes só se colunas existirem)
+    const tipoIncidente = normalizeNullableText(input?.tipoIncidente);
+    const impacto = normalizeNullableText(input?.impacto);
+    const area = normalizeNullableText(input?.area);
+    const tecnologia = normalizeNullableText(input?.tecnologia);
+    const classificacao = normalizeNullableText(input?.classificacao);
+    const cnl = normalizeNullableText(input?.cnl);
+
+    // Início do evento — necessário para calcular MTTD (opcional, depende da migração).
+    const eventStartAt = normalizeMysqlNaiveDateInput(input?.eventStartAt);
+
+    // Protocolo de infraestrutura vinculado (1 por evento — mesmo valor em todas as linhas do lote).
+    const infraProtocol = normalizePositiveInt(input?.infraProtocol);
+    const infraAssignmentId = normalizePositiveInt(input?.infraAssignmentId);
+
     let insertedOrUpdated = 0;
 
     for (const result of results) {
@@ -267,6 +338,34 @@ export function createMassivaHistoryStore(config) {
       const existingId = await findExistingHistoryId(protocol, assignmentId);
 
       if (existingId !== null) {
+        // Colunas de classificação: adicionadas somente quando a migração já rodou.
+        const classifSetClause = hasClassificationColumns
+          ? `,
+              tipo_incidente = COALESCE(?, tipo_incidente),
+              impacto = COALESCE(?, impacto),
+              area = COALESCE(?, area),
+              tecnologia = COALESCE(?, tecnologia),
+              classificacao = COALESCE(?, classificacao),
+              cnl = COALESCE(?, cnl)`
+          : '';
+        const classifUpdateParams = hasClassificationColumns
+          ? [tipoIncidente, impacto, area, tecnologia, classificacao, cnl]
+          : [];
+
+        // Início do evento: COALESCE para não sobrescrever dado existente.
+        const eventStartSetClause = hasEventStartColumn
+          ? ', event_start_at = COALESCE(?, event_start_at)'
+          : '';
+        const eventStartUpdateParam = hasEventStartColumn ? [eventStartAt] : [];
+
+        // Protocolo de infra: COALESCE para não apagar um vínculo já gravado.
+        const infraSetClause = hasInfraProtocolColumns
+          ? `,
+              infra_protocol = COALESCE(?, infra_protocol),
+              infra_assignment_id = COALESCE(?, infra_assignment_id)`
+          : '';
+        const infraUpdateParams = hasInfraProtocolColumns ? [infraProtocol, infraAssignmentId] : [];
+
         await dataPool.query(
           `
             UPDATE massiva_history
@@ -284,7 +383,7 @@ export function createMassivaHistoryStore(config) {
               closed_at = ?,
               auto_closed_without_clients = ?,
               close_description = COALESCE(?, close_description),
-              source = 'nexaview-local'
+              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}
             WHERE id = ?
           `,
           [
@@ -304,11 +403,39 @@ export function createMassivaHistoryStore(config) {
             closedAt,
             autoClosed ? 1 : 0,
             closeDescription,
+            ...classifUpdateParams,
+            ...eventStartUpdateParam,
+            ...infraUpdateParams,
             existingId,
           ],
         );
         await attachSplitters(existingId, splitterEntries);
       } else {
+        // Colunas de classificação: incluídas no INSERT somente quando a migração já rodou.
+        const classifInsertCols = hasClassificationColumns
+          ? `,
+              tipo_incidente,
+              impacto,
+              area,
+              tecnologia,
+              classificacao,
+              cnl`
+          : '';
+        const classifInsertPlaceholders = hasClassificationColumns ? ', ?, ?, ?, ?, ?, ?' : '';
+        const classifInsertValues = hasClassificationColumns
+          ? [tipoIncidente, impacto, area, tecnologia, classificacao, cnl]
+          : [];
+
+        // Início do evento: incluído no INSERT somente quando a coluna existir.
+        const eventStartInsertCol = hasEventStartColumn ? ', event_start_at' : '';
+        const eventStartInsertPlaceholder = hasEventStartColumn ? ', ?' : '';
+        const eventStartInsertValue = hasEventStartColumn ? [eventStartAt] : [];
+
+        // Protocolo de infra: incluído no INSERT somente quando as colunas existirem.
+        const infraInsertCols = hasInfraProtocolColumns ? ', infra_protocol, infra_assignment_id' : '';
+        const infraInsertPlaceholders = hasInfraProtocolColumns ? ', ?, ?' : '';
+        const infraInsertValues = hasInfraProtocolColumns ? [infraProtocol, infraAssignmentId] : [];
+
         const [insertResult] = await dataPool.query(
           `
             INSERT INTO massiva_history (
@@ -325,9 +452,9 @@ export function createMassivaHistoryStore(config) {
               closed_at,
               auto_closed_without_clients,
               close_description,
-              source
+              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders})
           `,
           [
             protocol,
@@ -343,6 +470,9 @@ export function createMassivaHistoryStore(config) {
             closedAt,
             autoClosed ? 1 : 0,
             closeDescription,
+            ...classifInsertValues,
+            ...eventStartInsertValue,
+            ...infraInsertValues,
           ],
         );
         await attachSplitters(insertResult.insertId, splitterEntries);
@@ -357,11 +487,22 @@ export function createMassivaHistoryStore(config) {
   async function registerClose(input) {
     await ensureReady();
 
+    // Status alvo: 'encerrada' (padrão) ou 'cancelada'. Literal validado (não vem cru do usuário).
+    const targetStatus = input?.targetStatus === 'cancelada' ? 'cancelada' : 'encerrada';
+
     const protocol = normalizePositiveInt(input?.protocol);
     const assignmentId = normalizePositiveInt(input?.assignmentId);
     const closeDescription = normalizeNullableText(input?.closeDescription);
     const closedBy = normalizeNullableText(input?.closedBy);
     const closedAt = normalizeDate(input?.closedAt) ?? new Date();
+
+    // Classificação preenchida pelo operador no encerramento.
+    const tipoIncidente = normalizeNullableText(input?.tipoIncidente);
+    const impacto = normalizeNullableText(input?.impacto);
+    const area = normalizeNullableText(input?.area);
+    const tecnologia = normalizeNullableText(input?.tecnologia);
+    const classificacao = normalizeNullableText(input?.classificacao);
+    const cnl = normalizeNullableText(input?.cnl);
 
     const existingId = await findExistingHistoryId(protocol, assignmentId);
     if (existingId === null) {
@@ -369,16 +510,27 @@ export function createMassivaHistoryStore(config) {
     }
 
     const closedByClause = hasClosedByColumn ? ', closed_by = COALESCE(?, closed_by)' : '';
-    const params = hasClosedByColumn
-      ? [closedAt, closeDescription, closedBy, existingId]
-      : [closedAt, closeDescription, existingId];
+    const classifClause = hasClassificationColumns
+      ? `,
+          tipo_incidente = COALESCE(?, tipo_incidente),
+          impacto = COALESCE(?, impacto),
+          area = COALESCE(?, area),
+          tecnologia = COALESCE(?, tecnologia),
+          classificacao = COALESCE(?, classificacao),
+          cnl = COALESCE(?, cnl)`
+      : '';
+    const closedByParams = hasClosedByColumn ? [closedBy] : [];
+    const classifParams = hasClassificationColumns
+      ? [tipoIncidente, impacto, area, tecnologia, classificacao, cnl]
+      : [];
+    const params = [closedAt, closeDescription, ...closedByParams, ...classifParams, existingId];
     const [result] = await dataPool.query(
       `
         UPDATE massiva_history
         SET
-          status = 'encerrada',
+          status = '${targetStatus}',
           closed_at = ?,
-          close_description = COALESCE(?, close_description)${closedByClause},
+          close_description = COALESCE(?, close_description)${closedByClause}${classifClause},
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
@@ -389,6 +541,14 @@ export function createMassivaHistoryStore(config) {
       configured: true,
       updated: Number(result?.affectedRows ?? 0),
     };
+  }
+
+  /**
+   * Cancelamento (incidentStatusId 8 na Voalle): mesma mecânica do encerramento, mas grava
+   * `status = 'cancelada'`. Sem classificação de incidente (cancelamento é erro de abertura/duplicado).
+   */
+  async function registerCancel(input) {
+    return registerClose({ ...input, targetStatus: 'cancelada' });
   }
 
   /**
@@ -1157,7 +1317,7 @@ export function createMassivaHistoryStore(config) {
       accessPointCode: normalizeText(row.accessPointCode),
       title: normalizeText(row.title),
       affectedClients: Number(row.affectedClients ?? 0),
-      status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
+      status: normalizeMassivaHistoryStatus(row.status),
       openedAt:
         row.openedAt instanceof Date
           ? row.openedAt.toISOString()
@@ -1561,7 +1721,10 @@ export function createMassivaHistoryStore(config) {
     await ensureReady();
 
     const statusRaw = normalizeText(input?.status).toLowerCase();
-    const status = statusRaw === 'aberta' || statusRaw === 'encerrada' ? statusRaw : null;
+    const status =
+      statusRaw === 'aberta' || statusRaw === 'encerrada' || statusRaw === 'cancelada'
+        ? statusRaw
+        : null;
     const startDate = normalizeDate(input?.startDate);
     const endDate = normalizeDate(input?.endDate);
     const limit = Math.min(10000, Math.max(1, normalizePositiveInt(input?.limit) ?? 3000));
@@ -1599,6 +1762,26 @@ export function createMassivaHistoryStore(config) {
           h.closed_at AS closedAt,
           h.close_description AS closeDescription,
           ${hasClosedByColumn ? 'h.closed_by AS closedBy,' : ''}
+          ${hasClassificationColumns ? `h.tipo_incidente AS tipoIncidente,
+          h.impacto AS impacto,
+          h.area AS area,
+          h.tecnologia AS tecnologia,
+          h.classificacao AS classificacao,
+          h.cnl AS cnl,` : ''}
+          ${hasEventStartColumn ? 'h.event_start_at AS eventStartAt,' : ''}
+          ${hasInfraProtocolColumns ? 'h.infra_protocol AS infraProtocol, h.infra_assignment_id AS infraAssignmentId,' : ''}
+          CASE
+            WHEN h.event_identified_at IS NOT NULL
+              AND h.closed_at IS NOT NULL
+              AND h.closed_at > h.event_identified_at
+            THEN TIMESTAMPDIFF(MINUTE, h.event_identified_at, h.closed_at)
+          END AS mttrMinutes,
+          ${hasEventStartColumn ? `CASE
+            WHEN h.event_start_at IS NOT NULL
+              AND h.event_identified_at IS NOT NULL
+              AND h.event_identified_at >= h.event_start_at
+            THEN TIMESTAMPDIFF(MINUTE, h.event_start_at, h.event_identified_at)
+          END AS mttdMinutes,` : 'NULL AS mttdMinutes,'}
           h.updated_at AS updatedAt
         FROM massiva_history h
         ${whereSql}
@@ -1616,14 +1799,86 @@ export function createMassivaHistoryStore(config) {
       title: normalizeText(row.title),
       operatorEmail: normalizeText(row.operatorEmail),
       affectedClients: Number(row.affectedClients ?? 0),
-      status: normalizeText(row.status).toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
+      status: normalizeMassivaHistoryStatus(row.status),
       openedAt: serializeHistoryDate(row.openedAt),
       eventIdentifiedAt: serializeHistoryDate(row.eventIdentifiedAt),
       expectedCloseAt: serializeHistoryDate(row.expectedCloseAt),
       closedAt: serializeHistoryDate(row.closedAt),
       closeDescription: normalizeNullableText(row.closeDescription),
       closedBy: normalizeNullableText(row.closedBy),
+      tipoIncidente: normalizeNullableText(row.tipoIncidente),
+      impacto: normalizeNullableText(row.impacto),
+      area: normalizeNullableText(row.area),
+      tecnologia: normalizeNullableText(row.tecnologia),
+      classificacao: normalizeNullableText(row.classificacao),
+      cnl: normalizeNullableText(row.cnl),
+      eventStartAt: serializeHistoryDate(row.eventStartAt),
+      infraProtocol: row.infraProtocol == null ? null : Number(row.infraProtocol),
+      infraAssignmentId: row.infraAssignmentId == null ? null : Number(row.infraAssignmentId),
+      mttdMinutes: row.mttdMinutes != null ? Number(row.mttdMinutes) : null,
+      mttrMinutes: row.mttrMinutes != null ? Number(row.mttrMinutes) : null,
       updatedAt: serializeHistoryDate(row.updatedAt),
+    }));
+  }
+
+  /**
+   * Retorna médias mensais de MTTD e MTTR para os últimos `months` meses.
+   * MTTR é sempre calculável (event_identified_at → closed_at).
+   * MTTD requer a coluna event_start_at (migração idempotente no ensureReady).
+   * Apenas registros encerrados e com timestamps válidos contribuem para cada média.
+   */
+  async function getMttdMttrMonthlyKpis(input = {}) {
+    await ensureReady();
+
+    const months = Math.min(24, Math.max(1, normalizePositiveInt(input?.months) ?? 6));
+
+    const mttdExpr = hasEventStartColumn
+      ? `AVG(CASE
+            WHEN h.event_start_at IS NOT NULL
+              AND h.event_identified_at IS NOT NULL
+              AND h.event_identified_at >= h.event_start_at
+            THEN TIMESTAMPDIFF(MINUTE, h.event_start_at, h.event_identified_at)
+          END)`
+      : 'NULL';
+
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          DATE_FORMAT(h.opened_at, '%Y-%m') AS month,
+          COUNT(*) AS total,
+          ${mttdExpr} AS avgMttdMinutes,
+          AVG(CASE
+            WHEN h.event_identified_at IS NOT NULL
+              AND h.closed_at IS NOT NULL
+              AND h.closed_at > h.event_identified_at
+            THEN TIMESTAMPDIFF(MINUTE, h.event_identified_at, h.closed_at)
+          END) AS avgMttrMinutes,
+          SUM(CASE
+            WHEN h.event_identified_at IS NOT NULL AND h.closed_at IS NOT NULL
+              AND h.closed_at > h.event_identified_at
+            THEN 1 ELSE 0 END) AS mttrCount,
+          SUM(CASE
+            WHEN ${hasEventStartColumn ? 'h.event_start_at IS NOT NULL AND ' : '1 = 0 AND '}
+              h.event_identified_at IS NOT NULL
+              AND h.event_identified_at >= ${hasEventStartColumn ? 'h.event_start_at' : 'h.event_start_at'}
+            THEN 1 ELSE 0 END) AS mttdCount
+        FROM massiva_history h
+        WHERE
+          h.status = 'encerrada'
+          AND h.opened_at >= DATE_SUB(NOW(), INTERVAL ? MONTH)
+        GROUP BY DATE_FORMAT(h.opened_at, '%Y-%m')
+        ORDER BY month ASC
+      `,
+      [months],
+    );
+
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      month: String(row.month ?? ''),
+      total: Number(row.total ?? 0),
+      avgMttdMinutes: row.avgMttdMinutes != null ? Number(row.avgMttdMinutes) : null,
+      avgMttrMinutes: row.avgMttrMinutes != null ? Number(row.avgMttrMinutes) : null,
+      mttrCount: Number(row.mttrCount ?? 0),
+      mttdCount: Number(row.mttdCount ?? 0),
     }));
   }
 
@@ -1636,6 +1891,7 @@ export function createMassivaHistoryStore(config) {
     ensureReady,
     registerOpenBatch,
     registerClose,
+    registerCancel,
     updateExpectedClose,
     markClosedByProtocols,
     getSplitterStats,
@@ -1654,6 +1910,7 @@ export function createMassivaHistoryStore(config) {
     hasCompletedNetworkReliefSnapshot,
     getLatestNetworkReliefSnapshotPage,
     getHistoryList,
+    getMttdMttrMonthlyKpis,
     end,
   };
 }
