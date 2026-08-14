@@ -31,4 +31,10 @@ export const massivaKeys = {
    */
   connectionsForAutoIspIndex: () =>
     [...massivaKeys.all, 'connections-autoisp-index'] as const,
+
+  /**
+   * GET `/api/massiva/history/mttd-mttr-kpis` — médias mensais de MTTD e MTTR.
+   */
+  mttdMttrKpis: (months: number) =>
+    [...massivaKeys.all, 'mttd-mttr-kpis', months] as const,
 }
