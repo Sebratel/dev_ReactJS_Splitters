@@ -6,8 +6,18 @@ import {
   resolveProtocolAndAssignment,
 } from '@/features/massiva/lib/buildMassivaAfetadosRequestBody'
 import { buildMassivaOpenRequestBody } from '@/features/massiva/lib/buildMassivaOpenRequestBody'
+import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { registerOpenedMassivaHistoryInLocalDb } from '@/features/massiva/api/registerOpenedMassivaHistoryInLocalDb'
+import { openInfraSolicitation } from '@/features/massiva/api/openInfraSolicitation'
+import {
+  buildInfraSolicitationDescription,
+  type InfraMaskRoute,
+} from '@/features/massiva/lib/buildInfraSolicitationDescription'
+import { infraProtocolOption } from '@/features/massiva/model/massivaInfraProtocol'
+import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
+import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import {
   formatMassivaOpenApiFailure,
   parseMassivaOpenHttpResult,
@@ -132,6 +142,93 @@ async function withFullCollectedClientes(
       error,
     )
     return context
+  }
+}
+
+function formatLocalDateTimeShort(local: string | null): string {
+  if (local == null || local.trim() === '') return ''
+  const instant = parseDateTimeLocalToDate(local.slice(0, 16))
+  if (instant === null) return ''
+  return formatBrazilDateTimeShortDisplay(instant)
+}
+
+/**
+ * Abre — quando o operador selecionou um tipo — 1 protocolo de infraestrutura agregando todos os APs.
+ * Best-effort: qualquer falha vira aviso (`followUpWarning`) e NÃO derruba a massiva já aberta.
+ */
+async function openInfraProtocolIfSelected(
+  context: MassivaOpenFinalContext,
+  successes: MassivaOpenSingleResult[],
+): Promise<{ infraProtocol: number | null; infraAssignmentId: number | null; warning: string | null }> {
+  const draft = useMassivaOpenDraftStore.getState()
+  const option = infraProtocolOption(draft.infraProtocolType)
+  if (option === null) {
+    return { infraProtocol: null, infraAssignmentId: null, warning: null }
+  }
+
+  const routes: InfraMaskRoute[] = context.basis.topology.routes.map((route) => ({
+    apCode: route.apCode,
+    apDisplayTitle: route.apDisplayTitle,
+    slot: route.slot,
+    port: route.port,
+    affected: collectMapeableAfetadosClientes(
+      clientesForAccessPoint(context.basis.collectedClientes, route.apCode),
+    ).length,
+  }))
+  const totalAffected = routes.reduce((sum, route) => sum + route.affected, 0)
+
+  const primary = pickPrimaryOpenResult(successes)
+  const primaryIds = primary != null ? resolveProtocolAndAssignment(primary) : null
+
+  const description = buildInfraSolicitationDescription({
+    type: option.code,
+    massivaProtocol: primaryIds?.protocol ?? null,
+    routes,
+    totalAffected,
+    signalDbm: draft.infraSignalDbm,
+    avaria: draft.infraAvaria,
+    responsavel: context.operatorName,
+    eventStartDisplay: formatLocalDateTimeShort(context.assignmentBeginningDateLocal),
+    eventIdentifiedDisplay: formatLocalDateTimeShort(context.eventIdentifiedAtLocal),
+  })
+
+  const primaryAp =
+    context.plan.requests[0]?.authenticationAccessPointCode?.trim() ||
+    context.basis.topology.routes[0]?.apCode?.trim() ||
+    null
+
+  const finalDateIso =
+    massivaLocalDateTimeToGatewayIso(context.assignmentFinalDateLocal) ??
+    context.assignmentFinalDateLocal
+
+  try {
+    const result = await openInfraSolicitation({
+      infraType: option.code,
+      personId: context.personId,
+      authenticationAccessPointCode: primaryAp,
+      assignmentTitle: `Infra - ${option.label}`,
+      assignmentDescription: description,
+      assignmentFinalDateIso: finalDateIso,
+    })
+
+    if (result.protocol == null) {
+      return {
+        infraProtocol: null,
+        infraAssignmentId: null,
+        warning: `Protocolo de infraestrutura (${option.label}) foi solicitado, mas a resposta não trouxe o número do protocolo.`,
+      }
+    }
+    return {
+      infraProtocol: result.protocol,
+      infraAssignmentId: result.assignmentId,
+      warning: null,
+    }
+  } catch (e) {
+    return {
+      infraProtocol: null,
+      infraAssignmentId: null,
+      warning: `Falha ao abrir o protocolo de infraestrutura (${option.label}): ${formatQueryError(e)}. A massiva foi aberta normalmente.`,
+    }
   }
 }
 
@@ -279,6 +376,19 @@ export async function openMassivaFromContext(
       payload,
       `Afetados não registrados em alguns pontos de acesso:\n${afetadosWarnings.join('\n')}`,
     )
+  }
+
+  // Protocolo de infraestrutura (opcional): 1 por evento, best-effort com aviso.
+  const infra = await openInfraProtocolIfSelected(context, successes)
+  if (infra.infraProtocol != null) {
+    payload = {
+      ...payload,
+      infraProtocol: infra.infraProtocol,
+      infraAssignmentId: infra.infraAssignmentId,
+    }
+  }
+  if (infra.warning != null) {
+    payload = appendFollowUpWarning(payload, infra.warning)
   }
 
   try {

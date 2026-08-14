@@ -7,6 +7,7 @@ import type {
 export function buildMassivaOpenFinalContext(params: {
   personId: number
   operatorEmail: string
+  operatorName: string
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
@@ -28,6 +29,7 @@ export function buildMassivaOpenFinalContext(params: {
   return {
     personId: params.personId,
     operatorEmail: params.operatorEmail.trim(),
+    operatorName: params.operatorName.trim(),
     basis: params.basis,
     plan: params.plan,
     assignmentDescription: params.assignmentDescription.trim(),

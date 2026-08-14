@@ -11,6 +11,8 @@ import type {
 export type MassivaOpenFinalContext = {
   personId: number
   operatorEmail: string
+  /** Nome do operador logado (para "Responsável pela identificação" no protocolo de infra). */
+  operatorName: string
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
