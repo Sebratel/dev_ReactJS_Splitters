@@ -11,6 +11,10 @@ import {
 } from 'lucide-react'
 import { MASSIVA_SOLICITATION_TYPE_LABEL } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
+import {
+  MASSIVA_INFRA_PROTOCOL_OPTIONS,
+  infraProtocolOption,
+} from '@/features/massiva/model/massivaInfraProtocol'
 import { cn } from '@/shared/lib/utils'
 
 type DescriptionByApItem = {
@@ -122,8 +126,16 @@ export function MassivaOpenDraftFields({
   const initialReport = useMassivaOpenDraftStore((s) => s.initialReport)
   const setInitialReport = useMassivaOpenDraftStore((s) => s.setInitialReport)
 
-  const fieldTechnicianRequesting = useMassivaOpenDraftStore((s) => s.fieldTechnicianRequesting)
-  const setFieldTechnicianRequesting = useMassivaOpenDraftStore((s) => s.setFieldTechnicianRequesting)
+  const eventIdentifiedBy = useMassivaOpenDraftStore((s) => s.eventIdentifiedBy)
+  const setEventIdentifiedBy = useMassivaOpenDraftStore((s) => s.setEventIdentifiedBy)
+
+  const infraProtocolType = useMassivaOpenDraftStore((s) => s.infraProtocolType)
+  const setInfraProtocolType = useMassivaOpenDraftStore((s) => s.setInfraProtocolType)
+  const infraSignalDbm = useMassivaOpenDraftStore((s) => s.infraSignalDbm)
+  const setInfraSignalDbm = useMassivaOpenDraftStore((s) => s.setInfraSignalDbm)
+  const infraAvaria = useMassivaOpenDraftStore((s) => s.infraAvaria)
+  const setInfraAvaria = useMassivaOpenDraftStore((s) => s.setInfraAvaria)
+  const infraManualField = infraProtocolOption(infraProtocolType)?.manualField ?? null
 
   return (
     <div className="mt-2">
@@ -293,57 +305,122 @@ export function MassivaOpenDraftFields({
             />
           </div>
 
-          <div
-            className={cn(
-              'flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm',
-              fieldTechnicianRequesting
-                ? 'border-blue-200/80 bg-blue-50/40'
-                : 'border-red-200/80 bg-red-50/40',
-              disabled && 'opacity-60',
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-tight text-neutral-900">
-                Técnico em campo solicitando abertura
-              </p>
-              <p className="mt-0.5 text-xs leading-snug text-neutral-600">
-                {fieldTechnicianRequesting
-                  ? 'Abertura solicitada pelo técnico no local.'
-                  : 'Origem registrada como rompimento.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={fieldTechnicianRequesting}
-              aria-label={
-                fieldTechnicianRequesting
-                  ? 'Origem: técnico em campo (ativado)'
-                  : 'Origem: rompimento (desativado)'
-              }
-              title={
-                fieldTechnicianRequesting
-                  ? 'Clique para registrar origem como rompimento'
-                  : 'Clique para indicar técnico em campo'
-              }
-              disabled={disabled}
-              onClick={() => setFieldTechnicianRequesting(!fieldTechnicianRequesting)}
-              className={cn(
-                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2',
-                fieldTechnicianRequesting
-                  ? 'border-blue-400 bg-blue-500'
-                  : 'border-red-400 bg-red-500',
-                disabled && 'cursor-not-allowed',
-              )}
+          {/* Quem identificou o evento — seletor segmentado */}
+          <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 bg-white px-3 py-2.5', disabled && 'opacity-60')}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              Quem identificou o evento
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="Quem identificou o evento"
+              className="flex gap-1.5"
             >
-              <span
-                className={cn(
-                  'pointer-events-none absolute top-0.5 size-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform',
-                  fieldTechnicianRequesting ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
-                )}
+              {(
+                [
+                  { value: 'tecnico', label: 'Técnico' },
+                  { value: 'zabbix',  label: 'Zabbix'  },
+                  { value: 'int6',    label: 'INT6'     },
+                ] as const
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={eventIdentifiedBy === value}
+                  disabled={disabled}
+                  onClick={() => setEventIdentifiedBy(value)}
+                  className={cn(
+                    'flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-all duration-150',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-1',
+                    'disabled:cursor-not-allowed',
+                    eventIdentifiedBy === value
+                      ? 'border-amber-300/80 bg-amber-50 text-amber-900 shadow-sm ring-1 ring-amber-200/70'
+                      : 'border-neutral-200/80 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-700',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Protocolo de infraestrutura (opcional) */}
+          <div className={cn('space-y-2 rounded-xl border border-neutral-200/70 bg-white px-3 py-2.5', disabled && 'opacity-60')}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                Protocolo de infraestrutura
+              </p>
+              <span className="text-[10px] font-medium text-neutral-400">Opcional</span>
+            </div>
+            <div className="relative">
+              <select
+                value={infraProtocolType}
+                onChange={(e) =>
+                  setInfraProtocolType(e.target.value as typeof infraProtocolType)
+                }
+                disabled={disabled}
+                className="w-full cursor-pointer appearance-none rounded-lg border border-neutral-200/80 bg-white py-2 pl-3 pr-8 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed"
+              >
+                <option value="none">Não abrir protocolo de infra</option>
+                {MASSIVA_INFRA_PROTOCOL_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400"
+                aria-hidden
               />
-            </button>
+            </div>
+
+            {infraManualField === 'signal' ? (
+              <div>
+                <label
+                  htmlFor="infra-signal"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+                >
+                  Sinal aferido (dBm)
+                </label>
+                <input
+                  id="infra-signal"
+                  type="text"
+                  inputMode="decimal"
+                  value={infraSignalDbm}
+                  onChange={(e) => setInfraSignalDbm(e.target.value)}
+                  disabled={disabled}
+                  placeholder="Ex.: -24.0"
+                  className="w-full rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+            ) : null}
+
+            {infraManualField === 'avaria' ? (
+              <div>
+                <label
+                  htmlFor="infra-avaria"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+                >
+                  Tipo de avaria
+                </label>
+                <textarea
+                  id="infra-avaria"
+                  rows={2}
+                  value={infraAvaria}
+                  onChange={(e) => setInfraAvaria(e.target.value)}
+                  disabled={disabled}
+                  placeholder="Descreva a avaria (ex.: parte interna da CTO quebrada)"
+                  className="w-full resize-y rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+            ) : null}
+
+            {infraProtocolType !== 'none' ? (
+              <p className="text-[10px] leading-snug text-neutral-500">
+                Abre 1 protocolo de infraestrutura vinculado à massiva, agregando todos os APs no
+                descritivo.
+              </p>
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-2.5 sm:p-3">

@@ -69,6 +69,14 @@ function massivaClosePathResolved(): string {
   return ''
 }
 
+/** POST de abertura de protocolo de infraestrutura vinculado à massiva (gateway → opendetailedsolicitation). */
+function massivaInfraOpenPathResolved(): string {
+  const fromEnv = str(import.meta.env.VITE_MASSIVA_INFRA_OPEN_PATH, '')
+  if (fromEnv !== '') return fromEnv
+  if (import.meta.env.DEV) return '/api/v1/massivas/abrir-protocolo-infra-via-api'
+  return ''
+}
+
 /** POST de registro de afetados após abertura (`usuarioAfetadoEntities` + `assignmentId`). */
 function massivaAfetadosPathResolved(): string {
   const fromEnv = str(import.meta.env.VITE_MASSIVA_AFETADOS_PATH, '')
@@ -140,6 +148,8 @@ export const env = {
   massivaOpenPath: massivaOpenPathResolved(),
   /** DELETE para encerramento de massiva no BFF (paridade `finalizar-chamado-via-api`). */
   massivaClosePath: massivaClosePathResolved(),
+  /** POST de abertura de protocolo de infraestrutura no BFF (`abrir-protocolo-infra-via-api`). */
+  massivaInfraOpenPath: massivaInfraOpenPathResolved(),
   /** POST de afetados no BFF (segunda etapa após abertura). */
   massivaAfetadosPath: massivaAfetadosPathResolved(),
   /**
@@ -149,6 +159,11 @@ export const env = {
   massivaCloseIncidentStatusId: str(
     import.meta.env.VITE_MASSIVA_CLOSE_INCIDENT_STATUS_ID,
     '4',
+  ),
+  /** `incidentStatusId` de cancelamento na Voalle (8 = Cancelado). Mesmo endpoint do encerramento. */
+  massivaCancelIncidentStatusId: str(
+    import.meta.env.VITE_MASSIVA_CANCEL_INCIDENT_STATUS_ID,
+    '8',
   ),
   /** IDs adicionais de `incidentStatusId` tratados como encerrado/cancelado (ex.: `3,5`). */
   massivaClosedIncidentStatusIds: str(

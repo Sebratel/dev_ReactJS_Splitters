@@ -1,5 +1,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import type { MassivaInfraProtocolSelection } from '@/features/massiva/model/massivaInfraProtocol'
+
+/** Quem identificou / solicitou a abertura do evento de massiva. */
+export type MassivaEventIdentifiedBy = 'tecnico' | 'zabbix' | 'int6'
 
 /**
  * Rascunho de abertura: campos do formulário + descrição técnica (template ou editada).
@@ -18,13 +22,20 @@ type MassivaOpenDraftState = {
   eventIdentifiedTime: string
 
   initialReport: string
-  /** true = técnico em campo; false = evento de rompimento */
-  fieldTechnicianRequesting: boolean
+  /** Quem identificou o evento: 'tecnico' | 'zabbix' | 'int6' */
+  eventIdentifiedBy: MassivaEventIdentifiedBy
   /**
    * Quando definido (ex.: clique em evento AutoISP), substitui a linha “Clientes afetados”
    * na descrição e o `affectedUsersQuantity` do POST em relação ao preview local.
    */
   affectedUsersQuantityAutoIspOverride: number | null
+
+  /** Protocolo de infraestrutura a abrir junto ('none' = nenhum). */
+  infraProtocolType: MassivaInfraProtocolSelection
+  /** Sinal aferido (dBm) — campo manual do tipo CTO Sinal Alto. */
+  infraSignalDbm: string
+  /** Tipo de avaria — campo manual do tipo CTO Avariada. */
+  infraAvaria: string
 
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
@@ -35,8 +46,11 @@ type MassivaOpenDraftState = {
   setEventIdentifiedDate: (value: string) => void
   setEventIdentifiedTime: (value: string) => void
   setInitialReport: (value: string) => void
-  setFieldTechnicianRequesting: (value: boolean) => void
+  setEventIdentifiedBy: (value: MassivaEventIdentifiedBy) => void
   setAffectedUsersQuantityAutoIspOverride: (value: number | null) => void
+  setInfraProtocolType: (value: MassivaInfraProtocolSelection) => void
+  setInfraSignalDbm: (value: string) => void
+  setInfraAvaria: (value: string) => void
   enableDescriptionAutoSync: () => void
   reset: () => void
 }
@@ -69,8 +83,11 @@ function buildInitialDraft() {
     eventIdentifiedDate: today,
     eventIdentifiedTime: currentTime,
     initialReport: '',
-    fieldTechnicianRequesting: false,
+    eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
     affectedUsersQuantityAutoIspOverride: null,
+    infraProtocolType: 'none' as MassivaInfraProtocolSelection,
+    infraSignalDbm: '',
+    infraAvaria: '',
   }
 }
 
@@ -86,8 +103,11 @@ const createInitialState = () => ({
   eventIdentifiedDate: initial.eventIdentifiedDate,
   eventIdentifiedTime: initial.eventIdentifiedTime,
   initialReport: '',
-  fieldTechnicianRequesting: false,
+  eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
   affectedUsersQuantityAutoIspOverride: null,
+  infraProtocolType: 'none' as MassivaInfraProtocolSelection,
+  infraSignalDbm: '',
+  infraAvaria: '',
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -108,15 +128,17 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setEventIdentifiedTime: (eventIdentifiedTime) =>
         set({ eventIdentifiedTime }),
       setInitialReport: (initialReport) => set({ initialReport }),
-      setFieldTechnicianRequesting: (fieldTechnicianRequesting) =>
-        set({ fieldTechnicianRequesting }),
+      setEventIdentifiedBy: (eventIdentifiedBy) => set({ eventIdentifiedBy }),
       setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
         set({ affectedUsersQuantityAutoIspOverride }),
+      setInfraProtocolType: (infraProtocolType) => set({ infraProtocolType }),
+      setInfraSignalDbm: (infraSignalDbm) => set({ infraSignalDbm }),
+      setInfraAvaria: (infraAvaria) => set({ infraAvaria }),
       enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
       reset: () => set(buildInitialDraft()),
     }),
     {
-      name: 'nexaview.massiva.open-draft.v1',
+      name: 'nexaview.massiva.open-draft.v3',
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         assignmentDescription: state.assignmentDescription,
@@ -128,8 +150,11 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
         eventIdentifiedDate: state.eventIdentifiedDate,
         eventIdentifiedTime: state.eventIdentifiedTime,
         initialReport: state.initialReport,
-        fieldTechnicianRequesting: state.fieldTechnicianRequesting,
+        eventIdentifiedBy: state.eventIdentifiedBy,
         affectedUsersQuantityAutoIspOverride: state.affectedUsersQuantityAutoIspOverride,
+        infraProtocolType: state.infraProtocolType,
+        infraSignalDbm: state.infraSignalDbm,
+        infraAvaria: state.infraAvaria,
       }),
     },
   ),

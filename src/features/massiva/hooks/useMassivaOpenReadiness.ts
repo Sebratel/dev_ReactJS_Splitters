@@ -54,7 +54,7 @@ export function useMassivaOpenReadiness(
   const eventIdentifiedDate = useMassivaOpenDraftStore((s) => s.eventIdentifiedDate)
   const eventIdentifiedTime = useMassivaOpenDraftStore((s) => s.eventIdentifiedTime)
   const initialReport = useMassivaOpenDraftStore((s) => s.initialReport)
-  const fieldTechnicianRequesting = useMassivaOpenDraftStore((s) => s.fieldTechnicianRequesting)
+  const eventIdentifiedBy = useMassivaOpenDraftStore((s) => s.eventIdentifiedBy)
   const affectedUsersQuantityAutoIspOverride = useMassivaOpenDraftStore(
     (s) => s.affectedUsersQuantityAutoIspOverride,
   )
@@ -113,7 +113,7 @@ export function useMassivaOpenReadiness(
     const next = buildMassivaOpeningTechnicalDescription({
       requesterDisplayName: requester,
       initialReport,
-      fieldTechnicianRequesting,
+      eventIdentifiedBy,
       basis,
       affectedClientsCount,
       eventStartDate,
@@ -133,7 +133,7 @@ export function useMassivaOpenReadiness(
     user?.name,
     user?.email,
     initialReport,
-    fieldTechnicianRequesting,
+    eventIdentifiedBy,
     eventStartDate,
     eventStartTime,
     eventIdentifiedDate,
@@ -235,6 +235,7 @@ export function useMassivaOpenReadiness(
     const context = buildMassivaOpenFinalContext({
       personId,
       operatorEmail: email,
+      operatorName: user?.name?.trim() ?? '',
       basis,
       plan,
       assignmentDescription,
