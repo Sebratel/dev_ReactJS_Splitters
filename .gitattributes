@@ -1,0 +1,16 @@
+# O índice já está todo em LF; isto fixa-o para não depender da configuração de cada máquina
+# (o git andava a avisar "LF will be replaced by CRLF" a cada commit no Windows). Ficheiros
+# que correm dentro de containers Linux ou no runner do CI não podem levar CRLF.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary

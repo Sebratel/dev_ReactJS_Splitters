@@ -10,7 +10,10 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: react-backend-portainer
+    mem_limit: 1.5g
+    memswap_limit: 1.5g
     environment:
+      NODE_OPTIONS: "--max-old-space-size=1200"
       TZ: America/Sao_Paulo
       NODE_ENV: production
       LOG_LEVEL: debug
@@ -81,6 +84,17 @@ services:
       REVERSE_GEOCODE_TIMEOUT_MS: ${REVERSE_GEOCODE_TIMEOUT_MS:-}
       REVERSE_GEOCODE_NEIGHBORS_MAX: ${REVERSE_GEOCODE_NEIGHBORS_MAX:-}
       REVERSE_GEOCODE_NEIGHBORS_DELAY_MS: ${REVERSE_GEOCODE_NEIGHBORS_DELAY_MS:-}
+      # Elastic APM. Endereço público de propósito: este compose corre em hosts diferentes
+      # (produção e testes) e o nome interno `apm-server` só resolveria no host do stack `elk`.
+      # Nesse host pode sobrepor com ELASTIC_APM_SERVER_URL=http://apm-server:8200 (exige juntar
+      # a stack à rede do elk). Vazio = agente desligado.
+      # `-` e não `:-` de propósito: com `:-` o Compose trata um valor VAZIO como não definido
+      # e cai no default, o que tornava impossível desligar o agente pelo painel da stack.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
+      # Separa os ambientes no Kibana mantendo o MESMO serviço (não mude o SERVICE_NAME por
+      # ambiente, senão perde a comparação entre eles). Em testes: ELASTIC_APM_ENVIRONMENT=staging.
+      ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     ports:
       - "${BACKEND_PORT:-3004}:3001"
     expose:
@@ -132,7 +146,17 @@ services:
         - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
         - VITE_ACCESS_ALLOWED_EMAILS=${VITE_ACCESS_ALLOWED_EMAILS}
         - VITE_ACCESS_ALLOWED_EMAIL_DOMAIN=${VITE_ACCESS_ALLOWED_EMAIL_DOMAIN}
+        # Elastic APM RUM (browser). Tem de ser o endereço PÚBLICO (é o navegador do
+        # utilizador que envia os dados; `apm-server:8200` só existe dentro do Docker).
+        # Vazio = agente nem chega a ser descarregado pelo browser (`-` e não `:-`, senão o
+        # vazio caía no default e o RUM não se conseguia desligar pelo painel da stack).
+        - VITE_APM_SERVER_URL=${VITE_APM_SERVER_URL-https://apm.sebratel.net.br}
+        - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
+        - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
+        - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
     container_name: react-frontend-portainer
+    mem_limit: 512m
+    memswap_limit: 512m
     environment:
       # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
@@ -149,6 +173,11 @@ services:
       LOCAL_USER_EMAIL: dev@local
       LOCAL_USER_PERSON_ID: 629
       LOCAL_MASSIVA_ENABLED: "true"
+      # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
+      # `-` e não `:-`: ver a nota no serviço backend — vazio tem de significar desligado.
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
+      ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
       - "3177"
     ports:
@@ -160,6 +189,10 @@ services:
       - nexaview-network
     restart: unless-stopped
 
+# Sem rede externa de propósito: este compose corre em hosts diferentes (produção e testes) e
+# uma rede `external: true` que não exista no host faz o deploy FALHAR. O APM é alcançado pelo
+# endereço público. Para usar a rede interna do `elk` num host onde ela exista, junte-a aqui e
+# defina ELASTIC_APM_SERVER_URL=http://apm-server:8200 no painel Environment dessa stack.
 networks:
   nexaview-network:
     driver: bridge

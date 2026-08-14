@@ -1,0 +1,14 @@
+# O .dockerignore da raiz NÃO se aplica aqui: o Docker procura-o dentro do contexto, e o
+# contexto do backend é ./server. Sem este ficheiro, o `COPY . .` do Dockerfile copiava o
+# node_modules da máquina por cima do que o `npm ci` acabou de instalar — incluindo binários
+# compilados para outro sistema operativo.
+node_modules
+npm-debug.log*
+
+.env
+.env.*
+
+# Não vão para a imagem de produção.
+*.test.js
+lib/*.test.js
+scripts

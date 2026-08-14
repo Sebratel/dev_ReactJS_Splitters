@@ -12,4 +12,6 @@ COPY . .
 
 EXPOSE 3001
 
-CMD ["node", "index.js"]
+# `-r ./apm.cjs` inicia o agente Elastic APM antes dos imports do `index.js`.
+# Sem ELASTIC_APM_SERVER_URL no ambiente, o preload não ativa nada (ver server/apm.cjs).
+CMD ["node", "-r", "./apm.cjs", "index.js"]

@@ -1,0 +1,170 @@
+name: CI
+
+# Portão de validação — não faz deploy. O deploy continua a ser o Portainer a construir as
+# imagens no host a partir do Git. É precisamente por isso que esta esteira constrói as duas
+# imagens e sobe a stack: um Dockerfile partido só se descobriria em produção.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+# Menor privilégio: nada aqui escreve no repositório.
+permissions:
+  contents: read
+
+# Um push novo cancela o run anterior da mesma branch/PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Frontend — lint, tipos, testes, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22' # o mesmo das imagens de deploy (node:22)
+          cache: npm
+          # Só o lockfile que este job instala: se os dois jobs usarem a mesma lista,
+          # geram a mesma chave de cache e colidem a escrever.
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      # Sem --max-warnings: há 27 avisos preexistentes (react-hooks/exhaustive-deps e
+      # react-refresh/only-export-components). São dívida a rever à mão, não regressões.
+      - name: ESLint
+        run: npx eslint .
+
+      # Separado do build para a falha dizer logo se foi tipo ou bundle.
+      - name: Tipos (tsc -b)
+        run: npx tsc -b
+
+      - name: Testes
+        run: npx vitest run
+
+      # Trava a cobertura de src/shared e src/app/auth nos 100% em linhas. É o passo mais
+      # exigente da esteira; se der falso vermelho no primeiro run, é o primeiro a rever.
+      - name: Cobertura mínima do núcleo
+        run: npm run test:coverage:core
+
+      - name: Bundle de produção
+        run: npx vite build
+
+  bff:
+    name: Backend — testes do BFF
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+        working-directory: server
+
+      # node --test com globs explícitos: a forma por diretório (`node --test server/`) pendura-se.
+      - name: Testes
+        run: npm test
+        working-directory: server
+
+  imagem:
+    name: Imagens Docker + smoke da stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: nexaview-ci
+      # O compose faz default do APM para produção. Vazio = agente desligado — sem isto,
+      # cada corrida da esteira injetava telemetria de CI no APM real. (Só funciona porque o
+      # compose usa `${VAR-default}` e não `${VAR:-default}`; com `:-` o vazio caía no default.)
+      ELASTIC_APM_SERVER_URL: ''
+      VITE_APM_SERVER_URL: ''
+      VITE_APM_ENVIRONMENT: ci
+      BACKEND_PORT: '3004'
+      FRONTEND_PORT: '3177'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Construir as imagens
+        run: docker compose -f docker-compose.portainer.yml build
+
+      # --wait espera pelo healthcheck do backend, que é o que o Portainer também espera.
+      - name: Subir a stack
+        run: docker compose -f docker-compose.portainer.yml up -d --wait
+
+      # As asserções abaixo comparam mesmo. Um `curl -w '%{http_code}'` que só imprime o
+      # código passa sempre, e um passo que passa sempre é pior do que não existir.
+      - name: BFF responde /api/health
+        run: |
+          curl -fsS --retry 15 --retry-delay 3 --retry-connrefused \
+            http://localhost:3004/api/health -o health.json
+          grep -q '"status":"ok"' health.json || {
+            echo "::error::/api/health devolveu resposta inesperada:"; cat health.json; exit 1; }
+
+      - name: SPA serve o HTML da aplicação
+        run: |
+          curl -fsS http://localhost:3177/ -o index.html
+          grep -q 'id="root"' index.html || {
+            echo "::error::index.html servido sem <div id=\"root\">:"; head -40 index.html; exit 1; }
+
+      - name: Fallback do SPA numa rota do router
+        run: |
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3177/splitters)
+          [ "$codigo" = "200" ] || { echo "::error::/splitters devolveu $codigo, esperava 200"; exit 1; }
+
+      # Aviso e não falha: o agente é opcional por desenho (o servidor arranca sem ele) e
+      # bloquear um merge por uma falha do registry npm seria pior do que o problema.
+      - name: Agente APM presente na imagem do frontend
+        run: |
+          if docker compose -f docker-compose.portainer.yml exec -T frontend \
+               node -e "require.resolve('elastic-apm-node')" 2>/dev/null; then
+            echo "elastic-apm-node presente na imagem."
+          else
+            echo "::warning::elastic-apm-node ausente — o servidor do SPA vai correr sem APM."
+          fi
+
+      - name: Logs da stack
+        if: failure()
+        run: |
+          docker compose -f docker-compose.portainer.yml logs --no-color --timestamps \
+            > compose-logs.txt
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: compose-logs
+          path: compose-logs.txt
+
+      - name: Derrubar a stack
+        if: always()
+        run: docker compose -f docker-compose.portainer.yml down -v
+
+  # Check único para a proteção de branch apontar. `if: always()` ao nível do job, senão
+  # é saltado quando um `needs` falha e o check nunca chega a reportar nada.
+  ci-ok:
+    # É ESTE o nome a marcar como required status check na ruleset da branch. Não lhe chame
+    # "CI" para não colidir com o nome do workflow — no ecrã do GitHub ficavam dois "CI".
+    name: ci-ok
+    runs-on: ubuntu-latest
+    needs: [web, bff, imagem]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Resultado agregado
+        run: |
+          echo "web=${{ needs.web.result }} bff=${{ needs.bff.result }} imagem=${{ needs.imagem.result }}"
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::Pelo menos um job não passou."
+            exit 1
+          fi
+          echo "Tudo verde."

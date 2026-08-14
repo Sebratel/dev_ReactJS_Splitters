@@ -1,5 +1,5 @@
-# NexaView Web (Splitters)
-
+# NexaView Web (Splitters).
+Teeeeeeste
 ## Desenvolvimento
 
 ```bash
@@ -7,6 +7,10 @@ npm run dev
 ```
 
 Variáveis: um único [`.env.example`](.env.example) documenta tudo; em dev use `.env.local` (gitignored) para sobrepor.
+
+## Observabilidade (Elastic APM)
+
+O BFF, o servidor do SPA e o browser estão instrumentados para o Elastic APM, **desligados por omissão** — cada agente só arranca com a respetiva variável de ambiente. Ver [`docs/observabilidade-apm.md`](docs/observabilidade-apm.md).
 
 ## Docker / Portainer
 

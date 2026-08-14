@@ -5,12 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node -r ./apm.cjs index.js",
+    "dev": "node --watch -r ./apm.cjs index.js",
+    "test": "node --test \"*.test.js\" \"lib/*.test.js\""
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "elastic-apm-node": "^4.18.0",
     "express": "^4.21.0",
     "firebase-admin": "^13.9.0",
     "google-auth-library": "^10.6.2",

@@ -16,12 +16,16 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
+    "test:run": "vitest run",
+    "test:server": "npm --prefix server test",
+    "test:all": "npm run test:run && npm run test:server",
     "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:coverage:core": "vitest run --coverage --config vitest.core-coverage.config.ts"
   },
   "dependencies": {
+    "@elastic/apm-rum": "^5.17.5",
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-query": "^5.97.0",
     "clsx": "^2.1.1",
