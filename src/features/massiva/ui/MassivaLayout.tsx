@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, MonitorPlay } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
 
@@ -24,7 +24,7 @@ export function MassivaLayout() {
       />
 
       {/* Navegação por abas */}
-      <div className="mt-5 flex border-b border-neutral-200/80">
+      <div className="mt-5 flex items-center border-b border-neutral-200/80">
         {TAB_ITEMS.map((tab) => (
           <NavLink
             key={tab.to}
@@ -42,6 +42,22 @@ export function MassivaLayout() {
             {tab.label}
           </NavLink>
         ))}
+
+        {/* Botão Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR) */}
+        <a
+          href="/massiva/monitor"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Abrir monitor de parede (CGR/COR)"
+          className={cn(
+            'ml-auto mb-1 flex items-center gap-1.5 rounded-md px-3 py-1.5',
+            'text-xs font-medium text-neutral-500 transition-colors duration-200',
+            'hover:bg-neutral-100 hover:text-neutral-800',
+          )}
+        >
+          <MonitorPlay size={15} />
+          Monitor
+        </a>
       </div>
 
       {/* Conteúdo da rota ativa */}
