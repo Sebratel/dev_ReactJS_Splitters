@@ -4,6 +4,7 @@ import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { fetchMassivaHistoryMttdMttrKpis } from '@/features/massiva/api/fetchMassivaHistoryMttdMttrKpis'
 import { fetchOnuNetworkSummary } from '@/features/onu/api/fetchOnuNetworkSummary'
+import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import { isMassivaOpenForGlobalDashboard } from '@/features/massiva/lib/massivaDashboardEligibility'
 import type { OnuOltBreakdown } from '@/features/onu/model/onuNetworkSummary'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
@@ -154,11 +155,45 @@ export function MassivaMonitorScreen() {
   const sessionToken = useSessionStore((s) => s.sessionToken)
 
   const { view } = useMassivaTickets({ refetchIntervalMs: TICKETS_REFETCH_MS })
-  const tickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
-  const openTickets = useMemo(
-    () => tickets.filter((t) => isMassivaOpenForGlobalDashboard(t)),
-    [tickets],
-  )
+  const bffTickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
+
+  // Janela de 7 dias para buscar aberturas locais (DB MySQL/BFF).
+  // O sessionStorage (recentOpenTickets) NAO e compartilhado entre abas, entao o
+  // monitor nao tem acesso aos "opens" da aba principal. A solucao e buscar o
+  // historico local diretamente e usa-lo como fonte de verdade para o merge com o
+  // BFF — buildDashboardMassivaTickets consegue sobrepor o status Elleven ambiguo
+  // com o status local quando isRecentLocalOpen retorna true.
+  const openPeriodStart = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [])
+
+  const openLocalQuery = useQuery({
+    queryKey: massivaKeys.historyList('aberta', openPeriodStart.toISOString(), 'monitor-open', 500),
+    queryFn: () =>
+      fetchMassivaHistoryListFromLocalDb({ status: 'aberta', startDate: openPeriodStart, limit: 500 }),
+    staleTime: TICKETS_REFETCH_MS / 2,
+    refetchInterval: TICKETS_REFETCH_MS,
+  })
+
+  const openTickets = useMemo(() => {
+    const localRows = openLocalQuery.data ?? []
+    const merged = buildDashboardMassivaTickets({
+      bffTickets,
+      localRows,
+      recentOpenTickets: [],  // sessionStorage nao compartilhado entre abas — localRows compensam
+      periodStart: openPeriodStart,
+    })
+    return merged
+      .filter((t) => isMassivaOpenForGlobalDashboard(t))
+      .sort((a, b) => {
+        const aTime = a.expectedCloseAt?.getTime() ?? Number.POSITIVE_INFINITY
+        const bTime = b.expectedCloseAt?.getTime() ?? Number.POSITIVE_INFINITY
+        return aTime - bTime
+      })
+  }, [bffTickets, openLocalQuery.data, openPeriodStart])
 
   const todayStart = useMemo(() => startOfTodayLocal(), [])
   const historyQuery = useQuery({
@@ -255,15 +290,9 @@ export function MassivaMonitorScreen() {
 
   const quedaSemMassivaCount = sinalRows.filter((r) => !r.hasOpenMassiva).length
 
+  // openTickets ja vem ordenado por SLA (expectedCloseAt asc) do useMemo acima
   const incidentRows = useMemo(
-    () =>
-      [...openTickets]
-        .sort((a, b) => {
-          const aTime = a.expectedCloseAt?.getTime() ?? Number.POSITIVE_INFINITY
-          const bTime = b.expectedCloseAt?.getTime() ?? Number.POSITIVE_INFINITY
-          return aTime - bTime
-        })
-        .slice(0, INCIDENT_ROWS_LIMIT),
+    () => openTickets.slice(0, INCIDENT_ROWS_LIMIT),
     [openTickets],
   )
 
@@ -294,7 +323,8 @@ export function MassivaMonitorScreen() {
           {view.status === 'error' && (
             <span> · erro: <span className="text-rose-300">{String((view as {error: unknown}).error)}</span></span>
           )}
-          {' · '}tickets: <span className="text-white">{tickets.length}</span>
+          {' · '}bff: <span className="text-white">{bffTickets.length}</span>
+          {' · '}localOpen: <span className="text-white">{openLocalQuery.data?.length ?? '...'}</span>
           {' · '}abertas: <span className="text-white">{openTickets.length}</span>
         </div>
       )}
