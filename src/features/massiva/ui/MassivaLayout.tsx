@@ -2,6 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Sparkles, MonitorPlay } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
+import { useSessionStore } from '@/features/session/store/sessionStore'
+import { persistSessionToken } from '@/shared/lib/storage'
 
 const TAB_ITEMS = [
   { to: '/massiva', label: 'Operacional', end: true },
@@ -43,12 +45,18 @@ export function MassivaLayout() {
           </NavLink>
         ))}
 
-        {/* Botão Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR) */}
-        <a
-          href="/massiva/monitor"
-          target="_blank"
-          rel="noopener noreferrer"
+        {/* Botão Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR).
+            Persiste o session token no localStorage imediatamente antes de abrir a nova
+            aba para que bootstrapSession() na nova aba encontre o token via
+            loadPersistedSession() — o store Zustand é in-memory e não é compartilhado. */}
+        <button
+          type="button"
           title="Abrir monitor de parede (CGR/COR)"
+          onClick={() => {
+            const { sessionToken, tokenExpiresAtMs } = useSessionStore.getState()
+            if (sessionToken) persistSessionToken(sessionToken, tokenExpiresAtMs)
+            window.open('/massiva/monitor', '_blank', 'noopener,noreferrer')
+          }}
           className={cn(
             'ml-auto mb-1 flex items-center gap-1.5 rounded-md px-3 py-1.5',
             'text-xs font-medium text-neutral-500 transition-colors duration-200',
@@ -57,7 +65,7 @@ export function MassivaLayout() {
         >
           <MonitorPlay size={15} />
           Monitor
-        </a>
+        </button>
       </div>
 
       {/* Conteúdo da rota ativa */}
