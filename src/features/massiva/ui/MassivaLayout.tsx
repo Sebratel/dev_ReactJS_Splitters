@@ -11,21 +11,21 @@ const TAB_ITEMS = [
 ] as const
 
 /**
- * Layout raiz do módulo de massivas.
- * Cabeçalho, navegação por abas e `<Outlet />` para a rota ativa.
+ * Layout raiz do modulo de massivas.
+ * Cabecalho, navegacao por abas e `<Outlet />` para a rota ativa.
  */
 export function MassivaLayout() {
   return (
     <div className="mx-auto max-w-[1720px] animate-in fade-in pt-0 duration-500">
       <AppPageHeader
         icon={Sparkles}
-        badge="Centro de operação"
-        title="Operação de Massivas"
-        description="Fluxo guiado de abertura com preview de rota, formulário e apoio do AutoISP — tudo organizado em painéis claros."
+        badge="Centro de operacao"
+        title="Operacao de Massivas"
+        description="Fluxo guiado de abertura com preview de rota, formulario e apoio do AutoISP — tudo organizado em paineis claros."
         primaryAction={{ to: '/splitters', label: 'Voltar aos Splitters' }}
       />
 
-      {/* Navegação por abas */}
+      {/* Navegacao por abas */}
       <div className="mt-5 flex items-center border-b border-neutral-200/80">
         {TAB_ITEMS.map((tab) => (
           <NavLink
@@ -45,17 +45,28 @@ export function MassivaLayout() {
           </NavLink>
         ))}
 
-        {/* Botão Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR).
-            Persiste o session token no localStorage imediatamente antes de abrir a nova
-            aba para que bootstrapSession() na nova aba encontre o token via
-            loadPersistedSession() — o store Zustand é in-memory e não é compartilhado. */}
+        {/* Botao Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR).
+            Estrategia dupla para garantir o token na nova aba:
+            1) Passa o token no hash #id_token=<token> — bootstrapSession() ja le este
+               parametro (mesmo mecanismo do callback OAuth) e o remove da URL logo apos.
+               Garante o token mesmo que localStorage esteja vazio.
+            2) Persiste no localStorage como fallback para F5 na aba do monitor.
+            O store Zustand e in-memory e nao e compartilhado entre abas. */}
         <button
           type="button"
           title="Abrir monitor de parede (CGR/COR)"
           onClick={() => {
             const { sessionToken, tokenExpiresAtMs } = useSessionStore.getState()
-            if (sessionToken) persistSessionToken(sessionToken, tokenExpiresAtMs)
-            window.open('/massiva/monitor', '_blank', 'noopener,noreferrer')
+            if (sessionToken) {
+              persistSessionToken(sessionToken, tokenExpiresAtMs)
+              window.open(
+                `/massiva/monitor#id_token=${encodeURIComponent(sessionToken)}`,
+                '_blank',
+                'noopener,noreferrer',
+              )
+            } else {
+              window.open('/massiva/monitor', '_blank', 'noopener,noreferrer')
+            }
           }}
           className={cn(
             'ml-auto mb-1 flex items-center gap-1.5 rounded-md px-3 py-1.5',
@@ -68,7 +79,7 @@ export function MassivaLayout() {
         </button>
       </div>
 
-      {/* Conteúdo da rota ativa */}
+      {/* Conteudo da rota ativa */}
       <div className="mt-6">
         <Outlet />
       </div>
