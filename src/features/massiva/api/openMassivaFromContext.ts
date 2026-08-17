@@ -9,6 +9,7 @@ import { buildMassivaOpenRequestBody } from '@/features/massiva/lib/buildMassiva
 import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { registerOpenedMassivaHistoryInLocalDb } from '@/features/massiva/api/registerOpenedMassivaHistoryInLocalDb'
+import { registerMassivaAffectedClientsInLocalDb } from '@/features/massiva/api/registerMassivaAffectedClientsInLocalDb'
 import { openInfraSolicitation } from '@/features/massiva/api/openInfraSolicitation'
 import {
   buildInfraSolicitationDescription,
@@ -363,6 +364,22 @@ export async function openMassivaFromContext(
       const msg = afetadosError instanceof Error ? afetadosError.message : String(afetadosError)
       console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
       afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
+    }
+
+    // Cópia local (nosso MySQL) da mesma lista de afetados, independente do gateway —
+    // viabiliza a verificação "ainda sem sinal?" pós-encerramento sem depender do DELETE
+    // de limpeza do gateway. Best-effort: nunca bloqueia a abertura.
+    try {
+      await registerMassivaAffectedClientsInLocalDb({
+        protocol: ids.protocol,
+        assignmentId: ids.assignmentId,
+        entities: afetadosBody.usuarioAfetadoEntities,
+      })
+    } catch (localAffectedError) {
+      console.warn(
+        `[Massiva] Falha ao gravar cópia local dos afetados para AP ${opened.accessPointCode}.`,
+        localAffectedError,
+      )
     }
   }
 
