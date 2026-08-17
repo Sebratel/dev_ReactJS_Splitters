@@ -1826,6 +1826,179 @@ app.post('/api/massiva/history/cancel', async (req, res) => {
   }
 });
 
+// Manutenção pós-encerramento: reclassifica um protocolo JÁ ENCERRADO (sem tocar na
+// Voalle e sem alterar closed_at/close_description/closed_by). Qualquer atendente pode usar;
+// só guarda o último editor (classification_updated_by/at) — sem histórico completo.
+app.post('/api/massiva/history/update-classification', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.updateClassification({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      updatedBy: String(req.body?.updatedBy ?? '').trim(),
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
+    });
+
+    if (result.reason === 'not-closed') {
+      return res.status(409).json({
+        success: false,
+        message: 'Só é possível editar a classificação de uma massiva já encerrada.',
+      });
+    }
+    if (result.reason === 'not-found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Massiva não encontrada no histórico local.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar classificação (manutenção) de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao atualizar classificação de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+// Grava (na abertura) a lista de clientes afetados — cópia nossa da mesma lista enviada
+// ao gateway, para viabilizar a verificação de sinal mesmo depois que o gateway apagar a dele.
+app.post('/api/massiva/history/affected-clients', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.registerAffectedClients({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      clients: Array.isArray(req.body?.clients) ? req.body.clients : [],
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao registrar clientes afetados (local) de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
+// Verificação sob demanda: "os clientes desta massiva encerrada continuam sem sinal?"
+// Só roda quando o atendente clica — nada dispara isso sozinho. Cruza a lista de
+// clientes afetados (gravada na abertura) com o monitoramento de ONU (onuPool),
+// e persiste o resultado (única fonte do painel de parede — ver getRecentAffectedVerificationsWithProblems).
+app.post('/api/massiva/history/verify-affected-clients', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const protocol = req.body?.protocol ?? null;
+    const assignmentId = req.body?.assignmentId ?? null;
+    const verifiedBy = String(req.body?.verifiedBy ?? '').trim();
+
+    const { pppoeList } = await massivaHistoryStore.getAffectedClientsPppoeList({ protocol, assignmentId });
+
+    if (pppoeList.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum cliente afetado registrado localmente para esta massiva. Só funciona para massivas abertas depois desta funcionalidade entrar no ar.',
+      });
+    }
+
+    let stillOffline = 0;
+    let stillDegraded = 0;
+
+    if (onuPool) {
+      const sql = `
+        SELECT bucket, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT ON (gc.pppoe_username)
+            ${ONU_BUCKET_CASE} AS bucket
+          FROM gpon_clients gc
+          LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+          WHERE gc.pppoe_username = ANY($1::text[])
+          ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+        ) sub
+        GROUP BY bucket
+      `;
+      const onuResult = await onuPool.query(sql, [pppoeList]);
+      for (const row of onuResult.rows) {
+        if (row.bucket === 'offline') stillOffline = Number(row.count) || 0;
+        if (row.bucket === 'degraded') stillDegraded = Number(row.count) || 0;
+      }
+    }
+
+    const total = pppoeList.length;
+    await massivaHistoryStore.saveAffectedVerificationResult({
+      protocol,
+      assignmentId,
+      total,
+      stillOffline,
+      stillDegraded,
+      verifiedBy,
+    });
+
+    res.json({
+      success: true,
+      data: { total, stillOffline, stillDegraded, checkedAt: new Date().toISOString() },
+    });
+  } catch (error) {
+    console.error('Erro ao verificar sinal dos clientes afetados de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao verificar sinal dos clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
+// Painel de parede: massivas encerradas já verificadas (sob demanda) e que ainda têm
+// clientes sem sinal. Só lê resultado já persistido — não dispara verificação nova.
+app.get('/api/massiva/history/affected-verifications', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+    const limitRaw = Number.parseInt(String(req.query.limit ?? '20'), 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+    const data = await massivaHistoryStore.getRecentAffectedVerificationsWithProblems({ limit });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Erro ao consultar verificações de clientes afetados:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar verificações de clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
 // Auth AutoISP no backend — credenciais ficam no servidor; o front pede só o token.
 app.get('/api/autoisp/config', (req, res) => {
   res.json({ success: true, data: { enabled: isAutoIspAuthConfigured() } });

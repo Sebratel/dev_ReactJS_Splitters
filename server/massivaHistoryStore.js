@@ -93,6 +93,21 @@ export function createMassivaHistoryStore(config) {
       async registerCancel() {
         return { configured: false, updated: 0 };
       },
+      async updateClassification() {
+        return { configured: false, updated: 0 };
+      },
+      async registerAffectedClients() {
+        return { configured: false, inserted: 0 };
+      },
+      async getAffectedClientsPppoeList() {
+        return { configured: false, massivaHistoryId: null, pppoeList: [] };
+      },
+      async saveAffectedVerificationResult() {
+        return { configured: false, updated: 0 };
+      },
+      async getRecentAffectedVerificationsWithProblems() {
+        return [];
+      },
       async updateExpectedClose() {
         return { configured: false, updated: 0 };
       },
@@ -179,6 +194,9 @@ export function createMassivaHistoryStore(config) {
   let hasClassificationColumns = false;
   let hasEventStartColumn = false;
   let hasInfraProtocolColumns = false;
+  let hasClassificationAuditColumns = false;
+  let hasAffectedVerificationColumns = false;
+  let hasAffectedClientsTable = false;
 
   /**
    * Adiciona uma coluna idempotentemente via ALTER TABLE.
@@ -240,6 +258,52 @@ export function createMassivaHistoryStore(config) {
         hasInfraProtocolColumns = Array.isArray(cols) && cols.length > 0;
       } catch {
         hasInfraProtocolColumns = false;
+      }
+
+      // Migração idempotente: autor da última manutenção pós-encerramento na classificação
+      // (edição feita DEPOIS do encerramento — nunca sobrescreve closed_by/closed_at/close_description).
+      await addColumnIfMissing('classification_updated_by VARCHAR(255) NULL');
+      await addColumnIfMissing('classification_updated_at DATETIME NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'classification_updated_by'");
+        hasClassificationAuditColumns = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasClassificationAuditColumns = false;
+      }
+
+      // Migração idempotente: cache da última verificação "clientes ainda sem sinal"
+      // (sob demanda — o botão "Verificar clientes" grava aqui; nada roda sozinho).
+      await addColumnIfMissing('affected_verification_checked_at DATETIME NULL');
+      await addColumnIfMissing('affected_verification_total INT NULL');
+      await addColumnIfMissing('affected_verification_still_offline INT NULL');
+      await addColumnIfMissing('affected_verification_still_degraded INT NULL');
+      await addColumnIfMissing('affected_verification_by VARCHAR(255) NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'affected_verification_checked_at'");
+        hasAffectedVerificationColumns = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasAffectedVerificationColumns = false;
+      }
+
+      // Migração idempotente: tabela de clientes afetados por massiva (log — 1 linha
+      // por cliente por evento, gravada na abertura). Cópia nossa da mesma lista que
+      // já mandamos ao gateway, para não depender do DELETE de limpeza dele.
+      try {
+        await dataPool.query(`
+          CREATE TABLE IF NOT EXISTS massiva_affected_clients (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            massiva_history_id BIGINT NOT NULL,
+            pppoe VARCHAR(255) NOT NULL,
+            contract_id BIGINT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_massiva_affected_pppoe (pppoe),
+            INDEX idx_massiva_affected_history (massiva_history_id)
+          )
+        `);
+        hasAffectedClientsTable = true;
+      } catch (createErr) {
+        console.warn('[massiva-history] tabela massiva_affected_clients não pôde ser criada:', createErr?.message ?? createErr);
+        hasAffectedClientsTable = false;
       }
     })().catch((error) => {
       readyPromise = null;
@@ -549,6 +613,243 @@ export function createMassivaHistoryStore(config) {
    */
   async function registerCancel(input) {
     return registerClose({ ...input, targetStatus: 'cancelada' });
+  }
+
+  /**
+   * Manutenção pós-encerramento: permite reclassificar (tipo/impacto/área/tecnologia/
+   * classificação/CNL) uma massiva JÁ ENCERRADA, sem qualquer relação com a Voalle.
+   *
+   * Diferente de `registerClose`:
+   *   - Só age sobre registros com `status = 'encerrada'` (rejeita abertos/cancelados —
+   *     validação no servidor, não confia só na UI).
+   *   - NUNCA toca em `closed_at`, `close_description` ou `closed_by` — o encerramento
+   *     original permanece intacto.
+   *   - Sobrescreve os campos de classificação (não usa COALESCE): o formulário de
+   *     manutenção sempre reenvia os 6 valores atuais/editados, então limpar um campo
+   *     para vazio deve realmente gravar `NULL`.
+   *   - Guarda só o ÚLTIMO editor (`classification_updated_by`/`classification_updated_at`),
+   *     sem histórico completo — decisão do time.
+   */
+  async function updateClassification(input) {
+    await ensureReady();
+
+    const protocol = normalizePositiveInt(input?.protocol);
+    const assignmentId = normalizePositiveInt(input?.assignmentId);
+    const updatedBy = normalizeNullableText(input?.updatedBy);
+    const tipoIncidente = normalizeNullableText(input?.tipoIncidente);
+    const impacto = normalizeNullableText(input?.impacto);
+    const area = normalizeNullableText(input?.area);
+    const tecnologia = normalizeNullableText(input?.tecnologia);
+    const classificacao = normalizeNullableText(input?.classificacao);
+    const cnl = normalizeNullableText(input?.cnl);
+
+    const existingId = await findExistingHistoryId(protocol, assignmentId);
+    if (existingId === null) {
+      return { configured: true, updated: 0, reason: 'not-found' };
+    }
+
+    const [rows] = await dataPool.query(
+      'SELECT status FROM massiva_history WHERE id = ? LIMIT 1',
+      [existingId],
+    );
+    const currentStatus = normalizeMassivaHistoryStatus(rows?.[0]?.status);
+    if (currentStatus !== 'encerrada') {
+      return { configured: true, updated: 0, reason: 'not-closed' };
+    }
+
+    if (!hasClassificationColumns) {
+      return { configured: true, updated: 0, reason: 'columns-missing' };
+    }
+
+    const auditClause = hasClassificationAuditColumns
+      ? ', classification_updated_by = ?, classification_updated_at = CURRENT_TIMESTAMP'
+      : '';
+    const auditParams = hasClassificationAuditColumns ? [updatedBy] : [];
+
+    const [result] = await dataPool.query(
+      `
+        UPDATE massiva_history
+        SET
+          tipo_incidente = ?,
+          impacto = ?,
+          area = ?,
+          tecnologia = ?,
+          classificacao = ?,
+          cnl = ?${auditClause},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'encerrada'
+      `,
+      [tipoIncidente, impacto, area, tecnologia, classificacao, cnl, ...auditParams, existingId],
+    );
+
+    return {
+      configured: true,
+      updated: Number(result?.affectedRows ?? 0),
+    };
+  }
+
+  /**
+   * Grava a lista de clientes afetados (pppoe + contractId) de uma massiva — cópia nossa,
+   * feita na abertura, da mesma lista que já mandamos ao gateway. Existe pra não depender
+   * do DELETE de limpeza do gateway (que apaga a lista dele assim que a massiva fecha).
+   * 1 linha por cliente por massiva — não é um contador; a recorrência/soma é sempre
+   * uma consulta (COUNT/GROUP BY) sobre este log, nunca um valor mantido à mão.
+   */
+  async function registerAffectedClients(input) {
+    await ensureReady();
+    if (!hasAffectedClientsTable) {
+      return { configured: true, inserted: 0, reason: 'table-missing' };
+    }
+
+    const protocol = normalizePositiveInt(input?.protocol);
+    const assignmentId = normalizePositiveInt(input?.assignmentId);
+    const clients = Array.isArray(input?.clients) ? input.clients : [];
+
+    const existingId = await findExistingHistoryId(protocol, assignmentId);
+    if (existingId === null || clients.length === 0) {
+      return { configured: true, inserted: 0, reason: existingId === null ? 'not-found' : 'empty' };
+    }
+
+    const rows = clients
+      .map((c) => ({
+        pppoe: normalizeNullableText(c?.pppoe),
+        contractId: normalizePositiveInt(c?.contractId),
+      }))
+      .filter((c) => c.pppoe !== null);
+    if (rows.length === 0) {
+      return { configured: true, inserted: 0, reason: 'empty' };
+    }
+
+    const placeholders = rows.map(() => '(?, ?, ?)').join(', ');
+    const params = rows.flatMap((r) => [existingId, r.pppoe, r.contractId]);
+    const [result] = await dataPool.query(
+      `INSERT INTO massiva_affected_clients (massiva_history_id, pppoe, contract_id) VALUES ${placeholders}`,
+      params,
+    );
+
+    return {
+      configured: true,
+      inserted: Number(result?.affectedRows ?? 0),
+    };
+  }
+
+  /**
+   * Lista de PPPoE únicos afetados por uma massiva (para a verificação de sinal).
+   * Só funciona para massivas cuja lista foi gravada na abertura (registerAffectedClients) —
+   * não há como recuperar retroativamente massivas anteriores a essa migração.
+   */
+  async function getAffectedClientsPppoeList(input) {
+    await ensureReady();
+    if (!hasAffectedClientsTable) {
+      return { configured: true, massivaHistoryId: null, pppoeList: [] };
+    }
+
+    const protocol = normalizePositiveInt(input?.protocol);
+    const assignmentId = normalizePositiveInt(input?.assignmentId);
+    const existingId = await findExistingHistoryId(protocol, assignmentId);
+    if (existingId === null) {
+      return { configured: true, massivaHistoryId: null, pppoeList: [] };
+    }
+
+    const [rows] = await dataPool.query(
+      'SELECT DISTINCT pppoe FROM massiva_affected_clients WHERE massiva_history_id = ?',
+      [existingId],
+    );
+    return {
+      configured: true,
+      massivaHistoryId: existingId,
+      pppoeList: (Array.isArray(rows) ? rows : []).map((r) => r.pppoe),
+    };
+  }
+
+  /**
+   * Grava o resultado da última verificação "clientes ainda sem sinal" — só a mais
+   * recente (sem histórico completo), assim como a manutenção de classificação.
+   * Chamado sob demanda, quando o atendente clica "Verificar clientes"; nada dispara isso
+   * sozinho.
+   */
+  async function saveAffectedVerificationResult(input) {
+    await ensureReady();
+    if (!hasAffectedVerificationColumns) {
+      return { configured: true, updated: 0, reason: 'columns-missing' };
+    }
+
+    const protocol = normalizePositiveInt(input?.protocol);
+    const assignmentId = normalizePositiveInt(input?.assignmentId);
+    const total = normalizeNonNegativeInt(input?.total, 0);
+    const stillOffline = normalizeNonNegativeInt(input?.stillOffline, 0);
+    const stillDegraded = normalizeNonNegativeInt(input?.stillDegraded, 0);
+    const verifiedBy = normalizeNullableText(input?.verifiedBy);
+
+    const existingId = await findExistingHistoryId(protocol, assignmentId);
+    if (existingId === null) {
+      return { configured: true, updated: 0, reason: 'not-found' };
+    }
+
+    const [result] = await dataPool.query(
+      `
+        UPDATE massiva_history
+        SET
+          affected_verification_checked_at = CURRENT_TIMESTAMP,
+          affected_verification_total = ?,
+          affected_verification_still_offline = ?,
+          affected_verification_still_degraded = ?,
+          affected_verification_by = ?
+        WHERE id = ?
+      `,
+      [total, stillOffline, stillDegraded, verifiedBy, existingId],
+    );
+
+    return {
+      configured: true,
+      updated: Number(result?.affectedRows ?? 0),
+    };
+  }
+
+  /**
+   * Massivas encerradas com verificação já feita (sob demanda) e AINDA com clientes sem
+   * sinal — fonte do painel de parede. Lê só resultados já persistidos; não roda
+   * verificação nova, então não aparece nada até alguém clicar "Verificar clientes" em algo.
+   */
+  async function getRecentAffectedVerificationsWithProblems(input = {}) {
+    await ensureReady();
+    if (!hasAffectedVerificationColumns) return [];
+
+    const limit = Math.min(100, Math.max(1, normalizePositiveInt(input?.limit) ?? 20));
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          protocol,
+          assignment_id AS assignmentId,
+          access_point_code AS accessPointCode,
+          title,
+          affected_verification_checked_at AS checkedAt,
+          affected_verification_total AS total,
+          affected_verification_still_offline AS stillOffline,
+          affected_verification_still_degraded AS stillDegraded,
+          affected_verification_by AS verifiedBy
+        FROM massiva_history
+        WHERE status = 'encerrada'
+          AND affected_verification_checked_at IS NOT NULL
+          AND (affected_verification_still_offline > 0 OR affected_verification_still_degraded > 0)
+        ORDER BY affected_verification_checked_at DESC
+        LIMIT ?
+      `,
+      [limit],
+    );
+
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      protocol: row.protocol == null ? null : Number(row.protocol),
+      assignmentId: row.assignmentId == null ? null : Number(row.assignmentId),
+      accessPointCode: normalizeText(row.accessPointCode),
+      title: normalizeText(row.title),
+      checkedAt: serializeHistoryDate(row.checkedAt),
+      total: Number(row.total ?? 0),
+      stillOffline: Number(row.stillOffline ?? 0),
+      stillDegraded: Number(row.stillDegraded ?? 0),
+      verifiedBy: normalizeNullableText(row.verifiedBy),
+    }));
   }
 
   /**
@@ -1770,6 +2071,12 @@ export function createMassivaHistoryStore(config) {
           h.cnl AS cnl,` : ''}
           ${hasEventStartColumn ? 'h.event_start_at AS eventStartAt,' : ''}
           ${hasInfraProtocolColumns ? 'h.infra_protocol AS infraProtocol, h.infra_assignment_id AS infraAssignmentId,' : ''}
+          ${hasClassificationAuditColumns ? 'h.classification_updated_by AS classificationUpdatedBy, h.classification_updated_at AS classificationUpdatedAt,' : ''}
+          ${hasAffectedVerificationColumns ? `h.affected_verification_checked_at AS affectedVerificationCheckedAt,
+          h.affected_verification_total AS affectedVerificationTotal,
+          h.affected_verification_still_offline AS affectedVerificationStillOffline,
+          h.affected_verification_still_degraded AS affectedVerificationStillDegraded,
+          h.affected_verification_by AS affectedVerificationBy,` : ''}
           CASE
             WHEN h.event_identified_at IS NOT NULL
               AND h.closed_at IS NOT NULL
@@ -1815,6 +2122,13 @@ export function createMassivaHistoryStore(config) {
       eventStartAt: serializeHistoryDate(row.eventStartAt),
       infraProtocol: row.infraProtocol == null ? null : Number(row.infraProtocol),
       infraAssignmentId: row.infraAssignmentId == null ? null : Number(row.infraAssignmentId),
+      classificationUpdatedBy: normalizeNullableText(row.classificationUpdatedBy),
+      classificationUpdatedAt: serializeHistoryDate(row.classificationUpdatedAt),
+      affectedVerificationCheckedAt: serializeHistoryDate(row.affectedVerificationCheckedAt),
+      affectedVerificationTotal: row.affectedVerificationTotal != null ? Number(row.affectedVerificationTotal) : null,
+      affectedVerificationStillOffline: row.affectedVerificationStillOffline != null ? Number(row.affectedVerificationStillOffline) : null,
+      affectedVerificationStillDegraded: row.affectedVerificationStillDegraded != null ? Number(row.affectedVerificationStillDegraded) : null,
+      affectedVerificationBy: normalizeNullableText(row.affectedVerificationBy),
       mttdMinutes: row.mttdMinutes != null ? Number(row.mttdMinutes) : null,
       mttrMinutes: row.mttrMinutes != null ? Number(row.mttrMinutes) : null,
       updatedAt: serializeHistoryDate(row.updatedAt),
@@ -1892,6 +2206,11 @@ export function createMassivaHistoryStore(config) {
     registerOpenBatch,
     registerClose,
     registerCancel,
+    updateClassification,
+    registerAffectedClients,
+    getAffectedClientsPppoeList,
+    saveAffectedVerificationResult,
+    getRecentAffectedVerificationsWithProblems,
     updateExpectedClose,
     markClosedByProtocols,
     getSplitterStats,

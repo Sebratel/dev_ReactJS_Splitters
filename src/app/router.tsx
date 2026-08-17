@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
+import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
 import { PermissionGuard } from '@/app/auth/PermissionGuard'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { HomePage } from '@/pages/HomePage'
@@ -24,6 +25,9 @@ const MassivaPage = lazy(() =>
 )
 const MassivaDashboardPage = lazy(() =>
   import('@/pages/MassivaDashboardPage').then((m) => ({ default: m.MassivaDashboardPage })),
+)
+const MassivaMonitorPage = lazy(() =>
+  import('@/pages/MassivaMonitorPage').then((m) => ({ default: m.MassivaMonitorPage })),
 )
 const NetworkIntelligencePage = lazy(() =>
   import('@/pages/NetworkIntelligencePage').then((m) => ({ default: m.NetworkIntelligencePage })),
@@ -50,6 +54,21 @@ export const router = createBrowserRouter([
   {
     path: '/callback',
     element: <OidcCallbackPage />,
+  },
+  {
+    // Painel de parede (CGR/COR) — rota isolada, fora do RootLayout/Sidebar de
+    // propósito: precisa ocupar a tela inteira num monitor físico, sem chrome do app.
+    path: '/massiva/monitor',
+    element: (
+      <ProtectedRoute>
+        <PermissionGuard
+          permission="canViewMassiva"
+          description="Seu perfil não possui acesso ao módulo de massivas."
+        >
+          <Page><MassivaMonitorPage /></Page>
+        </PermissionGuard>
+      </ProtectedRoute>
+    ),
   },
   {
     path: '/',

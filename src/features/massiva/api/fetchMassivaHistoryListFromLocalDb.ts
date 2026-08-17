@@ -33,13 +33,29 @@ export type MassivaHistoryListRow = {
   /** Protocolo de infraestrutura vinculado (1 por evento). Null quando não foi aberto. */
   infraProtocol: number | null
   infraAssignmentId: number | null
-  /** Campos de classificação operacional — preenchidos ao abrir a massiva (podem ser null). */
+  /** Campos de classificação operacional — preenchidos ao encerrar a massiva (podem ser null). */
   tipoIncidente: string | null
   impacto: string | null
   area: string | null
   tecnologia: string | null
   classificacao: string | null
   cnl: string | null
+  /**
+   * Manutenção pós-encerramento: quem editou a classificação por último (independente
+   * de quem encerrou) e quando. Null se a classificação nunca foi editada após o encerramento.
+   */
+  classificationUpdatedBy: string | null
+  classificationUpdatedAt: Date | null
+  /**
+   * Última verificação (sob demanda) "clientes ainda sem sinal?" — null se nunca foi
+   * verificado. Só existe pra massivas cuja lista de afetados foi gravada na abertura
+   * (depois desta funcionalidade entrar no ar).
+   */
+  affectedVerificationCheckedAt: Date | null
+  affectedVerificationTotal: number | null
+  affectedVerificationStillOffline: number | null
+  affectedVerificationStillDegraded: number | null
+  affectedVerificationBy: string | null
 }
 
 function toNullableDate(value: unknown): Date | null {
@@ -129,6 +145,17 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
       : null,
     cnl: row.cnl != null && String(row.cnl).trim() !== ''
       ? String(row.cnl).trim()
+      : null,
+    classificationUpdatedBy: row.classificationUpdatedBy != null && String(row.classificationUpdatedBy).trim() !== ''
+      ? String(row.classificationUpdatedBy).trim()
+      : null,
+    classificationUpdatedAt: toNullableDate(row.classificationUpdatedAt),
+    affectedVerificationCheckedAt: toNullableDate(row.affectedVerificationCheckedAt),
+    affectedVerificationTotal: row.affectedVerificationTotal == null ? null : toInt(row.affectedVerificationTotal),
+    affectedVerificationStillOffline: row.affectedVerificationStillOffline == null ? null : toInt(row.affectedVerificationStillOffline),
+    affectedVerificationStillDegraded: row.affectedVerificationStillDegraded == null ? null : toInt(row.affectedVerificationStillDegraded),
+    affectedVerificationBy: row.affectedVerificationBy != null && String(row.affectedVerificationBy).trim() !== ''
+      ? String(row.affectedVerificationBy).trim()
       : null,
   }))
 }
