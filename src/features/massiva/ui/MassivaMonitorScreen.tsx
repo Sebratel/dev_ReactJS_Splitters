@@ -371,12 +371,17 @@ export function MassivaMonitorScreen() {
                   <th className="pb-2">Ponto de acesso</th>
                   <th className="pb-2">Afetados</th>
                   <th className="pb-2">Aberta há</th>
+                  <th className="pb-2">Identificado por</th>
                   <th className="pb-2">SLA</th>
                 </tr>
               </thead>
               <tbody>
                 {incidentRows.map((t) => {
                   const sla = formatSla(t.expectedCloseAt, nowMs)
+                  const operator = (t.createdBy ?? '').trim()
+                  const operatorDisplay = operator.includes('@')
+                    ? operator.split('@')[0]
+                    : operator || '—'
                   return (
                     <tr key={`${t.protocol}-${t.assignmentId ?? 'x'}`} className="border-t border-[#253150]/50">
                       <td className="py-2.5 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
@@ -387,6 +392,7 @@ export function MassivaMonitorScreen() {
                       </td>
                       <td className="py-2.5">{t.affectedClients.toLocaleString('pt-BR')}</td>
                       <td className="py-2.5">{formatDurationSince(t.openedAt, nowMs)}</td>
+                      <td className="py-2.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
                       <td className="py-2.5">
                         <span className={cn('rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold', chipClass[sla.severity])}>
                           {sla.label}
