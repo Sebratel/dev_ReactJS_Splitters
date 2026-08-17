@@ -2,6 +2,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
 import { cancelMassivaTicket } from '@/features/massiva/api/cancelMassivaTicket'
+import { updateMassivaClassification } from '@/features/massiva/api/updateMassivaClassification'
+import { MassivaClassificationFields } from '@/features/massiva/ui/MassivaClassificationFields'
+import {
+  MASSIVA_CLASSIFICATION_RESET,
+  type MassivaClassificationDraft,
+} from '@/features/massiva/model/massivaClassificationOptions'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
@@ -137,6 +143,13 @@ type HistoryClassifEntry = {
   cnl: string | null
   mttdMinutes: number | null
   mttrMinutes: number | null
+  classificationUpdatedBy: string | null
+  classificationUpdatedAt: Date | null
+  affectedVerificationCheckedAt: Date | null
+  affectedVerificationTotal: number | null
+  affectedVerificationStillOffline: number | null
+  affectedVerificationStillDegraded: number | null
+  affectedVerificationBy: string | null
 }
 
 function buildMassivasCsv(
@@ -338,22 +351,14 @@ export function MassivaTicketsSection({
 
   const [closeLocalWarning, setCloseLocalWarning] = useState<string | null>(null)
 
-  const CLOSE_CLASSIF_RESET = {
-    tipoIncidente: '',
-    impacto: '',
-    area: '',
-    tecnologia: '',
-    classificacao: '',
-    cnl: '',
-  } as const
-  const [closeClassif, setCloseClassif] = useState({ ...CLOSE_CLASSIF_RESET })
+  const [closeClassif, setCloseClassif] = useState({ ...MASSIVA_CLASSIFICATION_RESET })
 
   const closeMutation = useMutation({
     mutationFn: closeMassivaTicket,
     onSuccess: async (result, variables) => {
       setClosingProtocol(null)
       setCloseDescription('')
-      setCloseClassif({ ...CLOSE_CLASSIF_RESET })
+      setCloseClassif({ ...MASSIVA_CLASSIFICATION_RESET })
       setCloseLocalWarning(result?.localHistoryWarning ?? null)
       if (variables.protocol > 0) {
         removeRecentOpenTicketFromStorage(variables.protocol)
@@ -389,6 +394,29 @@ export function MassivaTicketsSection({
       await queryClient.invalidateQueries({ queryKey: massivaKeys.list() })
       await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
       await queryClient.invalidateQueries({ queryKey: splittersKeys.all })
+      void historyQuery.refetch()
+    },
+  })
+
+  // Manutenção pós-encerramento: reclassifica um protocolo já encerrado, sem tocar na
+  // Voalle e sem alterar quem/quando encerrou. Só disponível na aba Encerradas.
+  const [maintenanceProtocol, setMaintenanceProtocol] = useState<number | null>(null)
+  const [maintenanceClassif, setMaintenanceClassif] = useState<MassivaClassificationDraft>({
+    ...MASSIVA_CLASSIFICATION_RESET,
+  })
+  const selectedMaintenanceTicket = useMemo(
+    () => view.status === 'success'
+      ? view.tickets.find((t) => t.protocol === maintenanceProtocol) ?? null
+      : null,
+    [view, maintenanceProtocol],
+  )
+
+  const maintenanceMutation = useMutation({
+    mutationFn: updateMassivaClassification,
+    onSuccess: async () => {
+      setMaintenanceProtocol(null)
+      setMaintenanceClassif({ ...MASSIVA_CLASSIFICATION_RESET })
+      await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
       void historyQuery.refetch()
     },
   })
@@ -618,6 +646,13 @@ const { data: recentOpenTickets = [] } = useQuery({
           cnl: row.cnl,
           mttdMinutes: row.mttdMinutes,
           mttrMinutes: row.mttrMinutes,
+          classificationUpdatedBy: row.classificationUpdatedBy,
+          classificationUpdatedAt: row.classificationUpdatedAt,
+          affectedVerificationCheckedAt: row.affectedVerificationCheckedAt,
+          affectedVerificationTotal: row.affectedVerificationTotal,
+          affectedVerificationStillOffline: row.affectedVerificationStillOffline,
+          affectedVerificationStillDegraded: row.affectedVerificationStillDegraded,
+          affectedVerificationBy: row.affectedVerificationBy,
         })
       }
     }
@@ -1039,6 +1074,30 @@ const { data: recentOpenTickets = [] } = useQuery({
                       setCancelDescription('')
                       setCancelLocalWarning(null)
                     }}
+                    onRequestMaintenance={(protocol) => {
+                      const current = historyClassificationByProtocol.get(protocol)
+                      setMaintenanceProtocol(protocol)
+                      setMaintenanceClassif({
+                        tipoIncidente: current?.tipoIncidente ?? '',
+                        impacto: current?.impacto ?? '',
+                        area: current?.area ?? '',
+                        tecnologia: current?.tecnologia ?? '',
+                        classificacao: current?.classificacao ?? '',
+                        cnl: current?.cnl ?? '',
+                      })
+                    }}
+                    lastAffectedVerification={(() => {
+                      const current = historyClassificationByProtocol.get(t.protocol)
+                      if (current?.affectedVerificationCheckedAt == null) return null
+                      return {
+                        checkedAt: current.affectedVerificationCheckedAt,
+                        total: current.affectedVerificationTotal ?? 0,
+                        stillOffline: current.affectedVerificationStillOffline ?? 0,
+                        stillDegraded: current.affectedVerificationStillDegraded ?? 0,
+                        verifiedBy: current.affectedVerificationBy,
+                      }
+                    })()}
+                    verifiedByLabel={closedByLabel}
                   />
                 </li>
               ))}
@@ -1116,165 +1175,11 @@ const { data: recentOpenTickets = [] } = useQuery({
                     <p className="text-xs font-semibold text-neutral-700">Classificação do incidente</p>
                     <span className="text-[10px] text-neutral-400">Opcional</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {/* Tipo */}
-                    <div>
-                      <label htmlFor="close-tipo" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tipo</label>
-                      <div className="relative">
-                        <select
-                          id="close-tipo"
-                          value={closeClassif.tipoIncidente}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, tipoIncidente: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="Externa">Externa</option>
-                          <option value="Interna">Interna</option>
-                          <option value="Parceira">Parceira</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                    {/* Impacto */}
-                    <div>
-                      <label htmlFor="close-impacto" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Impacto</label>
-                      <div className="relative">
-                        <select
-                          id="close-impacto"
-                          value={closeClassif.impacto}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, impacto: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="Indisponibilidade">Indisponibilidade</option>
-                          <option value="Degradação">Degradação</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                    {/* Tecnologia */}
-                    <div>
-                      <label htmlFor="close-tecnologia" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tecnologia</label>
-                      <div className="relative">
-                        <select
-                          id="close-tecnologia"
-                          value={closeClassif.tecnologia}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, tecnologia: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="Fibra">Fibra</option>
-                          <option value="Rádio">Rádio</option>
-                          <option value="Ambos">Ambos</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                    {/* CNL */}
-                    <div>
-                      <label htmlFor="close-cnl" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">CNL</label>
-                      <div className="relative">
-                        <select
-                          id="close-cnl"
-                          value={closeClassif.cnl}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, cnl: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="SLE">SLE</option>
-                          <option value="CAN">CAN</option>
-                          <option value="SPS">SPS</option>
-                          <option value="NHO">NHO</option>
-                          <option value="TNF">TNF</option>
-                          <option value="EIO">EIO</option>
-                          <option value="NSR">NSR</option>
-                          <option value="PAE">PAE</option>
-                          <option value="BCR">BCR</option>
-                          <option value="CHN">CHN</option>
-                          <option value="CBM">CBM</option>
-                          <option value="BREEQ">BREEQ</option>
-                          <option value="POA">POA</option>
-                          <option value="SRT">SRT</option>
-                          <option value="NSRCA">NSRCA</option>
-                          <option value="GTI">GTI</option>
-                          <option value="BRE">BRE</option>
-                          <option value="Geral">Geral</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                    {/* Área */}
-                    <div>
-                      <label htmlFor="close-area" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Área</label>
-                      <div className="relative">
-                        <select
-                          id="close-area"
-                          value={closeClassif.area}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, area: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="Acesso">Acesso</option>
-                          <option value="Backbone">Backbone</option>
-                          <option value="Infra">Infra</option>
-                          <option value="IP">IP</option>
-                          <option value="Telefonia">Telefonia</option>
-                          <option value="TI / Servidores">TI / Servidores</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                    {/* Classificação — linha inteira */}
-                    <div className="col-span-2 sm:col-span-3">
-                      <label htmlFor="close-classificacao" className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Classificação</label>
-                      <div className="relative">
-                        <select
-                          id="close-classificacao"
-                          value={closeClassif.classificacao}
-                          onChange={(e) => setCloseClassif((p) => ({ ...p, classificacao: e.target.value }))}
-                          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                        >
-                          <option value="">— selecione —</option>
-                          <option value="Atenuação">Atenuação</option>
-                          <option value="Carga Alta">Carga Alta</option>
-                          <option value="Capilar quebrado">Capilar quebrado</option>
-                          <option value="Conector">Conector</option>
-                          <option value="CTO Indisponível">CTO Indisponível</option>
-                          <option value="DDoS">DDoS</option>
-                          <option value="Equip. Hardware">Equip. Hardware</option>
-                          <option value="Erro Humano">Erro Humano</option>
-                          <option value="Erro de Abertura">Erro de Abertura</option>
-                          <option value="Evento climático">Evento climático</option>
-                          <option value="Falha de configuração">Falha de configuração</option>
-                          <option value="Falha em operadora">Falha em operadora</option>
-                          <option value="Fogo em poste">Fogo em poste</option>
-                          <option value="Formigas">Formigas</option>
-                          <option value="Infra-energia site">Infra-energia site</option>
-                          <option value="Link Loss / Led Loss">Link Loss / Led Loss</option>
-                          <option value="Migração">Migração</option>
-                          <option value="Migração de CTO">Migração de CTO</option>
-                          <option value="OLT/SITE Indisponível">OLT/SITE Indisponível</option>
-                          <option value="Poda de árvore">Poda de árvore</option>
-                          <option value="Queda de poste">Queda de poste</option>
-                          <option value="Readequação">Readequação</option>
-                          <option value="Readequação CTO">Readequação CTO</option>
-                          <option value="Reiniciado ONU/Roteador">Reiniciado ONU/Roteador</option>
-                          <option value="Rompimento">Rompimento</option>
-                          <option value="Sinal Elevado CTO/Splitter/Cabo">Sinal Elevado CTO/Splitter/Cabo</option>
-                          <option value="Troca de Antena">Troca de Antena</option>
-                          <option value="Troca de Conector">Troca de Conector</option>
-                          <option value="Troca de Equipamento">Troca de Equipamento</option>
-                          <option value="Troca de fonte/baterias">Troca de fonte/baterias</option>
-                          <option value="Troca de porta">Troca de porta</option>
-                          <option value="Troca de poste">Troca de poste</option>
-                          <option value="Troca de splitter">Troca de splitter</option>
-                          <option value="Vandalismo">Vandalismo</option>
-                          <option value="Outros">Outros</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
-                      </div>
-                    </div>
-                  </div>
+                  <MassivaClassificationFields
+                    idPrefix="close"
+                    value={closeClassif}
+                    onChange={setCloseClassif}
+                  />
                 </div>
               </div>
             )}
@@ -1286,7 +1191,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 onClick={() => {
                   setClosingProtocol(null)
                   setCloseDescription('')
-                  setCloseClassif({ ...CLOSE_CLASSIF_RESET })
+                  setCloseClassif({ ...MASSIVA_CLASSIFICATION_RESET })
                   setCloseLocalWarning(null)
                 }}
               >
@@ -1408,6 +1313,113 @@ const { data: recentOpenTickets = [] } = useQuery({
                 }}
               >
                 {cancelMutation.isPending ? 'Cancelando...' : 'Confirmar cancelamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedMaintenanceTicket !== null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-neutral-900">Manutenção — Classificação do incidente</h3>
+            <p className="mt-1 text-sm text-neutral-600">
+              Protocolo <span className="font-mono font-semibold">{selectedMaintenanceTicket.protocol}</span>
+              {selectedMaintenanceTicket.assignmentId !== null
+                ? (
+                  <>
+                    {' e Assignment '}
+                    <span className="font-mono font-semibold">{selectedMaintenanceTicket.assignmentId}</span>
+                  </>
+                )
+                : null}
+            </p>
+
+            <div className="mt-2 space-y-1 rounded-lg border border-neutral-200/70 bg-neutral-50/60 px-3 py-2 text-[11px] text-neutral-600">
+              <p>
+                Encerrado por{' '}
+                <span className="font-semibold text-neutral-800">
+                  {selectedMaintenanceTicket.closedBy?.trim() || 'não informado'}
+                </span>
+                {selectedMaintenanceTicket.closedAt !== null ? (
+                  <>
+                    {' em '}
+                    <span className="font-semibold text-neutral-800">
+                      {formatMassivaListDateDisplay(selectedMaintenanceTicket.closedAt)}
+                    </span>
+                  </>
+                ) : null}
+                . Esta manutenção <strong>não altera</strong> o motivo, a data nem o autor do
+                encerramento.
+              </p>
+              {(() => {
+                const entry = historyClassificationByProtocol.get(selectedMaintenanceTicket.protocol)
+                if (entry?.classificationUpdatedBy?.trim()) {
+                  return (
+                    <p>
+                      Última manutenção por{' '}
+                      <span className="font-semibold text-neutral-800">{entry.classificationUpdatedBy}</span>
+                      {entry.classificationUpdatedAt !== null ? (
+                        <>
+                          {' em '}
+                          <span className="font-semibold text-neutral-800">
+                            {formatMassivaListDateDisplay(entry.classificationUpdatedAt)}
+                          </span>
+                        </>
+                      ) : null}
+                      .
+                    </p>
+                  )
+                }
+                return null
+              })()}
+            </div>
+
+            <div className="mt-4">
+              <MassivaClassificationFields
+                idPrefix="maint"
+                value={maintenanceClassif}
+                onChange={setMaintenanceClassif}
+                disabled={maintenanceMutation.isPending}
+              />
+            </div>
+
+            {maintenanceMutation.isError ? (
+              <p className="mt-2 text-xs text-red-700">
+                {formatQueryError(maintenanceMutation.error)}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                onClick={() => {
+                  setMaintenanceProtocol(null)
+                  setMaintenanceClassif({ ...MASSIVA_CLASSIFICATION_RESET })
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                disabled={maintenanceMutation.isPending}
+                onClick={() => {
+                  void maintenanceMutation.mutateAsync({
+                    protocol: selectedMaintenanceTicket.protocol,
+                    assignmentId: selectedMaintenanceTicket.assignmentId,
+                    updatedBy: closedByLabel,
+                    tipoIncidente: maintenanceClassif.tipoIncidente || null,
+                    impacto: maintenanceClassif.impacto || null,
+                    area: maintenanceClassif.area || null,
+                    tecnologia: maintenanceClassif.tecnologia || null,
+                    classificacao: maintenanceClassif.classificacao || null,
+                    cnl: maintenanceClassif.cnl || null,
+                  })
+                }}
+              >
+                {maintenanceMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
               </button>
             </div>
           </div>
