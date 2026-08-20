@@ -15,6 +15,7 @@ import {
   MASSIVA_INFRA_PROTOCOL_OPTIONS,
   infraProtocolOption,
 } from '@/features/massiva/model/massivaInfraProtocol'
+import { InfraSiteSelect } from '@/features/massiva/ui/InfraSiteSelect'
 import { cn } from '@/shared/lib/utils'
 
 type DescriptionByApItem = {
@@ -135,6 +136,8 @@ export function MassivaOpenDraftFields({
   const setInfraSignalDbm = useMassivaOpenDraftStore((s) => s.setInfraSignalDbm)
   const infraAvaria = useMassivaOpenDraftStore((s) => s.infraAvaria)
   const setInfraAvaria = useMassivaOpenDraftStore((s) => s.setInfraAvaria)
+  const infraSiteCode = useMassivaOpenDraftStore((s) => s.infraSiteCode)
+  const setInfraSiteCode = useMassivaOpenDraftStore((s) => s.setInfraSiteCode)
   const infraManualField = infraProtocolOption(infraProtocolType)?.manualField ?? null
 
   return (
@@ -413,6 +416,14 @@ export function MassivaOpenDraftFields({
                   className="w-full resize-y rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
+            ) : null}
+
+            {infraManualField === 'site' ? (
+              <InfraSiteSelect
+                value={infraSiteCode}
+                onChange={setInfraSiteCode}
+                disabled={disabled}
+              />
             ) : null}
 
             {infraProtocolType !== 'none' ? (

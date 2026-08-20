@@ -7,6 +7,8 @@ type OpenInfraSolicitationInput = {
   personId: number
   /** AP principal da massiva (a lista completa vai na descrição). Pode ser vazio. */
   authenticationAccessPointCode: string | null
+  /** Código do Site (obrigatório para backbone). Ignorado nos demais tipos. */
+  authenticationSiteCode?: string | null
   assignmentTitle: string
   /** Máscara já montada pelo frontend. */
   assignmentDescription: string
@@ -47,6 +49,10 @@ export async function openInfraSolicitation(
       authenticationAccessPointCode:
         input.authenticationAccessPointCode && input.authenticationAccessPointCode.trim() !== ''
           ? input.authenticationAccessPointCode
+          : undefined,
+      authenticationSiteCode:
+        input.authenticationSiteCode && input.authenticationSiteCode.trim() !== ''
+          ? input.authenticationSiteCode.trim()
           : undefined,
       assignment: {
         title: input.assignmentTitle,

@@ -36,6 +36,8 @@ type MassivaOpenDraftState = {
   infraSignalDbm: string
   /** Tipo de avaria — campo manual do tipo CTO Avariada. */
   infraAvaria: string
+  /** Código do Site (authenticationSiteCode) — campo manual do tipo Backbone. */
+  infraSiteCode: string
 
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
@@ -51,6 +53,7 @@ type MassivaOpenDraftState = {
   setInfraProtocolType: (value: MassivaInfraProtocolSelection) => void
   setInfraSignalDbm: (value: string) => void
   setInfraAvaria: (value: string) => void
+  setInfraSiteCode: (value: string) => void
   enableDescriptionAutoSync: () => void
   reset: () => void
 }
@@ -88,6 +91,7 @@ function buildInitialDraft() {
     infraProtocolType: 'none' as MassivaInfraProtocolSelection,
     infraSignalDbm: '',
     infraAvaria: '',
+    infraSiteCode: '',
   }
 }
 
@@ -108,6 +112,7 @@ const createInitialState = () => ({
   infraProtocolType: 'none' as MassivaInfraProtocolSelection,
   infraSignalDbm: '',
   infraAvaria: '',
+  infraSiteCode: '',
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -134,6 +139,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setInfraProtocolType: (infraProtocolType) => set({ infraProtocolType }),
       setInfraSignalDbm: (infraSignalDbm) => set({ infraSignalDbm }),
       setInfraAvaria: (infraAvaria) => set({ infraAvaria }),
+      setInfraSiteCode: (infraSiteCode) => set({ infraSiteCode }),
       enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
       reset: () => set(buildInitialDraft()),
     }),
@@ -155,6 +161,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
         infraProtocolType: state.infraProtocolType,
         infraSignalDbm: state.infraSignalDbm,
         infraAvaria: state.infraAvaria,
+        infraSiteCode: state.infraSiteCode,
       }),
     },
   ),

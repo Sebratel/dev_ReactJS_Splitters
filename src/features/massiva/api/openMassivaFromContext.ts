@@ -229,11 +229,22 @@ async function openInfraProtocolIfSelected(
     massivaLocalDateTimeToGatewayIso(context.assignmentFinalDateLocal) ??
     context.assignmentFinalDateLocal
 
+  // Backbone exige Site (matriz interna). Sem site, nem chamamos o Elleven — avisamos claro.
+  const siteCode = draft.infraSiteCode?.trim() ?? ''
+  if (option.code === 'backbone' && siteCode === '') {
+    return {
+      infraProtocol: null,
+      infraAssignmentId: null,
+      warning: `Protocolo de infraestrutura (${option.label}) não foi aberto: selecione o Site (obrigatório para Backbone). A massiva foi aberta normalmente.`,
+    }
+  }
+
   try {
     const result = await openInfraSolicitation({
       infraType: option.code,
       personId: context.personId,
       authenticationAccessPointCode: primaryAp,
+      authenticationSiteCode: option.code === 'backbone' ? siteCode : null,
       assignmentTitle: `Infra - ${option.label}`,
       assignmentDescription: description,
       assignmentFinalDateIso: finalDateIso,

@@ -14,7 +14,7 @@ export type MassivaInfraProtocolCode =
 export type MassivaInfraProtocolSelection = 'none' | MassivaInfraProtocolCode
 
 /** Campo manual extra exibido quando o tipo é selecionado. */
-export type MassivaInfraManualField = 'signal' | 'avaria' | null
+export type MassivaInfraManualField = 'signal' | 'avaria' | 'site' | null
 
 export type MassivaInfraProtocolOption = {
   code: MassivaInfraProtocolCode
@@ -26,7 +26,7 @@ export const MASSIVA_INFRA_PROTOCOL_OPTIONS: readonly MassivaInfraProtocolOption
   { code: 'cto_lo', label: 'CTO LO', manualField: null },
   { code: 'cto_sinal_alto', label: 'CTO Sinal Alto', manualField: 'signal' },
   { code: 'cto_avariada', label: 'CTO Avariada', manualField: 'avaria' },
-  { code: 'backbone', label: 'Rompimento de Backbone', manualField: null },
+  { code: 'backbone', label: 'Rompimento de Backbone', manualField: 'site' },
 ] as const
 
 export function infraProtocolOption(
