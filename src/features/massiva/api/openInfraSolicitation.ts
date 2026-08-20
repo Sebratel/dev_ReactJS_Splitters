@@ -58,6 +58,23 @@ export async function openInfraSolicitation(
 
   // Desembrulha ApiResponse<AberturaRegistroMassivoOutputDTO> → response.{protocol, assignmentId}
   const inner = (data?.data ?? data) as Record<string, unknown> | undefined
+
+  // O Elleven pode recusar com HTTP 2xx mas devolver success=false + messages[].message.
+  // Ex.: "Não foi encontrado nenhuma matriz padrão configurada." (code 1000).
+  // Nesse caso lançamos erro com a mensagem real para o operador ver o motivo exato.
+  if (inner?.success === false) {
+    const messages = Array.isArray(inner.messages)
+      ? (inner.messages as Array<Record<string, unknown>>)
+          .map((m) => String(m.message ?? '').trim())
+          .filter((s) => s !== '')
+      : []
+    const reason =
+      messages.length > 0
+        ? messages.join('; ')
+        : 'O Elleven recusou a abertura do protocolo de infraestrutura sem detalhar o motivo.'
+    throw new Error(reason)
+  }
+
   const response = (inner?.response ?? undefined) as Record<string, unknown> | undefined
 
   return {

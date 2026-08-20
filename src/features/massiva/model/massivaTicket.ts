@@ -66,6 +66,13 @@ export type MassivaTicket = {
   affectedClientsResidential: number | null
   affectedClientsCorporate: number | null
   usedFallback: boolean
+  /**
+   * Protocolo de infraestrutura aberto junto com a massiva (1 por evento). Só existe na origem
+   * local (histórico MySQL) — o payload ao vivo do Elleven não expõe esse vínculo. Null/ausente
+   * quando não houve abertura de infra.
+   */
+  infraProtocol?: number | null
+  infraAssignmentId?: number | null
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

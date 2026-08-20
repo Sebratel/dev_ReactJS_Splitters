@@ -668,6 +668,15 @@ export function MassivaTicketCard({
                   Fallback
                 </span>
               ) : null}
+              {ticket.infraProtocol != null && ticket.infraProtocol > 0 ? (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-sky-300/70 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-800"
+                  title={`Protocolo de infraestrutura vinculado a esta massiva: #${ticket.infraProtocol}`}
+                >
+                  <Wrench size={11} strokeWidth={2.2} aria-hidden />
+                  Infra #{ticket.infraProtocol}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
