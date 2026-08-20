@@ -107,6 +107,11 @@ export function BottomActionBar({
                   })()}
                 </div>
               ) : null}
+              {successPayload.followUpWarning != null && successPayload.followUpWarning.trim() !== '' ? (
+                <p className="whitespace-pre-line rounded-lg border border-amber-300/70 bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
+                  {successPayload.followUpWarning}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {isError ? (
