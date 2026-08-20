@@ -30,6 +30,7 @@ import {
 } from '@/features/massiva/model/massivaOpenMutation'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { bffClient } from '@/shared/api/bffClient'
+import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
@@ -64,6 +65,31 @@ function appendFollowUpWarning(
 
 function closePathConfigured(): boolean {
   return env.massivaClosePath.trim() !== ''
+}
+
+/**
+ * Extrai o motivo real de uma falha do POST de afetados. O gateway devolve o motivo no corpo
+ * (`{ message, errors }`), mas o ApiError.message traz só "HTTP 400 em /api/v1/afetados".
+ * Aqui desembrulhamos o corpo para o operador ver a causa (ex.: indisponibilidade do banco de
+ * afetados no gateway) em vez de um código genérico.
+ */
+function describeAfetadosFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(error.body) as { message?: unknown; errors?: unknown }
+      const parts: string[] = []
+      const message = typeof parsed.message === 'string' ? parsed.message.trim() : ''
+      if (message !== '') parts.push(message)
+      if (Array.isArray(parsed.errors)) {
+        const errs = parsed.errors.map((e) => String(e).trim()).filter((s) => s !== '')
+        if (errs.length > 0) parts.push(errs.join('; '))
+      }
+      if (parts.length > 0) return `${error.message} — ${parts.join(' — ')}`
+    } catch {
+      // corpo não era JSON — cai no formato padrão abaixo
+    }
+  }
+  return formatQueryError(error)
 }
 
 function normalizeAp(value: string | null | undefined): string {
@@ -361,7 +387,7 @@ export async function openMassivaFromContext(
       })
       afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
     } catch (afetadosError) {
-      const msg = afetadosError instanceof Error ? afetadosError.message : String(afetadosError)
+      const msg = describeAfetadosFailure(afetadosError)
       console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
       afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
     }
