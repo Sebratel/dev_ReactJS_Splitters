@@ -4,6 +4,7 @@ import {
   collectMapeableAfetadosClientes,
   pickPrimaryOpenResult,
   resolveProtocolAndAssignment,
+  type UsuarioAfetadoEntity,
 } from '@/features/massiva/lib/buildMassivaAfetadosRequestBody'
 import { buildMassivaOpenRequestBody } from '@/features/massiva/lib/buildMassivaOpenRequestBody'
 import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
@@ -357,6 +358,14 @@ export async function openMassivaFromContext(
 
   let afetadosPostedCount = 0
   const afetadosWarnings: string[] = []
+  // A cópia local (massiva_affected_clients) é gravada por AP, mas só DEPOIS do
+  // registerOpenedMassivaHistoryInLocalDb — a gravação é keyed pela linha de massiva_history,
+  // que só existe após aquele registro. Coletamos aqui e persistimos no fim.
+  const localAffectedCopies: Array<{
+    protocol: number
+    assignmentId: number
+    entities: readonly UsuarioAfetadoEntity[]
+  }> = []
 
   for (const opened of successes) {
     const ids = resolveProtocolAndAssignment(opened)
@@ -394,19 +403,12 @@ export async function openMassivaFromContext(
 
     // Cópia local (nosso MySQL) da mesma lista de afetados, independente do gateway —
     // viabiliza a verificação "ainda sem sinal?" pós-encerramento sem depender do DELETE
-    // de limpeza do gateway. Best-effort: nunca bloqueia a abertura.
-    try {
-      await registerMassivaAffectedClientsInLocalDb({
-        protocol: ids.protocol,
-        assignmentId: ids.assignmentId,
-        entities: afetadosBody.usuarioAfetadoEntities,
-      })
-    } catch (localAffectedError) {
-      console.warn(
-        `[Massiva] Falha ao gravar cópia local dos afetados para AP ${opened.accessPointCode}.`,
-        localAffectedError,
-      )
-    }
+    // de limpeza do gateway. Só coletamos aqui; a gravação acontece após o histórico existir.
+    localAffectedCopies.push({
+      protocol: ids.protocol,
+      assignmentId: ids.assignmentId,
+      entities: afetadosBody.usuarioAfetadoEntities,
+    })
   }
 
   let payload: MassivaOpenMutationSuccessPayload = {
@@ -439,6 +441,19 @@ export async function openMassivaFromContext(
   } catch (localError) {
     console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
     payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+  }
+
+  // Só agora, com a linha de massiva_history criada, gravamos a cópia local dos afetados
+  // (a gravação é keyed por essa linha). Best-effort: falha aqui não derruba a abertura.
+  for (const copy of localAffectedCopies) {
+    try {
+      await registerMassivaAffectedClientsInLocalDb(copy)
+    } catch (localAffectedError) {
+      console.warn(
+        `[Massiva] Falha ao gravar cópia local dos afetados (protocolo ${copy.protocol}).`,
+        localAffectedError,
+      )
+    }
   }
 
   return payload
