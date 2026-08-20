@@ -242,6 +242,7 @@ export function useMassivaOpenReadiness(
       assignmentFinalDateLocal: finalDateLocal,
       assignmentBeginningDateLocal,
       eventIdentifiedAtLocal,
+      eventIdentifiedBy,
       massivaOpenPath: openPath,
       massivaAfetadosPath: afetadosPath,
       descriptionAutoSyncEnabled: descriptionAutoSync,
@@ -266,6 +267,7 @@ export function useMassivaOpenReadiness(
     assignmentForecastDate,
     assignmentForecastTime,
     affectedUsersQuantityAutoIspOverride,
+    eventIdentifiedBy,
   ])
 
   const refetchPersonId = () => {

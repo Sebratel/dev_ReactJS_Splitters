@@ -33,6 +33,8 @@ export type MassivaHistoryListRow = {
   /** Protocolo de infraestrutura vinculado (1 por evento). Null quando não foi aberto. */
   infraProtocol: number | null
   infraAssignmentId: number | null
+  /** Quem identificou o evento (tecnico/zabbix/int6). Null para massivas anteriores à coluna. */
+  identifiedBy: 'tecnico' | 'zabbix' | 'int6' | null
   /** Campos de classificação operacional — preenchidos ao encerrar a massiva (podem ser null). */
   tipoIncidente: string | null
   impacto: string | null
@@ -128,6 +130,10 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
     updatedAt: toNullableDate(row.updatedAt),
     infraProtocol: row.infraProtocol == null ? null : toInt(row.infraProtocol),
     infraAssignmentId: row.infraAssignmentId == null ? null : toInt(row.infraAssignmentId),
+    identifiedBy: ((): 'tecnico' | 'zabbix' | 'int6' | null => {
+      const v = String(row.identifiedBy ?? '').trim().toLowerCase()
+      return v === 'tecnico' || v === 'zabbix' || v === 'int6' ? v : null
+    })(),
     tipoIncidente: row.tipoIncidente != null && String(row.tipoIncidente).trim() !== ''
       ? String(row.tipoIncidente).trim()
       : null,

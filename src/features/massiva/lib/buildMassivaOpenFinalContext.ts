@@ -3,6 +3,7 @@ import type {
   MassivaOpeningBasis,
   MassivaOpeningPlanDraft,
 } from '@/features/massiva/model/massivaOpeningBasis'
+import type { MassivaEventIdentifiedBy } from '@/features/massiva/store/massivaOpenDraftStore'
 
 export function buildMassivaOpenFinalContext(params: {
   personId: number
@@ -14,6 +15,7 @@ export function buildMassivaOpenFinalContext(params: {
   assignmentFinalDateLocal: string
   assignmentBeginningDateLocal: string | null
   eventIdentifiedAtLocal: string | null
+  eventIdentifiedBy: MassivaEventIdentifiedBy
   massivaOpenPath: string
   massivaAfetadosPath: string
   descriptionAutoSyncEnabled: boolean
@@ -36,6 +38,7 @@ export function buildMassivaOpenFinalContext(params: {
     assignmentFinalDateLocal: params.assignmentFinalDateLocal,
     assignmentBeginningDateLocal: params.assignmentBeginningDateLocal,
     eventIdentifiedAtLocal: params.eventIdentifiedAtLocal,
+    eventIdentifiedBy: params.eventIdentifiedBy,
     massivaOpenPath: params.massivaOpenPath.trim().startsWith('/')
       ? params.massivaOpenPath.trim()
       : `/${params.massivaOpenPath.trim()}`,

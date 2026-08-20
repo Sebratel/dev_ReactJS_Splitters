@@ -194,6 +194,7 @@ export function createMassivaHistoryStore(config) {
   let hasClassificationColumns = false;
   let hasEventStartColumn = false;
   let hasInfraProtocolColumns = false;
+  let hasIdentifiedByColumn = false;
   let hasClassificationAuditColumns = false;
   let hasAffectedVerificationColumns = false;
   let hasAffectedClientsTable = false;
@@ -258,6 +259,15 @@ export function createMassivaHistoryStore(config) {
         hasInfraProtocolColumns = Array.isArray(cols) && cols.length > 0;
       } catch {
         hasInfraProtocolColumns = false;
+      }
+
+      // Migração idempotente: quem identificou o evento (tecnico/zabbix/int6) — base de indicador futuro.
+      await addColumnIfMissing('identified_by VARCHAR(20) NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'identified_by'");
+        hasIdentifiedByColumn = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasIdentifiedByColumn = false;
       }
 
       // Migração idempotente: autor da última manutenção pós-encerramento na classificação
@@ -385,6 +395,9 @@ export function createMassivaHistoryStore(config) {
     const infraProtocol = normalizePositiveInt(input?.infraProtocol);
     const infraAssignmentId = normalizePositiveInt(input?.infraAssignmentId);
 
+    // Quem identificou o evento (tecnico/zabbix/int6) — mesmo valor em todas as linhas do lote.
+    const identifiedBy = normalizeNullableText(input?.identifiedBy);
+
     let insertedOrUpdated = 0;
 
     for (const result of results) {
@@ -430,6 +443,12 @@ export function createMassivaHistoryStore(config) {
           : '';
         const infraUpdateParams = hasInfraProtocolColumns ? [infraProtocol, infraAssignmentId] : [];
 
+        // Quem identificou: COALESCE para não apagar um valor já gravado no lote.
+        const identifiedBySetClause = hasIdentifiedByColumn
+          ? ', identified_by = COALESCE(?, identified_by)'
+          : '';
+        const identifiedByUpdateParam = hasIdentifiedByColumn ? [identifiedBy] : [];
+
         await dataPool.query(
           `
             UPDATE massiva_history
@@ -447,7 +466,7 @@ export function createMassivaHistoryStore(config) {
               closed_at = ?,
               auto_closed_without_clients = ?,
               close_description = COALESCE(?, close_description),
-              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}
+              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}${identifiedBySetClause}
             WHERE id = ?
           `,
           [
@@ -470,6 +489,7 @@ export function createMassivaHistoryStore(config) {
             ...classifUpdateParams,
             ...eventStartUpdateParam,
             ...infraUpdateParams,
+            ...identifiedByUpdateParam,
             existingId,
           ],
         );
@@ -500,6 +520,11 @@ export function createMassivaHistoryStore(config) {
         const infraInsertPlaceholders = hasInfraProtocolColumns ? ', ?, ?' : '';
         const infraInsertValues = hasInfraProtocolColumns ? [infraProtocol, infraAssignmentId] : [];
 
+        // Quem identificou: incluído no INSERT somente quando a coluna existir.
+        const identifiedByInsertCol = hasIdentifiedByColumn ? ', identified_by' : '';
+        const identifiedByInsertPlaceholder = hasIdentifiedByColumn ? ', ?' : '';
+        const identifiedByInsertValue = hasIdentifiedByColumn ? [identifiedBy] : [];
+
         const [insertResult] = await dataPool.query(
           `
             INSERT INTO massiva_history (
@@ -516,9 +541,9 @@ export function createMassivaHistoryStore(config) {
               closed_at,
               auto_closed_without_clients,
               close_description,
-              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}
+              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}${identifiedByInsertCol}
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders}${identifiedByInsertPlaceholder})
           `,
           [
             protocol,
@@ -537,6 +562,7 @@ export function createMassivaHistoryStore(config) {
             ...classifInsertValues,
             ...eventStartInsertValue,
             ...infraInsertValues,
+            ...identifiedByInsertValue,
           ],
         );
         await attachSplitters(insertResult.insertId, splitterEntries);
@@ -2071,6 +2097,7 @@ export function createMassivaHistoryStore(config) {
           h.cnl AS cnl,` : ''}
           ${hasEventStartColumn ? 'h.event_start_at AS eventStartAt,' : ''}
           ${hasInfraProtocolColumns ? 'h.infra_protocol AS infraProtocol, h.infra_assignment_id AS infraAssignmentId,' : ''}
+          ${hasIdentifiedByColumn ? 'h.identified_by AS identifiedBy,' : ''}
           ${hasClassificationAuditColumns ? 'h.classification_updated_by AS classificationUpdatedBy, h.classification_updated_at AS classificationUpdatedAt,' : ''}
           ${hasAffectedVerificationColumns ? `h.affected_verification_checked_at AS affectedVerificationCheckedAt,
           h.affected_verification_total AS affectedVerificationTotal,
@@ -2122,6 +2149,7 @@ export function createMassivaHistoryStore(config) {
       eventStartAt: serializeHistoryDate(row.eventStartAt),
       infraProtocol: row.infraProtocol == null ? null : Number(row.infraProtocol),
       infraAssignmentId: row.infraAssignmentId == null ? null : Number(row.infraAssignmentId),
+      identifiedBy: normalizeNullableText(row.identifiedBy),
       classificationUpdatedBy: normalizeNullableText(row.classificationUpdatedBy),
       classificationUpdatedAt: serializeHistoryDate(row.classificationUpdatedAt),
       affectedVerificationCheckedAt: serializeHistoryDate(row.affectedVerificationCheckedAt),

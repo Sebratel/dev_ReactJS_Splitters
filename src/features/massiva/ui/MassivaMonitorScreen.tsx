@@ -89,6 +89,13 @@ const stripeClass: Record<SlaState['severity'], string> = {
   crit: 'bg-rose-400',
 }
 
+/** Rótulo curto de "quem identificou o evento" para a coluna Origem. */
+const MASSIVA_IDENTIFIED_BY_LABEL: Record<string, string> = {
+  tecnico: 'Técnico',
+  zabbix: 'Zabbix',
+  int6: 'INT6',
+}
+
 function KpiTile({
   label,
   value,
@@ -371,7 +378,8 @@ export function MassivaMonitorScreen() {
                   <th className="pb-2">Ponto de acesso</th>
                   <th className="pb-2">Afetados</th>
                   <th className="pb-2">Aberta há</th>
-                  <th className="pb-2">Identificado por</th>
+                  <th className="pb-2">Operador</th>
+                  <th className="pb-2">Origem</th>
                   <th className="pb-2">SLA</th>
                 </tr>
               </thead>
@@ -393,6 +401,7 @@ export function MassivaMonitorScreen() {
                       <td className="py-2.5">{t.affectedClients.toLocaleString('pt-BR')}</td>
                       <td className="py-2.5">{formatDurationSince(t.openedAt, nowMs)}</td>
                       <td className="py-2.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
+                      <td className="py-2.5 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
                       <td className="py-2.5">
                         <span className={cn('rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold', chipClass[sla.severity])}>
                           {sla.label}

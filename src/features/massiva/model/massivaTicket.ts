@@ -73,6 +73,11 @@ export type MassivaTicket = {
    */
   infraProtocol?: number | null
   infraAssignmentId?: number | null
+  /**
+   * Quem identificou o evento (tecnico/zabbix/int6). Só existe na origem local (histórico MySQL);
+   * o payload ao vivo do Elleven não expõe. Null/ausente quando não informado ou massiva antiga.
+   */
+  identifiedBy?: 'tecnico' | 'zabbix' | 'int6' | null
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

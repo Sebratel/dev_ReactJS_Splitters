@@ -75,6 +75,7 @@ function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTi
     usedFallback: false,
     infraProtocol: row.infraProtocol,
     infraAssignmentId: row.infraAssignmentId,
+    identifiedBy: row.identifiedBy,
   })
 }
 

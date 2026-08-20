@@ -1741,6 +1741,7 @@ app.post('/api/massiva/history/open', async (req, res) => {
       eventStartAt: req.body?.eventStartAt ?? null,
       infraProtocol: req.body?.infraProtocol ?? null,
       infraAssignmentId: req.body?.infraAssignmentId ?? null,
+      identifiedBy: req.body?.identifiedBy ?? null,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
