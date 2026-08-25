@@ -127,6 +127,7 @@ services:
         - VITE_MASSIVA_LIST_PATH=${VITE_MASSIVA_LIST_PATH:-/api/v1/massivas/recuperar-pelo-banco}
         - VITE_MASSIVA_OPEN_PATH=${VITE_MASSIVA_OPEN_PATH:-/api/v1/massivas/salvar-massiva-via-api}
         - VITE_MASSIVA_CLOSE_PATH=${VITE_MASSIVA_CLOSE_PATH:-/api/v1/massivas/finalizar-chamado-via-api}
+        - VITE_MASSIVA_INFRA_OPEN_PATH=${VITE_MASSIVA_INFRA_OPEN_PATH:-/api/v1/massivas/abrir-protocolo-infra-via-api}
         - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
         # Só o endpoint de eventos (URL, não é segredo) vai para o frontend.
         # Auth AutoISP é feita no backend via AUTOISP_* (usuário/senha nunca no bundle).
