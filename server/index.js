@@ -671,6 +671,7 @@ SELECT
     ss."number"                       AS "NÚMERO[SPLT.SECUNDARIO]",
     ss.neighborhood                   AS "BAIRRO[SPLT.SECUNDARIO]",
     ss.city                           AS "CIDADE[SPLT.SECUNDARIO]",
+    site.city                         AS "CIDADE[SITE]",
     COALESCE(nba.latitude, ss.lat)    AS "LATITUDE[SPLT.SECUNDARIO]",
     COALESCE(nba.longitude, ss.lng)   AS "LONGITUDE[SPLT.SECUNDARIO]",
     nba.latitude                      AS "LATITUDE_CAIXADEREDE",
@@ -1239,7 +1240,7 @@ app.get('/api/splitters/filter-options', async (_req, res) => {
     const query = `
       SELECT DISTINCT
         NULLIF(TRIM(base."RUA[SPLT.SECUNDARIO]"), '') AS "street",
-        NULLIF(TRIM(base."CIDADE[SPLT.SECUNDARIO]"), '') AS "city",
+        NULLIF(TRIM(base."CIDADE[SITE]"), '') AS "city",
         NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS "condominium"
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE base."ID[SPLT.SECUNDARIO]" IS NOT NULL

@@ -147,7 +147,7 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
     .map((city) => String(city || '').trim())
     .filter((city) => city !== '');
   if (normalizedCitySelections.length > 0) {
-    whereClauses.push(`TRIM(base."CIDADE[SPLT.SECUNDARIO]") = ANY($${currentParam})`);
+    whereClauses.push(`TRIM(base."CIDADE[SITE]") = ANY($${currentParam})`);
     values.push(normalizedCitySelections);
     currentParam++;
   }
