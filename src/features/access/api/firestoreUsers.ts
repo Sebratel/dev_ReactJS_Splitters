@@ -76,28 +76,19 @@ export async function ensureSplittersUserProfile(input: {
   const snapshot = await getDoc(ref)
 
   if (!snapshot.exists()) {
-    const firstUserSnapshot = await getDocs(
-      query(collection(firestoreDb, USERS_COLLECTION), limit(1)),
-    )
-
-    const firstUserPermissions: SplittersPermissionSet = firstUserSnapshot.empty
-      ? {
-          canViewSplitters: true,
-          canViewMassiva: true,
-          canOpenMassiva: true,
-          canViewIntelligence: true,
-          canUsePlanningAssistant: true,
-          isAdmin: true,
-        }
-      : defaultSplittersPermissions
-
+    // Usuario novo entra SEMPRE com as permissoes padrao (so ver splitters).
+    // O primeiro admin e semeado manualmente no console — o cliente nunca cria
+    // um usuario admin (as regras do Firestore bloqueiam isso de proposito).
+    // Antes havia um getDocs(limit 1) para dar admin ao "primeiro usuario"; foi
+    // removido porque (a) e um vetor de auto-promocao e (b) sob as regras novas a
+    // leitura de um doc arbitrario e negada, o que quebraria o primeiro login.
     await setDoc(ref, {
       uid: input.uid,
       email: input.email.trim().toLowerCase(),
       displayName: input.displayName.trim(),
       photoURL: normalizePhotoURL(input.photoURL ?? null),
       isActive: true,
-      permissions: firstUserPermissions,
+      permissions: defaultSplittersPermissions,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       lastLoginAt: serverTimestamp(),
