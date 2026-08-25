@@ -164,6 +164,9 @@ export function createMassivaHistoryStore(config) {
       async getLatestNetworkReliefSnapshotPage() {
         return null;
       },
+      async diffNetworkReliefSnapshots() {
+        return { relievedSplitters: [] };
+      },
       async getHistoryList() {
         return [];
       },
@@ -2044,6 +2047,74 @@ export function createMassivaHistoryStore(config) {
     };
   }
 
+  /**
+   * Compara o snapshot recém-gravado (`currentRunId`) com o snapshot completed
+   * imediatamente anterior (mesmos parâmetros de raio). Retorna os splitters que
+   * estavam na fila no snapshot anterior mas NÃO estão no atual — ou seja, ganharam
+   * alívio de rede entre as duas capturas.
+   *
+   * @param {{ currentRunId: number, straightRadiusMeters?: number, maxRouteMeters?: number }} input
+   * @returns {Promise<{ relievedSplitters: Array<{ code: string, title: string, outPorts: number, busyCount: number }> }>}
+   */
+  async function diffNetworkReliefSnapshots(input = {}) {
+    await ensureReady();
+
+    const currentRunId = Number(input?.currentRunId ?? 0);
+    if (currentRunId <= 0) return { relievedSplitters: [] };
+
+    const straightRadiusMeters = normalizeNonNegativeInt(input?.straightRadiusMeters, 200);
+    const maxRouteMeters = normalizeNonNegativeInt(input?.maxRouteMeters, 200);
+
+    // Busca o snapshot completed imediatamente anterior ao currentRunId (mesmos parâmetros).
+    const [prevRunRows] = await dataPool.query(
+      `
+        SELECT id
+        FROM splitter_network_relief_snapshot_runs
+        WHERE status = 'completed'
+          AND straight_radius_meters = ?
+          AND max_route_meters = ?
+          AND id < ?
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+      [straightRadiusMeters, maxRouteMeters, currentRunId],
+    );
+
+    const prevRunId = Array.isArray(prevRunRows) && prevRunRows.length > 0
+      ? Number(prevRunRows[0].id)
+      : 0;
+    if (prevRunId <= 0) return { relievedSplitters: [] };
+
+    // Splitters que estavam no anterior mas NÃO estão no atual = ganharam alívio.
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          prev.splitter_code  AS code,
+          prev.splitter_title AS title,
+          prev.out_ports      AS outPorts,
+          prev.busy_count     AS busyCount
+        FROM splitter_network_relief_snapshot_entries prev
+        LEFT JOIN splitter_network_relief_snapshot_entries curr
+          ON curr.snapshot_run_id = ?
+          AND curr.splitter_code = prev.splitter_code
+        WHERE prev.snapshot_run_id = ?
+          AND curr.splitter_code IS NULL
+      `,
+      [currentRunId, prevRunId],
+    );
+
+    const relievedSplitters = Array.isArray(rows)
+      ? rows.map((r) => ({
+          code: normalizeText(r.code),
+          title: normalizeText(r.title),
+          outPorts: Number(r.outPorts ?? 0),
+          busyCount: Number(r.busyCount ?? 0),
+        }))
+      : [];
+
+    return { relievedSplitters };
+  }
+
   async function getHistoryList(input = {}) {
     await ensureReady();
 
@@ -2256,6 +2327,7 @@ export function createMassivaHistoryStore(config) {
     replaceNetworkReliefSnapshot,
     hasCompletedNetworkReliefSnapshot,
     getLatestNetworkReliefSnapshotPage,
+    diffNetworkReliefSnapshots,
     getHistoryList,
     getMttdMttrMonthlyKpis,
     end,

@@ -10,8 +10,6 @@ import type { OnuOltBreakdown } from '@/features/onu/model/onuNetworkSummary'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/store/sessionStore'
-import { env } from '@/shared/config/env'
 
 const TICKETS_REFETCH_MS = 30_000
 const HISTORY_REFETCH_MS = 60_000
@@ -158,8 +156,6 @@ export function MassivaMonitorScreen() {
     const id = window.setInterval(() => setNow(new Date()), CLOCK_TICK_MS)
     return () => window.clearInterval(id)
   }, [])
-
-  const sessionToken = useSessionStore((s) => s.sessionToken)
 
   const { view } = useMassivaTickets({ refetchIntervalMs: TICKETS_REFETCH_MS })
   const bffTickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
@@ -319,22 +315,6 @@ export function MassivaMonitorScreen() {
           </span>
         </div>
       </div>
-
-      {/* DEBUG — remover após diagnóstico */}
-      {import.meta.env.DEV && (
-        <div className="mb-3 rounded border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 font-mono text-[11px] text-yellow-300">
-          <span className="font-bold">DEBUG</span>
-          {' · '}massivaListPath: <span className="text-white">{env.massivaListPath || '(vazio)'}</span>
-          {' · '}token: <span className="text-white">{sessionToken ? `${sessionToken.slice(0, 20)}...` : 'null'}</span>
-          {' · '}view.status: <span className="text-white">{view.status}</span>
-          {view.status === 'error' && (
-            <span> · erro: <span className="text-rose-300">{String((view as {error: unknown}).error)}</span></span>
-          )}
-          {' · '}bff: <span className="text-white">{bffTickets.length}</span>
-          {' · '}localOpen: <span className="text-white">{openLocalQuery.data?.length ?? '...'}</span>
-          {' · '}abertas: <span className="text-white">{openTickets.length}</span>
-        </div>
-      )}
 
       <div className="grid grid-cols-6 gap-3">
         <KpiTile label="Abertas agora" value={String(kpis.abertasAgora)} tone={kpis.abertasAgora > 0 ? 'warn' : 'default'} />

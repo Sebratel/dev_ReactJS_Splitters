@@ -1,14 +1,14 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Sparkles, MonitorPlay } from 'lucide-react'
+import { Sparkles, MonitorPlay, Wrench, BarChart3, type LucideIcon } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/store/sessionStore'
 import { persistSessionToken } from '@/shared/lib/storage'
 
-const TAB_ITEMS = [
-  { to: '/massiva', label: 'Operacional', end: true },
-  { to: '/massiva/dashboard', label: 'Dashboard', end: false },
-] as const
+const TAB_ITEMS: ReadonlyArray<{ to: string; label: string; end: boolean; icon: LucideIcon }> = [
+  { to: '/massiva', label: 'Operacional', end: true, icon: Wrench },
+  { to: '/massiva/dashboard', label: 'Dashboard', end: false, icon: BarChart3 },
+]
 
 /**
  * Layout raiz do modulo de massivas.
@@ -25,33 +25,46 @@ export function MassivaLayout() {
         primaryAction={{ to: '/splitters', label: 'Voltar aos Splitters' }}
       />
 
-      {/* Navegacao por abas */}
-      <div className="mt-5 flex items-center border-b border-neutral-200/80">
-        {TAB_ITEMS.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) =>
-              cn(
-                '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors duration-200',
-                isActive
-                  ? 'border-amber-500 text-amber-500'
-                  : 'border-transparent text-neutral-500 hover:border-neutral-300 hover:text-neutral-800',
-              )
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
+      {/* Navegação por abas */}
+      <div className="mt-5 flex items-center gap-2 border-b border-neutral-200/80 px-1">
+        <div className="flex gap-1 rounded-lg bg-neutral-100/80 p-1">
+          {TAB_ITEMS.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              end={tab.end}
+              className={({ isActive }) =>
+                cn(
+                  'group flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80'
+                    : 'text-neutral-500 hover:bg-white/50 hover:text-neutral-700',
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <tab.icon
+                    size={15}
+                    className={cn(
+                      'shrink-0 transition-colors',
+                      isActive ? 'text-amber-500' : 'text-neutral-400 group-hover:text-neutral-500',
+                    )}
+                  />
+                  <span>{tab.label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
 
-        {/* Botao Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR).
-            Estrategia dupla para garantir o token na nova aba:
-            1) Passa o token no hash #id_token=<token> — bootstrapSession() ja le este
-               parametro (mesmo mecanismo do callback OAuth) e o remove da URL logo apos.
+        {/* Botão Monitor de Parede — abre /massiva/monitor em nova aba (TV CGR/COR).
+            Estratégia dupla para garantir o token na nova aba:
+            1) Passa o token no hash #id_token=<token> — bootstrapSession() já lê este
+               parâmetro (mesmo mecanismo do callback OAuth) e o remove da URL logo após.
                Garante o token mesmo que localStorage esteja vazio.
             2) Persiste no localStorage como fallback para F5 na aba do monitor.
-            O store Zustand e in-memory e nao e compartilhado entre abas. */}
+            O store Zustand é in-memory e não é compartilhado entre abas. */}
         <button
           type="button"
           title="Abrir monitor de parede (CGR/COR)"
@@ -69,9 +82,9 @@ export function MassivaLayout() {
             }
           }}
           className={cn(
-            'ml-auto mb-1 flex items-center gap-1.5 rounded-md px-3 py-1.5',
-            'text-xs font-medium text-neutral-500 transition-colors duration-200',
-            'hover:bg-neutral-100 hover:text-neutral-800',
+            'ml-auto flex items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-3 py-2',
+            'text-xs font-medium text-neutral-500 shadow-sm transition-all duration-200',
+            'hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700',
           )}
         >
           <MonitorPlay size={15} />
@@ -79,7 +92,7 @@ export function MassivaLayout() {
         </button>
       </div>
 
-      {/* Conteudo da rota ativa */}
+      {/* Conteúdo da rota ativa */}
       <div className="mt-6">
         <Outlet />
       </div>
