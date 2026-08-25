@@ -47,6 +47,7 @@ import {
   requireAuthenticatedSplittersUser,
   requireIsaAdminAccess,
   requireSplittersAdminAccess,
+  requireSplittersPermission,
 } from './firebaseAdminAuth.js';
 import {
   readIsaPromptConfig,
@@ -1724,6 +1725,8 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
 
 app.post('/api/massiva/history/open', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1772,6 +1775,8 @@ app.post('/api/massiva/history/open', async (req, res) => {
 
 app.post('/api/massiva/history/close', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1809,6 +1814,8 @@ app.post('/api/massiva/history/close', async (req, res) => {
 
 app.post('/api/massiva/history/cancel', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1843,6 +1850,8 @@ app.post('/api/massiva/history/cancel', async (req, res) => {
 // só guarda o último editor (classification_updated_by/at) — sem histórico completo.
 app.post('/api/massiva/history/update-classification', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -2018,19 +2027,24 @@ app.get('/api/autoisp/config', (req, res) => {
 
 app.get('/api/autoisp/token', async (req, res) => {
   try {
+    await requireAuthenticatedSplittersUser(req);
+
     if (!isAutoIspAuthConfigured()) {
       return res.status(503).json({ success: false, message: 'AutoISP não configurado no backend.' });
     }
     const { token, expiresInSec } = await getAutoIspToken();
     res.json({ success: true, data: { token, expiresIn: expiresInSec } });
   } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 502);
     console.error('Erro ao autenticar no AutoISP:', error.message);
-    res.status(502).json({ success: false, message: 'Falha ao autenticar no AutoISP.', error: error.message });
+    res.status(Number.isFinite(statusCode) ? statusCode : 502).json({ success: false, message: 'Falha ao autenticar no AutoISP.', error: error.message });
   }
 });
 
 app.post('/api/massiva/history/update-expected-close', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -2060,6 +2074,8 @@ app.post('/api/massiva/history/update-expected-close', async (req, res) => {
 
 app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
