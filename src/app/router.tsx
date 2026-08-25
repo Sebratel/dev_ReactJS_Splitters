@@ -88,7 +88,18 @@ export const router = createBrowserRouter([
             element: <Page><SplitterDetailPage /></Page>,
           },
           { path: 'clientes/:id', element: <Page><ClienteDetailPage /></Page> },
-          { path: 'redistribuicao-condominios', element: <Page><CondoRedistributionPage /></Page> },
+          {
+            path: 'redistribuicao-condominios',
+            element: (
+              <PermissionGuard
+                permission="canViewRedistribution"
+                allowAdmin
+                description="Seu perfil não possui acesso à tela de redistribuição."
+              >
+                <Page><CondoRedistributionPage /></Page>
+              </PermissionGuard>
+            ),
+          },
           {
             path: 'massiva',
             element: (

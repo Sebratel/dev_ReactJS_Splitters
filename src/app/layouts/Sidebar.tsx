@@ -45,6 +45,7 @@ export function Sidebar({
   const currentPath = useLocation().pathname
   const canAccessMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
   const canAccessIntelligence = useAccessAuthStore((s) => s.hasPermission('canViewIntelligence'))
+  const canAccessRedistribution = useAccessAuthStore((s) => s.hasPermission('canViewRedistribution'))
   const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
   const signOutUser = useAccessAuthStore((s) => s.signOutUser)
 
@@ -56,7 +57,9 @@ export function Sidebar({
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
     { label: 'Splitters', icon: Cpu, to: '/splitters' },
-    { label: 'Redistribuição', icon: ArrowRightLeft, to: '/redistribuicao-condominios' },
+    ...(isAdmin || canAccessRedistribution
+      ? [{ label: 'Redistribuição', icon: ArrowRightLeft, to: '/redistribuicao-condominios' }]
+      : []),
     { label: 'Sugestões', icon: Lightbulb, to: '/sugestoes' },
     ...(canAccessIntelligence ? [{ label: 'Painel da rede', icon: BarChart2, to: '/intelligence' }] : []),
     ...(canAccessMassiva

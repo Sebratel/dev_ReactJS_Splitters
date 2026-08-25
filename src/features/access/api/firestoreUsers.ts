@@ -35,6 +35,8 @@ export function parsePermissions(value: unknown): SplittersPermissionSet {
     canViewIntelligence: raw.canViewIntelligence ?? defaultSplittersPermissions.canViewIntelligence,
     canUsePlanningAssistant:
       raw.canUsePlanningAssistant ?? defaultSplittersPermissions.canUsePlanningAssistant,
+    canViewRedistribution:
+      raw.canViewRedistribution ?? defaultSplittersPermissions.canViewRedistribution,
     isAdmin: raw.isAdmin ?? defaultSplittersPermissions.isAdmin,
   }
 }

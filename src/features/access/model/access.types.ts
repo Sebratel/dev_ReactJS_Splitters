@@ -4,6 +4,7 @@
   canOpenMassiva: boolean
   canViewIntelligence: boolean
   canUsePlanningAssistant: boolean
+  canViewRedistribution: boolean
   isAdmin: boolean
 }
 
@@ -27,6 +28,7 @@ export const defaultSplittersPermissions: SplittersPermissionSet = {
   canOpenMassiva: false,
   canViewIntelligence: false,
   canUsePlanningAssistant: false,
+  canViewRedistribution: false,
   isAdmin: false,
 }
 

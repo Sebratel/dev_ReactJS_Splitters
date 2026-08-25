@@ -42,6 +42,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: true,
     canUsePlanningAssistant: true,
+    canViewRedistribution: true,
     isAdmin: true,
   },
   operador: {
@@ -50,6 +51,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: true,
     canUsePlanningAssistant: true,
+    canViewRedistribution: false,
     isAdmin: false,
   },
   operador_massivas: {
@@ -58,6 +60,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: false,
     canUsePlanningAssistant: false,
+    canViewRedistribution: false,
     isAdmin: false,
   },
   leitura: {
@@ -66,6 +69,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: false,
     canViewIntelligence: false,
     canUsePlanningAssistant: false,
+    canViewRedistribution: false,
     isAdmin: false,
   },
 }
@@ -77,6 +81,7 @@ function permissionsEqual(a: SplittersPermissionSet, b: SplittersPermissionSet):
     a.canOpenMassiva === b.canOpenMassiva &&
     a.canViewIntelligence === b.canViewIntelligence &&
     a.canUsePlanningAssistant === b.canUsePlanningAssistant &&
+    a.canViewRedistribution === b.canViewRedistribution &&
     a.isAdmin === b.isAdmin
   )
 }
