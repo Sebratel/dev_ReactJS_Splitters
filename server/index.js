@@ -22,6 +22,17 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
+import {
+  extractBlockFromTitle,
+  extractFloorFromTitle,
+  extractFloorFromComplement,
+  extractBlockFromComplement,
+  extractCondominiumName,
+  isCondominiumTitle,
+  isResidenceTitle,
+  isAlcapaoTitle,
+  normalizeCondoNameForGrouping,
+} from './condominiumClassifier.js';
 import { aggregateCancellations, aggregateSplitterCancellations, correlateMassivaChurn } from './cancellationsInsights.js';
 import { isAutoIspAuthConfigured, getAutoIspToken } from './autoIspAuth.js';
 import {
@@ -3139,18 +3150,146 @@ async function computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRoute
 
 async function captureNetworkReliefSnapshot({ straightRadiusMeters, maxRouteMeters }) {
   if (!massivaHistoryStore.configured) {
-    return { configured: false, snapshotRunId: null, entryCount: 0, scannedCount: 0 };
+    return { configured: false, snapshotRunId: null, entryCount: 0, scannedCount: 0, relieved: [] };
   }
 
   const data = await computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRouteMeters });
   const persisted = await massivaHistoryStore.replaceNetworkReliefSnapshot(data);
+
+  // ── Diff: detectar splitters que ganharam alívio ────────────────────────
+  let relieved = [];
+  try {
+    const diff = await massivaHistoryStore.diffNetworkReliefSnapshots({
+      currentRunId: persisted.snapshotRunId,
+      straightRadiusMeters,
+      maxRouteMeters,
+    });
+    relieved = diff.relievedSplitters;
+
+    if (relieved.length > 0) {
+      logger.info(
+        `[network-relief-snapshot] ${relieved.length} splitter(s) ganharam alívio: ${relieved.map((s) => s.code).join(', ')}`,
+      );
+      // Dispara webhook N8N (fire-and-forget — não bloqueia a captura)
+      notifyReliefWebhook(relieved).catch((err) => {
+        logger.warn('[network-relief-snapshot] Falha ao notificar webhook de alívio:', { error: err.message });
+      });
+    }
+  } catch (diffError) {
+    // Diff é best-effort: se falhar, o snapshot já foi gravado normalmente.
+    logger.warn('[network-relief-snapshot] Diff de alívio falhou (snapshot OK):', { error: diffError.message });
+  }
+
   return {
     configured: true,
     snapshotRunId: persisted.snapshotRunId,
     entryCount: persisted.entryCount,
     scannedCount: persisted.scannedCount,
     totalEntries: data.totalEntries,
+    relieved,
   };
+}
+
+/**
+ * Envia os splitters que ganharam alívio para o webhook N8N.
+ * Fire-and-forget — não interrompe o fluxo se falhar.
+ * Configurar via env N8N_RELIEF_WEBHOOK_URL.
+ */
+async function notifyReliefWebhook(relievedSplitters) {
+  const webhookUrl = (process.env.N8N_RELIEF_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[network-relief-webhook] N8N_RELIEF_WEBHOOK_URL não configurada — notificação ignorada.');
+    return;
+  }
+
+  const payload = {
+    event: 'splitter_relief_available',
+    timestamp: new Date().toISOString(),
+    count: relievedSplitters.length,
+    splitters: relievedSplitters.map((s) => ({
+      code: s.code,
+      title: s.title,
+      outPorts: s.outPorts,
+      busyCount: s.busyCount,
+    })),
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[network-relief-webhook] Notificação enviada com sucesso (${relievedSplitters.length} splitters).`);
+}
+
+/**
+ * Envia oportunidades de redistribuição de condomínio para o webhook N8N.
+ * Chamada sob demanda (botão na tela) — não é automática.
+ * Configurar via env N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL.
+ */
+async function notifyCondoRedistributionWebhook(opportunities) {
+  const webhookUrl = (process.env.N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[condo-redistribution-webhook] N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL não configurada — notificação ignorada.');
+    return { sent: false, reason: 'webhook_not_configured' };
+  }
+
+  // Agrupar por condomínio para o e-mail
+  const byCondominium = new Map();
+  for (const opp of opportunities) {
+    const key = opp.condoName;
+    if (!byCondominium.has(key)) byCondominium.set(key, []);
+    byCondominium.get(key).push(opp);
+  }
+
+  const payload = {
+    event: 'condo_redistribution_available',
+    timestamp: new Date().toISOString(),
+    totalOpportunities: opportunities.length,
+    condominiums: [...byCondominium.entries()].map(([name, opps]) => ({
+      name,
+      opportunityCount: opps.length,
+      clients: opps.map((o) => ({
+        clientName: o.client.name,
+        pppoeUser: o.client.pppoeUser,
+        complement: o.client.complement,
+        clientFloor: o.client.floor,
+        block: o.client.block,
+        currentSplitter: {
+          code: o.currentSplitter.code,
+          title: o.currentSplitter.title,
+          floor: o.currentSplitter.floor,
+        },
+        suggestedSplitter: {
+          code: o.suggestedSplitter.code,
+          title: o.suggestedSplitter.title,
+          floor: o.suggestedSplitter.floor,
+          availablePorts: o.suggestedSplitter.availablePorts,
+        },
+        floorImprovement: o.floorDifference.improvement,
+      })),
+    })),
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[condo-redistribution-webhook] Notificação enviada com sucesso (${opportunities.length} oportunidades em ${byCondominium.size} condomínio(s)).`);
+  return { sent: true, count: opportunities.length, condominiums: byCondominium.size };
 }
 
 /**
@@ -3681,6 +3820,257 @@ app.get(['/api/splitters/:code/connections', '/api/splitters/connections'], asyn
     });
   } catch (error) {
     console.error('Erro ao buscar conexões detalhadas:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Análise de redistribuição em condomínios ──────────────────────────────────
+// Para cada condomínio+bloco, identifica clientes que estão conectados em um
+// splitter de andar diferente do seu apartamento, quando existe um splitter mais
+// próximo (em andar) com portas disponíveis.
+// ───────────────────────────────────────────────────────────────────────────────
+app.get('/api/splitters/condo-redistribution', async (req, res) => {
+  try {
+    // Uma ÚNICA query que traz todos os clientes de condomínio com dados do splitter.
+    // A lógica de agrupamento e comparação é feita em JS (mais rápido que N queries).
+    const allCondoQuery = `
+      SELECT
+        base."CÓDIGO[SPLT.SECUNDARIO]"        AS splitter_code,
+        base."SPLT.SECUNDARIO"                AS splitter_title,
+        base."CAPACIDADE[SPLT.SECUNDARIO]"    AS out_ports,
+        base."BUSY_COUNT"                     AS busy_count,
+        base."NOME CONDOMÍNIO"                AS condo_name,
+        base."TIPO LOCAL"                     AS tipo_local,
+        base."NOME CLIENTE"                   AS client_name,
+        base."USUÁRIO[CLIENTE]"               AS pppoe_user,
+        base."ENDERECO COMPLE."               AS complement,
+        base."RUA"                            AS client_street,
+        base."NUMERO"                         AS client_number,
+        base."CELULAR"                        AS client_phone,
+        base."ID CONEXAO[CLIENTE]"            AS connection_id
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE base."TIPO LOCAL" = 'CONDOMÍNIO'
+        AND base."CAPACIDADE[SPLT.SECUNDARIO]" IS NOT NULL
+      ORDER BY base."NOME CONDOMÍNIO", base."CÓDIGO[SPLT.SECUNDARIO]"
+    `;
+    const result = await pool.query(allCondoQuery);
+    const rows = result.rows;
+
+    if (rows.length === 0) {
+      return res.json({ success: true, opportunities: [], pendingFloorInfo: [], stats: { condos: 0, splitters: 0, clientsAnalyzed: 0, opportunitiesFound: 0, pendingCount: 0 } });
+    }
+
+    // 1. Construir mapa de splitters únicos (deduplica linhas de clientes)
+    /** @type {Map<string, { code: string, title: string, outPorts: number, busyCount: number, availablePorts: number, condoName: string, block: string|null, floor: number|null }>} */
+    const splitterMap = new Map();
+    for (const row of rows) {
+      const code = (row.splitter_code ?? '').trim();
+      if (code && !splitterMap.has(code)) {
+        const outPorts = Number(row.out_ports ?? 0);
+        const busyCount = Number(row.busy_count ?? 0);
+        splitterMap.set(code, {
+          code,
+          title: (row.splitter_title ?? '').trim(),
+          outPorts,
+          busyCount,
+          availablePorts: Math.max(0, outPorts - busyCount),
+          condoName: normalizeCondoNameForGrouping(row.condo_name),
+          block: extractBlockFromTitle(row.splitter_title),
+          floor: extractFloorFromTitle(row.splitter_title),
+        });
+      }
+    }
+
+    // 2. Agrupar splitters por condomínio normalizado + bloco.
+    //    RES. (residências individuais) são excluídos: não têm andar por natureza
+    //    e não fazem parte da análise de redistribuição vertical.
+    //    normalizeCondoNameForGrouping remove o sufixo de andar (ex: "- 8°")
+    //    para que splitters do mesmo edifício/bloco mas de andares diferentes
+    //    caiam no mesmo grupo.
+    /** @type {Map<string, Array<{ code: string, title: string, outPorts: number, busyCount: number, availablePorts: number, condoName: string, block: string|null, floor: number }>>} */
+    const groups = new Map();
+    for (const s of splitterMap.values()) {
+      // RES. (residência) e ALÇ° (alçapão/forro) ignorados em toda a análise
+      if (isResidenceTitle(s.title) || isAlcapaoTitle(s.title)) continue;
+      const key = `${s.condoName}|||${s.block ?? '__SEM_BLOCO__'}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    }
+
+    // 3. Filtrar grupos com >= 2 splitters
+    const relevantGroups = new Map();
+    for (const [key, splitters] of groups) {
+      if (splitters.length >= 2) relevantGroups.set(key, splitters);
+    }
+
+    // Códigos de splitters que pertencem a um grupo relevante
+    const relevantCodes = new Set();
+    for (const splitters of relevantGroups.values()) {
+      for (const s of splitters) relevantCodes.add(s.code);
+    }
+
+    // 4. Analisar cada cliente
+    const opportunities = [];
+    /** @type {Array<{ client: object, currentSplitter: object, condoName: string, pendingReason: 'splitter_sem_andar' | 'cliente_sem_complemento' }>} */
+    const pendingFloorInfo = [];
+    const pendingClientsSeen = new Set(); // evita duplicar o mesmo cliente
+    let totalClientsAnalyzed = 0;
+
+    for (const row of rows) {
+      const clientName = (row.client_name ?? '').trim();
+      if (!clientName) continue; // linha sem cliente (porta vazia)
+
+      const splitterCode = (row.splitter_code ?? '').trim();
+      if (!relevantCodes.has(splitterCode)) continue; // splitter não está em grupo relevante
+
+      totalClientsAnalyzed++;
+
+      const currentSplitter = splitterMap.get(splitterCode);
+      if (!currentSplitter) continue;
+
+      const pppoeUser = (row.pppoe_user ?? '').trim();
+      const complement = (row.complement ?? '').trim();
+      const clientFloor = extractFloorFromComplement(complement);
+
+      // RES. = residência individual (sem andar por natureza) e ALÇ° = alçapão/forro
+      // (andar conhecido, colocado deliberadamente). Ambos ignorados por completo:
+      // não geram pendência nem oportunidade.
+      if (isResidenceTitle(currentSplitter.title) || isAlcapaoTitle(currentSplitter.title)) continue;
+
+      // Cliente sem andar identificável no complemento
+      if (clientFloor === null) {
+        if (!pendingClientsSeen.has(pppoeUser)) {
+          pendingClientsSeen.add(pppoeUser);
+          pendingFloorInfo.push({
+            client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
+            currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
+            condoName: currentSplitter.condoName,
+            pendingReason: 'cliente_sem_complemento',
+          });
+        }
+        continue;
+      }
+
+      // Splitter sem andar cadastrado no título (só COND./ED. chegam aqui)
+      if (currentSplitter.floor === null) {
+        if (!pendingClientsSeen.has(pppoeUser)) {
+          pendingClientsSeen.add(pppoeUser);
+          pendingFloorInfo.push({
+            client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
+            currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
+            condoName: currentSplitter.condoName,
+            pendingReason: 'splitter_sem_andar',
+          });
+        }
+        continue;
+      }
+
+      const clientBlock = extractBlockFromComplement(complement);
+
+      // Bloco do cliente vs bloco do splitter
+      if (clientBlock && currentSplitter.block && clientBlock !== currentSplitter.block) continue;
+
+      const currentDistance = Math.abs(clientFloor - currentSplitter.floor);
+
+      // Encontrar grupo deste splitter
+      const groupKey = `${currentSplitter.condoName}|||${currentSplitter.block ?? '__SEM_BLOCO__'}`;
+      const groupSplitters = relevantGroups.get(groupKey);
+      if (!groupSplitters) continue;
+
+      // Encontrar melhor candidato (mais próximo do andar do cliente, com portas livres)
+      let bestCandidate = null;
+      let bestDistance = currentDistance;
+
+      for (const candidate of groupSplitters) {
+        if (candidate.code === splitterCode) continue;
+        if (candidate.availablePorts <= 0) continue;
+        if (candidate.floor === null) continue; // candidato sem andar cadastrado — ignorar
+        if (clientBlock && candidate.block && clientBlock !== candidate.block) continue;
+
+        const candidateDistance = Math.abs(clientFloor - candidate.floor);
+        if (candidateDistance < bestDistance) {
+          bestDistance = candidateDistance;
+          bestCandidate = candidate;
+        }
+      }
+
+      if (bestCandidate) {
+        opportunities.push({
+          client: {
+            name: clientName,
+            pppoeUser,
+            complement,
+            floor: clientFloor,
+            block: clientBlock,
+            street: (row.client_street ?? '').trim(),
+            number: (row.client_number ?? '').trim(),
+            phone: (row.client_phone ?? '').trim(),
+            connectionId: row.connection_id,
+          },
+          currentSplitter: {
+            code: currentSplitter.code,
+            title: currentSplitter.title,
+            floor: currentSplitter.floor,
+            block: currentSplitter.block,
+          },
+          suggestedSplitter: {
+            code: bestCandidate.code,
+            title: bestCandidate.title,
+            floor: bestCandidate.floor,
+            block: bestCandidate.block,
+            availablePorts: bestCandidate.availablePorts,
+          },
+          floorDifference: {
+            current: currentDistance,
+            suggested: bestDistance,
+            improvement: currentDistance - bestDistance,
+          },
+          condoName: currentSplitter.condoName,
+        });
+      }
+    }
+
+    // 5. Ordenar por maior melhoria descendente
+    opportunities.sort((a, b) => b.floorDifference.improvement - a.floorDifference.improvement);
+
+    // 6. Ordenar pendências: primeiro os de splitter sem andar, depois os sem complemento
+    pendingFloorInfo.sort((a, b) => {
+      if (a.pendingReason === b.pendingReason) return a.condoName.localeCompare(b.condoName);
+      return a.pendingReason === 'splitter_sem_andar' ? -1 : 1;
+    });
+
+    const uniqueCondos = new Set(opportunities.map((o) => o.condoName));
+
+    res.json({
+      success: true,
+      opportunities,
+      pendingFloorInfo,
+      stats: {
+        condos: uniqueCondos.size,
+        splitters: splitterMap.size,
+        clientsAnalyzed: totalClientsAnalyzed,
+        opportunitiesFound: opportunities.length,
+        pendingCount: pendingFloorInfo.length,
+      },
+    });
+  } catch (error) {
+    logger.error('[condo-redistribution] Erro na análise:', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Disparo manual de notificação de redistribuição para o CAOC
+app.post('/api/splitters/condo-redistribution/notify', async (req, res) => {
+  try {
+    const { opportunities } = req.body ?? {};
+    if (!Array.isArray(opportunities) || opportunities.length === 0) {
+      return res.status(400).json({ success: false, message: 'Nenhuma oportunidade enviada.' });
+    }
+
+    const result = await notifyCondoRedistributionWebhook(opportunities);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    logger.error('[condo-redistribution-notify] Erro ao notificar:', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });

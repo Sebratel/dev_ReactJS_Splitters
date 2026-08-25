@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowRightLeft,
   Cpu,
   LayoutDashboard,
   AlertTriangle,
@@ -55,6 +56,7 @@ export function Sidebar({
   const navigationItems = [
     { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
     { label: 'Splitters', icon: Cpu, to: '/splitters' },
+    { label: 'Redistribuição', icon: ArrowRightLeft, to: '/redistribuicao-condominios' },
     { label: 'Sugestões', icon: Lightbulb, to: '/sugestoes' },
     ...(canAccessIntelligence ? [{ label: 'Painel da rede', icon: BarChart2, to: '/intelligence' }] : []),
     ...(canAccessMassiva

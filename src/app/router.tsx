@@ -41,6 +41,9 @@ const IsaSettingsPage = lazy(() =>
 const PlatformSuggestionsPage = lazy(() =>
   import('@/pages/PlatformSuggestionsPage').then((m) => ({ default: m.PlatformSuggestionsPage })),
 )
+const CondoRedistributionPage = lazy(() =>
+  import('@/pages/CondoRedistributionPage').then((m) => ({ default: m.CondoRedistributionPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -85,6 +88,7 @@ export const router = createBrowserRouter([
             element: <Page><SplitterDetailPage /></Page>,
           },
           { path: 'clientes/:id', element: <Page><ClienteDetailPage /></Page> },
+          { path: 'redistribuicao-condominios', element: <Page><CondoRedistributionPage /></Page> },
           {
             path: 'massiva',
             element: (
