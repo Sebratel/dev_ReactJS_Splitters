@@ -21,7 +21,7 @@ export const SPLITTERS_ROLE_DESCRIPTION: Record<
 > = {
   admin: 'Acesso total ao sistema, gestao de usuarios e assistente ISA.',
   operador:
-    'Painel da rede, splitters, massivas e assistente ISA de planejamento, sem administracao.',
+    'Painel da rede, splitters, massivas, redistribuicao e assistente ISA de planejamento, sem administracao.',
   operador_massivas:
     'Splitters e massivas (inclui abrir ocorrencias), sem painel de inteligencia nem assistente ISA.',
   leitura: 'Somente splitters (leitura). Nao inclui massivas, inteligencia nem assistente ISA.',
@@ -51,7 +51,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: true,
     canUsePlanningAssistant: true,
-    canViewRedistribution: false,
+    canViewRedistribution: true,
     isAdmin: false,
   },
   operador_massivas: {
