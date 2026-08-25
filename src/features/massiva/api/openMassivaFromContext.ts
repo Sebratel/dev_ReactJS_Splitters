@@ -197,6 +197,11 @@ async function openInfraProtocolIfSelected(
   const routes: InfraMaskRoute[] = context.basis.topology.routes.map((route) => ({
     apCode: route.apCode,
     apDisplayTitle: route.apDisplayTitle,
+    // Nomenclatura do(s) splitter(s) da rota (ss.title) — vira "Número da CTO".
+    splitterLabel: route.effectiveSplitterDisplay
+      .map((s) => s.label.trim())
+      .filter((label) => label !== '')
+      .join(', '),
     slot: route.slot,
     port: route.port,
     affected: collectMapeableAfetadosClientes(

@@ -5,6 +5,8 @@ export type InfraMaskRoute = {
   apCode: string
   /** Nome de exibição da OLT (ex.: "OLT 02 - CANMV"). */
   apDisplayTitle: string
+  /** Nomenclatura do(s) splitter(s) da rota (ss.title). Usado como "Número da CTO". */
+  splitterLabel: string
   /** Placa. */
   slot: number
   /** Porta PON. */
@@ -79,12 +81,16 @@ export function buildInfraSolicitationDescription(input: BuildInfraDescriptionIn
       ? `📶 ${input.signalDbm.trim()} dBm`
       : undefined
 
-  for (const route of routes) {
+  routes.forEach((route, index) => {
+    if (index > 0) lines.push(SEP_MINOR) // divisória entre pontos de acesso
     lines.push(ctoLine(route, signalExtra))
+    if (route.splitterLabel.trim()) {
+      lines.push(`   🧷 Splitter: ${route.splitterLabel.trim()}`)
+    }
     if (type === 'cto_avariada' && input.avaria?.trim()) {
       lines.push(`   🔨 Avaria: ${input.avaria.trim()}`)
     }
-  }
+  })
 
   lines.push(SEP_MINOR)
   lines.push(`📊 Total: ${routes.length} CTO(s) · ${totalAffected} clientes afetados`)
