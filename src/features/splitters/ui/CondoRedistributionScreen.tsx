@@ -24,6 +24,8 @@ import { useInstallationAlerts } from '@/features/splitters/hooks/useInstallatio
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import { classifySplitterSignalLevel } from '@/features/onu/model/onuSplitterSummary'
 import { fetchOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/api/fetchOpenMassivaSplitterCodesFromLocalDb'
+import { fetchProjectedSignalsBatch } from '@/features/onu/api/fetchProjectedSignalsBatch'
+import { normalizeClientName } from '@/features/onu/model/projectedSignal'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -80,6 +82,14 @@ const PRIORITY_META: Record<CondoPriority, { label: string; cls: string }> = {
   alta: { label: 'Alta prioridade', cls: 'bg-rose-100 text-rose-700' },
   media: { label: 'Média', cls: 'bg-amber-100 text-amber-800' },
   baixa: { label: 'Baixa', cls: 'bg-neutral-100 text-neutral-500' },
+}
+
+/** Célula de sinal projetado (dBm): cor por gravidade (crítico ≤ -25, atenuado ≤ -22). */
+function signalCell(rx: number | null | undefined): { text: string; cls: string } {
+  if (rx == null) return { text: '—', cls: 'text-neutral-300' }
+  if (rx <= -25) return { text: `${Math.round(rx)}`, cls: 'text-rose-700 font-semibold' }
+  if (rx <= -22) return { text: `${Math.round(rx)}`, cls: 'text-amber-700 font-semibold' }
+  return { text: `${Math.round(rx)}`, cls: 'text-emerald-700 font-semibold' }
 }
 
 type SortField = 'improvement' | 'condoName' | 'clientFloor'
@@ -267,6 +277,20 @@ export function CondoRedistributionScreen() {
       : null,
     [selectedCondo, groupedByCondo],
   )
+
+  // Sinal projetado por cliente (GeoGrid) — só quando o modal de oportunidades abre
+  const selectedCondoNames = useMemo(
+    () => selectedCondoOpps ? selectedCondoOpps.map((o) => o.client.name).filter(Boolean) : [],
+    [selectedCondoOpps],
+  )
+  const projectedSignals = useQuery({
+    queryKey: ['condo-projected-signals', selectedCondo],
+    queryFn: () => fetchProjectedSignalsBatch(selectedCondoNames),
+    enabled: selectedCondo !== null && selectedCondoNames.length > 0,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const signalByName = projectedSignals.data
 
   // Dados do modal (pendências)
   const selectedPendingItems = useMemo<PendingFloorInfoItem[] | null>(
@@ -883,6 +907,7 @@ export function CondoRedistributionScreen() {
                     <th className="px-4 py-3 font-semibold text-neutral-500">Splitter atual</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Splitter sugerido</th>
                     <th className="px-4 py-3 text-center font-semibold text-neutral-500">Portas livres</th>
+                    <th className="px-4 py-3 text-center font-semibold text-neutral-500">Sinal</th>
                     <th className="px-4 py-3 text-center font-semibold text-neutral-500">Melhoria</th>
                   </tr>
                 </thead>
@@ -916,6 +941,20 @@ export function CondoRedistributionScreen() {
                         <span className="inline-flex min-w-[2rem] items-center justify-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold tabular-nums text-emerald-700">
                           {o.suggestedSplitter.availablePorts}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(() => {
+                          const rx = signalByName?.get(normalizeClientName(o.client.name))?.projectedRxPower
+                          const cell = signalCell(rx)
+                          return (
+                            <span
+                              className={cn('inline-flex items-center gap-1 tabular-nums', cell.cls)}
+                              title={rx != null ? 'Sinal projetado (GeoGrid)' : 'Sem sinal projetado disponível'}
+                            >
+                              {rx != null && <SignalLow className="size-3.5" />}{cell.text}{rx != null ? ' dBm' : ''}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums', improvementBadgeClass(o.floorDifference.improvement))}>
