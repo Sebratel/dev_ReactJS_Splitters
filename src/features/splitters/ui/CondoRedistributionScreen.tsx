@@ -943,7 +943,9 @@ export function CondoRedistributionScreen() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {(() => {
+                        {projectedSignals.isLoading ? (
+                          <Loader2 className="mx-auto size-3.5 animate-spin text-neutral-300" />
+                        ) : (() => {
                           const rx = signalByName?.get(normalizeClientName(o.client.name))?.projectedRxPower
                           const cell = signalCell(rx)
                           return (
