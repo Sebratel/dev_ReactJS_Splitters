@@ -33,6 +33,8 @@ export type CondoRedistributionOpportunity = {
     improvement: number
   }
   condoName: string
+  city: string
+  site: string
 }
 
 export type CondoRedistributionStats = {
@@ -58,6 +60,8 @@ export type PendingFloorInfoItem = {
     title: string
   }
   condoName: string
+  city: string
+  site: string
   pendingReason: PendingFloorInfoReason
 }
 
@@ -125,6 +129,8 @@ export async function fetchCondoRedistributionFromLocalDb(): Promise<CondoRedist
         improvement: Number(diff?.improvement ?? 0),
       },
       condoName: String(row.condoName ?? '').trim(),
+      city: String(row.city ?? '').trim(),
+      site: String(row.site ?? '').trim(),
     }
   })
 
@@ -147,6 +153,8 @@ export async function fetchCondoRedistributionFromLocalDb(): Promise<CondoRedist
         title: String(current?.title ?? '').trim(),
       },
       condoName: String(row.condoName ?? '').trim(),
+      city: String(row.city ?? '').trim(),
+      site: String(row.site ?? '').trim(),
       pendingReason: (row.pendingReason as PendingFloorInfoReason) ?? 'cliente_sem_complemento',
     }
   })

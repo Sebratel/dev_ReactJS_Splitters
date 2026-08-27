@@ -12,8 +12,10 @@ import {
   FileSpreadsheet,
   FileText,
   Loader2,
+  MapPin,
   RefreshCw,
   Search,
+  Server,
   Wrench,
   X,
 } from 'lucide-react'
@@ -75,6 +77,10 @@ export function CondoRedistributionScreen() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedCondo, setSelectedCondo] = useState<string | null>(null)
 
+  // Filtros geográficos (compartilhados entre as duas abas)
+  const [cityFilter, setCityFilter] = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
+
   // Aba pendências
   const [pendingSearch, setPendingSearch] = useState('')
   const [selectedPendingCondo, setSelectedPendingCondo] = useState<string | null>(null)
@@ -86,11 +92,29 @@ export function CondoRedistributionScreen() {
     refetchOnWindowFocus: false,
   })
 
+  // Opções de cidade e site (das duas abas), ordenadas
+  const { cityOptions, siteOptions } = useMemo(() => {
+    const cities = new Set<string>()
+    const sites = new Set<string>()
+    for (const o of data?.opportunities ?? []) {
+      if (o.city) cities.add(o.city)
+      if (o.site) sites.add(o.site)
+    }
+    for (const p of data?.pendingFloorInfo ?? []) {
+      if (p.city) cities.add(p.city)
+      if (p.site) sites.add(p.site)
+    }
+    const byPt = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
+    return { cityOptions: [...cities].sort(byPt), siteOptions: [...sites].sort(byPt) }
+  }, [data?.opportunities, data?.pendingFloorInfo])
+
   // ── Oportunidades filtradas ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (!data?.opportunities) return []
     const q = search.trim().toLowerCase()
     let list = data.opportunities
+    if (cityFilter) list = list.filter((o) => o.city === cityFilter)
+    if (siteFilter) list = list.filter((o) => o.site === siteFilter)
     if (q) {
       list = list.filter(
         (o) =>
@@ -99,7 +123,9 @@ export function CondoRedistributionScreen() {
           o.condoName.toLowerCase().includes(q) ||
           o.currentSplitter.code.toLowerCase().includes(q) ||
           o.suggestedSplitter.code.toLowerCase().includes(q) ||
-          o.client.complement.toLowerCase().includes(q),
+          o.client.complement.toLowerCase().includes(q) ||
+          o.city.toLowerCase().includes(q) ||
+          o.site.toLowerCase().includes(q),
       )
     }
     const sorted = [...list]
@@ -119,7 +145,7 @@ export function CondoRedistributionScreen() {
       return sortDirection === 'desc' ? -cmp : cmp
     })
     return sorted
-  }, [data?.opportunities, search, sortField, sortDirection])
+  }, [data?.opportunities, search, sortField, sortDirection, cityFilter, siteFilter])
 
   const groupedByCondo = useMemo(() => {
     const map = new Map<string, CondoRedistributionOpportunity[]>()
@@ -139,7 +165,9 @@ export function CondoRedistributionScreen() {
       ])
       const bestImprovement = Math.max(...opps.map((o) => o.floorDifference.improvement))
       const blocks = [...new Set(opps.map((o) => o.currentSplitter.block).filter(Boolean))] as string[]
-      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks }
+      const city = opps.find((o) => o.city)?.city ?? ''
+      const site = opps.find((o) => o.site)?.site ?? ''
+      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site }
     })
 
     cards.sort((a, b) => {
@@ -159,15 +187,20 @@ export function CondoRedistributionScreen() {
   const filteredPending = useMemo(() => {
     if (!data?.pendingFloorInfo) return []
     const q = pendingSearch.trim().toLowerCase()
-    if (!q) return data.pendingFloorInfo
-    return data.pendingFloorInfo.filter(
+    let list = data.pendingFloorInfo
+    if (cityFilter) list = list.filter((p) => p.city === cityFilter)
+    if (siteFilter) list = list.filter((p) => p.site === siteFilter)
+    if (!q) return list
+    return list.filter(
       (p) =>
         p.client.name.toLowerCase().includes(q) ||
         p.client.pppoeUser.toLowerCase().includes(q) ||
         p.condoName.toLowerCase().includes(q) ||
-        p.currentSplitter.code.toLowerCase().includes(q),
+        p.currentSplitter.code.toLowerCase().includes(q) ||
+        p.city.toLowerCase().includes(q) ||
+        p.site.toLowerCase().includes(q),
     )
-  }, [data?.pendingFloorInfo, pendingSearch])
+  }, [data?.pendingFloorInfo, pendingSearch, cityFilter, siteFilter])
 
   // Pendências agrupadas por condomínio (mesma lógica da aba de oportunidades)
   const pendingByCondo = useMemo(() => {
@@ -230,6 +263,43 @@ export function CondoRedistributionScreen() {
       : sortDirection === 'desc'
         ? <ChevronDown className="inline size-3.5" />
         : <ChevronUp className="inline size-3.5" />
+
+  // Filtros de cidade e site (compartilhados; limpam a seleção de card ao trocar)
+  const clearSelections = () => { setSelectedCondo(null); setSelectedPendingCondo(null) }
+  const geoFilters = (cityOptions.length > 0 || siteOptions.length > 0) ? (
+    <div className="flex items-center gap-2">
+      {cityOptions.length > 0 && (
+        <div className="relative">
+          <MapPin className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-amber-500" />
+          <select
+            value={cityFilter}
+            onChange={(e) => { setCityFilter(e.target.value); clearSelections() }}
+            className={cn('h-9 appearance-none rounded-xl border bg-white pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-200/50',
+              cityFilter ? 'border-amber-300 text-amber-800' : 'border-neutral-200 text-neutral-600')}
+          >
+            <option value="">Todas as cidades</option>
+            {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
+        </div>
+      )}
+      {siteOptions.length > 0 && (
+        <div className="relative">
+          <Server className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-sky-500" />
+          <select
+            value={siteFilter}
+            onChange={(e) => { setSiteFilter(e.target.value); clearSelections() }}
+            className={cn('h-9 appearance-none rounded-xl border bg-white pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-200/50',
+              siteFilter ? 'border-sky-300 text-sky-800' : 'border-neutral-200 text-neutral-600')}
+          >
+            <option value="">Todos os sites</option>
+            {siteOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" />
+        </div>
+      )}
+    </div>
+  ) : null
 
   // ── Alertas de protocolo em andamento ────────────────────────────────────────
   // Cruza os PPPoEs pendentes de andar com protocolos abertos no Elleven
@@ -503,6 +573,7 @@ export function CondoRedistributionScreen() {
                 </button>
               ))}
             </div>
+            {geoFilters}
           </div>
 
           {/* Empty */}
@@ -518,7 +589,7 @@ export function CondoRedistributionScreen() {
           {/* Grid de cards — 2 col em tablet, 3 col em desktop */}
           {condoCards.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks }) => {
+              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site }) => {
                 const isSelected = selectedCondo === condoName
                 return (
                   <button
@@ -543,7 +614,14 @@ export function CondoRedistributionScreen() {
                     {/* Info */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-neutral-900">{condoName}</p>
-                      <p className="mb-3 text-xs text-neutral-500">
+                      {(city || site) && (
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-neutral-500">
+                          {city && (<span className="inline-flex items-center gap-1"><MapPin className="size-3 text-amber-500" />{city}</span>)}
+                          {city && site && <span className="text-neutral-300">·</span>}
+                          {site && (<span className="inline-flex items-center gap-1"><Server className="size-3 text-sky-500" />{site}</span>)}
+                        </p>
+                      )}
+                      <p className="mb-3 mt-0.5 text-xs text-neutral-500">
                         {blocks.length > 0 ? `BL ${blocks.join(' · BL ')}` : 'Bloco único'}
                       </p>
                       <div className="flex gap-4">
@@ -573,16 +651,19 @@ export function CondoRedistributionScreen() {
       {/* ── Aba: Pendências ─────────────────────────────────────────────────── */}
       {!isLoading && !isError && activeTab === 'pending' && (
         <div key="tab-pending" className="space-y-4 animate-tab-enter">
-          {/* Busca */}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-            <input
-              type="text"
-              placeholder="Filtrar por cliente, condomínio ou splitter..."
-              value={pendingSearch}
-              onChange={(e) => { setPendingSearch(e.target.value); setSelectedPendingCondo(null) }}
-              className="h-9 w-full rounded-xl border border-neutral-200 bg-white pl-10 pr-4 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
-            />
+          {/* Busca + filtros */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Filtrar por cliente, condomínio ou splitter..."
+                value={pendingSearch}
+                onChange={(e) => { setPendingSearch(e.target.value); setSelectedPendingCondo(null) }}
+                className="h-9 w-full rounded-xl border border-neutral-200 bg-white pl-10 pr-4 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
+              />
+            </div>
+            {geoFilters}
           </div>
 
           {/* Empty */}
@@ -619,7 +700,18 @@ export function CondoRedistributionScreen() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-neutral-900">{condoName}</p>
-                      <p className="mb-3 text-xs text-neutral-500">{items.length} pendência{items.length !== 1 ? 's' : ''}</p>
+                      {(() => {
+                        const city = items.find((i) => i.city)?.city ?? ''
+                        const site = items.find((i) => i.site)?.site ?? ''
+                        return (city || site) ? (
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-neutral-500">
+                            {city && (<span className="inline-flex items-center gap-1"><MapPin className="size-3 text-amber-500" />{city}</span>)}
+                            {city && site && <span className="text-neutral-300">·</span>}
+                            {site && (<span className="inline-flex items-center gap-1"><Server className="size-3 text-sky-500" />{site}</span>)}
+                          </p>
+                        ) : null
+                      })()}
+                      <p className="mb-3 mt-0.5 text-xs text-neutral-500">{items.length} pendência{items.length !== 1 ? 's' : ''}</p>
                       <div className="flex gap-3">
                         {nSplitter > 0 && (
                           <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[10px] font-bold text-orange-700">
@@ -668,8 +760,10 @@ export function CondoRedistributionScreen() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold text-neutral-900">{selectedCondo}</h2>
-                <p className="text-xs text-neutral-500">
-                  {selectedCondoOpps.length} cliente{selectedCondoOpps.length !== 1 ? 's' : ''} para redistribuir
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500">
+                  <span>{selectedCondoOpps.length} cliente{selectedCondoOpps.length !== 1 ? 's' : ''} para redistribuir</span>
+                  {selectedCondoOpps[0]?.city && (<span className="inline-flex items-center gap-1 text-neutral-400"><MapPin className="size-3 text-amber-500" />{selectedCondoOpps[0].city}</span>)}
+                  {selectedCondoOpps[0]?.site && (<span className="inline-flex items-center gap-1 text-neutral-400"><Server className="size-3 text-sky-500" />{selectedCondoOpps[0].site}</span>)}
                 </p>
               </div>
               {/* Botões de exportação */}
@@ -786,8 +880,10 @@ export function CondoRedistributionScreen() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-base font-bold text-neutral-900">{selectedPendingCondo}</h2>
-                <p className="text-xs text-neutral-500">
-                  {selectedPendingItems.length} pendência{selectedPendingItems.length !== 1 ? 's' : ''} sem informação de andar
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500">
+                  <span>{selectedPendingItems.length} pendência{selectedPendingItems.length !== 1 ? 's' : ''} sem informação de andar</span>
+                  {selectedPendingItems[0]?.city && (<span className="inline-flex items-center gap-1 text-neutral-400"><MapPin className="size-3 text-amber-500" />{selectedPendingItems[0].city}</span>)}
+                  {selectedPendingItems[0]?.site && (<span className="inline-flex items-center gap-1 text-neutral-400"><Server className="size-3 text-sky-500" />{selectedPendingItems[0].site}</span>)}
                 </p>
               </div>
               {/* Botões de exportação */}

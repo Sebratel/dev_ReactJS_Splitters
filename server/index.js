@@ -3864,7 +3864,9 @@ app.get('/api/splitters/condo-redistribution', async (req, res) => {
         base."RUA"                            AS client_street,
         base."NUMERO"                         AS client_number,
         base."CELULAR"                        AS client_phone,
-        base."ID CONEXAO[CLIENTE]"            AS connection_id
+        base."ID CONEXAO[CLIENTE]"            AS connection_id,
+        base."SITE"                           AS site,
+        base."CIDADE[SITE]"                   AS city
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE base."TIPO LOCAL" = 'CONDOMÍNIO'
         AND base."CAPACIDADE[SPLT.SECUNDARIO]" IS NOT NULL
@@ -3894,6 +3896,8 @@ app.get('/api/splitters/condo-redistribution', async (req, res) => {
           condoName: normalizeCondoNameForGrouping(row.condo_name),
           block: extractBlockFromTitle(row.splitter_title),
           floor: extractFloorFromTitle(row.splitter_title),
+          city: (row.city ?? '').trim(),
+          site: (row.site ?? '').trim(),
         });
       }
     }
@@ -3962,6 +3966,8 @@ app.get('/api/splitters/condo-redistribution', async (req, res) => {
             client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
             currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
             condoName: currentSplitter.condoName,
+            city: currentSplitter.city,
+            site: currentSplitter.site,
             pendingReason: 'cliente_sem_complemento',
           });
         }
@@ -3976,6 +3982,8 @@ app.get('/api/splitters/condo-redistribution', async (req, res) => {
             client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
             currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
             condoName: currentSplitter.condoName,
+            city: currentSplitter.city,
+            site: currentSplitter.site,
             pendingReason: 'splitter_sem_andar',
           });
         }
@@ -4043,6 +4051,8 @@ app.get('/api/splitters/condo-redistribution', async (req, res) => {
             improvement: currentDistance - bestDistance,
           },
           condoName: currentSplitter.condoName,
+          city: currentSplitter.city,
+          site: currentSplitter.site,
         });
       }
     }
