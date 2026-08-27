@@ -16,10 +16,13 @@ import {
   RefreshCw,
   Search,
   Server,
+  SignalLow,
   Wrench,
   X,
 } from 'lucide-react'
 import { useInstallationAlerts } from '@/features/splitters/hooks/useInstallationAlerts'
+import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
+import { classifySplitterSignalLevel } from '@/features/onu/model/onuSplitterSummary'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -111,6 +114,10 @@ export function CondoRedistributionScreen() {
     refetchOnWindowFocus: false,
   })
 
+  // Sinal ONU por código de splitter (para sinalizar sinal crítico no card)
+  const onuSummary = useOnuSummaryBySplitter()
+  const onuByCode = onuSummary.data
+
   // Opções de cidade e site (das duas abas), ordenadas
   const { cityOptions, siteOptions } = useMemo(() => {
     const cities = new Set<string>()
@@ -187,7 +194,14 @@ export function CondoRedistributionScreen() {
       const city = opps.find((o) => o.city)?.city ?? ''
       const site = opps.find((o) => o.site)?.site ?? ''
       const priority = condoPriority(opps.length, bestImprovement)
-      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site, priority }
+      // Splitters atuais deste condomínio com sinal ONU crítico/offline
+      const currentCodes = new Set(opps.map((o) => o.currentSplitter.code))
+      let criticalSignals = 0
+      for (const code of currentCodes) {
+        const level = classifySplitterSignalLevel(onuByCode?.get(code))
+        if (level === 'critico' || level === 'offline') criticalSignals++
+      }
+      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site, priority, criticalSignals }
     })
 
     cards.sort((a, b) => {
@@ -201,7 +215,7 @@ export function CondoRedistributionScreen() {
     })
 
     return cards
-  }, [groupedByCondo, sortField, sortDirection])
+  }, [groupedByCondo, sortField, sortDirection, onuByCode])
 
   // ── Pendências filtradas ───────────────────────────────────────────────────────
   const filteredPending = useMemo(() => {
@@ -609,7 +623,7 @@ export function CondoRedistributionScreen() {
           {/* Grid de cards — 2 col em tablet, 3 col em desktop */}
           {condoCards.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site, priority }) => {
+              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site, priority, criticalSignals }) => {
                 const isSelected = selectedCondo === condoName
                 return (
                   <button
@@ -645,6 +659,15 @@ export function CondoRedistributionScreen() {
                         <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', PRIORITY_META[priority].cls)}>
                           {PRIORITY_META[priority].label}
                         </span>
+                        {criticalSignals > 0 && (
+                          <span
+                            title={`${criticalSignals} splitter(s) com sinal crítico/offline`}
+                            className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700"
+                          >
+                            <SignalLow className="size-3" />
+                            {criticalSignals} sinal crítico
+                          </span>
+                        )}
                         <span className="text-xs text-neutral-500">
                           {blocks.length > 0 ? `BL ${blocks.join(' · BL ')}` : 'Bloco único'}
                         </span>
