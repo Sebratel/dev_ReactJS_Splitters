@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
 import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
 import { PermissionGuard } from '@/app/auth/PermissionGuard'
+import { RouteErrorBoundary } from '@/app/RouteErrorBoundary'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { HomePage } from '@/pages/HomePage'
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage'
@@ -76,6 +77,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <RootLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <ProtectedAppLayout />,
@@ -152,4 +154,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  // Qualquer rota não encontrada → tela amigável (em vez do erro cru do React Router)
+  { path: '*', element: <RouteErrorBoundary /> },
 ])
