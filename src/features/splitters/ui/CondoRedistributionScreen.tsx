@@ -24,8 +24,8 @@ import { useInstallationAlerts } from '@/features/splitters/hooks/useInstallatio
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import { classifySplitterSignalLevel } from '@/features/onu/model/onuSplitterSummary'
 import { fetchOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/api/fetchOpenMassivaSplitterCodesFromLocalDb'
-import { fetchProjectedSignalsBatch } from '@/features/onu/api/fetchProjectedSignalsBatch'
-import { normalizeClientName } from '@/features/onu/model/projectedSignal'
+import { fetchOnuDiagnosticsBatch } from '@/features/onu/api/fetchOnuDiagnostic'
+import { RX_POWER_CRITICAL_DBM, RX_POWER_DEGRADED_DBM } from '@/features/onu/model/onuDiagnostic'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -84,11 +84,15 @@ const PRIORITY_META: Record<CondoPriority, { label: string; cls: string }> = {
   baixa: { label: 'Baixa', cls: 'bg-neutral-100 text-neutral-500' },
 }
 
-/** Célula de sinal projetado (dBm): cor por gravidade (crítico ≤ -25, atenuado ≤ -22). */
+/**
+ * Célula de sinal ONU medido ao vivo (dBm) — mesmo dado/limiares do chip do card.
+ * `rx === 0` é o sentinela de LOS (sem luz óptica). Crítico ≤ -28, degradado ≤ -25.
+ */
 function signalCell(rx: number | null | undefined): { text: string; cls: string } {
   if (rx == null) return { text: '—', cls: 'text-neutral-300' }
-  if (rx <= -25) return { text: `${Math.round(rx)}`, cls: 'text-rose-700 font-semibold' }
-  if (rx <= -22) return { text: `${Math.round(rx)}`, cls: 'text-amber-700 font-semibold' }
+  if (rx === 0) return { text: 'sem luz', cls: 'text-rose-700 font-semibold' }
+  if (rx <= RX_POWER_CRITICAL_DBM) return { text: `${Math.round(rx)}`, cls: 'text-rose-700 font-semibold' }
+  if (rx <= RX_POWER_DEGRADED_DBM) return { text: `${Math.round(rx)}`, cls: 'text-amber-700 font-semibold' }
   return { text: `${Math.round(rx)}`, cls: 'text-emerald-700 font-semibold' }
 }
 
@@ -278,19 +282,20 @@ export function CondoRedistributionScreen() {
     [selectedCondo, groupedByCondo],
   )
 
-  // Sinal projetado por cliente (GeoGrid) — só quando o modal de oportunidades abre
-  const selectedCondoNames = useMemo(
-    () => selectedCondoOpps ? selectedCondoOpps.map((o) => o.client.name).filter(Boolean) : [],
+  // Sinal ONU medido ao vivo por cliente (por pppoe) — só quando o modal de
+  // oportunidades abre. Mesma fonte do chip de sinal crítico do card.
+  const selectedCondoPppoes = useMemo(
+    () => selectedCondoOpps ? selectedCondoOpps.map((o) => o.client.pppoeUser).filter(Boolean) : [],
     [selectedCondoOpps],
   )
-  const projectedSignals = useQuery({
-    queryKey: ['condo-projected-signals', selectedCondo],
-    queryFn: () => fetchProjectedSignalsBatch(selectedCondoNames),
-    enabled: selectedCondo !== null && selectedCondoNames.length > 0,
+  const onuSignals = useQuery({
+    queryKey: ['condo-onu-signals', selectedCondo],
+    queryFn: () => fetchOnuDiagnosticsBatch(selectedCondoPppoes),
+    enabled: selectedCondo !== null && selectedCondoPppoes.length > 0,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   })
-  const signalByName = projectedSignals.data
+  const signalByPppoe = onuSignals.data
 
   // Dados do modal (pendências)
   const selectedPendingItems = useMemo<PendingFloorInfoItem[] | null>(
@@ -943,17 +948,18 @@ export function CondoRedistributionScreen() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {projectedSignals.isLoading ? (
+                        {onuSignals.isLoading ? (
                           <Loader2 className="mx-auto size-3.5 animate-spin text-neutral-300" />
                         ) : (() => {
-                          const rx = signalByName?.get(normalizeClientName(o.client.name))?.projectedRxPower
+                          const rx = signalByPppoe?.get(o.client.pppoeUser)?.rxPower
                           const cell = signalCell(rx)
+                          const hasReading = rx != null && rx !== 0
                           return (
                             <span
                               className={cn('inline-flex items-center gap-1 tabular-nums', cell.cls)}
-                              title={rx != null ? 'Sinal projetado (GeoGrid)' : 'Sem sinal projetado disponível'}
+                              title={rx != null ? 'Sinal ONU medido ao vivo' : 'Sem leitura de ONU disponível'}
                             >
-                              {rx != null && <SignalLow className="size-3.5" />}{cell.text}{rx != null ? ' dBm' : ''}
+                              {rx != null && <SignalLow className="size-3.5" />}{cell.text}{hasReading ? ' dBm' : ''}
                             </span>
                           )
                         })()}
