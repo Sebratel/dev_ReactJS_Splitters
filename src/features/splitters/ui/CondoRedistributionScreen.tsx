@@ -59,6 +59,25 @@ function improvementBadgeClass(improvement: number): string {
   return 'bg-sky-100 text-sky-800 border-sky-200'
 }
 
+type CondoPriority = 'alta' | 'media' | 'baixa'
+
+/**
+ * Prioridade heurística do condomínio: combina volume de clientes com a criticidade
+ * (maior ganho de andar). Score = clientes × ganho. Ajustável no futuro (ver roadmap ISA).
+ */
+function condoPriority(count: number, bestImprovement: number): CondoPriority {
+  const score = count * bestImprovement
+  if (score >= 40 || bestImprovement >= 6) return 'alta'
+  if (score >= 15 || bestImprovement >= 3) return 'media'
+  return 'baixa'
+}
+
+const PRIORITY_META: Record<CondoPriority, { label: string; cls: string }> = {
+  alta: { label: 'Alta prioridade', cls: 'bg-rose-100 text-rose-700' },
+  media: { label: 'Média', cls: 'bg-amber-100 text-amber-800' },
+  baixa: { label: 'Baixa', cls: 'bg-neutral-100 text-neutral-500' },
+}
+
 type SortField = 'improvement' | 'condoName' | 'clientFloor'
 type SortDirection = 'asc' | 'desc'
 type ActiveTab = 'opportunities' | 'pending'
@@ -167,7 +186,8 @@ export function CondoRedistributionScreen() {
       const blocks = [...new Set(opps.map((o) => o.currentSplitter.block).filter(Boolean))] as string[]
       const city = opps.find((o) => o.city)?.city ?? ''
       const site = opps.find((o) => o.site)?.site ?? ''
-      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site }
+      const priority = condoPriority(opps.length, bestImprovement)
+      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site, priority }
     })
 
     cards.sort((a, b) => {
@@ -589,7 +609,7 @@ export function CondoRedistributionScreen() {
           {/* Grid de cards — 2 col em tablet, 3 col em desktop */}
           {condoCards.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site }) => {
+              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site, priority }) => {
                 const isSelected = selectedCondo === condoName
                 return (
                   <button
@@ -621,9 +641,14 @@ export function CondoRedistributionScreen() {
                           {site && (<span className="inline-flex items-center gap-1"><Server className="size-3 text-sky-500" />{site}</span>)}
                         </p>
                       )}
-                      <p className="mb-3 mt-0.5 text-xs text-neutral-500">
-                        {blocks.length > 0 ? `BL ${blocks.join(' · BL ')}` : 'Bloco único'}
-                      </p>
+                      <div className="mb-3 mt-1 flex flex-wrap items-center gap-2">
+                        <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold', PRIORITY_META[priority].cls)}>
+                          {PRIORITY_META[priority].label}
+                        </span>
+                        <span className="text-xs text-neutral-500">
+                          {blocks.length > 0 ? `BL ${blocks.join(' · BL ')}` : 'Bloco único'}
+                        </span>
+                      </div>
                       <div className="flex gap-4">
                         <div>
                           <p className="text-lg font-semibold tabular-nums text-neutral-900">{count}</p>
@@ -806,6 +831,7 @@ export function CondoRedistributionScreen() {
                 <thead className="sticky top-0 z-10 bg-neutral-50">
                   <tr className="border-b border-neutral-200">
                     <th className="px-4 py-3 font-semibold text-neutral-500">Cliente</th>
+                    <th className="px-4 py-3 font-semibold text-neutral-500">Telefone</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Complemento</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Andar</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Splitter atual</th>
@@ -821,6 +847,7 @@ export function CondoRedistributionScreen() {
                         <div className="font-medium text-neutral-900">{o.client.name}</div>
                         <div className="text-[10px] text-neutral-400">{o.client.pppoeUser}</div>
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-neutral-600">{o.client.phone || '—'}</td>
                       <td className="px-4 py-3 text-neutral-600">{o.client.complement || '—'}</td>
                       <td className="px-4 py-3 font-semibold tabular-nums text-neutral-800">{floorLabel(o.client.floor)}</td>
                       <td className="px-4 py-3">
@@ -926,6 +953,7 @@ export function CondoRedistributionScreen() {
                 <thead className="sticky top-0 z-10 bg-neutral-50">
                   <tr className="border-b border-neutral-200">
                     <th className="px-4 py-3 font-semibold text-neutral-500">Cliente</th>
+                    <th className="px-4 py-3 font-semibold text-neutral-500">Telefone</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Splitter atual</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Complemento</th>
                     <th className="px-4 py-3 font-semibold text-neutral-500">Pendência</th>
@@ -940,6 +968,7 @@ export function CondoRedistributionScreen() {
                           <div className="font-medium text-neutral-900">{p.client.name}</div>
                           <div className="text-[10px] text-neutral-400">{p.client.pppoeUser}</div>
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-neutral-600">{p.client.phone || '—'}</td>
                         <td className="px-4 py-3">
                           <Link to={`/splitters/${p.currentSplitter.code}`} className="font-medium text-sky-700 hover:underline" title={p.currentSplitter.title} onClick={closePendingModal}>
                             {splitterLabel(p.currentSplitter.title)}
