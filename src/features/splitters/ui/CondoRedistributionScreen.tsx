@@ -404,12 +404,48 @@ export function CondoRedistributionScreen() {
         primaryAction={{ to: '/splitters', label: 'Voltar aos Splitters' }}
       />
 
-      {/* Banner ISA */}
-      <div
-        className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-amber-200/60 bg-cover bg-center bg-no-repeat px-5 py-4 shadow-lg"
-        style={{ backgroundImage: "url('/isa-network-header.png')" }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-900/50 to-transparent" />
+      {/* Banner ISA — fundo desenhado (gradiente + skyline SVG), sem imagem raster:
+          escala nítida em qualquer tela e nunca corta mal. O skyline evoca os
+          edifícios analisados e evapora para a esquerda, deixando o texto legível. */}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-5 py-4 shadow-lg">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 480 120"
+          preserveAspectRatio="xMaxYMax slice"
+          className="pointer-events-none absolute inset-y-0 right-0 h-full w-2/3"
+        >
+          <defs>
+            <linearGradient id="isa-skyline-fade" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="white" stopOpacity="0" />
+              <stop offset="0.55" stopColor="white" stopOpacity="0.5" />
+              <stop offset="1" stopColor="white" stopOpacity="1" />
+            </linearGradient>
+            <mask id="isa-skyline-mask">
+              <rect width="480" height="120" fill="url(#isa-skyline-fade)" />
+            </mask>
+          </defs>
+          <g mask="url(#isa-skyline-mask)">
+            {[38, 60, 46, 72, 54, 88, 64, 104, 58, 80, 50, 96, 44, 68, 56, 84, 62, 100, 52, 76].map(
+              (h, i) => {
+                const highlight = i === 17
+                return (
+                  <rect
+                    key={i}
+                    x={12 + i * 24}
+                    y={120 - h}
+                    width={12}
+                    height={h}
+                    rx={3}
+                    fill={highlight ? '#f59e0b' : 'white'}
+                    fillOpacity={highlight ? 0.55 : 0.12}
+                  />
+                )
+              },
+            )}
+          </g>
+        </svg>
+        {/* Brilho âmbar suave, ancora o olhar no lado das métricas */}
+        <div className="pointer-events-none absolute -right-8 top-1/2 size-52 -translate-y-1/2 rounded-full bg-amber-500/10 blur-3xl" />
         <div className="relative z-10 flex flex-1 items-center gap-4">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
             <ArrowRightLeft className="size-6 text-white" />
