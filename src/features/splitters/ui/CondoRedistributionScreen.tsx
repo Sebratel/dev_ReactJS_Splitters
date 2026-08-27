@@ -23,6 +23,7 @@ import {
 import { useInstallationAlerts } from '@/features/splitters/hooks/useInstallationAlerts'
 import { useOnuSummaryBySplitter } from '@/features/onu/hooks/useOnuSummaryBySplitter'
 import { classifySplitterSignalLevel } from '@/features/onu/model/onuSplitterSummary'
+import { fetchOpenMassivaSplitterCodesFromLocalDb } from '@/features/splitters/api/fetchOpenMassivaSplitterCodesFromLocalDb'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { ResponsiveWrapper } from '@/shared/ui/ResponsiveWrapper'
 import { cn } from '@/shared/lib/utils'
@@ -118,6 +119,18 @@ export function CondoRedistributionScreen() {
   const onuSummary = useOnuSummaryBySplitter()
   const onuByCode = onuSummary.data
 
+  // Splitters com massiva aberta (para sinalizar "não redistribuir em cima de obra")
+  const openMassivaQuery = useQuery({
+    queryKey: ['open-massiva-splitter-codes'],
+    queryFn: fetchOpenMassivaSplitterCodesFromLocalDb,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const openMassivaCodes = useMemo(
+    () => new Set(openMassivaQuery.data ?? []),
+    [openMassivaQuery.data],
+  )
+
   // Opções de cidade e site (das duas abas), ordenadas
   const { cityOptions, siteOptions } = useMemo(() => {
     const cities = new Set<string>()
@@ -201,7 +214,8 @@ export function CondoRedistributionScreen() {
         const level = classifySplitterSignalLevel(onuByCode?.get(code))
         if (level === 'critico' || level === 'offline') criticalSignals++
       }
-      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site, priority, criticalSignals }
+      const hasOpenMassiva = [...currentCodes].some((code) => openMassivaCodes.has(code))
+      return { condoName, count: opps.length, splitters: splitters.size, bestImprovement, blocks, city, site, priority, criticalSignals, hasOpenMassiva }
     })
 
     cards.sort((a, b) => {
@@ -215,7 +229,7 @@ export function CondoRedistributionScreen() {
     })
 
     return cards
-  }, [groupedByCondo, sortField, sortDirection, onuByCode])
+  }, [groupedByCondo, sortField, sortDirection, onuByCode, openMassivaCodes])
 
   // ── Pendências filtradas ───────────────────────────────────────────────────────
   const filteredPending = useMemo(() => {
@@ -623,7 +637,7 @@ export function CondoRedistributionScreen() {
           {/* Grid de cards — 2 col em tablet, 3 col em desktop */}
           {condoCards.length > 0 && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site, priority, criticalSignals }) => {
+              {condoCards.map(({ condoName, count, splitters, bestImprovement, blocks, city, site, priority, criticalSignals, hasOpenMassiva }) => {
                 const isSelected = selectedCondo === condoName
                 return (
                   <button
@@ -666,6 +680,15 @@ export function CondoRedistributionScreen() {
                           >
                             <SignalLow className="size-3" />
                             {criticalSignals} sinal crítico
+                          </span>
+                        )}
+                        {hasOpenMassiva && (
+                          <span
+                            title="Há massiva aberta neste condomínio — avaliar antes de redistribuir"
+                            className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700"
+                          >
+                            <AlertTriangle className="size-3" />
+                            massiva aberta
                           </span>
                         )}
                         <span className="text-xs text-neutral-500">
