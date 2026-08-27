@@ -1,8 +1,9 @@
-import { useMemo, useEffect, useState, useCallback } from 'react'
+import { type ReactNode, useMemo, useEffect, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
+  ArrowRight,
   ArrowRightLeft,
   Bell,
   Building2,
@@ -94,6 +95,56 @@ function signalCell(rx: number | null | undefined): { text: string; cls: string 
   if (rx <= RX_POWER_CRITICAL_DBM) return { text: `${Math.round(rx)}`, cls: 'text-rose-700 font-semibold' }
   if (rx <= RX_POWER_DEGRADED_DBM) return { text: `${Math.round(rx)}`, cls: 'text-amber-700 font-semibold' }
   return { text: `${Math.round(rx)}`, cls: 'text-emerald-700 font-semibold' }
+}
+
+// Malha de rede decorativa do banner ISA (coordenadas no viewBox 0 0 480 120).
+// O nó ISA_MESH_HIGHLIGHT_INDEX é destacado em âmbar; os demais em branco tênue.
+const ISA_MESH_NODES: ReadonlyArray<readonly [number, number]> = [
+  [60, 80], [120, 40], [170, 90], [230, 55], [285, 95], [320, 35],
+  [365, 70], [410, 100], [440, 50], [300, 72], [200, 30], [95, 105],
+]
+const ISA_MESH_EDGES: ReadonlyArray<readonly [number, number]> = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [3, 5], [5, 6], [6, 7],
+  [6, 8], [9, 4], [9, 6], [10, 3], [10, 1], [11, 0], [11, 2],
+]
+const ISA_MESH_HIGHLIGHT_INDEX = 8
+
+// Explicador no topo de cada aba: conta, em linguagem simples, o que a aba
+// entrega e o que fazer com ela. Persistente (não é alerta) — é storytelling.
+function TabIntro({
+  tone,
+  icon,
+  title,
+  children,
+}: {
+  tone: 'amber' | 'orange'
+  icon: ReactNode
+  title: string
+  children: ReactNode
+}) {
+  const t =
+    tone === 'amber'
+      ? { wrap: 'border-amber-200/70 bg-amber-50/50', tile: 'bg-amber-100 text-amber-700', title: 'text-amber-900' }
+      : { wrap: 'border-orange-200/70 bg-orange-50/50', tile: 'bg-orange-100 text-orange-700', title: 'text-orange-900' }
+  return (
+    <div className={cn('flex gap-3 rounded-2xl border p-4', t.wrap)}>
+      <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl', t.tile)}>{icon}</div>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className={cn('text-sm font-bold', t.title)}>{title}</p>
+        <div className="space-y-2 text-xs leading-relaxed text-neutral-600">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// Chip de passo do "como usar" (numerado), separados por seta.
+function StepChip({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2 py-1 ring-1 ring-neutral-200">
+      <span className="flex size-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white">{n}</span>
+      <span className="font-medium text-neutral-700">{children}</span>
+    </span>
+  )
 }
 
 type SortField = 'improvement' | 'condoName' | 'clientFloor'
@@ -404,48 +455,56 @@ export function CondoRedistributionScreen() {
         primaryAction={{ to: '/splitters', label: 'Voltar aos Splitters' }}
       />
 
-      {/* Banner ISA — fundo desenhado (gradiente + skyline SVG), sem imagem raster:
-          escala nítida em qualquer tela e nunca corta mal. O skyline evoca os
-          edifícios analisados e evapora para a esquerda, deixando o texto legível. */}
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-5 py-4 shadow-lg">
+      {/* Banner ISA — fundo desenhado (gradiente vermelho + malha de rede SVG),
+          sem imagem raster: escala nítido em qualquer tela e nunca corta mal. A
+          malha evapora para a esquerda, deixando o texto sempre legível. */}
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-red-950 via-red-800 to-red-950 px-5 py-4 shadow-lg">
         <svg
           aria-hidden="true"
           viewBox="0 0 480 120"
-          preserveAspectRatio="xMaxYMax slice"
+          preserveAspectRatio="xMaxYMid slice"
           className="pointer-events-none absolute inset-y-0 right-0 h-full w-2/3"
         >
           <defs>
-            <linearGradient id="isa-skyline-fade" x1="0" y1="0" x2="1" y2="0">
+            <linearGradient id="isa-mesh-fade" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" stopColor="white" stopOpacity="0" />
-              <stop offset="0.55" stopColor="white" stopOpacity="0.5" />
+              <stop offset="0.5" stopColor="white" stopOpacity="0.5" />
               <stop offset="1" stopColor="white" stopOpacity="1" />
             </linearGradient>
-            <mask id="isa-skyline-mask">
-              <rect width="480" height="120" fill="url(#isa-skyline-fade)" />
+            <mask id="isa-mesh-mask">
+              <rect width="480" height="120" fill="url(#isa-mesh-fade)" />
             </mask>
           </defs>
-          <g mask="url(#isa-skyline-mask)">
-            {[38, 60, 46, 72, 54, 88, 64, 104, 58, 80, 50, 96, 44, 68, 56, 84, 62, 100, 52, 76].map(
-              (h, i) => {
-                const highlight = i === 17
-                return (
-                  <rect
-                    key={i}
-                    x={12 + i * 24}
-                    y={120 - h}
-                    width={12}
-                    height={h}
-                    rx={3}
-                    fill={highlight ? '#f59e0b' : 'white'}
-                    fillOpacity={highlight ? 0.55 : 0.12}
-                  />
-                )
-              },
-            )}
+          <g mask="url(#isa-mesh-mask)">
+            {ISA_MESH_EDGES.map(([a, b], i) => (
+              <line
+                key={`e${i}`}
+                x1={ISA_MESH_NODES[a][0]}
+                y1={ISA_MESH_NODES[a][1]}
+                x2={ISA_MESH_NODES[b][0]}
+                y2={ISA_MESH_NODES[b][1]}
+                stroke="white"
+                strokeOpacity={0.18}
+                strokeWidth={1}
+              />
+            ))}
+            {ISA_MESH_NODES.map(([cx, cy], i) => {
+              const highlight = i === ISA_MESH_HIGHLIGHT_INDEX
+              return (
+                <circle
+                  key={`n${i}`}
+                  cx={cx}
+                  cy={cy}
+                  r={highlight ? 4.5 : 2.6}
+                  fill={highlight ? '#fbbf24' : 'white'}
+                  fillOpacity={highlight ? 0.95 : 0.35}
+                />
+              )
+            })}
           </g>
         </svg>
         {/* Brilho âmbar suave, ancora o olhar no lado das métricas */}
-        <div className="pointer-events-none absolute -right-8 top-1/2 size-52 -translate-y-1/2 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-8 top-1/2 size-52 -translate-y-1/2 rounded-full bg-amber-400/15 blur-3xl" />
         <div className="relative z-10 flex flex-1 items-center gap-4">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
             <ArrowRightLeft className="size-6 text-white" />
@@ -657,6 +716,26 @@ export function CondoRedistributionScreen() {
       {/* ── Aba: Oportunidades ──────────────────────────────────────────────── */}
       {!isLoading && !isError && activeTab === 'opportunities' && (
         <div key="tab-opportunities" className="space-y-4 animate-tab-enter">
+          <TabIntro
+            tone="amber"
+            icon={<ArrowRightLeft className="size-5" />}
+            title="Onde vale a pena mover um cliente de splitter"
+          >
+            <p>
+              Clientes ligados a um splitter de <strong className="font-semibold text-neutral-800">andar distante</strong>,
+              quando existe outro splitter <strong className="font-semibold text-neutral-800">mais próximo, no mesmo bloco</strong>,
+              com portas livres. Mover encurta a distância óptica e tende a melhorar o sinal do cliente.
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-0.5 text-[11px] font-semibold text-neutral-500">Como usar:</span>
+              <StepChip n={1}>Escolha um condomínio</StepChip>
+              <ArrowRight className="size-3 text-neutral-400" />
+              <StepChip n={2}>Veja cliente, splitter atual → sugerido e o sinal</StepChip>
+              <ArrowRight className="size-3 text-neutral-400" />
+              <StepChip n={3}>Exporte a lista para o time de campo</StepChip>
+            </div>
+          </TabIntro>
+
           {/* Busca + ordenação */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
@@ -787,6 +866,34 @@ export function CondoRedistributionScreen() {
       {/* ── Aba: Pendências ─────────────────────────────────────────────────── */}
       {!isLoading && !isError && activeTab === 'pending' && (
         <div key="tab-pending" className="space-y-4 animate-tab-enter">
+          <TabIntro
+            tone="orange"
+            icon={<AlertTriangle className="size-5" />}
+            title="O que falta para estes casos virarem oportunidade"
+          >
+            <p>
+              Casos que <strong className="font-semibold text-neutral-800">ainda não puderam ser avaliados</strong> por
+              falta de cadastro — sem esses dados o sistema não consegue comparar os andares. Há dois motivos:
+            </p>
+            <ul className="space-y-1.5">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                  Splitter sem andar
+                </span>
+                <span>o andar não está na descrição do splitter.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700">
+                  Cliente sem complemento
+                </span>
+                <span>falta o andar/apartamento no cadastro do cliente.</span>
+              </li>
+            </ul>
+            <p>
+              Corrija no ERP e o caso passa a ser analisado na próxima atualização.
+            </p>
+          </TabIntro>
+
           {/* Busca + filtros */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-0 flex-1">
