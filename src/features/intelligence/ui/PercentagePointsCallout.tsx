@@ -16,7 +16,7 @@ export function PercentagePointsCallout({ periodLabel, className }: PercentagePo
   return (
     <div
       className={cn(
-        'flex gap-2 rounded-xl border border-sky-200/80 dark:border-sky-800/50 bg-sky-50/70 dark:bg-sky-950/40 px-2.5 py-2 text-[11px] leading-relaxed text-slate-700',
+        'flex gap-2 rounded-xl border border-sky-200/80 dark:border-sky-800/50 bg-sky-50/70 dark:bg-sky-950/40 px-2.5 py-2 text-[11px] leading-relaxed text-on-surface-variant',
         className,
       )}
       title={PP_TOOLTIP}

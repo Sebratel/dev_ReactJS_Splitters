@@ -265,7 +265,7 @@ export function ClienteDetailOnuSection({
                 {noSignal ? 'Sem sinal' : fmtDbm(diagnostic.rxPower)}
               </span>
             </div>
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
               <div
                 className={cn('h-full rounded-full transition-all', BAR_COLOR[status])}
                 style={{ width: `${pct}%` }}

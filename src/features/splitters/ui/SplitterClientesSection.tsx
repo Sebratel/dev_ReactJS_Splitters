@@ -97,7 +97,7 @@ export function SplitterClientesSection({
             type="button"
             onClick={() => setComparisonRequested(true)}
             disabled={!canValidate || comparisonState.type === 'loading'}
-            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
           >
             {buttonLabel}
           </button>

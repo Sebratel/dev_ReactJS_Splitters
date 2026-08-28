@@ -109,7 +109,7 @@ function ClienteNameCell({
         )}
       >
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200/90 text-[11px] font-bold uppercase text-slate-700 shadow-sm ring-2 ring-white"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200/90 text-[11px] font-bold uppercase text-on-surface-variant shadow-sm ring-2 ring-white"
           aria-hidden
         >
           {initialsFromName(name === '?' ? '' : name)}
@@ -175,7 +175,7 @@ function LocalCell({
               ? cliente.isCorporate
                 ? 'bg-amber-500 shadow-sm'
                 : 'bg-sky-500 shadow-sm'
-              : 'bg-neutral-200',
+              : 'bg-neutral-200 dark:bg-white/10',
           )}
           title={
             onMap
@@ -392,7 +392,7 @@ export function StepValidacao({
               Clientes afetados
             </p>
             <div className="mt-1 flex items-baseline gap-2">
-              <p className="text-3xl font-bold tabular-nums tracking-tight text-neutral-950">
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-on-surface">
                 {totals?.totalAffected ?? 0}
               </p>
               {isPrepared && (totals?.totalAffected ?? 0) > 0 ? (
@@ -402,7 +402,7 @@ export function StepValidacao({
           </div>
           <div className="rounded-xl border border-white bg-surface-container-lowest px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/80 dark:ring-white/10">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">PPPoEs</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-neutral-950">
+            <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-on-surface">
               {totals?.totalPppoes ?? 0}
             </p>
             <p className="mt-1.5 text-[11px] font-medium text-on-surface-variant">Total na amostra</p>
@@ -588,7 +588,7 @@ export function StepValidacao({
           <div className="flex min-h-0 flex-col gap-3">
             <section className="space-y-3 rounded-xl border border-white bg-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
               <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 text-on-surface-variant ring-1 ring-neutral-200/80 dark:ring-white/10">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-1 ring-neutral-200/80 dark:ring-white/10">
                   <GitBranch className="h-4 w-4" strokeWidth={2.25} aria-hidden />
                 </span>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
@@ -613,10 +613,10 @@ export function StepValidacao({
                         {route.effectiveSplitterDisplay.length} splitter(s) nesta rota
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="inline-flex items-center rounded-md border border-neutral-200/80 dark:border-white/10 bg-neutral-100 px-2 py-1 font-mono text-[11px] font-semibold text-on-surface shadow-sm">
+                        <span className="inline-flex items-center rounded-md border border-neutral-200/80 dark:border-white/10 bg-neutral-100 dark:bg-white/5 px-2 py-1 font-mono text-[11px] font-semibold text-on-surface shadow-sm">
                           {OLT_SLOT_LABEL} {route.slot}
                         </span>
-                        <span className="inline-flex items-center rounded-md border border-neutral-200/80 dark:border-white/10 bg-neutral-100 px-2 py-1 font-mono text-[11px] font-semibold text-on-surface shadow-sm">
+                        <span className="inline-flex items-center rounded-md border border-neutral-200/80 dark:border-white/10 bg-neutral-100 dark:bg-white/5 px-2 py-1 font-mono text-[11px] font-semibold text-on-surface shadow-sm">
                           {OLT_PON_LABEL} {route.port}
                         </span>
                       </div>

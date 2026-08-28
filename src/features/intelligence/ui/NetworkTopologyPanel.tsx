@@ -94,7 +94,7 @@ function SignalHealthBar({
   if (total <= 0) return null
   const pct = (n: number) => `${(n / total) * 100}%`
   return (
-    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
       {online > 0 ? <div className="h-full bg-emerald-500" style={{ width: pct(online) }} /> : null}
       {degraded > 0 ? <div className="h-full bg-amber-500" style={{ width: pct(degraded) }} /> : null}
       {offline > 0 ? <div className="h-full bg-rose-500" style={{ width: pct(offline) }} /> : null}
@@ -119,21 +119,21 @@ function NodeMetrics({
             {metrics.avgUsagePercent.toFixed(1)}% · {metrics.maxUsagePercent.toFixed(1)}%
           </span>
         </div>
-        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
           <div
             className={cn('h-full rounded-full transition-all', usageBarClass(metrics.maxUsagePercent))}
             style={{ width: `${Math.min(100, Math.max(2, metrics.maxUsagePercent))}%` }}
           />
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-700">
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-on-surface-variant">
         <span className="inline-flex items-center gap-1">
           <Cpu className="size-3.5 text-on-surface-variant/60" aria-hidden />
           {metrics.splitters} splitters
         </span>
         <span className="inline-flex items-center gap-1">
           <AlertTriangle
-            className={cn('size-3.5', metrics.criticalSplitters > 0 ? 'text-rose-500' : 'text-slate-300')}
+            className={cn('size-3.5', metrics.criticalSplitters > 0 ? 'text-rose-500' : 'text-on-surface-variant/60')}
             aria-hidden
           />
           {metrics.criticalSplitters} críticos
@@ -144,7 +144,7 @@ function NodeMetrics({
         </span>
         <span className="inline-flex items-center gap-1">
           <Activity
-            className={cn('size-3.5', metrics.openTickets > 0 ? 'text-amber-500' : 'text-slate-300')}
+            className={cn('size-3.5', metrics.openTickets > 0 ? 'text-amber-500' : 'text-on-surface-variant/60')}
             aria-hidden
           />
           {metrics.openTickets} massivas abertas
@@ -216,7 +216,7 @@ function NodeCard({ icon: Icon, title, subtitle, metrics, deltaReferenceLabel, o
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary">
             <Icon className="size-4.5" aria-hidden />
           </span>
           <div className="min-w-0">
@@ -364,7 +364,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
             </>
           ) : null}
         </nav>
-        <p className="mt-2 text-sm font-medium text-slate-700">{narrative}</p>
+        <p className="mt-2 text-sm font-medium text-on-surface-variant">{narrative}</p>
       </div>
 
       {/* Nível 0 — OLTs */}
@@ -502,7 +502,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
                 >
                   {BAND_LABEL[row.riskBand]}
                 </span>
-                <ChevronRight className="size-4 text-slate-300" aria-hidden />
+                <ChevronRight className="size-4 text-on-surface-variant/60" aria-hidden />
               </div>
             </Link>
           ))}

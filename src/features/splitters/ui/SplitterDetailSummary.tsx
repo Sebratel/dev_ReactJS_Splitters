@@ -332,7 +332,7 @@ export function SplitterDetailSummary({
               active={splitter.active}
               labels={{ active: 'Sinal ativo', inactive: 'Equipamento inativo' }}
             />
-            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
+            <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
               ID: {integrationRef}
             </span>
           </div>
@@ -361,7 +361,7 @@ export function SplitterDetailSummary({
               className={cn(
                 'inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition',
                 isRefreshing
-                  ? 'cursor-not-allowed border-slate-200 dark:border-white/10 bg-slate-100 text-on-surface-variant/60'
+                  ? 'cursor-not-allowed border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-on-surface-variant/60'
                   : 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15',
               )}
             >
@@ -560,7 +560,7 @@ export function SplitterDetailSummary({
               {animatedUsagePercent}%
             </p>
           </div>
-          <div className="h-2 rounded-full bg-slate-200">
+          <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10">
             <div
               className={cn(
                 'h-2 rounded-full transition-all duration-700',

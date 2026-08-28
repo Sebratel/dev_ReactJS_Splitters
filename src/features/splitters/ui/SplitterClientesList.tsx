@@ -77,7 +77,7 @@ function PortBlockIndicator({ block }: { block: SplitterPortState }) {
           <Lock size={11} />
           Porta com bloqueio
         </div>
-        <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-700">
+        <p className="mt-1 text-[11px] font-medium leading-relaxed text-on-surface-variant">
           {description}
         </p>
       </div>

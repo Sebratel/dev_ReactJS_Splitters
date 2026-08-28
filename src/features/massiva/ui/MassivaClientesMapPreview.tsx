@@ -219,7 +219,7 @@ export function MassivaClientesMapPreview({
   const mapShell = (
     <div
       className={clsx(
-        'relative w-full max-w-full overflow-hidden rounded-lg bg-neutral-100 [&_.leaflet-control-attribution]:text-[9px] [&_.leaflet-popup-content-wrapper]:rounded-lg [&_.leaflet-popup-content-wrapper]:shadow-lg',
+        'relative w-full max-w-full overflow-hidden rounded-lg bg-neutral-100 dark:bg-white/5 [&_.leaflet-control-attribution]:text-[9px] [&_.leaflet-popup-content-wrapper]:rounded-lg [&_.leaflet-popup-content-wrapper]:shadow-lg',
         mapHeightClass,
         mapChrome === 'dark'
           ? 'border border-slate-700/80 ring-1 ring-slate-600/50'

@@ -10,8 +10,8 @@ const CATEGORY_DOT: Record<CancellationCategory, string> = {
   financeiro: 'bg-slate-400',
   pre_instalacao: 'bg-sky-400',
   mudanca: 'bg-violet-400',
-  operacional: 'bg-neutral-300',
-  outros: 'bg-neutral-200',
+  operacional: 'bg-neutral-300 dark:bg-white/15',
+  outros: 'bg-neutral-200 dark:bg-white/10',
 }
 
 type CancellationMotiveFilterProps = {

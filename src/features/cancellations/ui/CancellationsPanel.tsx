@@ -64,8 +64,8 @@ const CATEGORY_DOT: Record<string, string> = {
   financeiro: 'bg-slate-400',
   pre_instalacao: 'bg-sky-400',
   mudanca: 'bg-violet-400',
-  operacional: 'bg-neutral-300',
-  outros: 'bg-neutral-200',
+  operacional: 'bg-neutral-300 dark:bg-white/15',
+  outros: 'bg-neutral-200 dark:bg-white/10',
 }
 
 function pct(part: number, whole: number): string {
@@ -376,7 +376,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             .filter((c): c is { icon: React.ReactNode; text: string } => Boolean(c.text))
             .map((c, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm leading-snug text-on-surface-variant">
-                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-bold text-on-surface-variant">
+                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-white/5 text-[10px] font-bold text-on-surface-variant">
                   {i + 2}
                 </span>
                 <span className="mt-0.5 shrink-0">{c.icon}</span>
@@ -461,7 +461,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             <SubmotiveBar label="Insatisfação (qualidade)" value={sub.insatisfacao} total={totalRede} color="bg-rose-500" />
             <SubmotiveBar label="Foi p/ concorrência (preço)" value={sub.concorrencia} total={totalRede} color="bg-fuchsia-500" />
             {sub.outros > 0 ? (
-              <SubmotiveBar label="Outros" value={sub.outros} total={totalRede} color="bg-neutral-300" />
+              <SubmotiveBar label="Outros" value={sub.outros} total={totalRede} color="bg-neutral-300 dark:bg-white/15" />
             ) : null}
           </div>
         ) : null}
@@ -750,7 +750,7 @@ function TipoLocalCard({
       <div className="flex items-center gap-2">
         <span
           className={`inline-flex size-8 items-center justify-center rounded-lg ${
-            highlight ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300' : 'bg-neutral-100 text-on-surface-variant'
+            highlight ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300' : 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant'
           }`}
         >
           {icon}
@@ -800,7 +800,7 @@ function SubmotiveBar({
           {value.toLocaleString('pt-BR')} ({width}%)
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div className={`h-full ${color}`} style={{ width: `${width}%` }} />
       </div>
     </div>

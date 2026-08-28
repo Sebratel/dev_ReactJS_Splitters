@@ -139,7 +139,7 @@ export function SuggestionCard({
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold tracking-tight text-neutral-950">
+            <h2 className="text-xl font-semibold tracking-tight text-on-surface">
               {suggestion.title}
             </h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
@@ -391,7 +391,7 @@ export function SuggestionCard({
                   <button
                     type="submit"
                     disabled={commentBusy}
-                    className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-neutral-950 shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {commentBusy ? (
                       <Loader2 className="size-4 animate-spin" aria-hidden />

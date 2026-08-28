@@ -133,11 +133,11 @@ export function SplitterGeoGridComparisonPanel({
             {mismatches}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 px-3 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-700/80">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/80">
             Sem resolução
           </p>
-          <p className="mt-1 text-xl font-bold tracking-tight text-slate-700">
+          <p className="mt-1 text-xl font-bold tracking-tight text-on-surface-variant">
             {unresolved}
           </p>
         </div>

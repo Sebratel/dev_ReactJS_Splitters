@@ -1448,7 +1448,7 @@ export function SplittersOperationalPriorityFab({
                         <AssistantMetaPill
                           label="Confiança"
                           value={assistantDisplayStructured.confianca}
-                          className="border-slate-200 dark:border-white/10 bg-surface-container-low text-slate-800"
+                          className="border-slate-200 dark:border-white/10 bg-surface-container-low text-on-surface"
                         />
                         <AssistantMetaPill
                           label="Score"
@@ -1738,7 +1738,7 @@ export function SplittersOperationalPriorityFab({
                       ? 'border border-white/45 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
                       : cn(
                           'border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-lg',
-                          'hover:border-neutral-300 hover:bg-surface-container-low hover:text-neutral-950',
+                          'hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface',
                           overlayOpen && 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-950',
                         ),
                   )}

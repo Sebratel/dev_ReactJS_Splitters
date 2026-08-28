@@ -58,7 +58,7 @@ export function AccessRequestsAdminPanel({
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-900/70">
             Aprovações
           </p>
-          <h2 className="text-base font-semibold tracking-tight text-neutral-950">
+          <h2 className="text-base font-semibold tracking-tight text-on-surface">
             Solicitações de acesso pendentes
           </h2>
           <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-on-surface-variant">
@@ -101,7 +101,7 @@ export function AccessRequestsAdminPanel({
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-sm font-semibold text-neutral-950">{r.displayName || r.email}</p>
+                    <p className="text-sm font-semibold text-on-surface">{r.displayName || r.email}</p>
                     <p className="text-[11px] text-on-surface-variant">{r.email}</p>
                     {r.requestedModules.length > 0 ? (
                       <ul className="flex flex-wrap gap-1.5 pt-1">

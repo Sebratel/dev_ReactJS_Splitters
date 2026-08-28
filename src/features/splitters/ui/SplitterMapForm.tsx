@@ -81,7 +81,7 @@ export function SplitterMapForm({
       )}
 
       <div>
-        <label htmlFor="mapName" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="mapName" className="block text-sm font-medium text-on-surface-variant">
           Nome do Mapa
         </label>
         <input

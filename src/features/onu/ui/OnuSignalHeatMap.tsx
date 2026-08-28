@@ -147,7 +147,7 @@ function LegendToggle({
   onToggle: () => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-700">
+    <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium text-on-surface-variant">
       <input type="checkbox" checked={checked} onChange={onToggle} className="h-3 w-3 accent-slate-700" />
       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
       <span>

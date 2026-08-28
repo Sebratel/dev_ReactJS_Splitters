@@ -352,7 +352,7 @@ export function CancellationsExplorer({
             onClick={clearFilters}
             disabled={!hasFilter}
             className={`rounded-lg border px-2 py-1.5 text-xs font-bold transition ${
-              hasFilter ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/50' : 'cursor-not-allowed border-neutral-200 dark:border-white/10 bg-neutral-100 text-on-surface-variant/60'
+              hasFilter ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/50' : 'cursor-not-allowed border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 text-on-surface-variant/60'
             }`}
           >
             Limpar
@@ -401,7 +401,7 @@ export function CancellationsExplorer({
                 <MixBar label="Operacional" value={scope.mix.operacional} total={scope.total} color="bg-neutral-400" />
               ) : null}
               {(categoryFilter.length === 0 || categoryFilter.includes('outros')) && scope.mix.outros > 0 ? (
-                <MixBar label="Outros" value={scope.mix.outros} total={scope.total} color="bg-neutral-300" />
+                <MixBar label="Outros" value={scope.mix.outros} total={scope.total} color="bg-neutral-300 dark:bg-white/15" />
               ) : null}
             </div>
           ) : (
@@ -610,7 +610,7 @@ function MixBar({ label, value, total, color }: { label: string; value: number; 
         <span className="text-on-surface-variant">{label}</span>
         <span className="font-semibold tabular-nums text-on-surface">{value.toLocaleString('pt-BR')} ({pct}%)</span>
       </div>
-      <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>

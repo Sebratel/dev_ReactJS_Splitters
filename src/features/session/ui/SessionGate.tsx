@@ -57,7 +57,7 @@ export function SessionGate({ children }: SessionGateProps) {
         <GoogleSignInButton />
         <a
           href={env.hubOrigin}
-          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-on-surface"
+          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:border-slate-400 hover:text-on-surface"
         >
           {t('session.login_button')}
         </a>

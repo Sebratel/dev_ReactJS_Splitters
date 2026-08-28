@@ -575,7 +575,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       {/* Distribuição por faixa de ocupação */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
         <p className="mb-2 text-xs font-semibold text-on-surface">Distribuição por ocupação</p>
-        <div className="flex h-3 w-full overflow-hidden rounded-full bg-neutral-100">
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
           {totals.distribution.map((band) =>
             band.count > 0 ? (
               <div

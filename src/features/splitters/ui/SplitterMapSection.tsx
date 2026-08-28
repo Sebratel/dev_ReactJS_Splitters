@@ -420,7 +420,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {splitterFullOccupancy && !currentIsCondominium && reliefGeoPendingForStreetRule ? (
           <div
-            className="mt-3 rounded-xl border border-slate-200/90 dark:border-white/10 bg-surface-container-low/95 px-3 py-2 text-xs text-slate-700 shadow-sm"
+            className="mt-3 rounded-xl border border-slate-200/90 dark:border-white/10 bg-surface-container-low/95 px-3 py-2 text-xs text-on-surface-variant shadow-sm"
             role="status"
           >
             A confirmar nomes de via no mapa para o aviso de planejamento…

@@ -122,7 +122,7 @@ function SortHeaderButton({
       type="button"
       onClick={() => onSort(column)}
       className={cn(
-        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left font-bold tracking-wider transition hover:bg-neutral-200/60 hover:text-on-surface',
+        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left font-bold tracking-wider transition hover:bg-neutral-200/60 dark:hover:bg-white/10 hover:text-on-surface',
         className,
       )}
     >
@@ -148,7 +148,7 @@ function LoginDot({ recency }: { recency: ReturnType<typeof loginRecency> }) {
         ? 'bg-amber-500'
         : recency === 'antigo'
           ? 'bg-rose-500'
-          : 'bg-neutral-300'
+          : 'bg-neutral-300 dark:bg-white/15'
   return <span className={cn('inline-block size-2 shrink-0 rounded-full', cls)} aria-hidden />
 }
 
@@ -297,7 +297,7 @@ function StatCard({
         : 'stroke-amber-400/90'
 
   const trendTone = trendLabel?.includes('da base')
-    ? 'bg-neutral-100 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
+    ? 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
     : trendLabel?.trim().startsWith('-')
       ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200 ring-rose-200/70'
       : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200 ring-emerald-200/70'
@@ -337,7 +337,7 @@ function StatCard({
 
           <div className="mt-2 flex items-baseline gap-2">
             {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-lg bg-neutral-100" />
+              <div className="h-9 w-24 animate-pulse rounded-lg bg-neutral-100 dark:bg-white/5" />
             ) : (
               <p className="text-[34px] font-black leading-none tracking-tight text-on-surface">
                 {NUMBER_FMT.format(animated)}
@@ -446,13 +446,13 @@ function UsersTableSkeleton() {
     <div className="divide-y divide-neutral-100">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-4">
-          <div className="size-10 rounded-full bg-neutral-200" />
+          <div className="size-10 rounded-full bg-neutral-200 dark:bg-white/10" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-40 rounded bg-neutral-200" />
-            <div className="h-3 w-56 rounded bg-neutral-100" />
+            <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-white/10" />
+            <div className="h-3 w-56 rounded bg-neutral-100 dark:bg-white/5" />
           </div>
-          <div className="hidden h-8 w-24 rounded-lg bg-neutral-100 md:block" />
-          <div className="hidden h-8 w-20 rounded-lg bg-neutral-100 lg:block" />
+          <div className="hidden h-8 w-24 rounded-lg bg-neutral-100 dark:bg-white/5 md:block" />
+          <div className="hidden h-8 w-20 rounded-lg bg-neutral-100 dark:bg-white/5 lg:block" />
         </div>
       ))}
     </div>
@@ -1035,13 +1035,13 @@ export function UsersManagementWorkspace({
               className="animate-pulse rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm"
             >
               <div className="flex items-center gap-3">
-                <div className="size-11 shrink-0 rounded-full bg-neutral-200" />
+                <div className="size-11 shrink-0 rounded-full bg-neutral-200 dark:bg-white/10" />
                 <div className="min-w-0 flex-1 space-y-2">
-                  <div className="h-4 w-40 rounded bg-neutral-200" />
-                  <div className="h-3 w-full max-w-xs rounded bg-neutral-100" />
+                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-white/10" />
+                  <div className="h-3 w-full max-w-xs rounded bg-neutral-100 dark:bg-white/5" />
                 </div>
               </div>
-              <div className="mt-4 h-10 w-full rounded-xl bg-neutral-100" />
+              <div className="mt-4 h-10 w-full rounded-xl bg-neutral-100 dark:bg-white/5" />
             </div>
           ))
         ) : (
@@ -1080,7 +1080,7 @@ export function UsersManagementWorkspace({
                         anchor: e.currentTarget.getBoundingClientRect(),
                       })
                     }}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant hover:bg-neutral-100 hover:text-on-surface"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                     aria-label={`Mais ações: ${u.email}`}
                   >
                     <MoreHorizontal className="size-5" />
@@ -1120,7 +1120,7 @@ export function UsersManagementWorkspace({
                       'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide',
                       u.isActive
                         ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80'
-                        : 'bg-neutral-200 text-on-surface-variant ring-1 ring-neutral-300/80',
+                        : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                     )}
                   >
                     {u.isActive ? 'Ativo' : 'Inativo'}
@@ -1291,7 +1291,7 @@ export function UsersManagementWorkspace({
                             'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                             u.isActive
                               ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80'
-                              : 'bg-neutral-200 text-on-surface-variant ring-1 ring-neutral-300/80',
+                              : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                           )}
                         >
                           {u.isActive ? 'Ativo' : 'Inativo'}
@@ -1317,7 +1317,7 @@ export function UsersManagementWorkspace({
                             anchor: e.currentTarget.getBoundingClientRect(),
                           })
                         }}
-                        className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 hover:text-on-surface"
+                        className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                         aria-label={`Mais ações: ${u.email}`}
                         aria-expanded={actionMenu?.user.uid === u.uid}
                       >
@@ -1439,7 +1439,7 @@ export function UsersManagementWorkspace({
                 <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
                   Novos perfis são criados automaticamente no <strong>primeiro login</strong> com a conta corporativa
                   (Google). Garanta que o e-mail esteja na lista de domínios ou e-mails permitidos em{' '}
-                  <code className="rounded bg-neutral-100 px-1 text-xs">env</code>.
+                  <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-xs">env</code>.
                 </p>
                 <p className="mt-2 text-sm text-on-surface-variant">
                   Depois do primeiro acesso, o usuário aparece nesta lista e você pode ajustar papel e permissões.

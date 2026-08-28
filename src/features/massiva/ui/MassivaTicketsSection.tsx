@@ -858,7 +858,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 <button
                   type="button"
                   onClick={() => setUiState((prev) => ({ ...prev, periodPreset: '30d' }))}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 hover:text-on-surface"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                   aria-label="Voltar aos períodos rápidos"
                   title="Voltar aos períodos"
                 >

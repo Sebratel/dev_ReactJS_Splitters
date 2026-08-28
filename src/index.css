@@ -193,14 +193,16 @@
   --color-secondary: #ff9e2c;
   --color-tertiary: #d4694f;
 
-  --color-surface: #15130f;
-  --color-surface-container-low: #1e1b16;
-  --color-surface-container-lowest: #26221b;
+  /* Superfícies em cinza-quente (não preto). Passos de elevação visíveis:
+     página < container < cards, para os cartões destacarem do fundo. */
+  --color-surface: #211d18;              /* fundo da página */
+  --color-surface-container-low: #2b2620; /* containers/empty/hover */
+  --color-surface-container-lowest: #37312a; /* cards/painéis (mais claro) */
 
-  --color-on-surface: #f3eee4;
-  --color-on-surface-variant: #ada597;
-  --color-outline-variant: rgba(255, 255, 255, 0.08);
-  --color-inverse-surface: #f3eee4;
+  --color-on-surface: #f5f1e9;           /* texto principal (off-white quente) */
+  --color-on-surface-variant: #c3bbad;   /* texto secundário — mais claro p/ legibilidade */
+  --color-outline-variant: rgba(255, 255, 255, 0.14); /* bordas mais visíveis */
+  --color-inverse-surface: #f5f1e9;
 }
 
 @layer base {

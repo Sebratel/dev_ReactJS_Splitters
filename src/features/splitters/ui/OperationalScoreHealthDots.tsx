@@ -43,7 +43,7 @@ export function OperationalScoreHealthDots({
             className={cn(
               'inline-block shrink-0 rounded-full',
               dotClassName,
-              active ? scoreDotToneClassName(tone) : 'bg-slate-300',
+              active ? scoreDotToneClassName(tone) : 'bg-slate-300 dark:bg-white/15',
             )}
             variants={
               reduceMotion

@@ -107,11 +107,11 @@ export function AutoIspSuggestions({
     return (
       <p className="text-xs text-on-surface-variant">
         AutoISP inativo: defina{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">VITE_AUTOISP_EVENTS_ENDPOINT</code> no
+        <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-[11px]">VITE_AUTOISP_EVENTS_ENDPOINT</code> no
         frontend e as credenciais{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_AUTH_ENDPOINT</code>,{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_USERNAME</code> e{' '}
-        <code className="rounded bg-neutral-100 px-1 text-[11px]">AUTOISP_PASSWORD</code> no backend.
+        <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-[11px]">AUTOISP_AUTH_ENDPOINT</code>,{' '}
+        <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-[11px]">AUTOISP_USERNAME</code> e{' '}
+        <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-[11px]">AUTOISP_PASSWORD</code> no backend.
       </p>
     )
   }
@@ -129,8 +129,8 @@ export function AutoIspSuggestions({
   if (isLoading) {
     return (
       <div className="flex animate-pulse items-center gap-3 rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-low/80 p-5 shadow-sm">
-        <div className="h-4 w-4 rounded-full bg-neutral-300" />
-        <div className="h-4 w-48 rounded-md bg-neutral-200/80" />
+        <div className="h-4 w-4 rounded-full bg-neutral-300 dark:bg-white/15" />
+        <div className="h-4 w-48 rounded-md bg-neutral-200/80 dark:bg-white/10" />
       </div>
     )
   }
@@ -175,7 +175,7 @@ export function AutoIspSuggestions({
         {routeCount > 0 ? (
           <p className="text-[11px] text-on-surface-variant">
             <span className="font-semibold text-on-surface-variant">{routeCount}</span> com rota (PPPoE na base ou{' '}
-            <code className="rounded bg-neutral-100 px-1 py-0.5 text-[10px] font-medium text-on-surface">ponlink</code>)
+            <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 py-0.5 text-[10px] font-medium text-on-surface">ponlink</code>)
           </p>
         ) : (
           <p className="text-[11px] text-on-surface-variant">Correlação em andamento ou via ponlink</p>

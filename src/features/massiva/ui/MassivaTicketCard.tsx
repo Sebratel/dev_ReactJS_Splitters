@@ -587,7 +587,7 @@ export function MassivaTicketCard({
       : displayStatus === 'cancelada'
         ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200'
         : displayStatus === 'encerrada'
-          ? 'border-neutral-200 dark:border-white/10 bg-neutral-100 text-on-surface-variant'
+          ? 'border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 text-on-surface-variant'
           : 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
 
   const apKnown = ticket.apCode.trim() !== ''
@@ -626,7 +626,7 @@ export function MassivaTicketCard({
                     : displayStatus === 'cancelada'
                       ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 ring-rose-200/70'
                       : displayStatus === 'encerrada'
-                        ? 'bg-neutral-100 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
+                        ? 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
                         : 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 ring-amber-200/70',
             )}
           >
@@ -662,7 +662,7 @@ export function MassivaTicketCard({
               ) : null}
               {ticket.usedFallback ? (
                 <span
-                  className="rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-on-surface-variant"
+                  className="rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-on-surface-variant"
                   title="Estratégia bulk_individual ou fallback registrado na origem"
                 >
                   Fallback

@@ -27,7 +27,7 @@ export function MassivaLayout() {
 
       {/* Navegação por abas */}
       <div className="mt-5 flex items-center gap-2 border-b border-neutral-200/80 dark:border-white/10 px-1">
-        <div className="flex gap-1 rounded-lg bg-neutral-100/80 p-1">
+        <div className="flex gap-1 rounded-lg bg-neutral-100/80 dark:bg-white/5 p-1">
           {TAB_ITEMS.map((tab) => (
             <NavLink
               key={tab.to}

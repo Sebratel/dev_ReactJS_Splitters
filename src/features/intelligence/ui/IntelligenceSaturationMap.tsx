@@ -189,10 +189,10 @@ function SaturationMapLegend() {
       <div>
         <p className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">Leitura do mapa</p>
         <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-on-surface-variant">
-          Não é só GPS: o <span className="font-semibold text-slate-800">tamanho do marcador</span> reflete um índice de
+          Não é só GPS: o <span className="font-semibold text-on-surface">tamanho do marcador</span> reflete um índice de
           atenção (ocupação + massivas abertas + tendência de crescimento). O{' '}
-          <span className="font-semibold text-slate-800">círculo semitransparente</span> ao redor estima a{' '}
-          <span className="font-semibold text-slate-800">pegada de impacto</span> pelos clientes afetados em massivas no
+          <span className="font-semibold text-on-surface">círculo semitransparente</span> ao redor estima a{' '}
+          <span className="font-semibold text-on-surface">pegada de impacto</span> pelos clientes afetados em massivas no
           período. O calor de fundo agrega pressão regional e{' '}
           <span className="font-semibold" style={{ color: CORPORATE_BRAND_PURPLE }}>
             reforça violeta/corporativo + incidentes
@@ -443,11 +443,11 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
                         Cliente corporativo (PJ)
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-slate-700">
+                    <p className="mt-1 text-xs text-on-surface-variant">
                       Índice de atenção:{' '}
                       <span className="font-semibold tabular-nums">{cell.attentionScore.toFixed(0)}</span>/100
                     </p>
-                    <p className="text-xs text-slate-700">
+                    <p className="text-xs text-on-surface-variant">
                       Uso:{' '}
                       <span className="font-semibold tabular-nums">{cell.usagePercent.toFixed(1)}%</span>
                       {' · '}

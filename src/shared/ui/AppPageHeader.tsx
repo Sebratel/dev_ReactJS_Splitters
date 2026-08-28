@@ -81,7 +81,7 @@ export function AppPageHeader({
                 replace={primaryAction.replace}
                 state={primaryAction.state}
                 aria-label={primaryAction.label}
-                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-amber-800/15 bg-amber-400 px-3 py-2.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-500 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 sm:px-4 sm:text-sm"
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-amber-800/15 bg-amber-400 px-3 py-2.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-500 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 sm:px-4 sm:text-sm"
                 title={primaryAction.label}
               >
                 <ArrowLeft size={16} aria-hidden className="shrink-0 opacity-80" />

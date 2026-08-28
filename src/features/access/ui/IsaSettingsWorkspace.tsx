@@ -165,7 +165,7 @@ export function IsaSettingsWorkspace({
                       <p className="text-sm text-on-surface-variant">{section.description}</p>
                     ) : null}
                   </div>
-                  <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  <span className="rounded-full bg-neutral-100 dark:bg-white/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
                     {value.length} chars
                   </span>
                 </div>

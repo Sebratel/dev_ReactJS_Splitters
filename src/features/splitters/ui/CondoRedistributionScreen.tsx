@@ -82,7 +82,7 @@ function condoPriority(count: number, bestImprovement: number): CondoPriority {
 const PRIORITY_META: Record<CondoPriority, { label: string; cls: string }> = {
   alta: { label: 'Alta prioridade', cls: 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200' },
   media: { label: 'Média', cls: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200' },
-  baixa: { label: 'Baixa', cls: 'bg-neutral-100 text-on-surface-variant' },
+  baixa: { label: 'Baixa', cls: 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant' },
 }
 
 /**
@@ -594,7 +594,7 @@ export function CondoRedistributionScreen() {
       )}
 
       {/* Abas */}
-      <div className="flex items-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 p-1">
+      <div className="flex items-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 p-1">
         <TabButton
           active={activeTab === 'opportunities'}
           onClick={() => setActiveTab('opportunities')}
@@ -758,7 +758,7 @@ export function CondoRedistributionScreen() {
                 <button key={field} type="button" onClick={() => toggleSort(field)}
                   title={desc}
                   className={cn('flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold transition',
-                    sortField === field ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200' : 'bg-neutral-100 text-on-surface-variant hover:bg-neutral-200')}
+                    sortField === field ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200' : 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant hover:bg-neutral-200 dark:hover:bg-white/10')}
                 >
                   {label}
                   <SortIcon field={field} />
@@ -1036,7 +1036,7 @@ export function CondoRedistributionScreen() {
               <button
                 type="button"
                 onClick={closeOpportunityModal}
-                className="flex size-8 items-center justify-center rounded-lg text-on-surface-variant/60 transition hover:bg-neutral-100 hover:text-on-surface-variant"
+                className="flex size-8 items-center justify-center rounded-lg text-on-surface-variant/60 transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface-variant"
                 aria-label="Fechar"
               >
                 <X className="size-4" />
@@ -1176,7 +1176,7 @@ export function CondoRedistributionScreen() {
               <button
                 type="button"
                 onClick={closePendingModal}
-                className="flex size-8 items-center justify-center rounded-lg text-on-surface-variant/60 transition hover:bg-neutral-100 hover:text-on-surface-variant"
+                className="flex size-8 items-center justify-center rounded-lg text-on-surface-variant/60 transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface-variant"
                 aria-label="Fechar"
               >
                 <X className="size-4" />
@@ -1275,7 +1275,7 @@ function TabButton({
               ? countColor === 'amber'
                 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-200'
                 : 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-200'
-              : 'bg-neutral-200 text-on-surface-variant',
+              : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant',
           )}
         >
           {count}
@@ -1286,7 +1286,7 @@ function TabButton({
       {alertLoading ? (
         <span
           title="Verificando protocolos de instalação/manutenção em andamento…"
-          className="flex items-center gap-1 rounded-full bg-neutral-200/80 px-1.5 py-0.5 text-on-surface-variant"
+          className="flex items-center gap-1 rounded-full bg-neutral-200/80 dark:bg-white/10 px-1.5 py-0.5 text-on-surface-variant"
         >
           <Loader2 className="size-2.5 animate-spin" />
         </span>

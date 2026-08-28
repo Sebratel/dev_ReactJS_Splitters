@@ -107,7 +107,7 @@ function RankBar({
           {fmtInt(count)}
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
         <div className={cn('h-full rounded-full', colorClass)} style={{ width: `${width}%` }} />
       </div>
     </li>
@@ -144,7 +144,7 @@ function SignalModelRow({ row }: { row: OnuModelSignalAnalyzed }) {
           {fmtInt(row.total)} ONUs · RX {fmtDbm(row.avgRx)}
         </span>
       </div>
-      <div className="mt-1 flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className="mt-1 flex h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
         <div className="h-full bg-emerald-500" style={{ width: `${onlinePct}%` }} title={`Online: ${fmtPct(onlinePct)}`} />
         <div className="h-full bg-amber-500" style={{ width: `${degradedPct}%` }} title={`Atenuado: ${fmtPct(degradedPct)}`} />
         <div className="h-full bg-rose-500" style={{ width: `${offlinePct}%` }} title={`Offline: ${fmtPct(offlinePct)}`} />

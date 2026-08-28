@@ -203,7 +203,7 @@ function OltProblemBar({ o, max }: { o: OnuOltBreakdown; max: number }) {
   const offlinePart = problems > 0 ? (o.offline / problems) * widthPct : 0
   const degradedPart = widthPct - offlinePart
   return (
-    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
       <div className="flex h-full">
         <div className="bg-rose-500" style={{ width: `${offlinePart}%` }} />
         <div className="bg-amber-400" style={{ width: `${degradedPart}%` }} />
@@ -230,17 +230,17 @@ function OnuSplitterSignalRanking() {
       <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <Wifi size={15} className="text-primary" />
-          <div className="h-4 w-40 animate-pulse rounded bg-slate-100" />
+          <div className="h-4 w-40 animate-pulse rounded bg-slate-100 dark:bg-white/5" />
         </div>
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="flex items-center gap-3">
-              <div className="h-3 w-4 animate-pulse rounded bg-slate-100" />
+              <div className="h-3 w-4 animate-pulse rounded bg-slate-100 dark:bg-white/5" />
               <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-3/4 animate-pulse rounded bg-slate-100" />
-                <div className="h-2 w-full animate-pulse rounded-full bg-slate-100" />
+                <div className="h-3 w-3/4 animate-pulse rounded bg-slate-100 dark:bg-white/5" />
+                <div className="h-2 w-full animate-pulse rounded-full bg-slate-100 dark:bg-white/5" />
               </div>
-              <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+              <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100 dark:bg-white/5" />
             </div>
           ))}
         </div>
@@ -293,7 +293,7 @@ function OnuSplitterSignalRanking() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar por nome ou código..."
-        className="mt-3 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-surface-container-low/80 px-3 py-1.5 text-xs text-slate-700 placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-primary/40 sm:w-64"
+        className="mt-3 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-surface-container-low/80 px-3 py-1.5 text-xs text-on-surface-variant placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-primary/40 sm:w-64"
       />
 
       <ul className="mt-3 space-y-0.5">
@@ -303,7 +303,7 @@ function OnuSplitterSignalRanking() {
           const isDegraded = !isNull && !isCritical && row.avgRxPower! <= RX_POWER_DEGRADED_DBM
 
           const chipBg = isNull
-            ? 'bg-slate-100 text-on-surface-variant border-slate-200 dark:border-white/10'
+            ? 'bg-slate-100 dark:bg-white/5 text-on-surface-variant border-slate-200 dark:border-white/10'
             : isCritical
               ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 border-rose-200 dark:border-rose-800/50'
               : isDegraded
@@ -352,7 +352,7 @@ function OnuSplitterSignalRanking() {
                   </span>
                 </div>
                 {/* Barra de sinal */}
-                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
                   <div
                     className={cn('h-full rounded-full transition-all', isNull ? 'w-0' : barColor)}
                     style={{ width: `${barWidth}%` }}
@@ -609,17 +609,17 @@ export function OnuSignalHealthPanel() {
 
       {/* Barra de proporção da rede */}
       <div>
-        <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
           <div className="bg-emerald-500" style={{ width: `${pct(online, total)}%` }} title={`Online: ${fmtInt(online)}`} />
           <div className="bg-amber-500" style={{ width: `${pct(degraded, total)}%` }} title={`Atenuado: ${fmtInt(degraded)}`} />
           <div className="bg-rose-500" style={{ width: `${pct(offline, total)}%` }} title={`Offline: ${fmtInt(offline)}`} />
-          <div className="bg-slate-300" style={{ width: `${pct(noData, total)}%` }} title={`Sem dados: ${fmtInt(noData)}`} />
+          <div className="bg-slate-300 dark:bg-white/15" style={{ width: `${pct(noData, total)}%` }} title={`Sem dados: ${fmtInt(noData)}`} />
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium text-on-surface-variant/75">
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Online</span>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Atenuado</span>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Offline</span>
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-slate-300" /> Sem dados ({fmtInt(noData)})</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-white/15" /> Sem dados ({fmtInt(noData)})</span>
         </div>
       </div>
 
@@ -765,7 +765,7 @@ export function OnuSignalHealthPanel() {
                 <span className="w-20 shrink-0 text-right text-[10px] font-medium tabular-nums text-on-surface-variant/70">
                   {h.label}
                 </span>
-                <div className="h-4 flex-1 overflow-hidden rounded bg-slate-100">
+                <div className="h-4 flex-1 overflow-hidden rounded bg-slate-100 dark:bg-white/5">
                   <div
                     className={cn('h-full rounded transition-all', BAND_BAR_COLOR[h.band])}
                     style={{ width: `${pct(h.count, maxHist)}%` }}
@@ -836,7 +836,7 @@ export function OnuSignalHealthPanel() {
         </p>
         <Suspense
           fallback={
-            <div className="h-[min(480px,58vh)] w-full animate-pulse rounded-2xl bg-slate-100" />
+            <div className="h-[min(480px,58vh)] w-full animate-pulse rounded-2xl bg-slate-100 dark:bg-white/5" />
           }
         >
           <OnuSignalHeatMap

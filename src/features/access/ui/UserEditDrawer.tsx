@@ -49,7 +49,7 @@ function SwitchRow({
         className={cn(
           'relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 focus-visible:ring-offset-2',
-          checked ? 'border-amber-500 bg-amber-500' : 'border-neutral-300 bg-neutral-200',
+          checked ? 'border-amber-500 bg-amber-500' : 'border-neutral-300 bg-neutral-200 dark:bg-white/10',
           disabled && 'cursor-not-allowed opacity-50',
         )}
       >
@@ -134,7 +134,7 @@ export function UserEditDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 hover:text-on-surface"
+            className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
             aria-label="Fechar"
           >
             <X className="size-5" />

@@ -65,7 +65,7 @@ function TrendStatusRow({
           title={deltaPpLineTitle(row.currentUsagePercent, selectedDelta, deltaReferenceLabel)}
         >
           Uso {row.currentUsagePercent.toFixed(1)}% · {deltaReferenceLabel}:{' '}
-          <span className="cursor-help border-b border-dotted border-slate-400 font-semibold text-slate-700">
+          <span className="cursor-help border-b border-dotted border-slate-400 font-semibold text-on-surface-variant">
             {formatDeltaPp(selectedDelta)}
           </span>
         </p>
@@ -145,7 +145,7 @@ export function TrendStatusCapacityPanel({
     <div className="space-y-4">
       <PercentagePointsCallout periodLabel={deltaReferenceLabel} />
       <p className="rounded-xl border border-slate-200/80 dark:border-white/10 bg-surface-container-low/90 px-2.5 py-2 text-[11px] leading-relaxed text-on-surface-variant">
-        <span className="font-semibold text-slate-800">Resumo do recorte:</span>{' '}
+        <span className="font-semibold text-on-surface">Resumo do recorte:</span>{' '}
         {labelCounts['Quase saturando']} quase saturando · {labelCounts['Em crescimento']} em crescimento ·{' '}
         {labelCounts['Em queda']} em queda · {labelCounts.Estavel} estáveis ({groups.totalWithTrend} com tendência).
         Foco em <span className="font-semibold">capacidade</span> — não repete massivas nem o ranking composto.
@@ -175,7 +175,7 @@ export function TrendStatusCapacityPanel({
         <button
           type="button"
           onClick={() => setStableOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 dark:border-white/10 bg-surface-container-lowest/80 px-3 py-2 text-left text-[11px] font-semibold text-slate-700 hover:bg-surface-container-low"
+          className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 dark:border-white/10 bg-surface-container-lowest/80 px-3 py-2 text-left text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low"
         >
           <span>
             Rede calma em capacidade — {outsideHighlightsCount.toLocaleString('pt-BR')} equipamentos fora dos destaques

@@ -42,7 +42,7 @@ function statusBadgeClasses(status: MassivaStatus): string {
     case 'aberta':
       return 'border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
     case 'encerrada':
-      return 'border-neutral-200 dark:border-white/10 bg-neutral-100 text-on-surface-variant'
+      return 'border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 text-on-surface-variant'
     default:
       return 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant'
   }
@@ -325,7 +325,7 @@ export function HomePage() {
                     <span className="text-lg font-semibold text-on-surface-variant">%</span>
                   </span>
                 </div>
-                <div className="mt-2.5 h-3.5 overflow-hidden rounded-full bg-stone-200/90 p-px ring-1 ring-stone-300/40 sm:h-4">
+                <div className="mt-2.5 h-3.5 overflow-hidden rounded-full bg-stone-200/90 dark:bg-white/10 p-px ring-1 ring-stone-300/40 sm:h-4">
                   <motion.div
                     className={cn(
                       'h-full rounded-full bg-gradient-to-r shadow-sm',
@@ -493,7 +493,7 @@ export function HomePage() {
                 </div>
                 <Link
                   to="/massiva"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-200/90 dark:border-white/10 bg-surface-container-lowest text-stone-700 shadow-sm transition-[transform,colors,box-shadow] hover:scale-105 hover:border-amber-300/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/40 hover:text-stone-950 hover:shadow-md"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-stone-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition-[transform,colors,box-shadow] hover:scale-105 hover:border-amber-300/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/40 hover:text-on-surface hover:shadow-md"
                   aria-label="Abrir módulo de massivas"
                 >
                   <ArrowUpRight size={18} strokeWidth={1.75} />
@@ -567,13 +567,13 @@ export function HomePage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center px-4 py-9 text-center">
                     <motion.div
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 ring-1 ring-neutral-200/80 dark:ring-white/10"
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-white/5 ring-1 ring-neutral-200/80 dark:ring-white/10"
                       animate={reduceMotion ? undefined : { scale: [1, 1.04, 1] }}
                       transition={{ duration: 2.2, repeat: reduceMotion ? 0 : Infinity, repeatDelay: 4 }}
                     >
                       <Zap className="h-5 w-5 text-on-surface-variant/60" strokeWidth={1.5} aria-hidden />
                     </motion.div>
-                    <p className="mt-3 text-[15px] font-semibold text-stone-800">Nenhuma falha crítica</p>
+                    <p className="mt-3 text-[15px] font-semibold text-on-surface">Nenhuma falha crítica</p>
                     <p className="mt-1 max-w-xs text-[12px] leading-relaxed text-on-surface-variant">
                       Lista atualiza automaticamente.
                     </p>

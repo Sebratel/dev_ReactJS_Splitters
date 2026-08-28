@@ -41,7 +41,7 @@ function toneDot(tone: RowTone): string {
     case 'err':
       return 'bg-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.28)]'
     default:
-      return 'bg-stone-300 shadow-[0_0_0_4px_rgba(168,162,158,0.35)]'
+      return 'bg-stone-300 dark:bg-white/15 shadow-[0_0_0_4px_rgba(168,162,158,0.35)]'
   }
 }
 
@@ -106,7 +106,7 @@ export function DashboardConnectionMonitor() {
             type="button"
             onClick={onRefreshAll}
             disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200/90 dark:border-white/10 bg-surface-container-lowest/90 px-4 py-2 text-[12px] font-semibold text-stone-800 shadow-sm transition-[transform,box-shadow,background] hover:bg-surface-container-lowest hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200/90 dark:border-white/10 bg-surface-container-lowest/90 px-4 py-2 text-[12px] font-semibold text-on-surface shadow-sm transition-[transform,box-shadow,background] hover:bg-surface-container-lowest hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className={cn('h-4 w-4', busy && 'animate-spin')} aria-hidden />
             Atualizar
@@ -125,13 +125,13 @@ export function DashboardConnectionMonitor() {
                 <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {formatUpdatedAt(statsQ.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {formatRefetchEvery(STATS_REFETCH_MS)}
                     </dd>
                   </div>
@@ -151,7 +151,7 @@ export function DashboardConnectionMonitor() {
                 <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {!listConnectivity.configured
                         ? '—'
                         : formatUpdatedAt(listConnectivity.dataUpdatedAt)}
@@ -159,7 +159,7 @@ export function DashboardConnectionMonitor() {
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {!listConnectivity.configured
                         ? '—'
                         : formatRefetchEvery(MASSIVA_REFETCH_MS)}
@@ -181,13 +181,13 @@ export function DashboardConnectionMonitor() {
                 <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {!autoIspConfigured ? '—' : formatUpdatedAt(autoIspQ.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-on-surface-variant">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {!autoIspConfigured ? '—' : formatRefetchEvery(AUTOISP_REFETCH_MS)}
                     </dd>
                   </div>

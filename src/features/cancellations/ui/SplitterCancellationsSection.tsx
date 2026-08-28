@@ -32,8 +32,8 @@ const CATEGORY_DOT: Record<string, string> = {
   financeiro: 'bg-slate-400',
   pre_instalacao: 'bg-sky-400',
   mudanca: 'bg-violet-400',
-  operacional: 'bg-neutral-300',
-  outros: 'bg-neutral-200',
+  operacional: 'bg-neutral-300 dark:bg-white/15',
+  outros: 'bg-neutral-200 dark:bg-white/10',
 }
 
 function fmtDate(iso: string): string {
@@ -263,7 +263,7 @@ export function SplitterCancellationsSection({
               return (
                 <div key={m.key} className="flex flex-1 flex-col items-center gap-1">
                   <div
-                    className="relative w-full max-w-[22px] overflow-hidden rounded-t bg-neutral-200"
+                    className="relative w-full max-w-[22px] overflow-hidden rounded-t bg-neutral-200 dark:bg-white/10"
                     style={{ height: totalH }}
                     title={`${monthLabel(m.key)}: ${m.total} total, ${m.rede} rede`}
                   >

@@ -234,7 +234,7 @@ function HBar({ label, count, max, total, color = '#fbbf24' }: HBarProps) {
           <span className="ml-1 font-normal text-on-surface-variant/60">({pctOfTotal}%)</span>
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -705,7 +705,7 @@ export function MassivaDashboardScreen() {
         {/* Linha 1: período + meta */}
         <div className="flex flex-wrap items-center gap-2">
           {periodPreset === 'month' ? (
-            <div className="flex items-center gap-1 rounded-lg bg-neutral-100 p-0.5">
+            <div className="flex items-center gap-1 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
               <button
                 type="button"
                 onClick={() => setPeriodPreset('30d')}
@@ -727,7 +727,7 @@ export function MassivaDashboardScreen() {
               </select>
             </div>
           ) : (
-            <div className="flex gap-0.5 rounded-lg bg-neutral-100 p-0.5">
+            <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
               {PERIOD_PRESETS.map(({ value, label }) => (
                 <button
                   key={value}
@@ -759,7 +759,7 @@ export function MassivaDashboardScreen() {
               type="button"
               onClick={refreshDashboard}
               disabled={historyQuery.isFetching || mttdMttrKpisQuery.isFetching}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant/60 transition-colors hover:bg-neutral-100 hover:text-on-surface-variant disabled:opacity-50"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant/60 transition-colors hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface-variant disabled:opacity-50"
               title="Atualizar dados"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', (historyQuery.isFetching || mttdMttrKpisQuery.isFetching) && 'animate-spin')} />
@@ -769,7 +769,7 @@ export function MassivaDashboardScreen() {
 
         {/* Divisor + Filtros */}
         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 pt-2.5">
-          <div className="flex gap-0.5 rounded-lg bg-neutral-100 p-0.5">
+          <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
             {STATUS_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
@@ -1081,7 +1081,7 @@ export function MassivaDashboardScreen() {
                     onClick={() => setChartMetric(metric)}
                     className={cn(
                       'rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition',
-                      chartMetric === metric ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-neutral-100',
+                      chartMetric === metric ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-neutral-100 dark:hover:bg-white/5',
                     )}
                   >
                     {metric}
@@ -1320,7 +1320,7 @@ export function MassivaDashboardScreen() {
                               <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-on-surface-variant/60">{idx + 1}</span>
                               <div className="min-w-0 flex-1">
                                 <p className="truncate font-semibold text-on-surface">{displayOperador(op.email)}</p>
-                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
+                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
                                   <div className="h-full rounded-full bg-sky-400 transition-all" style={{ width: `${barPct}%` }} />
                                 </div>
                               </div>
@@ -1520,7 +1520,7 @@ export function MassivaDashboardScreen() {
                       {infraProtocolStats.pct > 10 ? `${infraProtocolStats.pct}%` : ''}
                     </div>
                     <div
-                      className="flex items-center justify-center bg-neutral-200 text-[9px] font-bold text-on-surface-variant transition-all"
+                      className="flex items-center justify-center bg-neutral-200 dark:bg-white/10 text-[9px] font-bold text-on-surface-variant transition-all"
                       style={{ width: `${100 - infraProtocolStats.pct}%` }}
                       title={`Sem infra: ${infraProtocolStats.withoutInfra}`}
                     >
@@ -1534,7 +1534,7 @@ export function MassivaDashboardScreen() {
                       <span className="text-xs tabular-nums text-on-surface-variant">{infraProtocolStats.withInfra}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-sm bg-neutral-200" />
+                      <div className="h-3 w-3 rounded-sm bg-neutral-200 dark:bg-white/10" />
                       <span className="text-xs font-semibold text-on-surface">Sem infra</span>
                       <span className="text-xs tabular-nums text-on-surface-variant">{infraProtocolStats.withoutInfra}</span>
                     </div>

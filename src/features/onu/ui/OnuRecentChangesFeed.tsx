@@ -27,7 +27,7 @@ function TriggerTag({ trigger }: { trigger: string | null }) {
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
-        isAlarm ? 'bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-200' : 'bg-slate-100 text-on-surface-variant',
+        isAlarm ? 'bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-200' : 'bg-slate-100 dark:bg-white/5 text-on-surface-variant',
       )}
       title={isAlarm ? 'Detectado por trap/alarme da OLT (instantâneo)' : 'Detectado por varredura de status'}
     >
