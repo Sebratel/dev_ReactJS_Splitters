@@ -104,12 +104,12 @@ export function SplitterCard({
               className={cn(
                 'inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
                 onuSignal.avgRxPower === null
-                  ? 'border-slate-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant'
+                  ? 'border-slate-200 dark:border-white/15 bg-surface-container-low dark:bg-white/5 text-on-surface-variant'
                   : onuSignal.avgRxPower <= RX_POWER_CRITICAL_DBM
-                    ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200'
+                    ? 'border-rose-200 dark:border-rose-600/60 bg-rose-50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-100'
                     : onuSignal.avgRxPower <= RX_POWER_DEGRADED_DBM
-                      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-200'
-                      : 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200',
+                      ? 'border-amber-200 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-100'
+                      : 'border-emerald-200 dark:border-emerald-600/60 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-100',
               )}
               title={`${onuSignal.online} online · ${onuSignal.degraded} atenuados · ${onuSignal.offline} offline`}
             >
