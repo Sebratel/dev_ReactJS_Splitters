@@ -995,7 +995,7 @@ export function CondoRedistributionScreen() {
           />
 
           {/* Painel */}
-          <div className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl">
+          <div className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
             <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50">
@@ -1135,7 +1135,7 @@ export function CondoRedistributionScreen() {
           />
 
           {/* Painel */}
-          <div className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl">
+          <div className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
             <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-950/50">

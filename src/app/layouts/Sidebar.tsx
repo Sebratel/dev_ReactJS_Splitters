@@ -115,7 +115,7 @@ export function Sidebar({
                 : 'items-center gap-4 px-2 text-left',
             )}
           >
-            <div className="flex h-18 w-18 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary text-white shadow-lg shadow-primary/30 transition-transform duration-300 group-hover:scale-[1.03]">
+            <div className="flex h-18 w-18 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary text-white shadow-lg shadow-primary/30 dark:shadow-primary/10 transition-transform duration-300 group-hover:scale-[1.03]">
               <img
                 src={operacaoSebratelMark}
                 alt=""

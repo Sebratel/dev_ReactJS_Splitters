@@ -195,9 +195,9 @@
 
   /* Superfícies em cinza-quente (não preto). Passos de elevação visíveis:
      página < container < cards, para os cartões destacarem do fundo. */
-  --color-surface: #211d18;              /* fundo da página */
+  --color-surface: #1b1814;              /* fundo da página (mais escuro = cards saltam) */
   --color-surface-container-low: #2b2620; /* containers/empty/hover */
-  --color-surface-container-lowest: #37312a; /* cards/painéis (mais claro) */
+  --color-surface-container-lowest: #38322b; /* cards/painéis (mais claro) */
 
   --color-on-surface: #f5f1e9;           /* texto principal (off-white quente) */
   --color-on-surface-variant: #c3bbad;   /* texto secundário — mais claro p/ legibilidade */
