@@ -118,7 +118,7 @@ function AssistantConversationHistoryPreview(props: {
         {recentTurns.map((turn, index) => (
           <div
             key={`${props.history.length - index}:${turn.userPrompt.slice(0, 48)}`}
-            className="rounded-xl border border-white/80 bg-surface-container-lowest/90 px-2.5 py-2 shadow-sm"
+            className="rounded-xl border border-white/80 dark:border-white/10 bg-surface-container-lowest/90 px-2.5 py-2 shadow-sm"
           >
             <p className="line-clamp-2 text-[11px] font-medium leading-relaxed text-on-surface">
               {turn.userPrompt}
@@ -248,7 +248,7 @@ function AssistantSection(props: {
           : 'border-neutral-200/85 dark:border-white/10 bg-surface-container-low/70',
       )}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900/80">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900/80 dark:text-sky-200">
         {props.title}
       </p>
       {hasContent ? (
@@ -276,7 +276,7 @@ function AssistantNeighborCards(props: { rows: IsaCtoVizinhaAnalisada[] }) {
   return (
     <section className="rounded-xl border border-violet-200/90 dark:border-violet-800/50 bg-violet-50/45 dark:bg-violet-950/40 px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90 dark:text-violet-100">
           CTOs vizinhas analisadas
         </p>
         <span className="rounded-full border border-violet-200 dark:border-violet-800/50 bg-surface-container-lowest/80 px-2 py-0.5 text-[10px] font-medium text-violet-950 dark:text-violet-100">
@@ -288,7 +288,7 @@ function AssistantNeighborCards(props: { rows: IsaCtoVizinhaAnalisada[] }) {
         {props.rows.map((row, idx) => (
           <div
             key={`${idx}:${row.cto}`}
-            className="rounded-xl border border-white/80 bg-surface-container-lowest/85 px-3 py-2.5 shadow-sm"
+            className="rounded-xl border border-white/80 dark:border-white/10 bg-surface-container-lowest/85 px-3 py-2.5 shadow-sm"
           >
             <div className="flex items-start justify-between gap-2">
               <p className="min-w-0 break-words text-[12px] font-semibold text-on-surface">
@@ -367,7 +367,7 @@ function AssistantThinkingState(props: { splitterCode: string; question: string 
         </div>
         <div className="min-w-0">
           <p className="font-semibold text-sky-950 dark:text-sky-100">ISA pensando na melhor leitura</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90">
+          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90 dark:text-sky-100">
             Cruzando contexto operacional, regra de ruas e histórico recente para responder com mais
             precisão.
           </p>
@@ -406,7 +406,7 @@ function AssistantThinkingState(props: { splitterCode: string; question: string 
         ].map((step, index) => (
           <motion.div
             key={step}
-            className="rounded-xl border border-white/80 bg-surface-container-lowest/80 px-2.5 py-2 text-[10px] font-medium text-on-surface-variant shadow-sm"
+            className="rounded-xl border border-white/80 dark:border-white/10 bg-surface-container-lowest/80 px-2.5 py-2 text-[10px] font-medium text-on-surface-variant shadow-sm"
             animate={{ opacity: [0.7, 1, 0.7] }}
             transition={{ duration: 1.8, repeat: Infinity, delay: index * 0.18 }}
           >
@@ -888,7 +888,7 @@ export function SplittersOperationalPriorityFab({
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-rose-600/80 transition hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:text-rose-950 dark:text-rose-100"
+                className="flex size-7 items-center justify-center rounded-lg text-rose-600/80 dark:text-rose-300 transition hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:text-rose-950 dark:text-rose-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -915,7 +915,7 @@ export function SplittersOperationalPriorityFab({
                   role="alert"
                 >
                   <p className="font-semibold">Indisponível</p>
-                  <p className="mt-1 leading-relaxed text-amber-950/90">
+                  <p className="mt-1 leading-relaxed text-amber-950/90 dark:text-amber-100">
                     O pedido a{' '}
                     <code className="rounded bg-amber-100/90 dark:bg-amber-950/50 px-1 py-0.5 font-mono text-[10px]">
                       /api/splitters/operational-priority
@@ -945,7 +945,7 @@ export function SplittersOperationalPriorityFab({
 
               {operationalQuery.isSuccess && hasOperationalResults ? (
                 <div className="min-w-0 space-y-3">
-                  <p className="break-words text-[10px] leading-relaxed text-rose-900/75">
+                  <p className="break-words text-[10px] leading-relaxed text-rose-900/75 dark:text-rose-200">
                     {operationalMeta?.truncated
                       ? `Top 5 com base em ${operationalMeta.scannedCount.toLocaleString('pt-BR')} equipamentos lidos (total filtrado no servidor: ${(
                           operationalMeta?.totalCountFiltered ?? totalCount
@@ -954,7 +954,7 @@ export function SplittersOperationalPriorityFab({
                           operationalMeta?.scannedCount ?? totalCount
                         ).toLocaleString('pt-BR')} equipamentos dos filtros atuais.`}
                     {operationalMeta?.massivaSource === 'none' ? (
-                      <span className="mt-1 block text-rose-800/80">
+                      <span className="mt-1 block text-rose-800/80 dark:text-rose-200">
                         Histórico de massivas não configurado no BFF; a pontuação pode não refletir todos os
                         tickets em aberto.
                       </span>
@@ -1039,7 +1039,7 @@ export function SplittersOperationalPriorityFab({
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-amber-700/85 transition hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:text-amber-950 dark:text-amber-100"
+                className="flex size-7 items-center justify-center rounded-lg text-amber-700/85 dark:text-amber-200 transition hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:text-amber-950 dark:text-amber-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -1047,7 +1047,7 @@ export function SplittersOperationalPriorityFab({
             </div>
 
             <div className="max-h-[min(72vh,32rem)] overflow-x-hidden overflow-y-auto overscroll-contain px-3.5 py-3">
-              <p className="mb-3 rounded-xl border border-amber-100/90 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-950/95">
+              <p className="mb-3 rounded-xl border border-amber-100/90 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-950/95 dark:text-amber-100">
                 <span className="font-semibold">CTOs secundários lotados</span> onde não há alívio: nem outro
                 equipamento no <span className="font-semibold">mesmo condomínio</span> no cadastro (texto após
                 RES./COND./ED.) com porta livre, nem vizinho com porta livre a até{' '}
@@ -1095,7 +1095,7 @@ export function SplittersOperationalPriorityFab({
                   role="alert"
                 >
                   <p className="font-semibold">Indisponível</p>
-                  <p className="mt-1 leading-relaxed text-amber-950/90">
+                  <p className="mt-1 leading-relaxed text-amber-950/90 dark:text-amber-100">
                     O pedido a{' '}
                     <code className="rounded bg-amber-100/90 dark:bg-amber-950/50 px-1 py-0.5 font-mono text-[10px]">
                       /api/splitters/network-relief-queue
@@ -1124,7 +1124,7 @@ export function SplittersOperationalPriorityFab({
 
               {reliefQueueQuery.isSuccess && reliefSnapshotReady && !reliefSnapshotBuilding && hasReliefResults ? (
                 <div className="min-w-0 space-y-2">
-                  <p className="text-[10px] leading-relaxed text-amber-900/80">
+                  <p className="text-[10px] leading-relaxed text-amber-900/80 dark:text-amber-200">
                     Exibindo {reliefEntries.length} caso(s) sem alívio em {reliefPages.length} rodada(s), com{' '}
                     <span className="tabular-nums">{reliefMeta?.scannedCount ?? reliefScannedCount}</span>{' '}
                     candidato(s) avaliados no snapshot global.
@@ -1160,7 +1160,7 @@ export function SplittersOperationalPriorityFab({
                           <p className="break-all font-mono text-[10px] text-on-surface-variant">
                             {entry.splitter.code}
                           </p>
-                          <div className="mt-2 flex flex-wrap gap-1.5 text-[9px] font-semibold uppercase tracking-wide text-amber-900/85">
+                          <div className="mt-2 flex flex-wrap gap-1.5 text-[9px] font-semibold uppercase tracking-wide text-amber-900/85 dark:text-amber-200">
                             <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5">
                               <GitBranch size={10} strokeWidth={2.25} aria-hidden />
                               Lotado · {entry.splitter.busyCount}/{entry.splitter.outPorts}
@@ -1244,7 +1244,7 @@ export function SplittersOperationalPriorityFab({
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-sky-700/85 transition hover:bg-sky-100 dark:hover:bg-sky-950/50 hover:text-sky-950 dark:text-sky-100"
+                className="flex size-7 items-center justify-center rounded-lg text-sky-700/85 dark:text-sky-200 transition hover:bg-sky-100 dark:hover:bg-sky-950/50 hover:text-sky-950 dark:text-sky-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -1283,10 +1283,10 @@ export function SplittersOperationalPriorityFab({
                     <div className="rounded-xl border border-sky-100/90 bg-sky-50/75 dark:bg-sky-950/40 px-3 py-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900/80">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900/80 dark:text-sky-200">
                             Conversa atual
                           </p>
-                          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90">
+                          <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90 dark:text-sky-100">
                             A ISA reaproveita as perguntas anteriores desta conversa.
                           </p>
                         </div>
@@ -1355,7 +1355,7 @@ export function SplittersOperationalPriorityFab({
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800/80">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-800/80 dark:text-sky-200">
                       Perguntas iniciais sugeridas
                     </p>
                     <div className="grid gap-2">
@@ -1415,7 +1415,7 @@ export function SplittersOperationalPriorityFab({
 
                   {hasAssistantResponse && assistantDisplayStructured ? (
                     <div className="space-y-3 rounded-xl border border-sky-200/85 dark:border-sky-800/50 bg-surface-container-lowest px-3 py-3 shadow-sm">
-                      <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-sky-800/80">
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-sky-800/80 dark:text-sky-200">
                         <span className="font-bold">Resposta da ISA</span>
                         <AssistantMetaPill
                           label="Modelo"
@@ -1469,7 +1469,7 @@ export function SplittersOperationalPriorityFab({
                       assistantDisplayStructured.viabilidade_remanejo ||
                       assistantDisplayStructured.viabilidade_expansao ? (
                         <div className="rounded-xl border border-indigo-200/90 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-950/40 px-3 py-2.5 text-[11px] leading-relaxed text-on-surface">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-950/90">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-950/90 dark:text-indigo-100">
                             Decisão operacional
                           </p>
                           {assistantDisplayStructured.decisao_operacional ? (
@@ -1477,7 +1477,7 @@ export function SplittersOperationalPriorityFab({
                               {assistantDisplayStructured.decisao_operacional.replaceAll('_', ' ')}
                             </p>
                           ) : null}
-                          <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-indigo-950/90">
+                          <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-indigo-950/90 dark:text-indigo-100">
                             {assistantDisplayStructured.viabilidade_remanejo ? (
                               <span className="rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-surface-container-lowest/80 px-2 py-0.5">
                                 Remanejo: {assistantDisplayStructured.viabilidade_remanejo}
@@ -1595,7 +1595,7 @@ export function SplittersOperationalPriorityFab({
             className="pointer-events-auto w-[min(calc(100vw-2rem),20rem)] overflow-hidden rounded-2xl border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest shadow-[0_12px_36px_-10px_rgba(15,23,42,0.28)] ring-1 ring-neutral-950/[0.04]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-neutral-100 dark:border-white/5 px-3 py-2">
+            <div className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Painéis ISA</p>
             </div>
             <div className="flex flex-col p-1.5">
@@ -1680,14 +1680,14 @@ export function SplittersOperationalPriorityFab({
           <div className="pointer-events-auto relative">
             {hasOperationalResults && operationalQuery.isSuccess ? (
               <span
-                className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-rose-500 shadow-sm"
+                className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-rose-500 shadow-sm"
                 aria-hidden
               />
             ) : null}
             {hasReliefResults && reliefQueueQuery.isSuccess ? (
               <span
                 className={cn(
-                  'absolute z-[1] size-3 rounded-full border-2 border-white bg-amber-500 shadow-sm',
+                  'absolute z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-amber-500 shadow-sm',
                   hasOperationalResults && operationalQuery.isSuccess
                     ? '-left-0.5 bottom-0'
                     : '-right-0.5 -top-0.5',
@@ -1701,7 +1701,7 @@ export function SplittersOperationalPriorityFab({
             !operationalQuery.isError &&
             !reliefQueueQuery.isError ? (
               <span
-                className="absolute -right-0.5 -top-0.5 z-[1] flex size-3.5 items-center justify-center rounded-full border-2 border-white bg-surface-container-lowest shadow-sm"
+                className="absolute -right-0.5 -top-0.5 z-[1] flex size-3.5 items-center justify-center rounded-full border-2 border-white dark:border-white/10 bg-surface-container-lowest shadow-sm"
                 aria-hidden
               >
                 <span className="size-2 animate-pulse rounded-full bg-primary" />
@@ -1709,13 +1709,13 @@ export function SplittersOperationalPriorityFab({
             ) : null}
             {operationalQuery.isError ? (
               <span
-                className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-amber-500 shadow-sm"
+                className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-amber-500 shadow-sm"
                 aria-hidden
               />
             ) : null}
             {reliefQueueQuery.isError && !operationalQuery.isError ? (
               <span
-                className="absolute -left-0.5 bottom-0 z-[1] size-3 rounded-full border-2 border-white bg-amber-600 shadow-sm"
+                className="absolute -left-0.5 bottom-0 z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-amber-600 shadow-sm"
                 aria-hidden
               />
             ) : null}
@@ -1735,7 +1735,7 @@ export function SplittersOperationalPriorityFab({
                   className={cn(
                     'relative flex size-[5rem] shrink-0 items-center justify-center overflow-hidden rounded-full transition',
                     showPhotoFab
-                      ? 'border border-white/45 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
+                      ? 'border border-white/45 dark:border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
                       : cn(
                           'border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-lg',
                           'hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface',
@@ -1761,7 +1761,7 @@ export function SplittersOperationalPriorityFab({
                     <>
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-[6%] rounded-full border border-white/35 shadow-[inset_0_0_22px_rgba(255,255,255,0.32)]"
+                        className="pointer-events-none absolute inset-[6%] rounded-full border border-white/35 dark:border-white/10 shadow-[inset_0_0_22px_rgba(255,255,255,0.32)]"
                       />
                       <span
                         aria-hidden
@@ -1769,7 +1769,7 @@ export function SplittersOperationalPriorityFab({
                       />
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute bottom-[12%] right-[16%] h-[22%] w-[30%] rounded-full bg-sky-200/25 blur-[6px]"
+                        className="pointer-events-none absolute bottom-[12%] right-[16%] h-[22%] w-[30%] rounded-full bg-sky-200/25 dark:bg-sky-950/60 blur-[6px]"
                       />
                       <span
                         aria-hidden

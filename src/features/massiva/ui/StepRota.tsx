@@ -38,28 +38,28 @@ const SLOT_PORT_SECTION_TONES = [
     header: 'border-sky-200/80 dark:border-sky-800/50 bg-sky-100/90 dark:bg-sky-950/50',
     accent: 'border-l-sky-500',
     title: 'text-sky-950 dark:text-sky-100',
-    action: 'text-sky-800 dark:text-sky-200 hover:bg-sky-200/50',
+    action: 'text-sky-800 dark:text-sky-200 hover:bg-sky-200/50 dark:hover:bg-sky-950/60',
   },
   {
     shell: 'border-violet-200/90 dark:border-violet-800/50 bg-violet-50/35 dark:bg-violet-950/40',
     header: 'border-violet-200/80 dark:border-violet-800/50 bg-violet-100/90 dark:bg-violet-950/50',
     accent: 'border-l-violet-500',
     title: 'text-violet-950 dark:text-violet-100',
-    action: 'text-violet-800 dark:text-violet-200 hover:bg-violet-200/50',
+    action: 'text-violet-800 dark:text-violet-200 hover:bg-violet-200/50 dark:hover:bg-violet-950/60',
   },
   {
     shell: 'border-amber-200/90 dark:border-amber-800/50 bg-amber-50/35 dark:bg-amber-950/40',
     header: 'border-amber-200/80 dark:border-amber-800/50 bg-amber-100/90 dark:bg-amber-950/50',
     accent: 'border-l-amber-500',
     title: 'text-amber-950 dark:text-amber-100',
-    action: 'text-amber-900 dark:text-amber-200 hover:bg-amber-200/50',
+    action: 'text-amber-900 dark:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-950/60',
   },
   {
     shell: 'border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/35 dark:bg-emerald-950/40',
     header: 'border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-100/90 dark:bg-emerald-950/50',
     accent: 'border-l-emerald-500',
     title: 'text-emerald-950 dark:text-emerald-100',
-    action: 'text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200/50',
+    action: 'text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200/50 dark:hover:bg-emerald-950/60',
   },
 ] as const
 
@@ -500,7 +500,7 @@ export function StepRota({
                           key={slot}
                           className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${
                             checked
-                              ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 ring-1 ring-sky-200/80'
+                              ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 ring-1 ring-sky-200/80 dark:ring-sky-800/50'
                               : 'bg-surface-container-lowest hover:bg-surface-container-low'
                           }`}
                         >

@@ -235,7 +235,7 @@ function ProtocolDescriptionDialog({
               </p>
             </div>
             <div className="px-5 py-4 sm:px-6 sm:py-5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80 dark:text-amber-200">
                 Ocorrência
               </p>
               <div className="mt-3 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-gradient-to-b from-slate-50/90 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] sm:p-5">
@@ -610,7 +610,7 @@ export function MassivaTicketCard({
           'flex flex-col gap-2.5 border-b p-3 sm:flex-row sm:items-start sm:justify-between',
           catalogOutOfBand
             ? 'border-amber-200/90 dark:border-amber-800/50 bg-gradient-to-r from-amber-50/80 dark:from-amber-950/20 to-orange-50/40 dark:to-orange-950/20'
-            : 'border-neutral-100/90 dark:border-white/5 bg-gradient-to-r from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5',
+            : 'border-neutral-100/90 dark:border-white/5 dark:border-white/10 bg-gradient-to-r from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5',
         )}
       >
         <div className="flex min-w-0 flex-1 gap-3">
@@ -618,16 +618,16 @@ export function MassivaTicketCard({
             className={cn(
               'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1',
               recordKind === 'incidente'
-                ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 ring-rose-200/70'
+                ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 ring-rose-200/70 dark:ring-rose-800/50'
                 : recordKind === 'evento'
-                  ? 'bg-sky-100 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200 ring-sky-200/70'
+                  ? 'bg-sky-100 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200 ring-sky-200/70 dark:ring-sky-800/50'
                   : displayStatus === 'aberta'
-                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-emerald-200/70'
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-emerald-200/70 dark:ring-emerald-800/50'
                     : displayStatus === 'cancelada'
-                      ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 ring-rose-200/70'
+                      ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 ring-rose-200/70 dark:ring-rose-800/50'
                       : displayStatus === 'encerrada'
                         ? 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
-                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 ring-amber-200/70',
+                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 ring-amber-200/70 dark:ring-amber-800/50',
             )}
           >
             {recordKind === 'incidente' ? (
@@ -738,7 +738,7 @@ export function MassivaTicketCard({
 
       <div
         className={cn(
-          'flex items-start gap-2.5 border-b border-neutral-100 dark:border-white/5 px-3 py-2.5',
+          'flex items-start gap-2.5 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2.5',
           apKnown || splitterKnown
             ? 'bg-sky-50/40 dark:bg-sky-950/40'
             : 'bg-amber-50/35 dark:bg-amber-950/40',
@@ -748,8 +748,8 @@ export function MassivaTicketCard({
           className={cn(
             'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1',
             apKnown || splitterKnown
-              ? 'bg-surface-container-lowest text-sky-700 dark:text-sky-200 ring-sky-200/70'
-              : 'bg-surface-container-lowest text-amber-800 dark:text-amber-200 ring-amber-200/70',
+              ? 'bg-surface-container-lowest text-sky-700 dark:text-sky-200 ring-sky-200/70 dark:ring-sky-800/50'
+              : 'bg-surface-container-lowest text-amber-800 dark:text-amber-200 ring-amber-200/70 dark:ring-amber-800/50',
           )}
         >
           <Network size={16} aria-hidden />
@@ -761,7 +761,7 @@ export function MassivaTicketCard({
           <p
             className={cn(
               'mt-0.5 font-medium leading-snug',
-              apKnown || splitterKnown ? 'text-on-surface' : 'text-amber-900/90',
+              apKnown || splitterKnown ? 'text-on-surface' : 'text-amber-900/90 dark:text-amber-200',
             )}
           >
             {apKnown ? (
@@ -781,11 +781,11 @@ export function MassivaTicketCard({
 
       <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 dark:from-amber-950/20 via-amber-50/50 dark:via-amber-950/20 to-amber-100/30 dark:to-amber-950/25 px-3 py-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/60">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/60 dark:ring-amber-800/50">
             <Users size={18} aria-hidden />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80 dark:text-amber-200">
               Clientes afetados
             </p>
             <p className="text-2xl font-semibold tabular-nums tracking-tight text-on-surface">

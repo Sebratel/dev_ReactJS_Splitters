@@ -541,7 +541,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       {/* Hero */}
       <div className="rounded-2xl border border-indigo-200/70 dark:border-indigo-800/50 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/20 to-white dark:to-surface-container-lowest p-4">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-200/70">
+          <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-200/70 dark:ring-indigo-800/50">
             <Building2 className="size-5" aria-hidden />
           </span>
           <div>
@@ -678,7 +678,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       {/* Mapa dos condomínios (cor segue a lente do ranking) */}
       {geoCondos.length > 0 ? (
         <div className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
               <MapPin className="size-4 text-indigo-500" aria-hidden />
               Mapa dos condomínios
@@ -688,7 +688,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             </span>
           </div>
           {/* Filtro por status da lente atual — clique para ocultar/mostrar no mapa. */}
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 px-4 py-2">
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-2">
             {STATUS_ORDER[view]
               .filter((s) => (statusCounts.get(s.key) ?? 0) > 0)
               .map((s) => {
@@ -737,7 +737,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
 
       {/* Ranking */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Router className="size-4 text-on-surface-variant" aria-hidden />
             Ranking de condomínios
@@ -980,7 +980,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center gap-2 border-t border-neutral-100 dark:border-white/5 px-4 py-2 text-[11px] text-on-surface-variant/60">
+        <div className="flex items-center gap-2 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-2 text-[11px] text-on-surface-variant/60">
           <Target className="size-3.5" aria-hidden />
           {view === 'saturacao'
             ? 'Ocupação média das portas dos splitters do condomínio. ≥85% = candidato a expansão.'

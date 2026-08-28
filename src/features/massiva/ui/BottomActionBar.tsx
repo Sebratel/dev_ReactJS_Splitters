@@ -133,7 +133,7 @@ export function BottomActionBar({
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit || isPending}
-            className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300 sm:w-auto"
+            className="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-300 dark:disabled:bg-sky-900/50 sm:w-auto"
             aria-disabled={!canSubmit || isPending}
             title={!canSubmit && disabledReason ? disabledReason : undefined}
           >

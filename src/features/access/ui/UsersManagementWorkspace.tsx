@@ -284,10 +284,10 @@ function StatCard({
   const animated = useAnimatedNumber(value, { enabled: !loading })
   const bg =
     tint === 'emerald'
-      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200/70'
+      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200/70 dark:ring-emerald-800/50'
       : tint === 'violet'
-        ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-900 dark:text-violet-200 ring-1 ring-violet-200/70'
-        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70'
+        ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-900 dark:text-violet-200 ring-1 ring-violet-200/70 dark:ring-violet-800/50'
+        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70 dark:ring-amber-800/50'
 
   const sparkStroke =
     tint === 'emerald'
@@ -299,8 +299,8 @@ function StatCard({
   const trendTone = trendLabel?.includes('da base')
     ? 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
     : trendLabel?.trim().startsWith('-')
-      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200 ring-rose-200/70'
-      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200 ring-emerald-200/70'
+      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200 ring-rose-200/70 dark:ring-rose-800/50'
+      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200 ring-emerald-200/70 dark:ring-emerald-800/50'
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm transition will-change-transform motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md">
@@ -1119,7 +1119,7 @@ export function UsersManagementWorkspace({
                     className={cn(
                       'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide',
                       u.isActive
-                        ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80'
+                        ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800/50'
                         : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                     )}
                   >
@@ -1149,7 +1149,7 @@ export function UsersManagementWorkspace({
         <div className="overflow-x-auto pb-8">
           <table className="w-full min-w-[720px] text-left">
             <thead>
-              <tr className="border-b border-neutral-100 dark:border-white/5 bg-surface-container-low/90 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/90 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <th className="w-10 px-3 py-3">
                   <input
                     type="checkbox"
@@ -1229,7 +1229,7 @@ export function UsersManagementWorkspace({
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-on-surface">{u.displayName || '—'}</p>
                           <p className="truncate text-xs text-on-surface-variant">{u.email}</p>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-900/80 md:hidden">
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-900/80 dark:text-amber-200 md:hidden">
                             {SPLITTERS_ROLE_LABEL[role]}
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 md:hidden">
@@ -1290,14 +1290,14 @@ export function UsersManagementWorkspace({
                           className={cn(
                             'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                             u.isActive
-                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800/50'
                               : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                           )}
                         >
                           {u.isActive ? 'Ativo' : 'Inativo'}
                         </span>
                         {u.permissions.isAdmin ? (
-                          <span className="inline-flex rounded-full bg-violet-100 dark:bg-violet-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:text-violet-200 ring-1 ring-violet-200/80">
+                          <span className="inline-flex rounded-full bg-violet-100 dark:bg-violet-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:text-violet-200 ring-1 ring-violet-200/80 dark:ring-violet-800/50">
                             Admin
                           </span>
                         ) : null}

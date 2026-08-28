@@ -110,8 +110,8 @@ export function IsaSettingsWorkspace({
           className={cn(
             'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide',
             dirty
-              ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/80'
-              : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80',
+              ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/80 dark:ring-amber-800/50'
+              : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800/50',
           )}
         >
           {dirty ? 'Alterações locais pendentes' : 'Sem alterações pendentes'}

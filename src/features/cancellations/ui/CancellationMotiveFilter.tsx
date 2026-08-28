@@ -56,9 +56,9 @@ export function CancellationMotiveFilter({
               onClick={() => toggle(cat)}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
                 isOn
-                  ? 'border-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-200'
+                  ? 'border-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-200 dark:ring-indigo-800/50'
                   : disabled
-                    ? 'cursor-not-allowed border-neutral-100 dark:border-white/5 bg-surface-container-low text-on-surface-variant/60'
+                    ? 'cursor-not-allowed border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low text-on-surface-variant/60'
                     : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-neutral-300 hover:bg-surface-container-low'
               }`}
             >

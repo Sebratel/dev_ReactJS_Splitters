@@ -157,7 +157,7 @@ function NodeMetrics({
         ) : null}
       </div>
       {metrics.monitoredOnus > 0 ? (
-        <div className="mt-3 border-t border-slate-100 dark:border-white/5 pt-2.5">
+        <div className="mt-3 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-on-surface-variant">
             <span className="inline-flex items-center gap-1">
               <Radio className="size-3.5 text-on-surface-variant/60" aria-hidden />
@@ -211,7 +211,7 @@ function NodeCard({ icon: Icon, title, subtitle, metrics, deltaReferenceLabel, o
       className={cn(
         'group flex flex-col rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-lowest p-4 text-left shadow-sm transition',
         interactive ? 'hover:border-primary/40 hover:shadow-md' : 'cursor-default',
-        metrics.worstRiskBand === 'critico' ? 'ring-1 ring-rose-200' : null,
+        metrics.worstRiskBand === 'critico' ? 'ring-1 ring-rose-200 dark:ring-rose-800/50' : null,
       )}
     >
       <div className="flex items-start justify-between gap-2">

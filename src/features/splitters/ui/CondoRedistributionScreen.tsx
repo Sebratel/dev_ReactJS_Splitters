@@ -402,7 +402,7 @@ export function CondoRedistributionScreen() {
           <select
             value={cityFilter}
             onChange={(e) => { setCityFilter(e.target.value); clearSelections() }}
-            className={cn('h-9 appearance-none rounded-xl border bg-surface-container-lowest pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-200/50',
+            className={cn('h-9 appearance-none rounded-xl border bg-surface-container-lowest pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-200/50 dark:focus:ring-amber-800/50',
               cityFilter ? 'border-amber-300 text-amber-800 dark:text-amber-200' : 'border-neutral-200 dark:border-white/10 text-on-surface-variant')}
           >
             <option value="">Todas as cidades</option>
@@ -417,7 +417,7 @@ export function CondoRedistributionScreen() {
           <select
             value={siteFilter}
             onChange={(e) => { setSiteFilter(e.target.value); clearSelections() }}
-            className={cn('h-9 appearance-none rounded-xl border bg-surface-container-lowest pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-200/50',
+            className={cn('h-9 appearance-none rounded-xl border bg-surface-container-lowest pl-8 pr-7 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-200/50 dark:focus:ring-sky-800/50',
               siteFilter ? 'border-sky-300 text-sky-800 dark:text-sky-200' : 'border-neutral-200 dark:border-white/10 text-on-surface-variant')}
           >
             <option value="">Todos os sites</option>
@@ -458,7 +458,7 @@ export function CondoRedistributionScreen() {
       {/* Banner ISA — fundo desenhado (gradiente vermelho + malha de rede SVG),
           sem imagem raster: escala nítido em qualquer tela e nunca corta mal. A
           malha evapora para a esquerda, deixando o texto sempre legível. */}
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-red-950 via-red-800 to-red-950 px-5 py-4 shadow-lg">
+      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/10 dark:border-white/10 bg-gradient-to-br from-red-950 via-red-800 to-red-950 px-5 py-4 shadow-lg">
         <svg
           aria-hidden="true"
           viewBox="0 0 480 120"
@@ -633,7 +633,7 @@ export function CondoRedistributionScreen() {
                   <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
 
                   <div className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-lg">
-                    <p className="border-b border-neutral-100 dark:border-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60">
+                    <p className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60">
                       {activeTab === 'opportunities' ? 'Oportunidades' : 'Pendências'}
                     </p>
                     <button
@@ -658,7 +658,7 @@ export function CondoRedistributionScreen() {
                         if (activeTab === 'opportunities') exportAllOpportunitiesToPDF(data.opportunities)
                         else exportAllPendingToPDF(data.pendingFloorInfo)
                       }}
-                      className="flex w-full items-center gap-3 border-t border-neutral-100 dark:border-white/5 px-3 py-2.5 text-left text-xs text-on-surface-variant transition hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-200"
+                      className="flex w-full items-center gap-3 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2.5 text-left text-xs text-on-surface-variant transition hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-200"
                     >
                       <FileText className="size-4 shrink-0 text-red-500" />
                       <div>
@@ -690,7 +690,7 @@ export function CondoRedistributionScreen() {
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
           <Loader2 className="size-8 animate-spin text-amber-500" />
           <p className="text-sm text-on-surface-variant">Analisando condomínios...</p>
         </div>
@@ -706,7 +706,7 @@ export function CondoRedistributionScreen() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-3 rounded-lg bg-rose-100 dark:bg-rose-950/50 px-4 py-2 text-xs font-semibold text-rose-700 dark:text-rose-200 transition hover:bg-rose-200"
+            className="mt-3 rounded-lg bg-rose-100 dark:bg-rose-950/50 px-4 py-2 text-xs font-semibold text-rose-700 dark:text-rose-200 transition hover:bg-rose-200 dark:hover:bg-rose-950/60"
           >
             Tentar novamente
           </button>
@@ -745,7 +745,7 @@ export function CondoRedistributionScreen() {
                 placeholder="Buscar por cliente, condomínio, splitter..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setSelectedCondo(null) }}
-                className="h-9 w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
+                className="h-9 w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50 dark:focus:ring-amber-800/50"
               />
             </div>
             <div className="flex items-center gap-2 text-xs text-on-surface-variant">
@@ -770,7 +770,7 @@ export function CondoRedistributionScreen() {
 
           {/* Empty */}
           {filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
               <Building2 className="size-10 text-emerald-400" />
               <p className="text-sm font-semibold text-on-surface-variant">
                 {search ? 'Nenhum resultado para a busca' : 'Nenhuma oportunidade encontrada'}
@@ -798,7 +798,7 @@ export function CondoRedistributionScreen() {
                     {/* Ícone */}
                     <div className={cn(
                       'flex size-9 shrink-0 items-center justify-center rounded-lg',
-                      isSelected ? 'bg-amber-200' : 'bg-amber-100 dark:bg-amber-950/50',
+                      isSelected ? 'bg-amber-200 dark:bg-amber-950/60' : 'bg-amber-100 dark:bg-amber-950/50',
                     )}>
                       <Building2 className="size-5 text-amber-700 dark:text-amber-200" />
                     </div>
@@ -903,7 +903,7 @@ export function CondoRedistributionScreen() {
                 placeholder="Filtrar por cliente, condomínio ou splitter..."
                 value={pendingSearch}
                 onChange={(e) => { setPendingSearch(e.target.value); setSelectedPendingCondo(null) }}
-                className="h-9 w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50"
+                className="h-9 w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest pl-10 pr-4 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200/50 dark:focus:ring-amber-800/50"
               />
             </div>
             {geoFilters}
@@ -911,7 +911,7 @@ export function CondoRedistributionScreen() {
 
           {/* Empty */}
           {filteredPending.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
               <AlertTriangle className="size-10 text-emerald-400" />
               <p className="text-sm font-semibold text-on-surface-variant">
                 {pendingSearch ? 'Nenhum resultado para a busca' : 'Sem pendências de andar'}
@@ -938,7 +938,7 @@ export function CondoRedistributionScreen() {
                         : 'border-l-orange-300 border-r-neutral-200 dark:border-white/10 border-t-neutral-200 dark:border-white/10 border-b-neutral-200 dark:border-white/10 bg-surface-container-lowest hover:border-l-orange-400 hover:bg-surface-container-low',
                     )}
                   >
-                    <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', isSelected ? 'bg-orange-200' : 'bg-orange-100 dark:bg-orange-950/50')}>
+                    <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', isSelected ? 'bg-orange-200 dark:bg-orange-950/60' : 'bg-orange-100 dark:bg-orange-950/50')}>
                       <AlertTriangle className="size-5 text-orange-600 dark:text-orange-300" />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -997,7 +997,7 @@ export function CondoRedistributionScreen() {
           {/* Painel */}
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50">
                 <Building2 className="size-5 text-amber-700 dark:text-amber-200" />
               </div>
@@ -1137,7 +1137,7 @@ export function CondoRedistributionScreen() {
           {/* Painel */}
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-950/50">
                 <AlertTriangle className="size-5 text-orange-600 dark:text-orange-300" />
               </div>
@@ -1319,7 +1319,7 @@ function StatPill({
       className={cn(
         'flex flex-col items-center rounded-xl px-5 py-2.5 shadow-sm',
         highlight
-          ? 'bg-amber-400 ring-1 ring-amber-300'
+          ? 'bg-amber-400 ring-1 ring-amber-300 dark:ring-amber-800/50'
           : 'bg-surface-container-lowest/90 ring-1 ring-white/50 backdrop-blur-sm',
       )}
     >

@@ -175,7 +175,7 @@ export function PlatformSuggestionsPage() {
                   <select
                     value={sectorFilter}
                     onChange={(event) => setSectorFilter(event.target.value)}
-                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                   >
                     <option value="all">Todos os setores</option>
                     {sectors.map((item) => (
@@ -190,7 +190,7 @@ export function PlatformSuggestionsPage() {
                     onChange={(event) =>
                       setStatusFilter(event.target.value as 'all' | PlatformSuggestionStatus)
                     }
-                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>

@@ -207,7 +207,7 @@ export function MassivaOpenMutationBar({
             <p className="mt-2 text-xs">{formatQueryError(error)}</p>
           )}
           {unauthorized ? (
-            <p className="mt-2 text-xs text-red-900/90">
+            <p className="mt-2 text-xs text-red-900/90 dark:text-red-200">
               Dica: em desenvolvimento local, defina{' '}
               <code className="rounded bg-red-100/80 dark:bg-red-950/50 px-1 text-[11px]">
                 VITE_DEV_SESSION_TOKEN

@@ -79,7 +79,7 @@ export function Sidebar({
       id="splitters-app-sidebar"
       className={cn(
         'fixed z-50 flex flex-col overflow-hidden bg-surface-container-lowest transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
-        'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 dark:max-xl:border-white/10 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
+        'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 dark:max-xl:border-white/10 dark:max-xl:border-white/10 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
         mobileDrawerOpen ? 'max-xl:translate-x-0' : 'max-xl:-translate-x-full',
         'xl:left-6 xl:top-6 xl:bottom-6 xl:rounded-4xl xl:shadow-xl xl:shadow-surface-container-low',
         navCollapsed
@@ -182,7 +182,7 @@ export function Sidebar({
                         isActive(item.to)
                           ? 'text-white'
                           : item.accent === 'danger'
-                            ? 'text-red-600 group-hover:text-red-700'
+                            ? 'text-red-600 dark:text-red-300 group-hover:text-red-700 dark:text-red-200'
                             : 'text-primary group-hover:text-primary',
                       )}
                     />
@@ -203,9 +203,9 @@ export function Sidebar({
                   onClick={() => {
                     void signOutUser()
                   }}
-                  className="flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
+                  className="flex w-full items-center gap-4 rounded-2xl border border-transparent px-4 py-3.5 text-sm font-bold text-on-surface-variant transition-all hover:border-rose-200 dark:border-rose-800/50 hover:bg-rose-50 dark:bg-rose-950/40 hover:text-rose-800 dark:text-rose-200"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200">
                     <LogOut size={18} aria-hidden />
                   </span>
                   Sair
@@ -221,9 +221,9 @@ export function Sidebar({
                     void signOutUser()
                   }}
                   title="Sair"
-                  className="flex w-full justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
+                  className="flex w-full justify-center rounded-2xl border border-transparent px-0 py-3.5 text-on-surface-variant transition-all hover:border-rose-200 dark:border-rose-800/50 hover:bg-rose-50 dark:bg-rose-950/40 hover:text-rose-800 dark:text-rose-200"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-700">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200">
                     <LogOut size={18} aria-hidden />
                   </span>
                 </button>

@@ -238,7 +238,7 @@ export function SuggestionCard({
                 onChange={(event) =>
                   onStatusChange(suggestion.id, event.target.value as PlatformSuggestionStatus)
                 }
-                className="min-h-[42px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 disabled:cursor-not-allowed disabled:opacity-70"
+                className="min-h-[42px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -380,7 +380,7 @@ export function SuggestionCard({
                   rows={3}
                   maxLength={4000}
                   placeholder="Compartilhe contexto, complemente a ideia ou diga como isso impacta seu setor."
-                  className="min-h-[110px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                  className="min-h-[110px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                 />
                 {commentError ? (
                   <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">

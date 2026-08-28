@@ -269,7 +269,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
       <div className="rounded-2xl border border-rose-200/70 dark:border-rose-800/50 bg-gradient-to-br from-rose-50 dark:from-rose-950/20 to-white dark:to-surface-container-lowest p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200/70">
+            <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200/70 dark:ring-rose-800/50">
               <TrendingDown className="size-5" aria-hidden />
             </span>
             <div>
@@ -283,7 +283,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                 ({redeShare}) — insatisfação + concorrência, o churn que a rede influencia.
               </p>
               {/* Tendência */}
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-surface-container-lowest/70 px-2.5 py-1 text-xs ring-1 ring-rose-200/60">
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-surface-container-lowest/70 px-2.5 py-1 text-xs ring-1 ring-rose-200/60 dark:ring-rose-800/50">
                 {trend.deltaPct > 0 ? (
                   <ArrowUpRight className="size-3.5 text-rose-600 dark:text-rose-300" aria-hidden />
                 ) : trend.deltaPct < 0 ? (
@@ -333,8 +333,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         <div
           className={`flex items-start gap-3 rounded-xl border p-3 ${
             topPriority.tone === 'bad'
-              ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200'
-              : 'border-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-200'
+              ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800/50'
+              : 'border-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-800/50'
           }`}
         >
           <span
@@ -434,7 +434,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
               <div
                 key={cat}
                 className={`rounded-xl border px-3 py-2.5 ${
-                  isRede ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200' : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'
+                  isRede ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800/50' : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
@@ -518,7 +518,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Áreas em risco: massiva → churn */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Zap className="size-4 text-amber-500" aria-hidden />
             Áreas em risco — churn de rede após massiva ({WINDOW_DAYS}d)
@@ -605,7 +605,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Ranking por área */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Router className="size-4 text-on-surface-variant" aria-hidden />
             Áreas com mais churn de rede
@@ -652,7 +652,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             </div>
           </div>
         </div>
-        <div className="border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+        <div className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
           <CancellationMotiveFilter
             selected={categoryFilter}
             onChange={setCategoryFilter}

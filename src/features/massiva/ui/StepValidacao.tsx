@@ -123,13 +123,13 @@ function ClienteNameCell({
 function ClienteStatusPill({ cliente }: { cliente: SplitterCliente }) {
   if (cliente.isCorporate) {
     return (
-      <span className="inline-flex rounded-full bg-red-100 dark:bg-red-950/50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-800 dark:text-red-200 ring-1 ring-red-200/90">
+      <span className="inline-flex rounded-full bg-red-100 dark:bg-red-950/50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-800 dark:text-red-200 ring-1 ring-red-200/90 dark:ring-red-800/50">
         Prioridade
       </span>
     )
   }
   return (
-    <span className="inline-flex rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200/90">
+    <span className="inline-flex rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200/90 dark:ring-emerald-800/50">
       Ativo
     </span>
   )
@@ -387,7 +387,7 @@ export function StepValidacao({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-xl border border-white bg-surface-container-lowest px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/80 dark:ring-white/10">
+          <div className="rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/80 dark:ring-white/10">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
               Clientes afetados
             </p>
@@ -400,7 +400,7 @@ export function StepValidacao({
               ) : null}
             </div>
           </div>
-          <div className="rounded-xl border border-white bg-surface-container-lowest px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/80 dark:ring-white/10">
+          <div className="rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/80 dark:ring-white/10">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">PPPoEs</p>
             <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-on-surface">
               {totals?.totalPppoes ?? 0}
@@ -411,8 +411,8 @@ export function StepValidacao({
             className={clsx(
               'relative overflow-hidden rounded-xl border px-4 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.08)] sm:col-span-2 lg:col-span-1',
               corporateCritical
-                ? 'border-l-[5px] border-l-red-500 border-t border-r border-b border-red-200/60 dark:border-red-800/50 bg-gradient-to-br from-red-50/90 dark:from-red-950/20 to-red-50/50 dark:to-red-950/20 ring-1 ring-red-200/50'
-                : 'border-white bg-amber-50/40 dark:bg-amber-950/40 ring-1 ring-amber-200/50',
+                ? 'border-l-[5px] border-l-red-500 border-t border-r border-b border-red-200/60 dark:border-red-800/50 bg-gradient-to-br from-red-50/90 dark:from-red-950/20 to-red-50/50 dark:to-red-950/20 ring-1 ring-red-200/50 dark:ring-red-800/50'
+                : 'border-white dark:border-white/10 bg-amber-50/40 dark:bg-amber-950/40 ring-1 ring-amber-200/50 dark:ring-amber-800/50',
             )}
           >
             {corporateCritical ? (
@@ -425,7 +425,7 @@ export function StepValidacao({
             <p
               className={clsx(
                 'pr-8 text-[10px] font-bold uppercase tracking-[0.2em]',
-                corporateCritical ? 'text-red-800/90' : 'text-amber-800/90',
+                corporateCritical ? 'text-red-800/90 dark:text-red-200' : 'text-amber-800/90 dark:text-amber-200',
               )}
             >
               {t.cardCorporativos}
@@ -440,7 +440,7 @@ export function StepValidacao({
                 {totalCorp}
               </p>
               {corporateCritical ? (
-                <span className="rounded-md bg-red-100 dark:bg-red-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200 ring-1 ring-red-200/80">
+                <span className="rounded-md bg-red-100 dark:bg-red-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-800 dark:text-red-200 ring-1 ring-red-200/80 dark:ring-red-800/50">
                   {'Cr\u00edtico'}
                 </span>
               ) : null}
@@ -448,7 +448,7 @@ export function StepValidacao({
             <p
               className={clsx(
                 'mt-1.5 text-[11px] leading-snug',
-                corporateCritical ? 'text-red-900/75' : 'text-amber-900/80',
+                corporateCritical ? 'text-red-900/75 dark:text-red-200' : 'text-amber-900/80 dark:text-amber-200',
               )}
             >
               PJ / contrato empresarial no impacto.
@@ -457,8 +457,8 @@ export function StepValidacao({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <section className="overflow-hidden rounded-xl border border-white bg-surface-container-lowest shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
-            <div className="flex flex-col gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-low/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <section className="overflow-hidden rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
+            <div className="flex flex-col gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <h4 className="text-lg font-semibold tracking-tight text-on-surface">Clientes</h4>
               <div className="flex w-full flex-1 flex-col gap-2 sm:max-w-md sm:flex-row sm:items-center sm:justify-end">
                 <div className="relative w-full min-w-0 sm:max-w-xs">
@@ -471,7 +471,7 @@ export function StepValidacao({
                     value={clienteFilterQuery}
                     onChange={(e) => setValidationUiState({ clienteFilterQuery: e.target.value })}
                     placeholder={'Buscar cliente, PPPoE ou splitter\u2026'}
-                    className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest py-1.5 pl-8 pr-3 text-sm text-on-surface shadow-sm ring-0 transition placeholder:text-on-surface-variant/60 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200/60"
+                    className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest py-1.5 pl-8 pr-3 text-sm text-on-surface shadow-sm ring-0 transition placeholder:text-on-surface-variant/60 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200/60 dark:focus:ring-sky-800/50"
                     aria-label="Filtrar clientes na tabela"
                   />
                 </div>
@@ -575,7 +575,7 @@ export function StepValidacao({
                     </button>
                   </div>
                 </div>
-                <p className="border-t border-neutral-100 dark:border-white/5 px-3 py-2 text-[10px] leading-relaxed text-on-surface-variant">
+                <p className="border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2 text-[10px] leading-relaxed text-on-surface-variant">
                   <span className="font-medium text-on-surface-variant">Local:</span>{' '}
                   {`ponto alinhado ao mapa (azul / \u00e2mbar) ou cinza quando s\u00f3 h\u00e1 endere\u00e7o em texto.`}
                 </p>
@@ -586,7 +586,7 @@ export function StepValidacao({
           </section>
 
           <div className="flex min-h-0 flex-col gap-3">
-            <section className="space-y-3 rounded-xl border border-white bg-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
+            <section className="space-y-3 rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-1 ring-neutral-200/80 dark:ring-white/10">
                   <GitBranch className="h-4 w-4" strokeWidth={2.25} aria-hidden />
@@ -602,7 +602,7 @@ export function StepValidacao({
                       key={`${route.apCode}-${route.slot}-${route.port}`}
                       className="relative pb-6 last:pb-0"
                     >
-                      <span className="absolute -left-[1.4rem] top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-sky-500 shadow-sm ring-1 ring-sky-600/20" />
+                      <span className="absolute -left-[1.4rem] top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white dark:border-white/10 bg-sky-500 shadow-sm ring-1 ring-sky-600/20" />
                       <p className="text-[9px] font-bold uppercase tracking-wide text-on-surface-variant/60">
                         {'N\u00f3 de rede'}
                       </p>
@@ -631,7 +631,7 @@ export function StepValidacao({
             </section>
 
             {fullClientes.length > 0 ? (
-              <section className="min-h-0 space-y-3 rounded-xl border border-white bg-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
+              <section className="min-h-0 space-y-3 rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
                   {'Visualiza\u00e7\u00e3o do mapa'}
                 </p>

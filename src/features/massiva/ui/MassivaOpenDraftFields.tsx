@@ -57,7 +57,7 @@ function DraftSection({
             className={cn(
               'mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg ring-1',
               variant === 'accent'
-                ? 'bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-violet-200/70'
+                ? 'bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-violet-200/70 dark:ring-violet-800/50'
                 : 'bg-surface-container-lowest text-on-surface-variant ring-neutral-200/80 dark:ring-white/10',
             )}
             aria-hidden
@@ -150,7 +150,7 @@ export function MassivaOpenDraftFields({
       >
         <header className="flex items-start gap-3 border-b border-neutral-200/70 dark:border-white/10 pb-3">
           <span
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-1 ring-violet-200/70"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-1 ring-violet-200/70 dark:ring-violet-800/50"
             aria-hidden
           >
             <ClipboardList className="size-5" />
@@ -337,7 +337,7 @@ export function MassivaOpenDraftFields({
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-1',
                     'disabled:cursor-not-allowed',
                     eventIdentifiedBy === value
-                      ? 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm ring-1 ring-amber-200/70'
+                      ? 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm ring-1 ring-amber-200/70 dark:ring-amber-800/50'
                       : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface-variant',
                   )}
                 >
@@ -457,7 +457,7 @@ export function MassivaOpenDraftFields({
           </div>
 
           <section className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-2.5 shadow-sm sm:p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 pb-1.5">
+            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 pb-1.5">
               <FileText className="size-3.5 text-on-surface-variant/60" aria-hidden />
               <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">
                 Descrição técnica
@@ -482,7 +482,7 @@ export function MassivaOpenDraftFields({
                         </span>
                       </span>
                     </summary>
-                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-2 py-2 text-[11px] leading-relaxed text-on-surface">
+                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-2 py-2 text-[11px] leading-relaxed text-on-surface">
                       {item.description}
                     </pre>
                   </details>

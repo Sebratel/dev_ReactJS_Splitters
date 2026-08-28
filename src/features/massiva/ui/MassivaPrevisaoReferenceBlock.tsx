@@ -39,7 +39,7 @@ export function MassivaPrevisaoReferenceBlock({ ticket }: MassivaPrevisaoReferen
 
   return (
     <div className="mt-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80">
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80 dark:text-amber-200">
         Previsão e SLA
       </p>
       <div

@@ -310,7 +310,7 @@ export function HomePage() {
             ) : null}
           </div>
 
-          <aside className="flex min-h-0 min-w-0 w-full flex-col justify-between gap-3 rounded-2xl border border-white/60 bg-surface-container-lowest/55 p-3.5 shadow-inner shadow-stone-900/[0.03] ring-1 ring-stone-200/50 dark:ring-white/10 backdrop-blur-md sm:gap-4 sm:p-5 lg:max-w-[35rem] lg:justify-self-end">
+          <aside className="flex min-h-0 min-w-0 w-full flex-col justify-between gap-3 rounded-2xl border border-white/60 dark:border-white/10 bg-surface-container-lowest/55 p-3.5 shadow-inner shadow-stone-900/[0.03] ring-1 ring-stone-200/50 dark:ring-white/10 backdrop-blur-md sm:gap-4 sm:p-5 lg:max-w-[35rem] lg:justify-self-end">
             {networkCapacityPercent != null ? (
               <div>
                 <div className="flex items-end justify-between gap-2">
@@ -387,7 +387,7 @@ export function HomePage() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <motion.div
-                        className="rounded-xl bg-emerald-500/[0.08] px-2 py-2 ring-1 ring-emerald-300/30 sm:py-2.5"
+                        className="rounded-xl bg-emerald-500/[0.08] px-2 py-2 ring-1 ring-emerald-300/30 dark:ring-emerald-800/50 sm:py-2.5"
                         whileHover={reduceMotion ? undefined : { y: -2 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
@@ -397,7 +397,7 @@ export function HomePage() {
                         </p>
                       </motion.div>
                       <motion.div
-                        className="rounded-xl bg-amber-500/[0.1] px-2 py-2 ring-1 ring-amber-300/35 sm:py-2.5"
+                        className="rounded-xl bg-amber-500/[0.1] px-2 py-2 ring-1 ring-amber-300/35 dark:ring-amber-800/50 sm:py-2.5"
                         whileHover={reduceMotion ? undefined : { y: -2 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
@@ -407,7 +407,7 @@ export function HomePage() {
                         </p>
                       </motion.div>
                       <motion.div
-                        className="rounded-xl bg-rose-500/[0.1] px-2 py-2 ring-1 ring-rose-300/35 sm:py-2.5"
+                        className="rounded-xl bg-rose-500/[0.1] px-2 py-2 ring-1 ring-rose-300/35 dark:ring-rose-800/50 sm:py-2.5"
                         whileHover={reduceMotion ? undefined : { y: -2 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
@@ -457,7 +457,7 @@ export function HomePage() {
               </motion.div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:min-w-0 xl:flex-[3] xl:border-l xl:border-stone-200/90 dark:xl:border-white/10 xl:pl-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:min-w-0 xl:flex-[3] xl:border-l xl:border-stone-200/90 dark:xl:border-white/10 dark:xl:border-white/10 xl:pl-4">
             {networkStatsCards.map((stat, idx) => (
               <motion.div
                 key={`network-${stat.label}-${idx}`}
@@ -479,7 +479,7 @@ export function HomePage() {
       >
         <div className="min-w-0 lg:col-span-8">
           <div className="overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-surface-container-lowest/90 shadow-[0_12px_48px_-24px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-sm">
-              <header className="flex flex-col gap-2 border-b border-stone-100/90 dark:border-white/5 bg-gradient-to-r from-stone-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
+              <header className="flex flex-col gap-2 border-b border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-gradient-to-r from-stone-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
                 <div className="min-w-0 space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-on-surface-variant sm:text-[11px]">
                     Fila operacional

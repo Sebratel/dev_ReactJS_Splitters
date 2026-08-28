@@ -252,7 +252,7 @@ export function AutoIspSuggestions({
                           {event.countCircuits > 0 ? `${event.countCircuits} circuitos` : null}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-[10px] text-amber-800/90">
+                      <p className="mt-1 text-[10px] text-amber-800/90 dark:text-amber-200">
                         Sem rota automática: escolha AP, slot e PON no preview; o restante do formulário será preenchido.
                       </p>
                     </div>

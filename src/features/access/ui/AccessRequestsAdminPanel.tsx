@@ -55,7 +55,7 @@ export function AccessRequestsAdminPanel({
     <div className="rounded-2xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-br from-amber-50/80 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest p-4 shadow-sm md:p-5">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-900/70">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-900/70 dark:text-amber-200">
             Aprovações
           </p>
           <h2 className="text-base font-semibold tracking-tight text-on-surface">
@@ -177,7 +177,7 @@ export function AccessRequestsAdminPanel({
                   </div>
                 </div>
                 {rejecting ? (
-                  <div className="mt-3 border-t border-neutral-100 dark:border-white/5 pt-3">
+                  <div className="mt-3 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-3">
                     <label className="block text-[11px] font-semibold text-on-surface-variant" htmlFor={`reject-${r.id}`}>
                       Mensagem para o usuário (opcional)
                     </label>
@@ -220,7 +220,7 @@ export function AccessRequestsAdminPanel({
           })}
         </ul>
       ) : loading ? (
-        <div className="mt-4 rounded-xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest/60 px-4 py-8 text-center text-sm text-on-surface-variant">
+        <div className="mt-4 rounded-xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/60 px-4 py-8 text-center text-sm text-on-surface-variant">
           Buscando solicitações…
         </div>
       ) : null}

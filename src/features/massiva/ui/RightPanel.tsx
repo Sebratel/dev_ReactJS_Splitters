@@ -80,7 +80,7 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
               className={cn(
                 'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
                 tab === 'autoisp'
-                  ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-1 ring-sky-200'
+                  ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-1 ring-sky-200 dark:ring-sky-800/50'
                   : 'text-on-surface-variant hover:bg-surface-container-low',
               )}
             >

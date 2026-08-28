@@ -120,7 +120,7 @@ export function UserEditDrawer({
         onClick={onClose}
       />
       <aside className="relative flex h-full w-full max-w-md flex-col border-l border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-lg">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-100 dark:border-white/5 px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-5 py-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <SplittersUserAvatar user={user} size="md" className="mt-0.5" />
             <div className="min-w-0">
@@ -251,7 +251,7 @@ export function UserEditDrawer({
           </section>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 dark:border-white/5 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-5 py-4">
           <button
             type="button"
             onClick={onClose}

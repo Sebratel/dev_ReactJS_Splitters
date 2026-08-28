@@ -49,18 +49,18 @@ export function AppPageHeader({
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-72 rounded-full bg-yellow-200/20 blur-3xl"
+        className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-72 rounded-full bg-yellow-200/20 dark:bg-yellow-950/60 blur-3xl"
         aria-hidden
       />
       <div className="relative flex flex-col gap-4 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:py-5 xl:px-7">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
           {Icon ? (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-300/50 sm:h-12 sm:w-12">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-300/50 dark:ring-amber-800/50 sm:h-12 sm:w-12">
               <Icon size={22} aria-hidden className="opacity-90" />
             </div>
           ) : null}
           <div className="min-w-0 space-y-1">
-            <span className="inline-flex items-center rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-surface-container-lowest/70 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900/90 shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-surface-container-lowest/70 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900/90 dark:text-amber-200 shadow-sm backdrop-blur-sm">
               {badge}
             </span>
             <h1 className="text-xl font-semibold tracking-tight text-on-surface sm:text-2xl">{title}</h1>

@@ -151,37 +151,37 @@ const COLOR_MAP: Record<
   amber: {
     border: 'border-amber-200/80 dark:border-amber-800/50',
     bg: 'bg-amber-50/60 dark:bg-amber-950/40',
-    label: 'text-amber-800/90',
+    label: 'text-amber-800/90 dark:text-amber-200',
     value: 'text-amber-900 dark:text-amber-200',
-    sub: 'text-amber-700/70',
+    sub: 'text-amber-700/70 dark:text-amber-200',
   },
   rose: {
     border: 'border-rose-200/80 dark:border-rose-800/50',
     bg: 'bg-rose-50/60 dark:bg-rose-950/40',
     label: 'text-rose-700 dark:text-rose-200',
     value: 'text-rose-800 dark:text-rose-200',
-    sub: 'text-rose-700/70',
+    sub: 'text-rose-700/70 dark:text-rose-200',
   },
   emerald: {
     border: 'border-emerald-200/80 dark:border-emerald-800/50',
     bg: 'bg-emerald-50/60 dark:bg-emerald-950/40',
     label: 'text-emerald-700 dark:text-emerald-200',
     value: 'text-emerald-800 dark:text-emerald-200',
-    sub: 'text-emerald-700/70',
+    sub: 'text-emerald-700/70 dark:text-emerald-200',
   },
   sky: {
     border: 'border-sky-200/80 dark:border-sky-800/50',
     bg: 'bg-sky-50/60 dark:bg-sky-950/40',
     label: 'text-sky-700 dark:text-sky-200',
     value: 'text-sky-800 dark:text-sky-200',
-    sub: 'text-sky-700/70',
+    sub: 'text-sky-700/70 dark:text-sky-200',
   },
   violet: {
     border: 'border-violet-200/80 dark:border-violet-800/50',
     bg: 'bg-violet-50/60 dark:bg-violet-950/40',
     label: 'text-violet-700 dark:text-violet-200',
     value: 'text-violet-800 dark:text-violet-200',
-    sub: 'text-violet-700/70',
+    sub: 'text-violet-700/70 dark:text-violet-200',
   },
 }
 
@@ -768,7 +768,7 @@ export function MassivaDashboardScreen() {
         </div>
 
         {/* Divisor + Filtros */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 pt-2.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-2.5">
           <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
             {STATUS_OPTIONS.map(({ value, label }) => (
               <button
@@ -880,7 +880,7 @@ export function MassivaDashboardScreen() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-xs">
               <thead>
-                <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
+                <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 text-left">
                   <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Protocolo</th>
                   <th className="px-2 py-2 font-semibold text-on-surface-variant">OLT / AP</th>
                   <th className="px-2 py-2 font-semibold text-on-surface-variant">Operador</th>
@@ -1301,7 +1301,7 @@ export function MassivaDashboardScreen() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-xs">
                   <thead>
-                    <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
+                    <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 text-left">
                       <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Operador</th>
                       <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">Protocolos</th>
                       <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">MTTD médio</th>
@@ -1620,7 +1620,7 @@ export function MassivaDashboardScreen() {
                         {affectedVerif.recovered.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-emerald-600/70">
+                        <p className="mt-0.5 text-[10px] text-emerald-600/70 dark:text-emerald-300">
                           {Math.round((affectedVerif.recovered / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}
@@ -1634,7 +1634,7 @@ export function MassivaDashboardScreen() {
                         {affectedVerif.stillDegraded.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-amber-600/70">
+                        <p className="mt-0.5 text-[10px] text-amber-600/70 dark:text-amber-300">
                           {Math.round((affectedVerif.stillDegraded / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}
@@ -1648,7 +1648,7 @@ export function MassivaDashboardScreen() {
                         {affectedVerif.stillOffline.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-rose-600/70">
+                        <p className="mt-0.5 text-[10px] text-rose-600/70 dark:text-rose-300">
                           {Math.round((affectedVerif.stillOffline / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}

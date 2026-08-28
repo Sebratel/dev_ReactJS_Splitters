@@ -408,7 +408,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             role="status"
           >
             <p className="font-bold text-emerald-900 dark:text-emerald-200">Condomínio — alívio por outro splitter</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-emerald-900/95">
+            <p className="mt-1 text-[13px] leading-relaxed text-emerald-900/95 dark:text-emerald-200">
               Há outro splitter secundário com o mesmo trecho de título após{' '}
               <span className="font-semibold">RES.</span>, <span className="font-semibold">COND.</span> ou{' '}
               <span className="font-semibold">ED.</span> (mesmo condomínio/bloco no cadastro textual) e com{' '}
@@ -429,11 +429,11 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {showNetworkPlanningAlert ? (
           <div
-            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 dark:from-rose-950/20 to-amber-50 dark:to-amber-950/20 px-3 py-2.5 text-sm text-rose-950 dark:text-rose-100 shadow-sm ring-1 ring-rose-200/60"
+            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 dark:from-rose-950/20 to-amber-50 dark:to-amber-950/20 px-3 py-2.5 text-sm text-rose-950 dark:text-rose-100 shadow-sm ring-1 ring-rose-200/60 dark:ring-rose-800/50"
             role="alert"
           >
             <p className="font-bold text-rose-900 dark:text-rose-200">Planejamento de rede — sem alívio disponível</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-rose-900/95">
+            <p className="mt-1 text-[13px] leading-relaxed text-rose-900/95 dark:text-rose-200">
               {currentIsCondominium
                 ? 'Este splitter de condomínio está com todas as portas ocupadas e não há outro splitter secundário do mesmo condomínio/bloco com porta livre.'
                 : `Este splitter de rua está com todas as portas ocupadas e não há outro splitter de rua com porta livre a até ${SPLITTER_ROUTE_RELIEF_MAX_METERS} m de percurso pedestre nas ruas (OSRM).`}

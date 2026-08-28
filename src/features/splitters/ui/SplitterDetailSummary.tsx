@@ -383,13 +383,13 @@ export function SplitterDetailSummary({
                 className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-950 dark:text-emerald-100 no-underline transition hover:bg-emerald-100/95 dark:hover:bg-emerald-950/50 hover:underline"
                 title="Splitter sugerido para alívio de rede (porta livre na regra do mapa)"
               >
-                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200">
                   Apoio
                 </span>
                 <span className="truncate font-semibold">
                   {mapReliefInsight.streetReliefNeighbor.title}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-emerald-900/80">
+                <span className="shrink-0 font-mono text-[10px] text-emerald-900/80 dark:text-emerald-200">
                   {mapReliefInsight.streetReliefNeighbor.code}
                 </span>
               </Link>
@@ -414,7 +414,7 @@ export function SplitterDetailSummary({
           <div
             className={cn(
               'rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow',
-              criticalityPulse && 'scale-[1.02] ring-1 ring-amber-200',
+              criticalityPulse && 'scale-[1.02] ring-1 ring-amber-200 dark:ring-amber-800/50',
             )}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
@@ -452,7 +452,7 @@ export function SplitterDetailSummary({
                 {animatedMassivas}
               </p>
               {hasOpenMassiva ? (
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 motion-safe:animate-pulse">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800/50 motion-safe:animate-pulse">
                   <BellRing size={13} strokeWidth={2.2} />
                 </span>
               ) : (

@@ -488,7 +488,7 @@ export function SplitterMapLeaflet({
         <Marker position={oltPos} icon={oltMarkerIcon} zIndexOffset={Z_OLT}>
           <Popup {...MAP_CARD_POPUP}>
             <div className="min-w-0 max-w-full text-sm leading-snug">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-800/90">OLT</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-800/90 dark:text-blue-200">OLT</p>
               <p className="mt-0.5 font-semibold text-on-surface">
                 {oltPoint.title.trim() || oltPoint.code.trim() || 'OLT'}
               </p>
@@ -505,7 +505,7 @@ export function SplitterMapLeaflet({
           <Marker key={`neighbor-${code}:${n.lat}:${n.lng}`} position={[n.lat, n.lng]} icon={icon} zIndexOffset={Z_NEIGHBOR}>
             <Popup {...MAP_CARD_POPUP}>
               <div className="min-w-0 max-w-full text-sm leading-snug">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200">
                   Splitter vizinho
                 </p>
                 <p className="mt-1 font-semibold leading-snug text-on-surface">{n.title.trim() || n.code}</p>
@@ -545,7 +545,7 @@ export function SplitterMapLeaflet({
       <Marker position={c} icon={currentMarkerIcon} zIndexOffset={Z_CURRENT}>
         <Popup {...MAP_CARD_POPUP}>
           <div className="min-w-0 max-w-full text-sm leading-snug">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/90">Splitter atual</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/90 dark:text-rose-200">Splitter atual</p>
             <p className="mt-1 font-semibold leading-snug text-on-surface">
               {currentSplitterTitle.trim() || currentSplitterCode.trim() || 'Equipamento atual'}
             </p>

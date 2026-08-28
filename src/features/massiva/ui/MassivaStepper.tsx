@@ -55,7 +55,7 @@ export function MassivaStepper({
                 type="button"
                 onClick={() => onStepChange(step.id)}
                 className={cn(
-                  'flex h-full w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition hover:border-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50',
+                  'flex h-full w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition hover:border-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50 dark:focus-visible:ring-sky-800/50',
                   toneClass,
                 )}
                 aria-current={isCurrent ? 'step' : undefined}

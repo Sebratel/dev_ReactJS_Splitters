@@ -90,7 +90,7 @@ export function DashboardConnectionMonitor() {
       <div className="relative p-4 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 dark:from-amber-950/25 to-stone-100/80 dark:to-white/5 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-200/40">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 dark:from-amber-950/25 to-stone-100/80 dark:to-white/5 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-200/40 dark:ring-amber-800/50">
               <Activity className="h-[1.05rem] w-[1.05rem]" strokeWidth={2} aria-hidden />
             </span>
             <div>
@@ -114,7 +114,7 @@ export function DashboardConnectionMonitor() {
         </div>
 
         <ul className="mt-4 space-y-2.5">
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(statsTone))}
@@ -140,7 +140,7 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(massivaTone))}
@@ -170,7 +170,7 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(autoIspTone))}

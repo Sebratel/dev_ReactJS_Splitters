@@ -47,7 +47,7 @@ export function MassivaRecurrencePanel({
       : 0
 
   return (
-    <article className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+    <article className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-2">
           <Ticket size={16} className="shrink-0 text-amber-600 dark:text-amber-300" />
@@ -58,7 +58,7 @@ export function MassivaRecurrencePanel({
             </p>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/80">
+        <span className="inline-flex shrink-0 items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/80 dark:ring-amber-800/50">
           Período: {periodLabel}
         </span>
       </div>

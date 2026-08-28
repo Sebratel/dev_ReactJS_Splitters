@@ -40,7 +40,7 @@ export function StatCard({
       className={cn(
         'group flex h-full min-w-0 flex-col justify-between rounded-2xl border transition-[box-shadow,transform,border-color] duration-300',
         surface === 'elevated'
-          ? 'border-white/50 bg-surface-container-lowest/75 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-stone-200/30 dark:ring-white/10 backdrop-blur-md motion-safe:hover:-translate-y-0.5 hover:border-amber-200/40 dark:hover:border-amber-800/50 hover:shadow-[0_12px_40px_-12px_rgba(15,23,42,0.15)]'
+          ? 'border-white/50 dark:border-white/10 bg-surface-container-lowest/75 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-stone-200/30 dark:ring-white/10 backdrop-blur-md motion-safe:hover:-translate-y-0.5 hover:border-amber-200/40 dark:hover:border-amber-800/50 hover:shadow-[0_12px_40px_-12px_rgba(15,23,42,0.15)]'
           : 'border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08)]',
         compact
           ? 'min-h-[100px] p-3.5 sm:p-4'
@@ -53,7 +53,7 @@ export function StatCard({
           className={cn(
             'flex shrink-0 items-center justify-center rounded-xl text-on-surface-variant dark:text-on-surface/85 ring-1 ring-inset transition-colors group-hover:text-on-surface',
             surface === 'elevated'
-              ? 'bg-gradient-to-br from-amber-50/90 dark:from-amber-950/20 to-stone-50/80 dark:to-white/5 ring-amber-200/40 group-hover:from-amber-100/80 dark:group-hover:from-amber-950/25 group-hover:to-stone-50 dark:group-hover:to-white/5'
+              ? 'bg-gradient-to-br from-amber-50/90 dark:from-amber-950/20 to-stone-50/80 dark:to-white/5 ring-amber-200/40 dark:ring-amber-800/50 group-hover:from-amber-100/80 dark:group-hover:from-amber-950/25 group-hover:to-stone-50 dark:group-hover:to-white/5'
               : 'bg-neutral-100 dark:bg-white/5 ring-neutral-200/80 dark:ring-white/10 group-hover:bg-surface-container-low',
             compact ? 'h-9 w-9' : 'h-11 w-11',
           )}

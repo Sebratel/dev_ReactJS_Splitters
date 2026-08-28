@@ -173,7 +173,7 @@ export function DashboardAccessRequestSection() {
             aria-modal="true"
             aria-labelledby="access-fab-panel-title"
           >
-            <div className="flex items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-3.5 py-2.5">
+            <div className="flex items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3.5 py-2.5">
               <h2 id="access-fab-panel-title" className="text-xs font-semibold tracking-tight text-on-surface">
                 Solicitar acesso
               </h2>
@@ -197,7 +197,7 @@ export function DashboardAccessRequestSection() {
               {pending ? (
                 <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 text-[11px] text-amber-950 dark:text-amber-100">
                   <p className="font-semibold">Em análise</p>
-                  <p className="mt-0.5 leading-relaxed text-amber-950/90">
+                  <p className="mt-0.5 leading-relaxed text-amber-950/90 dark:text-amber-100">
                     Aguarde a resposta da administração.
                   </p>
                   {pending.requestedModules.length > 0 ? (
@@ -251,7 +251,7 @@ export function DashboardAccessRequestSection() {
                   <p className="text-[12px] font-semibold tracking-tight">
                     {isAdmin ? '✨ Acesso completo' : '🎉 Tudo certo por aqui!'}
                   </p>
-                  <p className="mt-2 text-emerald-950/[0.92]">
+                  <p className="mt-2 text-emerald-950/[0.92] dark:text-emerald-100">
                     {isAdmin
                       ? 'Como administrador(a), você já dispõe de todos os módulos da plataforma — explore e gerencie à vontade.'
                       : 'Você já possui todos os módulos liberados para o seu perfil na plataforma. Aproveita e, se pintar algo fora da rotina, o time de apoio tá por perto também. 🙂'}
@@ -295,7 +295,7 @@ export function DashboardAccessRequestSection() {
                     {moduleOptions.map((opt) => (
                       <label
                         key={opt.id}
-                        className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-100 dark:border-white/5 bg-surface-container-low/40 px-2 py-1.5 transition hover:border-neutral-200 dark:hover:border-white/10 hover:bg-surface-container-low/90"
+                        className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/40 px-2 py-1.5 transition hover:border-neutral-200 dark:hover:border-white/10 dark:hover:border-white/10 hover:bg-surface-container-low/90"
                       >
                         <input
                           type="checkbox"
@@ -387,12 +387,12 @@ export function DashboardAccessRequestSection() {
           <div className="pointer-events-auto relative">
           {pending ? (
             <span
-              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-amber-500 shadow-sm"
+              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-amber-500 shadow-sm"
               aria-hidden
             />
           ) : latestResolved?.status === 'rejected' ? (
             <span
-              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white bg-rose-400 shadow-sm"
+              className="absolute -right-0.5 -top-0.5 z-[1] size-3 rounded-full border-2 border-white dark:border-white/10 bg-rose-400 shadow-sm"
               aria-hidden
             />
           ) : null}
@@ -413,7 +413,7 @@ export function DashboardAccessRequestSection() {
                 className={cn(
                   'relative flex size-[5rem] shrink-0 items-center justify-center overflow-hidden rounded-full transition',
                   showPhotoFab
-                    ? 'border border-white/45 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
+                    ? 'border border-white/45 dark:border-white/10 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.82),rgba(198,226,255,0.34)_42%,rgba(157,187,255,0.18)_62%,rgba(120,146,214,0.12)_100%)] p-0 shadow-[0_18px_42px_-10px_rgba(15,23,42,0.42),inset_0_1px_0_rgba(255,255,255,0.75)] hover:scale-[1.02]'
                     : cn(
                         'border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-lg',
                         'hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface',
@@ -428,7 +428,7 @@ export function DashboardAccessRequestSection() {
                   <>
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute inset-[6%] rounded-full border border-white/35 shadow-[inset_0_0_22px_rgba(255,255,255,0.32)]"
+                      className="pointer-events-none absolute inset-[6%] rounded-full border border-white/35 dark:border-white/10 shadow-[inset_0_0_22px_rgba(255,255,255,0.32)]"
                     />
                     <span
                       aria-hidden
@@ -436,7 +436,7 @@ export function DashboardAccessRequestSection() {
                     />
                     <span
                       aria-hidden
-                      className="pointer-events-none absolute bottom-[12%] right-[16%] h-[22%] w-[30%] rounded-full bg-sky-200/25 blur-[6px]"
+                      className="pointer-events-none absolute bottom-[12%] right-[16%] h-[22%] w-[30%] rounded-full bg-sky-200/25 dark:bg-sky-950/60 blur-[6px]"
                     />
                     <span
                       aria-hidden

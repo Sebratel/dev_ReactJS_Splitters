@@ -114,7 +114,7 @@ export function ClienteDetailMaintenanceSection({
       ) : null}
 
       {view.status === 'success' && summary.total === 0 ? (
-        <p className="mt-4 text-sm leading-relaxed text-amber-900/85">
+        <p className="mt-4 text-sm leading-relaxed text-amber-900/85 dark:text-amber-200">
           Nenhuma solicitação foi classificada como manutenção pelos textos de título, área, equipe ou status.
           Os protocolos continuam listados na secção <strong>Solicitações</strong>; se faltar alguma palavra-chave do
           seu ERP, podemos incluir no filtro.

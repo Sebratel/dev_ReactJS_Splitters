@@ -135,7 +135,7 @@ function IntelligencePanelLoadingSkeleton() {
       {Array.from({ length: 4 }, (_, i) => (
         <div
           key={i}
-          className="min-h-[200px] rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10"
+          className="min-h-[200px] rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10"
         >
           <div className="h-3 w-28 animate-pulse rounded bg-slate-200/90 dark:bg-white/10" />
           <div className="mt-4 h-9 w-44 animate-pulse rounded-lg bg-slate-200/80 dark:bg-white/10" />
@@ -147,7 +147,7 @@ function IntelligencePanelLoadingSkeleton() {
           </div>
         </div>
       ))}
-      <div className="flex min-h-[5.5rem] flex-col gap-3 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
+      <div className="flex min-h-[5.5rem] flex-col gap-3 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
         <div className="flex gap-2">
           <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-slate-100 dark:bg-white/5" />
           <div className="space-y-2 pt-0.5">
@@ -170,14 +170,14 @@ function IntelligenceLowerDashboardSkeleton() {
   return (
     <div className="space-y-4">
       <section className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2 h-80 animate-pulse rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl" />
-        <div className="h-80 animate-pulse rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl" />
+        <div className="xl:col-span-2 h-80 animate-pulse rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl" />
+        <div className="h-80 animate-pulse rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl" />
       </section>
       <section className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2 h-80 animate-pulse rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl" />
-        <div className="h-80 animate-pulse rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl" />
+        <div className="xl:col-span-2 h-80 animate-pulse rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl" />
+        <div className="h-80 animate-pulse rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl" />
       </section>
-      <div className="h-[min(420px,55vh)] animate-pulse rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl" />
+      <div className="h-[min(420px,55vh)] animate-pulse rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl" />
     </div>
   )
 }
@@ -1391,7 +1391,7 @@ export function NetworkIntelligencePage() {
         }
       />
 
-      <section className="rounded-2xl border border-white/45 bg-surface-container-lowest/70 p-3 shadow-md shadow-amber-500/10 backdrop-blur-xl md:p-3.5">
+      <section className="rounded-2xl border border-white/45 dark:border-white/10 bg-surface-container-lowest/70 p-3 shadow-md shadow-amber-500/10 backdrop-blur-xl md:p-3.5">
         {/* Nível 1 — categorias */}
         <div className="-mx-1 flex items-center gap-1 overflow-x-auto border-b-2 border-slate-200/60 dark:border-white/10 px-1 [scrollbar-width:thin]">
           {INTELLIGENCE_CATEGORIES.map((cat) => {
@@ -1610,7 +1610,7 @@ export function NetworkIntelligencePage() {
               Ajuda: filtros e o que esta aba mostra
             </span>
           </summary>
-          <div className="mt-2 space-y-2 rounded-lg border border-white/50 bg-surface-container-lowest/50 px-3 py-2 text-[11px] leading-relaxed text-on-surface-variant">
+          <div className="mt-2 space-y-2 rounded-lg border border-white/50 dark:border-white/10 bg-surface-container-lowest/50 px-3 py-2 text-[11px] leading-relaxed text-on-surface-variant">
             <p>
               Cada aba exibe apenas os filtros que recortam os próprios dados — período, busca,
               risco, idade e tipo de local aparecem só onde fazem efeito. No{' '}
@@ -1630,10 +1630,10 @@ export function NetworkIntelligencePage() {
             Como lemos ranking, score e matriz impacto × urgência
           </span>
         </summary>
-        <div className="space-y-1.5 border-t border-amber-200/60 dark:border-amber-800/50 px-3 pb-3 pt-2 text-amber-900/95">
+        <div className="space-y-1.5 border-t border-amber-200/60 dark:border-amber-800/50 px-3 pb-3 pt-2 text-amber-900/95 dark:text-amber-200">
           <p className="font-semibold">
             Base do ranking: <span className="font-black">{deltaReferenceLabel}</span>
-            <span className="font-normal text-amber-800/95">
+            <span className="font-normal text-amber-800/95 dark:text-amber-200">
               {' '}
               (variação de ocupação em 7 ou 30 dias, conforme o período escolhido)
             </span>
@@ -1656,7 +1656,7 @@ export function NetworkIntelligencePage() {
             <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
             Carregando tendências, massivas e mapa por splitter…
           </p>
-          <p className="mt-1.5 text-xs font-medium leading-relaxed text-amber-900/85">
+          <p className="mt-1.5 text-xs font-medium leading-relaxed text-amber-900/85 dark:text-amber-200">
             Indicadores gerais da rede já disponíveis:{' '}
             <span className="font-bold tabular-nums">
               {(() => {
@@ -1696,7 +1696,7 @@ export function NetworkIntelligencePage() {
           transition={{ duration: 0.45 }}
           className="grid gap-4 lg:grid-cols-2"
         >
-          <div className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+          <div className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
               Saturação no período
             </p>
@@ -1763,25 +1763,25 @@ export function NetworkIntelligencePage() {
               (não pela tendência): verde folga, âmbar atenção, vermelho saturado.
             </p>
             <div className="mt-2 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 px-2 py-3 text-center ring-1 ring-emerald-200/80">
+              <div className="rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 px-2 py-3 text-center ring-1 ring-emerald-200/80 dark:ring-emerald-800/50">
                 <p className="text-2xl font-black tabular-nums text-emerald-800 dark:text-emerald-200">{intelligenceSnapshot.folga}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/90">&lt; 70%</p>
-                <p className="text-[9px] font-medium text-emerald-700/70">folga</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/90 dark:text-emerald-200">&lt; 70%</p>
+                <p className="text-[9px] font-medium text-emerald-700/70 dark:text-emerald-200">folga</p>
               </div>
-              <div className="rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 px-2 py-3 text-center ring-1 ring-amber-200/80">
+              <div className="rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 px-2 py-3 text-center ring-1 ring-amber-200/80 dark:ring-amber-800/50">
                 <p className="text-2xl font-black tabular-nums text-amber-900 dark:text-amber-200">{intelligenceSnapshot.atencao}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800/90">70–94%</p>
-                <p className="text-[9px] font-medium text-amber-800/70">atenção</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800/90 dark:text-amber-200">70–94%</p>
+                <p className="text-[9px] font-medium text-amber-800/70 dark:text-amber-200">atenção</p>
               </div>
-              <div className="rounded-2xl bg-rose-50/90 dark:bg-rose-950/40 px-2 py-3 text-center ring-1 ring-rose-200/80">
+              <div className="rounded-2xl bg-rose-50/90 dark:bg-rose-950/40 px-2 py-3 text-center ring-1 ring-rose-200/80 dark:ring-rose-800/50">
                 <p className="text-2xl font-black tabular-nums text-rose-800 dark:text-rose-200">{intelligenceSnapshot.critico}</p>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-rose-800/90">≥ 95%</p>
-                <p className="text-[9px] font-medium text-rose-800/70">crítico</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-rose-800/90 dark:text-rose-200">≥ 95%</p>
+                <p className="text-[9px] font-medium text-rose-800/70 dark:text-rose-200">crítico</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+          <div className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
               Distribuição de tendência
             </p>
@@ -1834,7 +1834,7 @@ export function NetworkIntelligencePage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+          <div className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Massivas no período</p>
             <p className="mt-0.5 text-xs leading-relaxed text-on-surface-variant">
               Contagem <span className="font-semibold text-on-surface-variant">distinta</span> de ocorrências (massivas) com
@@ -1849,8 +1849,8 @@ export function NetworkIntelligencePage() {
                   {intelligenceSnapshot.massivaAgg.totalTickets.toLocaleString('pt-BR')}
                 </dd>
               </div>
-              <div className="rounded-xl bg-amber-50/80 dark:bg-amber-950/40 px-3 py-2.5 ring-1 ring-amber-200/70">
-                <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80">Abertas</dt>
+              <div className="rounded-xl bg-amber-50/80 dark:bg-amber-950/40 px-3 py-2.5 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80 dark:text-amber-200">Abertas</dt>
                 <dd className="mt-0.5 text-xl font-black tabular-nums text-amber-950 dark:text-amber-100">
                   {intelligenceSnapshot.massivaAgg.openTickets.toLocaleString('pt-BR')}
                 </dd>
@@ -1870,7 +1870,7 @@ export function NetworkIntelligencePage() {
             </dl>
           </div>
 
-          <div className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+          <div className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Destaques</p>
             <p className="mt-0.5 text-xs leading-relaxed text-on-surface-variant">
               Três campeões no recorte: maior ocupação atual; maior {deltaReferenceLabel} (mudança de ocupação em 7 ou 30
@@ -1959,7 +1959,7 @@ export function NetworkIntelligencePage() {
             </ul>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl lg:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl lg:col-span-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2.5">
               <span className="mt-0.5 shrink-0 rounded-xl bg-amber-100 dark:bg-amber-950/50 p-2 text-amber-700 dark:text-amber-200">
                 <MapPin size={16} aria-hidden />
@@ -1980,14 +1980,14 @@ export function NetworkIntelligencePage() {
                   {intelligenceSnapshot.geoTotal.toLocaleString('pt-BR')}
                 </dd>
               </div>
-              <div className="rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 px-3 py-2 text-center ring-1 ring-emerald-200/80 sm:min-w-[5.5rem]">
-                <dt className="text-[9px] font-bold uppercase tracking-wide text-emerald-800/90">Com GPS</dt>
+              <div className="rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 px-3 py-2 text-center ring-1 ring-emerald-200/80 dark:ring-emerald-800/50 sm:min-w-[5.5rem]">
+                <dt className="text-[9px] font-bold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200">Com GPS</dt>
                 <dd className="text-lg font-black tabular-nums text-emerald-900 dark:text-emerald-200">
                   {intelligenceSnapshot.geoWithCoords.toLocaleString('pt-BR')}
                 </dd>
               </div>
-              <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-center ring-1 ring-amber-200/80 sm:min-w-[5.5rem]">
-                <dt className="text-[9px] font-bold uppercase tracking-wide text-amber-900/80">Sem GPS</dt>
+              <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-center ring-1 ring-amber-200/80 dark:ring-amber-800/50 sm:min-w-[5.5rem]">
+                <dt className="text-[9px] font-bold uppercase tracking-wide text-amber-900/80 dark:text-amber-200">Sem GPS</dt>
                 <dd className="text-lg font-black tabular-nums text-amber-950 dark:text-amber-100">
                   {intelligenceSnapshot.geoWithoutCoords.toLocaleString('pt-BR')}
                 </dd>
@@ -2012,7 +2012,7 @@ export function NetworkIntelligencePage() {
                 <p className="mt-1 text-2xl font-black tabular-nums text-rose-800 dark:text-rose-200">
                   {decisionKpis.criticalSplitters.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] leading-snug text-rose-700/90">
+                <p className="text-[11px] leading-snug text-rose-700/90 dark:text-rose-200">
                   Splitters em uso de portas ≥95% — prioridade máxima de capacidade ou remanejamento.
                 </p>
               </div>
@@ -2021,7 +2021,7 @@ export function NetworkIntelligencePage() {
                 <p className="mt-1 text-2xl font-black tabular-nums text-amber-900 dark:text-amber-200">
                   {decisionKpis.growthSplitters.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] leading-snug text-amber-800/90">
+                <p className="text-[11px] leading-snug text-amber-800/90 dark:text-amber-200">
                   Subiram pelo menos 5 pontos percentuais de ocupação no {deltaReferenceLabel} — checar tendência antes de
                   virar crítico.
                 </p>
@@ -2031,7 +2031,7 @@ export function NetworkIntelligencePage() {
                 <p className="mt-1 text-2xl font-black tabular-nums text-violet-900 dark:text-violet-200">
                   {decisionKpis.highRiskMassivaTickets.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[11px] leading-snug text-violet-800/90">
+                <p className="text-[11px] leading-snug text-violet-800/90 dark:text-violet-200">
                   Soma de vínculos “massiva × splitter” (tickets) nos equipamentos em risco alto ou crítico; a mesma
                   massiva pode contar em mais de um splitter.
                 </p>
@@ -2041,7 +2041,7 @@ export function NetworkIntelligencePage() {
                 <p className="mt-1 text-2xl font-black tabular-nums text-sky-900 dark:text-sky-200">
                   {decisionKpis.attentionSharePercent.toFixed(1)}%
                 </p>
-                <p className="text-[11px] leading-snug text-sky-800/90">
+                <p className="text-[11px] leading-snug text-sky-800/90 dark:text-sky-200">
                   Participação dos splitters que estão críticos OU em crescimento forte — mostra quanto da base exige
                   atenção simultânea.
                 </p>
@@ -2085,7 +2085,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.03 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2213,7 +2213,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.06 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Matriz impacto × urgência</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2232,7 +2232,7 @@ export function NetworkIntelligencePage() {
                   selectedMatrixKey === cell.key
                     ? 'ring-amber-400 bg-amber-50 dark:bg-amber-950/40'
                     : cell.key === 'altoImpactoAltaUrgencia' && cell.count > 0
-                      ? 'ring-rose-300 bg-rose-50/50 dark:bg-rose-950/40'
+                      ? 'ring-rose-300 dark:ring-rose-800/50 bg-rose-50/50 dark:bg-rose-950/40'
                       : 'ring-slate-200/70 dark:ring-white/10',
                 )}
               >
@@ -2282,7 +2282,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.08 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Risco por ciclo de vida</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2298,11 +2298,11 @@ export function NetworkIntelligencePage() {
               <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Splitters 5+ anos</p>
               <p className="text-xl font-black tabular-nums text-on-surface">{contextualLifecycle.kpis.agedSplitters.toLocaleString('pt-BR')}</p>
             </div>
-            <div className="rounded-xl bg-rose-50/90 dark:bg-rose-950/40 px-2 py-2 ring-1 ring-rose-200/70">
+            <div className="rounded-xl bg-rose-50/90 dark:bg-rose-950/40 px-2 py-2 ring-1 ring-rose-200/70 dark:ring-rose-800/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-rose-700 dark:text-rose-200">5+ anos críticos</p>
               <p className="text-xl font-black tabular-nums text-rose-800 dark:text-rose-200">{contextualLifecycle.kpis.agedCriticalSplitters.toLocaleString('pt-BR')}</p>
             </div>
-            <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-2 py-2 ring-1 ring-amber-200/70">
+            <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-2 py-2 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">Pressão envelhecida</p>
               <p className="text-xl font-black tabular-nums text-amber-900 dark:text-amber-200">{contextualLifecycle.kpis.agedPressurePercent.toFixed(1)}%</p>
             </div>
@@ -2312,7 +2312,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Ranking de substituição preventiva</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2371,7 +2371,7 @@ export function NetworkIntelligencePage() {
           </div>
         </motion.article>
       </section>
-      <section className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+      <section className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
         <h2 className="text-sm font-bold text-on-surface">Alertas de ciclo de vida</h2>
         <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
           Regras automáticas (ex.: idade alta + uso alto ou queda brusca). Só aparecem equipamentos que continuam no filtro
@@ -2386,9 +2386,9 @@ export function NetworkIntelligencePage() {
             lifecycleAlerts
               .filter((item) => contextualRiskRanking.some((row) => row.splitterCode === item.splitterCode))
               .map((alert) => (
-              <li key={alert.splitterCode} className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70">
+              <li key={alert.splitterCode} className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
                 <p className="font-semibold">{alert.splitterTitle || alert.splitterCode}</p>
-                <p className="font-mono text-[10px] text-amber-800/80">{alert.splitterCode}</p>
+                <p className="font-mono text-[10px] text-amber-800/80 dark:text-amber-200">{alert.splitterCode}</p>
                 <p className="mt-1">{alert.reason}</p>
               </li>
             ))
@@ -2400,7 +2400,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.2 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Curva de envelhecimento por faixa</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2440,7 +2440,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.24 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Heatmap idade × saturação</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2467,7 +2467,7 @@ export function NetworkIntelligencePage() {
           ) : null}
         </motion.article>
       </section>
-      <section className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
+      <section className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl">
         <h2 className="text-sm font-bold text-on-surface">Cohorts por ano de implantação</h2>
         <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
           Agrupa splitters pelo ano de entrada em operação.{" "}
@@ -2509,7 +2509,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.05 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -2555,7 +2555,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <div className="mb-3 flex items-center gap-2">
             <AlertTriangle size={16} className="text-amber-600 dark:text-amber-300" />
@@ -2595,7 +2595,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.18 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <div className="mb-3 flex items-center gap-2">
             <Database size={16} className="text-amber-600 dark:text-amber-300" />
@@ -2805,7 +2805,7 @@ export function NetworkIntelligencePage() {
                     </tbody>
                   </table>
                 </div>
-                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 pt-2">
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2">
                   {contextualRegionalInsights.topCidades.slice(0, 4).map((row) => (
                     <li key={`d-${row.label}`} className="text-[10px] leading-snug text-on-surface-variant">
                       <span className="font-semibold text-on-surface-variant">{row.label}:</span> {row.directive}
@@ -2867,7 +2867,7 @@ export function NetworkIntelligencePage() {
                     </tbody>
                   </table>
                 </div>
-                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 pt-2">
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2">
                   {contextualRegionalInsights.topBairros.slice(0, 5).map((row) => (
                     <li key={`bd-${row.label}`} className="text-[10px] leading-snug text-on-surface-variant">
                       <span className="font-semibold text-on-surface-variant">{row.label}:</span> {row.directive}
@@ -2885,7 +2885,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.08 }}
-          className="xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Drill-down por AP/OLT</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -2951,7 +2951,7 @@ export function NetworkIntelligencePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
-          className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+          className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
         >
           <h2 className="text-sm font-bold text-on-surface">Geo e contexto local</h2>
           <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -3014,7 +3014,7 @@ export function NetworkIntelligencePage() {
                 <section className={cn('min-w-0 rounded-xl bg-surface-container-low/70 p-2.5 ring-1 ring-slate-200/70 dark:ring-white/10', geoTab !== 'condominios' ? 'hidden sm:block' : '')}>
                   <header className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
                         <Building2 className="size-4" aria-hidden />
                       </span>
                       <div className="min-w-0">
@@ -3037,7 +3037,7 @@ export function NetworkIntelligencePage() {
                         className="rounded-xl bg-surface-container-lowest/80 px-3 py-2 text-[11px] text-on-surface-variant ring-1 ring-slate-200/70 dark:ring-white/10"
                       >
                         <div className="flex items-start gap-2">
-                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/40 text-[10px] font-black text-amber-800 dark:text-amber-200 ring-1 ring-amber-200/70">
+                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-amber-50 dark:bg-amber-950/40 text-[10px] font-black text-amber-800 dark:text-amber-200 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
                             {idx + 1}
                           </span>
                           <div className="min-w-0 flex-1">
@@ -3076,7 +3076,7 @@ export function NetworkIntelligencePage() {
                 <section className={cn('min-w-0 rounded-xl bg-surface-container-low/70 p-2.5 ring-1 ring-slate-200/70 dark:ring-white/10', geoTab !== 'ruas' ? 'hidden sm:block' : '')}>
                   <header className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-950/50 text-rose-900 dark:text-rose-200 ring-1 ring-rose-200/70">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-950/50 text-rose-900 dark:text-rose-200 ring-1 ring-rose-200/70 dark:ring-rose-800/50">
                         <MapPin className="size-4" aria-hidden />
                       </span>
                       <div className="min-w-0">
@@ -3099,7 +3099,7 @@ export function NetworkIntelligencePage() {
                         className="rounded-xl bg-surface-container-lowest/80 px-3 py-2 text-[11px] text-on-surface-variant ring-1 ring-slate-200/70 dark:ring-white/10"
                       >
                         <div className="flex items-start gap-2">
-                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-rose-50 dark:bg-rose-950/40 text-[10px] font-black text-rose-800 dark:text-rose-200 ring-1 ring-rose-200/70">
+                          <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-rose-50 dark:bg-rose-950/40 text-[10px] font-black text-rose-800 dark:text-rose-200 ring-1 ring-rose-200/70 dark:ring-rose-800/50">
                             {idx + 1}
                           </span>
                           <div className="min-w-0 flex-1">
@@ -3141,7 +3141,7 @@ export function NetworkIntelligencePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: 0.22 }}
-        className="overflow-visible rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+        className="overflow-visible rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
       >
         <h2 className="mb-1 text-sm font-bold text-on-surface">Mapa inteligente de pressão na rede</h2>
         <p className="mb-3 text-xs leading-relaxed text-on-surface-variant">
@@ -3216,7 +3216,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.04 }}
-              className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
                 Splitters com manutenção
@@ -3230,7 +3230,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.08 }}
-              className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
                 Manutenções no período
@@ -3251,7 +3251,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.12 }}
-              className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
                 Protocolos únicos
@@ -3264,7 +3264,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.16 }}
-              className="rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
                 Protocolos em aberto
@@ -3281,7 +3281,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.14 }}
-              className="min-w-0 xl:col-span-2 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="min-w-0 xl:col-span-2 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -3354,7 +3354,7 @@ export function NetworkIntelligencePage() {
                               {row.uniqueClients.toLocaleString('pt-BR')}
                             </dd>
                           </div>
-                          <div className="rounded-lg bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 ring-1 ring-amber-200/70">
+                          <div className="rounded-lg bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
                             <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
                               Abertas
                             </dt>
@@ -3379,7 +3379,7 @@ export function NetworkIntelligencePage() {
                             </dd>
                           </div>
                         </dl>
-                        <p className="mt-3 border-t border-slate-100 dark:border-white/5 pt-2 text-[11px] leading-snug text-on-surface-variant">
+                        <p className="mt-3 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2 text-[11px] leading-snug text-on-surface-variant">
                           <span className="font-semibold text-on-surface-variant">Última</span>{' '}
                           {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                         </p>
@@ -3433,7 +3433,7 @@ export function NetworkIntelligencePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.18 }}
-              className="min-w-0 rounded-3xl border border-white/50 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
+              className="min-w-0 rounded-3xl border border-white/50 dark:border-white/10 bg-surface-container-lowest/70 p-4 shadow-xl shadow-amber-500/10 backdrop-blur-xl"
             >
               <h2 className="text-sm font-bold text-on-surface">Qualidade do mapeamento</h2>
               <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
@@ -3446,7 +3446,7 @@ export function NetworkIntelligencePage() {
                     {maintenanceTotals.totalClients.toLocaleString('pt-BR')}
                   </dd>
                 </div>
-                <div className="rounded-xl bg-amber-50/85 dark:bg-amber-950/40 px-3 py-2 ring-1 ring-amber-200/70">
+                <div className="rounded-xl bg-amber-50/85 dark:bg-amber-950/40 px-3 py-2 ring-1 ring-amber-200/70 dark:ring-amber-800/50">
                   <dt className="font-semibold text-amber-800 dark:text-amber-200">Sem splitter mapeado</dt>
                   <dd className="mt-0.5 text-lg font-black tabular-nums text-amber-900 dark:text-amber-200">
                     {maintenanceTotals.unmappedMaintenances.toLocaleString('pt-BR')}
