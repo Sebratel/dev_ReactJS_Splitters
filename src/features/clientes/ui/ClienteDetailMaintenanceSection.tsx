@@ -34,11 +34,11 @@ function KpiChip({
 }) {
   const toneClass =
     tone === 'amber'
-      ? 'border-amber-200 bg-amber-50 text-amber-900'
+      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
       : tone === 'emerald'
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+        ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
         : tone === 'sky'
-          ? 'border-sky-200 bg-sky-50 text-sky-900'
+          ? 'border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200'
           : 'border-outline-variant bg-surface-container-low text-on-surface'
 
   return (
@@ -66,12 +66,12 @@ export function ClienteDetailMaintenanceSection({
 
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-maintenance-heading"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-900">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200">
             <Wrench size={18} strokeWidth={1.75} />
           </div>
           <div className="min-w-0">

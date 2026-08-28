@@ -52,7 +52,7 @@ export function AccessRequestsAdminPanel({
   if (!loading && sorted.length === 0 && !error) return null
 
   return (
-    <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50/80 via-white to-white p-4 shadow-sm md:p-5">
+    <div className="rounded-2xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-br from-amber-50/80 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest p-4 shadow-sm md:p-5">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-900/70">
@@ -61,25 +61,25 @@ export function AccessRequestsAdminPanel({
           <h2 className="text-base font-semibold tracking-tight text-neutral-950">
             Solicitações de acesso pendentes
           </h2>
-          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-neutral-600">
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-on-surface-variant">
             Aprove com um papel padrão (as permissões são gravadas no cadastro do usuário) ou recuse com
             uma mensagem visível para o solicitante.
           </p>
         </div>
         {loading ? (
-          <div className="inline-flex items-center gap-2 text-xs font-medium text-neutral-600">
-            <Loader2 className="size-4 animate-spin text-amber-700" aria-hidden />
+          <div className="inline-flex items-center gap-2 text-xs font-medium text-on-surface-variant">
+            <Loader2 className="size-4 animate-spin text-amber-700 dark:text-amber-200" aria-hidden />
             Carregando…
           </div>
         ) : (
-          <span className="inline-flex w-fit items-center rounded-lg border border-amber-200/90 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950">
+          <span className="inline-flex w-fit items-center rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950">
             {sorted.length} pendente{sorted.length === 1 ? '' : 's'}
           </span>
         )}
       </div>
 
       {error ? (
-        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+        <div className="mt-4 rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-900 dark:text-rose-200">
           {error}
         </div>
       ) : null}
@@ -97,31 +97,31 @@ export function AccessRequestsAdminPanel({
             return (
               <li
                 key={r.id}
-                className="rounded-xl border border-neutral-200/90 bg-white p-4 shadow-sm"
+                className="rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm"
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-sm font-semibold text-neutral-950">{r.displayName || r.email}</p>
-                    <p className="text-[11px] text-neutral-500">{r.email}</p>
+                    <p className="text-[11px] text-on-surface-variant">{r.email}</p>
                     {r.requestedModules.length > 0 ? (
                       <ul className="flex flex-wrap gap-1.5 pt-1">
                         {r.requestedModules.map((id) => (
                           <li
                             key={id}
-                            className="rounded-md border border-amber-200/80 bg-amber-50/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950"
+                            className="rounded-md border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold text-amber-950"
                           >
                             {labelForRequestedModule(id)}
                           </li>
                         ))}
                       </ul>
                     ) : null}
-                    <p className="text-[12px] leading-relaxed text-neutral-700">{r.message}</p>
-                    <p className="text-[10px] font-medium tabular-nums text-neutral-400">
+                    <p className="text-[12px] leading-relaxed text-on-surface-variant">{r.message}</p>
+                    <p className="text-[10px] font-medium tabular-nums text-on-surface-variant/60">
                       Recebida em {formatWhen(r.createdAt)}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col gap-2 lg:items-end">
-                    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500 lg:items-end">
+                    <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant lg:items-end">
                       Papel ao aprovar
                       <select
                         value={selectedRole}
@@ -131,7 +131,7 @@ export function AccessRequestsAdminPanel({
                             [r.id]: e.target.value as ApproveRole,
                           }))
                         }
-                        className="w-full min-w-[12rem] rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-2 text-xs font-bold text-neutral-900 lg:w-auto"
+                        className="w-full min-w-[12rem] rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-low px-2 py-2 text-xs font-bold text-on-surface lg:w-auto"
                       >
                         {SPLITTERS_PRESET_ROLE_IDS.map((id) => (
                           <option key={id} value={id}>
@@ -166,8 +166,8 @@ export function AccessRequestsAdminPanel({
                         className={cn(
                           'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-bold shadow-sm transition',
                           rejecting
-                            ? 'border-rose-400 bg-rose-50 text-rose-950'
-                            : 'border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50',
+                            ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-950'
+                            : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
                         )}
                       >
                         <X className="size-3.5" aria-hidden />
@@ -177,8 +177,8 @@ export function AccessRequestsAdminPanel({
                   </div>
                 </div>
                 {rejecting ? (
-                  <div className="mt-3 border-t border-neutral-100 pt-3">
-                    <label className="block text-[11px] font-semibold text-neutral-700" htmlFor={`reject-${r.id}`}>
+                  <div className="mt-3 border-t border-neutral-100 dark:border-white/5 pt-3">
+                    <label className="block text-[11px] font-semibold text-on-surface-variant" htmlFor={`reject-${r.id}`}>
                       Mensagem para o usuário (opcional)
                     </label>
                     <textarea
@@ -186,7 +186,7 @@ export function AccessRequestsAdminPanel({
                       value={rejectNote}
                       onChange={(e) => setRejectNote(e.target.value)}
                       rows={3}
-                      className="mt-1 w-full rounded-lg border border-neutral-200 bg-neutral-50/50 px-3 py-2 text-sm text-neutral-900 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      className="mt-1 w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-low/50 px-3 py-2 text-sm text-on-surface focus:border-amber-400 focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                       placeholder="Explique o motivo da recusa ou próximos passos."
                     />
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -198,7 +198,7 @@ export function AccessRequestsAdminPanel({
                           setRejectForId(null)
                           setRejectNote('')
                         }}
-                        className="rounded-lg border border-rose-200 bg-rose-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50"
+                        className="rounded-lg border border-rose-200 dark:border-rose-800/50 bg-rose-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50"
                       >
                         Confirmar recusa
                       </button>
@@ -208,7 +208,7 @@ export function AccessRequestsAdminPanel({
                           setRejectForId(null)
                           setRejectNote('')
                         }}
-                        className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-50"
+                        className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low"
                       >
                         Cancelar
                       </button>
@@ -220,7 +220,7 @@ export function AccessRequestsAdminPanel({
           })}
         </ul>
       ) : loading ? (
-        <div className="mt-4 rounded-xl border border-neutral-100 bg-white/60 px-4 py-8 text-center text-sm text-neutral-500">
+        <div className="mt-4 rounded-xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest/60 px-4 py-8 text-center text-sm text-on-surface-variant">
           Buscando solicitações…
         </div>
       ) : null}

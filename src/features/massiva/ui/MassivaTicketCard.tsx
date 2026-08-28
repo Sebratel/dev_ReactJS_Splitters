@@ -128,7 +128,7 @@ function ProtocolOccurrenceContent({ text }: { text: string }) {
   const normalized = preprocessOccurrenceTextForDisplay(text)
   if (normalized === '') {
     return (
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-on-surface-variant">
         Não há texto de ocorrência associado a este registro.
       </p>
     )
@@ -142,9 +142,9 @@ function ProtocolOccurrenceContent({ text }: { text: string }) {
       {toRender.map((block, i) => (
         <div
           key={i}
-          className="rounded-lg border border-neutral-200/80 bg-white/90 px-3.5 py-2.5 shadow-sm sm:px-4 sm:py-3"
+          className="rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest/90 px-3.5 py-2.5 shadow-sm sm:px-4 sm:py-3"
         >
-          <p className="whitespace-pre-line [overflow-wrap:anywhere] text-[0.9375rem] leading-[1.75] text-neutral-800">
+          <p className="whitespace-pre-line [overflow-wrap:anywhere] text-[0.9375rem] leading-[1.75] text-on-surface">
             {block}
           </p>
         </div>
@@ -207,7 +207,7 @@ function ProtocolDescriptionDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-2xl"
+        className="flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="massiva-desc-dialog-title"
@@ -216,20 +216,20 @@ function ProtocolDescriptionDialog({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div
             ref={pdfCaptureRef}
-            className="w-full min-w-0 bg-white"
+            className="w-full min-w-0 bg-surface-container-lowest"
             data-massiva-pdf-capture
           >
-            <div className="shrink-0 border-b border-neutral-200/80 bg-gradient-to-r from-amber-50/40 to-white px-5 pb-4 pt-5 sm:px-6">
+            <div className="shrink-0 border-b border-neutral-200/80 dark:border-white/10 bg-gradient-to-r from-amber-50/40 dark:from-amber-950/20 to-white dark:to-surface-container-lowest px-5 pb-4 pt-5 sm:px-6">
               <h3
                 id="massiva-desc-dialog-title"
-                className="text-lg font-bold tracking-tight text-neutral-900"
+                className="text-lg font-bold tracking-tight text-on-surface"
               >
                 Detalhes do protocolo
               </h3>
-              <p className="mt-1 text-xs text-neutral-500">
-                <span className="font-mono text-[13px] text-neutral-600">#{protocolLabel}</span>
-                <span className="text-neutral-400"> — </span>
-                <span className="text-sm font-medium text-neutral-700">
+              <p className="mt-1 text-xs text-on-surface-variant">
+                <span className="font-mono text-[13px] text-on-surface-variant">#{protocolLabel}</span>
+                <span className="text-on-surface-variant/60"> — </span>
+                <span className="text-sm font-medium text-on-surface-variant">
                   {formatMassivaTicketStatusLabel(ticket)}
                 </span>
               </p>
@@ -238,7 +238,7 @@ function ProtocolDescriptionDialog({
               <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-900/80">
                 Ocorrência
               </p>
-              <div className="mt-3 rounded-xl border border-neutral-200/90 bg-gradient-to-b from-slate-50/90 to-white p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] sm:p-5">
+              <div className="mt-3 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-gradient-to-b from-slate-50/90 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)] sm:p-5">
                 <ProtocolOccurrenceContent text={descText} />
               </div>
               <MassivaPrevisaoReferenceBlock ticket={ticket} />
@@ -246,9 +246,9 @@ function ProtocolDescriptionDialog({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-neutral-200/80 bg-neutral-50/50 px-5 py-3 sm:px-6">
+        <div className="shrink-0 border-t border-neutral-200/80 dark:border-white/10 bg-surface-container-low/50 px-5 py-3 sm:px-6">
           {pdfError !== null ? (
-            <p className="mb-2 text-left text-xs leading-snug text-red-700">
+            <p className="mb-2 text-left text-xs leading-snug text-red-700 dark:text-red-200">
               {pdfError}
             </p>
           ) : null}
@@ -257,7 +257,7 @@ function ProtocolDescriptionDialog({
               type="button"
               disabled={pdfBusy}
               onClick={onExportPdf}
-              className="inline-flex items-center gap-2 rounded-lg border border-neutral-200/90 bg-white px-3.5 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:border-amber-300/80 hover:bg-amber-50/50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3.5 py-2 text-sm font-semibold text-on-surface shadow-sm transition hover:border-amber-300/80 hover:bg-amber-50/50 dark:hover:bg-amber-950/40 disabled:opacity-50"
             >
               {pdfBusy ? (
                 <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
@@ -269,7 +269,7 @@ function ProtocolDescriptionDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:border-amber-300/70 hover:bg-amber-50/40"
+              className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-4 py-2 text-sm font-semibold text-on-surface shadow-sm transition hover:border-amber-300/70 hover:bg-amber-50/40 dark:hover:bg-amber-950/40"
             >
               Fechar
             </button>
@@ -308,50 +308,50 @@ function CloseDescriptionDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200/90 bg-white shadow-2xl"
+        className="flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="massiva-close-desc-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-neutral-200/80 bg-gradient-to-r from-neutral-50/80 to-white px-5 pb-4 pt-5 sm:px-6">
+        <div className="shrink-0 border-b border-neutral-200/80 dark:border-white/10 bg-gradient-to-r from-neutral-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest px-5 pb-4 pt-5 sm:px-6">
           <h3
             id="massiva-close-desc-title"
-            className="text-base font-bold tracking-tight text-neutral-900"
+            className="text-base font-bold tracking-tight text-on-surface"
           >
             Motivo de encerramento
           </h3>
-          <p className="mt-0.5 font-mono text-xs text-neutral-500">
+          <p className="mt-0.5 font-mono text-xs text-on-surface-variant">
             #{protocolLabel}
           </p>
           {closedAtLabel !== '' && closedAtLabel !== '—' ? (
-            <p className="mt-1 text-xs text-neutral-600">
-              Encerrado em <span className="font-semibold text-neutral-800">{closedAtLabel}</span>
+            <p className="mt-1 text-xs text-on-surface-variant">
+              Encerrado em <span className="font-semibold text-on-surface">{closedAtLabel}</span>
             </p>
           ) : null}
           {closedBy !== '' ? (
-            <p className="mt-0.5 text-xs text-neutral-600">
-              Encerrado por <span className="font-semibold text-neutral-800">{closedBy}</span>
+            <p className="mt-0.5 text-xs text-on-surface-variant">
+              Encerrado por <span className="font-semibold text-on-surface">{closedBy}</span>
             </p>
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           {text !== '' ? (
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-800">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-on-surface">
               {text}
             </p>
           ) : (
-            <p className="text-sm italic text-neutral-400">
+            <p className="text-sm italic text-on-surface-variant/60">
               Nenhum relato de encerramento registrado.
             </p>
           )}
         </div>
-        <div className="shrink-0 border-t border-neutral-200/80 bg-neutral-50/50 px-5 py-3 sm:px-6">
+        <div className="shrink-0 border-t border-neutral-200/80 dark:border-white/10 bg-surface-container-low/50 px-5 py-3 sm:px-6">
           <div className="flex justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+              className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-4 py-2 text-sm font-semibold text-on-surface shadow-sm transition hover:border-neutral-300 hover:bg-surface-container-low"
             >
               Fechar
             </button>
@@ -417,59 +417,59 @@ function AffectedVerificationDialog({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-5 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="massiva-affected-verify-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="massiva-affected-verify-title" className="text-base font-bold tracking-tight text-neutral-900">
+        <h3 id="massiva-affected-verify-title" className="text-base font-bold tracking-tight text-on-surface">
           Clientes ainda sem sinal?
         </h3>
-        <p className="mt-0.5 font-mono text-xs text-neutral-500">#{protocolLabel}</p>
-        <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+        <p className="mt-0.5 font-mono text-xs text-on-surface-variant">#{protocolLabel}</p>
+        <p className="mt-2 text-xs leading-relaxed text-on-surface-variant">
           Cruza os clientes afetados por esta massiva com o monitoramento de sinal (ONU) agora
           mesmo. Só roda quando você clica — não é automático.
         </p>
 
         {shown !== null ? (
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-lg border border-neutral-200/80 bg-neutral-50/60 px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Afetados</p>
-              <p className="mt-0.5 text-xl font-bold text-neutral-900">{shown.total}</p>
+            <div className="rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-low/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">Afetados</p>
+              <p className="mt-0.5 text-xl font-bold text-on-surface">{shown.total}</p>
             </div>
-            <div className="rounded-lg border border-rose-200/70 bg-rose-50/60 px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Offline</p>
-              <p className="mt-0.5 text-xl font-bold text-rose-700">{shown.stillOffline}</p>
+            <div className="rounded-lg border border-rose-200/70 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/40 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-300">Offline</p>
+              <p className="mt-0.5 text-xl font-bold text-rose-700 dark:text-rose-200">{shown.stillOffline}</p>
             </div>
-            <div className="rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2.5 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Degradado</p>
-              <p className="mt-0.5 text-xl font-bold text-amber-800">{shown.stillDegraded}</p>
+            <div className="rounded-lg border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">Degradado</p>
+              <p className="mt-0.5 text-xl font-bold text-amber-800 dark:text-amber-200">{shown.stillDegraded}</p>
             </div>
           </div>
         ) : (
-          <p className="mt-4 text-sm italic text-neutral-400">
+          <p className="mt-4 text-sm italic text-on-surface-variant/60">
             Ainda não verificado. Clique em "Verificar agora" para checar o sinal atual.
           </p>
         )}
 
         {shown !== null ? (
-          <p className="mt-3 text-[11px] text-neutral-500">
-            Última verificação por <span className="font-semibold text-neutral-700">{shown.verifiedBy?.trim() || 'não informado'}</span>
+          <p className="mt-3 text-[11px] text-on-surface-variant">
+            Última verificação por <span className="font-semibold text-on-surface-variant">{shown.verifiedBy?.trim() || 'não informado'}</span>
             {' em '}
-            <span className="font-semibold text-neutral-700">{formatMassivaListDateDisplay(shown.checkedAt)}</span>.
+            <span className="font-semibold text-on-surface-variant">{formatMassivaListDateDisplay(shown.checkedAt)}</span>.
           </p>
         ) : null}
 
         {verifyMutation.isError ? (
-          <p className="mt-2 text-xs text-red-700">{formatQueryError(verifyMutation.error)}</p>
+          <p className="mt-2 text-xs text-red-700 dark:text-red-200">{formatQueryError(verifyMutation.error)}</p>
         ) : null}
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
           >
             Fechar
           </button>
@@ -583,12 +583,12 @@ export function MassivaTicketCard({
 
   const statusStyles =
     displayStatus === 'aberta'
-      ? 'border-emerald-300/80 bg-emerald-50 text-emerald-900'
+      ? 'border-emerald-300/80 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
       : displayStatus === 'cancelada'
-        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200'
         : displayStatus === 'encerrada'
-          ? 'border-neutral-200 bg-neutral-100 text-neutral-700'
-          : 'border-amber-200 bg-amber-50 text-amber-900'
+          ? 'border-neutral-200 dark:border-white/10 bg-neutral-100 text-on-surface-variant'
+          : 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
 
   const apKnown = ticket.apCode.trim() !== ''
   const splitterKnown = ticket.splitterCode.trim() !== ''
@@ -598,10 +598,10 @@ export function MassivaTicketCard({
   return (
     <article
       className={cn(
-        'h-full overflow-hidden rounded-2xl border bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1',
+        'h-full overflow-hidden rounded-2xl border bg-surface-container-lowest shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1',
         catalogOutOfBand
           ? 'border-amber-400/80 ring-amber-400/35'
-          : 'border-neutral-200/85',
+          : 'border-neutral-200/85 dark:border-white/10',
       )}
       aria-label={`Massiva protocolo ${protocolLabel}`}
     >
@@ -609,8 +609,8 @@ export function MassivaTicketCard({
         className={cn(
           'flex flex-col gap-2.5 border-b p-3 sm:flex-row sm:items-start sm:justify-between',
           catalogOutOfBand
-            ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 to-orange-50/40'
-            : 'border-neutral-100/90 bg-gradient-to-r from-white to-neutral-50/40',
+            ? 'border-amber-200/90 dark:border-amber-800/50 bg-gradient-to-r from-amber-50/80 dark:from-amber-950/20 to-orange-50/40 dark:to-orange-950/20'
+            : 'border-neutral-100/90 dark:border-white/5 bg-gradient-to-r from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5',
         )}
       >
         <div className="flex min-w-0 flex-1 gap-3">
@@ -618,16 +618,16 @@ export function MassivaTicketCard({
             className={cn(
               'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1',
               recordKind === 'incidente'
-                ? 'bg-rose-100 text-rose-800 ring-rose-200/70'
+                ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200 ring-rose-200/70'
                 : recordKind === 'evento'
-                  ? 'bg-sky-100 text-sky-800 ring-sky-200/70'
+                  ? 'bg-sky-100 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200 ring-sky-200/70'
                   : displayStatus === 'aberta'
-                    ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-emerald-200/70'
                     : displayStatus === 'cancelada'
-                      ? 'bg-rose-100 text-rose-700 ring-rose-200/70'
+                      ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 ring-rose-200/70'
                       : displayStatus === 'encerrada'
-                        ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
-                        : 'bg-amber-100 text-amber-800 ring-amber-200/70',
+                        ? 'bg-neutral-100 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
+                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 ring-amber-200/70',
             )}
           >
             {recordKind === 'incidente' ? (
@@ -637,10 +637,10 @@ export function MassivaTicketCard({
             )}
           </div>
           <div className="min-w-0 space-y-1.5">
-            <p className="font-mono text-xs font-semibold tabular-nums text-neutral-500">
+            <p className="font-mono text-xs font-semibold tabular-nums text-on-surface-variant">
               #{protocolLabel}
             </p>
-            <h3 className="text-sm font-semibold leading-snug text-neutral-900 sm:text-base">
+            <h3 className="text-sm font-semibold leading-snug text-on-surface sm:text-base">
               {ticket.title.trim() !== '' ? ticket.title : 'Massiva'}
             </h3>
             <div className="flex flex-wrap items-center gap-2">
@@ -654,7 +654,7 @@ export function MassivaTicketCard({
               </span>
               {catalogOutOfBand ? (
                 <span
-                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-700/35 bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950"
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-700/35 bg-amber-100 dark:bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950"
                   title="Título diferente dos catálogos esperados (Registro Evento Massivo ou Registro Incidente de Rede)."
                 >
                   Fora do catálogo esperado
@@ -662,7 +662,7 @@ export function MassivaTicketCard({
               ) : null}
               {ticket.usedFallback ? (
                 <span
-                  className="rounded-md border border-neutral-200 bg-neutral-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-600"
+                  className="rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-on-surface-variant"
                   title="Estratégia bulk_individual ou fallback registrado na origem"
                 >
                   Fallback
@@ -670,7 +670,7 @@ export function MassivaTicketCard({
               ) : null}
               {ticket.infraProtocol != null && ticket.infraProtocol > 0 ? (
                 <span
-                  className="inline-flex w-fit items-center gap-1 rounded-md border border-sky-300/70 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-800"
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-sky-300/70 bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200"
                   title={`Protocolo de infraestrutura vinculado a esta massiva: #${ticket.infraProtocol}`}
                 >
                   <Wrench size={11} strokeWidth={2.2} aria-hidden />
@@ -686,7 +686,7 @@ export function MassivaTicketCard({
               <button
                 type="button"
                 onClick={() => setCloseDescOpen(true)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:text-neutral-800"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-neutral-300 hover:text-on-surface"
                 title="Ver motivo de encerramento"
                 aria-label="Ver motivo de encerramento"
               >
@@ -695,7 +695,7 @@ export function MassivaTicketCard({
               <button
                 type="button"
                 onClick={() => onRequestMaintenance(ticket.protocol)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-sky-300/80 hover:text-sky-800"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-sky-300/80 hover:text-sky-800 dark:hover:text-sky-200"
                 title="Manutenção — editar classificação do incidente"
                 aria-label="Manutenção — editar classificação do incidente"
               >
@@ -705,11 +705,11 @@ export function MassivaTicketCard({
                 type="button"
                 onClick={() => setAffectedVerifyOpen(true)}
                 className={cn(
-                  'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-white shadow-sm transition',
+                  'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-surface-container-lowest shadow-sm transition',
                   lastAffectedVerification != null &&
                     (lastAffectedVerification.stillOffline > 0 || lastAffectedVerification.stillDegraded > 0)
-                    ? 'border-rose-300/80 text-rose-600 hover:border-rose-400 hover:text-rose-700'
-                    : 'border-neutral-200/90 text-neutral-500 hover:border-sky-300/80 hover:text-sky-800',
+                    ? 'border-rose-300/80 text-rose-600 dark:text-rose-300 hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-200'
+                    : 'border-neutral-200/90 dark:border-white/10 text-on-surface-variant hover:border-sky-300/80 hover:text-sky-800 dark:hover:text-sky-200',
                 )}
                 title="Verificar se os clientes afetados continuam sem sinal"
                 aria-label="Verificar se os clientes afetados continuam sem sinal"
@@ -727,7 +727,7 @@ export function MassivaTicketCard({
           <button
             type="button"
             onClick={() => setDetailsOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-600 shadow-sm transition hover:border-amber-300/80 hover:text-amber-900"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-amber-300/80 hover:text-amber-900 dark:hover:text-amber-200"
             title="Ver descrição do protocolo"
             aria-label="Ver descrição do protocolo"
           >
@@ -738,30 +738,30 @@ export function MassivaTicketCard({
 
       <div
         className={cn(
-          'flex items-start gap-2.5 border-b border-neutral-100 px-3 py-2.5',
+          'flex items-start gap-2.5 border-b border-neutral-100 dark:border-white/5 px-3 py-2.5',
           apKnown || splitterKnown
-            ? 'bg-sky-50/40'
-            : 'bg-amber-50/35',
+            ? 'bg-sky-50/40 dark:bg-sky-950/40'
+            : 'bg-amber-50/35 dark:bg-amber-950/40',
         )}
       >
         <div
           className={cn(
             'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1',
             apKnown || splitterKnown
-              ? 'bg-white text-sky-700 ring-sky-200/70'
-              : 'bg-white text-amber-800 ring-amber-200/70',
+              ? 'bg-surface-container-lowest text-sky-700 dark:text-sky-200 ring-sky-200/70'
+              : 'bg-surface-container-lowest text-amber-800 dark:text-amber-200 ring-amber-200/70',
           )}
         >
           <Network size={16} aria-hidden />
         </div>
         <div className="min-w-0 text-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Ponto de acesso
           </p>
           <p
             className={cn(
               'mt-0.5 font-medium leading-snug',
-              apKnown || splitterKnown ? 'text-neutral-900' : 'text-amber-900/90',
+              apKnown || splitterKnown ? 'text-on-surface' : 'text-amber-900/90',
             )}
           >
             {apKnown ? (
@@ -771,53 +771,53 @@ export function MassivaTicketCard({
             )}
           </p>
           {splitterKnown ? (
-            <p className="mt-1 text-xs text-neutral-600">
+            <p className="mt-1 text-xs text-on-surface-variant">
               Splitter:{' '}
-              <span className="font-mono font-medium text-neutral-800">{ticket.splitterCode}</span>
+              <span className="font-mono font-medium text-on-surface">{ticket.splitterCode}</span>
             </p>
           ) : null}
         </div>
       </div>
 
-      <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-amber-100/30 px-3 py-2.5">
+      <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 dark:from-amber-950/20 via-amber-50/50 dark:via-amber-950/20 to-amber-100/30 px-3 py-2.5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 text-amber-900 ring-1 ring-amber-200/60">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/60">
             <Users size={18} aria-hidden />
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80">
               Clientes afetados
             </p>
-            <p className="text-2xl font-semibold tabular-nums tracking-tight text-neutral-900">
+            <p className="text-2xl font-semibold tabular-nums tracking-tight text-on-surface">
               {ticket.affectedClients}
             </p>
           </div>
         </div>
         {ticket.affectedClients > 0 ? (
-          <span className="shrink-0 whitespace-nowrap rounded-full border border-amber-300/80 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 shadow-sm">
+          <span className="shrink-0 whitespace-nowrap rounded-full border border-amber-300/80 bg-surface-container-lowest/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200 shadow-sm">
             Impactados
           </span>
         ) : (
-          <span className="shrink-0 whitespace-nowrap rounded-full border border-neutral-200/90 bg-white/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          <span className="shrink-0 whitespace-nowrap rounded-full border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest/90 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
             Sem impacto mapeado
           </span>
         )}
       </div>
 
-      <div className="grid gap-2.5 bg-neutral-50/50 p-3 sm:grid-cols-2">
+      <div className="grid gap-2.5 bg-surface-container-low/50 p-3 sm:grid-cols-2">
         <div className="flex gap-2.5 text-xs">
-          <Clock className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+          <Clock className="mt-0.5 size-4 shrink-0 text-on-surface-variant/60" aria-hidden />
           <div>
-            <p className="font-semibold text-neutral-500">Abertura</p>
-            <p className="mt-0.5 font-medium text-neutral-900">
+            <p className="font-semibold text-on-surface-variant">Abertura</p>
+            <p className="mt-0.5 font-medium text-on-surface">
               {formatMassivaListDateDisplay(ticket.openedAt)}
             </p>
           </div>
         </div>
         <div className="flex min-w-0 gap-2.5 text-xs">
-          <Calendar className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+          <Calendar className="mt-0.5 size-4 shrink-0 text-on-surface-variant/60" aria-hidden />
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-neutral-500">
+            <p className="font-semibold text-on-surface-variant">
               {ticket.status === 'encerrada' && ticket.closedAt !== null
                 ? 'Encerrado em'
                 : 'Previsão de encerramento'}
@@ -831,7 +831,7 @@ export function MassivaTicketCard({
                   onChange={(e) =>
                     setExpectedCloseDraft(normalizeDateTimeLocalString(e.target.value))
                   }
-                  className="w-full min-w-0 max-w-full rounded-lg border border-neutral-200/90 bg-white px-2 py-1.5 text-xs text-neutral-900 shadow-sm focus:border-amber-500/80 focus:outline-none focus:ring-1 focus:ring-amber-500/25"
+                  className="w-full min-w-0 max-w-full rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface shadow-sm focus:border-amber-500/80 focus:outline-none focus:ring-1 focus:ring-amber-500/25"
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -854,13 +854,13 @@ export function MassivaTicketCard({
                       setEditingExpectedClose(false)
                       updatePrevisaoMutation.reset()
                     }}
-                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                    className="rounded-lg border border-neutral-200 dark:border-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                 </div>
                 {updatePrevisaoMutation.isError ? (
-                  <p className="whitespace-pre-wrap break-words text-[11px] leading-snug text-red-700">
+                  <p className="whitespace-pre-wrap break-words text-[11px] leading-snug text-red-700 dark:text-red-200">
                     {updatePrevisaoMutation.error instanceof ApiError
                       ? `${updatePrevisaoMutation.error.message}${
                         updatePrevisaoMutation.error.body.trim() === ''
@@ -875,7 +875,7 @@ export function MassivaTicketCard({
               </div>
             ) : (
               <div className="mt-0.5 flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                <p className="min-w-0 font-medium leading-snug text-neutral-900 sm:flex-1 sm:pr-1">
+                <p className="min-w-0 font-medium leading-snug text-on-surface sm:flex-1 sm:pr-1">
                   {expectedCloseDisplayForCard(ticket)}
                 </p>
                 {canEditExpectedClose ? (
@@ -885,7 +885,7 @@ export function MassivaTicketCard({
                       setExpectedCloseDraft(defaultDraftExpectedClose(ticket))
                       setEditingExpectedClose(true)
                     }}
-                    className="inline-flex w-fit shrink-0 items-center gap-1 self-end rounded-lg border border-neutral-200/90 bg-white px-2 py-1 text-[10px] font-semibold text-neutral-600 shadow-sm transition hover:border-amber-300/80 hover:bg-amber-50/50 hover:text-amber-900 sm:self-auto"
+                    className="inline-flex w-fit shrink-0 items-center gap-1 self-end rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2 py-1 text-[10px] font-semibold text-on-surface-variant shadow-sm transition hover:border-amber-300/80 hover:bg-amber-50/50 dark:hover:bg-amber-950/40 hover:text-amber-900 dark:hover:text-amber-200 sm:self-auto"
                     aria-label="Editar previsão de encerramento"
                   >
                     <Pencil size={12} strokeWidth={2.5} aria-hidden />
@@ -897,36 +897,36 @@ export function MassivaTicketCard({
           </div>
         </div>
         <div className="flex gap-2.5 text-xs sm:col-span-2">
-          <Users className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+          <Users className="mt-0.5 size-4 shrink-0 text-on-surface-variant/60" aria-hidden />
           <div className="min-w-0">
-            <p className="font-semibold text-neutral-500">Equipe</p>
-            <p className="mt-0.5 break-words font-medium text-neutral-900">
+            <p className="font-semibold text-on-surface-variant">Equipe</p>
+            <p className="mt-0.5 break-words font-medium text-on-surface">
               {displayOrDash(ticket.team)}
             </p>
           </div>
         </div>
         <div className="flex gap-2.5 text-xs">
-          <UserPlus className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+          <UserPlus className="mt-0.5 size-4 shrink-0 text-on-surface-variant/60" aria-hidden />
           <div className="min-w-0">
-            <p className="font-semibold text-neutral-500">Solicitado por</p>
-            <p className="mt-0.5 break-words font-medium text-neutral-900">
+            <p className="font-semibold text-on-surface-variant">Solicitado por</p>
+            <p className="mt-0.5 break-words font-medium text-on-surface">
               {displayOrDash(ticket.createdBy)}
             </p>
           </div>
         </div>
         <div className="flex gap-2.5 text-xs">
-          <IdCard className="mt-0.5 size-4 shrink-0 text-neutral-400" aria-hidden />
+          <IdCard className="mt-0.5 size-4 shrink-0 text-on-surface-variant/60" aria-hidden />
           <div className="min-w-0">
-            <p className="font-semibold text-neutral-500">Responsável</p>
-            <p className="mt-0.5 break-words font-medium text-neutral-900">
+            <p className="font-semibold text-on-surface-variant">Responsável</p>
+            <p className="mt-0.5 break-words font-medium text-on-surface">
               {displayOrDash(ticket.responsible)}
             </p>
           </div>
         </div>
         {ticket.assignmentId !== null ? (
-          <p className="text-[10px] text-neutral-400 sm:col-span-2">
+          <p className="text-[10px] text-on-surface-variant/60 sm:col-span-2">
             Assignment (atendimento):{' '}
-            <span className="font-mono font-medium text-neutral-500">{ticket.assignmentId}</span>
+            <span className="font-mono font-medium text-on-surface-variant">{ticket.assignmentId}</span>
           </p>
         ) : null}
         <div className="pt-0.5 sm:col-span-2">
@@ -937,7 +937,7 @@ export function MassivaTicketCard({
                   type="button"
                   disabled={!closeConfigured}
                   onClick={() => onRequestClose(ticket.protocol)}
-                  className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                  className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
                 >
                   Encerrar massiva
                 </button>
@@ -945,7 +945,7 @@ export function MassivaTicketCard({
                   type="button"
                   disabled={!closeConfigured}
                   onClick={() => onRequestCancel(ticket.protocol)}
-                  className="inline-flex min-w-[110px] items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-w-[110px] items-center justify-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800/50 bg-surface-container-lowest px-3.5 py-2 text-xs font-semibold text-rose-600 dark:text-rose-300 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Cancelar
                 </button>

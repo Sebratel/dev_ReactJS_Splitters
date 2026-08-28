@@ -43,17 +43,17 @@ export function MassivaPrevisaoReferenceBlock({ ticket }: MassivaPrevisaoReferen
         Previsão e SLA
       </p>
       <div
-        className="mt-2 space-y-3.5 rounded-lg border border-amber-200/80 bg-amber-50/50 px-3.5 py-3.5 sm:px-4"
+        className="mt-2 space-y-3.5 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/40 px-3.5 py-3.5 sm:px-4"
         data-massiva-pdf-amber
       >
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
             Prazo de encerramento
           </p>
-          <p className="mt-0.5 text-base leading-relaxed text-neutral-900">
+          <p className="mt-0.5 text-base leading-relaxed text-on-surface">
             {mostrarAjustado ? (
               <>
-                <span className="font-semibold text-neutral-600">Ajustado para </span>
+                <span className="font-semibold text-on-surface-variant">Ajustado para </span>
                 <span className="font-bold">{dataLine}</span>
               </>
             ) : (
@@ -63,10 +63,10 @@ export function MassivaPrevisaoReferenceBlock({ ticket }: MassivaPrevisaoReferen
         </div>
         {hoursLine !== null ? (
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
               Estimativa (h)
             </p>
-            <p className="mt-0.5 text-sm font-semibold leading-relaxed text-neutral-900">
+            <p className="mt-0.5 text-sm font-semibold leading-relaxed text-on-surface">
               {hoursLine}
             </p>
           </div>

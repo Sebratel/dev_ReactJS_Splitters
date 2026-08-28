@@ -215,11 +215,11 @@ function fmtEta(days: number | null): string {
 
 /** Cor do texto do ETA por urgência (mesmas faixas do mapa). */
 function etaTone(days: number | null): string {
-  if (days == null) return 'text-neutral-400'
-  if (days <= ETA_CRITICAL_DAYS) return 'text-rose-700'
-  if (days <= ETA_HIGH_DAYS) return 'text-amber-700'
-  if (days <= ETA_MODERATE_DAYS) return 'text-sky-700'
-  return 'text-emerald-700'
+  if (days == null) return 'text-on-surface-variant/60'
+  if (days <= ETA_CRITICAL_DAYS) return 'text-rose-700 dark:text-rose-200'
+  if (days <= ETA_HIGH_DAYS) return 'text-amber-700 dark:text-amber-200'
+  if (days <= ETA_MODERATE_DAYS) return 'text-sky-700 dark:text-sky-200'
+  return 'text-emerald-700 dark:text-emerald-200'
 }
 
 /** Número com vírgula decimal (Excel pt-BR); vazio para null. */
@@ -527,29 +527,29 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
 
   if (condos.length === 0) {
     return (
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-8 text-center text-sm text-neutral-500">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-8 text-center text-sm text-on-surface-variant">
         Nenhum condomínio identificado no recorte atual da rede.
       </div>
     )
   }
 
   const usageTone = (u: number) =>
-    u >= 90 ? 'text-rose-700' : u >= SATURATION_THRESHOLD ? 'text-amber-700' : 'text-neutral-800'
+    u >= 90 ? 'text-rose-700 dark:text-rose-200' : u >= SATURATION_THRESHOLD ? 'text-amber-700 dark:text-amber-200' : 'text-on-surface'
 
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <div className="rounded-2xl border border-indigo-200/70 bg-gradient-to-br from-indigo-50 to-white p-4">
+      <div className="rounded-2xl border border-indigo-200/70 dark:border-indigo-800/50 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/20 to-white dark:to-surface-container-lowest p-4">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 ring-1 ring-indigo-200/70">
+          <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 ring-1 ring-indigo-200/70">
             <Building2 className="size-5" aria-hidden />
           </span>
           <div>
-            <p className="text-sm font-bold tracking-tight text-neutral-900">Condomínios na rede</p>
-            <p className="mt-0.5 max-w-2xl text-sm leading-snug text-neutral-600">
+            <p className="text-sm font-bold tracking-tight text-on-surface">Condomínios na rede</p>
+            <p className="mt-0.5 max-w-2xl text-sm leading-snug text-on-surface-variant">
               {condos.length.toLocaleString('pt-BR')} condomínios · {fmt(totals.splitters)} splitters ·{' '}
               {condoActive > 0 ? `${fmt(condoActive)} clientes ativos ` : ''}
-              {baseShare > 0 ? <span className="font-semibold text-indigo-700">({baseShare}% da base)</span> : null}
+              {baseShare > 0 ? <span className="font-semibold text-indigo-700 dark:text-indigo-200">({baseShare}% da base)</span> : null}
             </p>
           </div>
         </div>
@@ -573,8 +573,8 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       </div>
 
       {/* Distribuição por faixa de ocupação */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-2 text-xs font-semibold text-neutral-800">Distribuição por ocupação</p>
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
+        <p className="mb-2 text-xs font-semibold text-on-surface">Distribuição por ocupação</p>
         <div className="flex h-3 w-full overflow-hidden rounded-full bg-neutral-100">
           {totals.distribution.map((band) =>
             band.count > 0 ? (
@@ -589,33 +589,33 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {totals.distribution.map((band) => (
-            <span key={band.key} className="inline-flex items-center gap-1.5 text-[11px] text-neutral-600">
+            <span key={band.key} className="inline-flex items-center gap-1.5 text-[11px] text-on-surface-variant">
               <span className={`size-2 rounded-full ${band.color}`} aria-hidden />
-              {band.label}: <span className="font-semibold tabular-nums text-neutral-800">{band.count}</span>
+              {band.label}: <span className="font-semibold tabular-nums text-on-surface">{band.count}</span>
             </span>
           ))}
         </div>
       </div>
 
       {/* Leitura rápida */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
+        <p className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-on-surface-variant">
           <Lightbulb className="size-4 text-amber-500" aria-hidden />
           Leitura rápida
         </p>
-        <ul className="space-y-2 text-sm leading-snug text-neutral-700">
+        <ul className="space-y-2 text-sm leading-snug text-on-surface-variant">
           <li className="flex items-start gap-2">
             <Gauge className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
             <span>
-              <span className="font-semibold text-neutral-900">{totals.saturatedCondos}</span> condomínio(s)
+              <span className="font-semibold text-on-surface">{totals.saturatedCondos}</span> condomínio(s)
               estão saturados (ocupação média ≥ {SATURATION_THRESHOLD}%) — candidatos a expansão de porta.
             </span>
           </li>
           {totals.saturatingSoon.length > 0 ? (
             <li className="flex items-start gap-2">
-              <CalendarClock className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+              <CalendarClock className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
               <span>
-                <span className="font-semibold text-neutral-900">{totals.saturatingSoon.length}</span>{' '}
+                <span className="font-semibold text-on-surface">{totals.saturatingSoon.length}</span>{' '}
                 condomínio(s) têm splitter projetado para saturar (≥95%) em até {SATURATION_HORIZON_DAYS} dias
                 se o ritmo atual se mantiver — antecipe a expansão na lente <em>Capacidade</em>.
               </span>
@@ -624,16 +624,16 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
           <li className="flex items-start gap-2">
             <TrendingDown className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
             <span>
-              <span className="font-semibold text-neutral-900">{totals.churnCondos}</span> condomínio(s)
+              <span className="font-semibold text-on-surface">{totals.churnCondos}</span> condomínio(s)
               têm churn de rede (insatisfação/concorrência) nos últimos 12 meses — possível problema de
               qualidade percebida.
             </span>
           </li>
           {totals.doubleTrouble.length > 0 ? (
             <li className="flex items-start gap-2">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0 text-rose-600" aria-hidden />
+              <ShieldAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-300" aria-hidden />
               <span>
-                <span className="font-bold text-rose-700">
+                <span className="font-bold text-rose-700 dark:text-rose-200">
                   {totals.doubleTrouble.length} condomínio(s) em prioridade máxima
                 </span>
                 : saturados <em>e</em> com churn de rede ({totals.doubleTrouble.slice(0, 3).map((c) => c.nome).join(', ')}
@@ -645,16 +645,16 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             <li className="flex items-start gap-2">
               <Zap className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
               <span>
-                <span className="font-semibold text-neutral-900">{totals.withMassivas}</span> condomínio(s)
+                <span className="font-semibold text-on-surface">{totals.withMassivas}</span> condomínio(s)
                 tiveram massivas no período — cruze com o churn abaixo.
               </span>
             </li>
           ) : null}
           {totals.postMassivaChurn.length > 0 ? (
             <li className="flex items-start gap-2">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0 text-rose-600" aria-hidden />
+              <ShieldAlert className="mt-0.5 size-4 shrink-0 text-rose-600 dark:text-rose-300" aria-hidden />
               <span>
-                <span className="font-bold text-rose-700">{totals.postMassivaChurn.length}</span> condomínio(s)
+                <span className="font-bold text-rose-700 dark:text-rose-200">{totals.postMassivaChurn.length}</span> condomínio(s)
                 tiveram <span className="font-semibold">cancelamento de rede logo após uma massiva</span>{' '}
                 (evidência de massiva puxando churn) —{' '}
                 {totals.postMassivaChurn.slice(0, 3).map((c) => c.nome).join(', ')}
@@ -666,7 +666,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             <li className="flex items-start gap-2">
               <Activity className="mt-0.5 size-4 shrink-0 text-rose-500" aria-hidden />
               <span>
-                <span className="font-semibold text-neutral-900">{totals.signalCritical.length}</span>{' '}
+                <span className="font-semibold text-on-surface">{totals.signalCritical.length}</span>{' '}
                 condomínio(s) com sinal ONU degradado/offline acima de {SIGNAL_PROBLEM_THRESHOLD}% —
                 monitore antes que vire churn.
               </span>
@@ -677,18 +677,18 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
 
       {/* Mapa dos condomínios (cor segue a lente do ranking) */}
       {geoCondos.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-            <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
+        <div className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
               <MapPin className="size-4 text-indigo-500" aria-hidden />
               Mapa dos condomínios
             </p>
-            <span className="text-[11px] text-neutral-500">
+            <span className="text-[11px] text-on-surface-variant">
               {mapPoints.length} de {condos.length} com localização · {VIEW_MAP_LEGEND[view]}
             </span>
           </div>
           {/* Filtro por status da lente atual — clique para ocultar/mostrar no mapa. */}
-          <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-100 px-4 py-2">
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 px-4 py-2">
             {STATUS_ORDER[view]
               .filter((s) => (statusCounts.get(s.key) ?? 0) > 0)
               .map((s) => {
@@ -701,14 +701,14 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                     onClick={() => toggleStatus(s.key)}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition ${
                       hidden
-                        ? 'border-neutral-200 bg-neutral-50 text-neutral-400 line-through'
-                        : 'border-neutral-200/90 bg-white text-neutral-700 hover:bg-neutral-50'
+                        ? 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant/60 line-through'
+                        : 'border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low'
                     }`}
                     title={hidden ? 'Mostrar no mapa' : 'Ocultar do mapa'}
                   >
                     <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />
                     {s.label}
-                    <span className="tabular-nums text-neutral-400">{count}</span>
+                    <span className="tabular-nums text-on-surface-variant/60">{count}</span>
                   </button>
                 )
               })}
@@ -716,7 +716,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               <button
                 type="button"
                 onClick={() => setHiddenStatuses(new Set())}
-                className="ml-auto inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                className="ml-auto inline-flex items-center gap-1 rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:text-indigo-200 transition hover:bg-indigo-100 dark:hover:bg-indigo-950/50"
               >
                 Mostrar todos
               </button>
@@ -725,8 +725,8 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
           <div className="relative">
             <CondominiumsMap points={deferredMapPoints} />
             {mapPoints.length === 0 ? (
-              <div className="pointer-events-none absolute inset-0 z-[400] flex items-center justify-center bg-white/70">
-                <span className="pointer-events-auto rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm">
+              <div className="pointer-events-none absolute inset-0 z-[400] flex items-center justify-center bg-surface-container-lowest/70">
+                <span className="pointer-events-auto rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-xs font-medium text-on-surface-variant shadow-sm">
                   Nenhum status selecionado — use os filtros acima para exibir condomínios.
                 </span>
               </div>
@@ -736,23 +736,23 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
       ) : null}
 
       {/* Ranking */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <Router className="size-4 text-neutral-500" aria-hidden />
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
+            <Router className="size-4 text-on-surface-variant" aria-hidden />
             Ranking de condomínios
           </p>
           <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant transition hover:bg-surface-container-low"
             title="Exportar todos os condomínios (todas as métricas) em CSV"
           >
             <Download className="size-3.5" aria-hidden />
             Exportar CSV
           </button>
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-0.5">
             {([
               { id: 'saturacao', label: 'Saturação' },
               { id: 'capacidade', label: 'Capacidade' },
@@ -766,7 +766,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                 type="button"
                 onClick={() => setView(opt.id)}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
-                  view === opt.id ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                  view === opt.id ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-surface-container-low'
                 }`}
               >
                 {opt.label}
@@ -777,8 +777,8 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
         </div>
         <div className="max-h-[32rem] overflow-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="sticky top-0 z-[1] bg-white">
-              <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+            <thead className="sticky top-0 z-[1] bg-surface-container-lowest">
+              <tr className="border-b border-neutral-200/90 dark:border-white/10 text-[11px] uppercase tracking-wide text-on-surface-variant">
                 <th className="px-4 py-2.5">Condomínio</th>
                 <th className="px-3 py-2.5 text-center">Splitters</th>
                 <th className="px-3 py-2.5 text-center">Clientes</th>
@@ -828,14 +828,14 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
               {rankedRows.map((c) => {
                 const doubleTrouble = c.avgUsage >= SATURATION_THRESHOLD && c.redeChurn > 0
                 return (
-                  <tr key={c.nome} className="hover:bg-neutral-50/70">
+                  <tr key={c.nome} className="hover:bg-surface-container-low/70">
                     <td className="px-4 py-2">
-                      <span className="inline-flex items-center gap-1.5 font-medium text-neutral-900">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-on-surface">
                         <Building2 className="size-3.5 text-indigo-400" aria-hidden />
                         {c.nome}
                         {doubleTrouble ? (
                           <span
-                            className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+                            className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 dark:bg-rose-950/50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-200"
                             title="Saturado e com churn de rede"
                           >
                             <AlertTriangle className="size-2.5" aria-hidden />
@@ -844,7 +844,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         ) : null}
                         {c.corporateSplitters > 0 ? (
                           <span
-                            className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700"
+                            className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 dark:bg-violet-950/50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:text-violet-200"
                             title={`${c.corporateSplitters} splitter(s) com cliente corporativo`}
                           >
                             <Briefcase className="size-2.5" aria-hidden />
@@ -853,10 +853,10 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         ) : null}
                       </span>
                       {c.cities.length > 0 || c.oltCount > 0 ? (
-                        <span className="ml-5 block text-[10px] text-neutral-400">
+                        <span className="ml-5 block text-[10px] text-on-surface-variant/60">
                           {c.cities.join(' · ')}
                           {c.oltCount > 0 ? (
-                            <span className="text-neutral-400">
+                            <span className="text-on-surface-variant/60">
                               {c.cities.length > 0 ? ' · ' : ''}
                               {c.oltCount} OLT{c.oltCount > 1 ? 's' : ''} · {c.ponCount} PON{c.ponCount > 1 ? 's' : ''}
                             </span>
@@ -864,8 +864,8 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{c.splitters}</td>
-                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
+                    <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">{c.splitters}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                       {c.activeClients > 0 ? fmt(c.activeClients) : '—'}
                     </td>
                     {view === 'saturacao' ? (
@@ -873,7 +873,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         <td className={`px-3 py-2 text-center font-bold tabular-nums ${usageTone(c.avgUsage)}`}>
                           {fmt1(c.avgUsage)}%
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                           {c.saturatedSplitters}/{c.splitters}
                         </td>
                       </>
@@ -885,7 +885,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         </td>
                         <td
                           className={`px-3 py-2 text-center tabular-nums ${
-                            c.avgDelta > 0 ? 'text-amber-700' : c.avgDelta < 0 ? 'text-emerald-700' : 'text-neutral-500'
+                            c.avgDelta > 0 ? 'text-amber-700 dark:text-amber-200' : c.avgDelta < 0 ? 'text-emerald-700 dark:text-emerald-200' : 'text-on-surface-variant'
                           }`}
                         >
                           {c.avgDelta > 0 ? '+' : ''}{fmt1(c.avgDelta)} pp
@@ -893,37 +893,37 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         <td className={`px-3 py-2 text-center font-bold tabular-nums ${etaTone(c.etaSoonestDays)}`}>
                           {fmtEta(c.etaSoonestDays)}
                           {c.splittersSaturatingSoon > 0 ? (
-                            <span className="ml-1 text-[9px] font-normal text-neutral-400">
+                            <span className="ml-1 text-[9px] font-normal text-on-surface-variant/60">
                               {c.splittersSaturatingSoon} splt
                             </span>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                           {c.avgAge > 0 ? `${fmt1(c.avgAge)} a` : '—'}
                         </td>
                       </>
                     ) : null}
                     {view === 'churn' ? (
                       <>
-                        <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700 dark:text-rose-200">
                           {c.redeChurn > 0 ? fmt(c.redeChurn) : '—'}
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                           {c.totalChurn > 0 ? fmt(c.totalChurn) : '—'}
                         </td>
                       </>
                     ) : null}
                     {view === 'massivas' ? (
                       <>
-                        <td className="px-3 py-2 text-center tabular-nums text-neutral-800">
+                        <td className="px-3 py-2 text-center tabular-nums text-on-surface">
                           {c.totalTickets > 0 ? `${c.openTickets} / ${c.totalTickets}` : '—'}
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
+                        <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                           {c.affectedClients > 0 ? fmt(c.affectedClients) : '—'}
                         </td>
                         <td
                           className={`px-3 py-2 text-center font-bold tabular-nums ${
-                            c.postMassivaChurn > 0 ? 'text-rose-700' : 'text-neutral-400'
+                            c.postMassivaChurn > 0 ? 'text-rose-700 dark:text-rose-200' : 'text-on-surface-variant/60'
                           }`}
                           title={
                             c.postMassivaEvents > 0
@@ -937,10 +937,10 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                     ) : null}
                     {view === 'risco' ? (
                       <>
-                        <td className="px-3 py-2 text-center font-bold tabular-nums text-neutral-900">
+                        <td className="px-3 py-2 text-center font-bold tabular-nums text-on-surface">
                           {fmt(c.avgRisk)}
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums text-rose-700">
+                        <td className="px-3 py-2 text-center tabular-nums text-rose-700 dark:text-rose-200">
                           {c.criticalSplitters > 0 ? c.criticalSplitters : '—'}
                         </td>
                       </>
@@ -951,23 +951,23 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
                         const lowSample = c.onuTotal > 0 && c.onuTotal < SIGNAL_MIN_SAMPLE
                         return (
                           <>
-                            <td className="px-3 py-2 text-center tabular-nums text-neutral-500">
+                            <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                               {c.onuTotal > 0 ? fmt(c.onuTotal) : '—'}
                             </td>
                             <td
                               className={`px-3 py-2 text-center font-bold tabular-nums ${
                                 lowSample
-                                  ? 'text-neutral-300'
+                                  ? 'text-on-surface-variant/60'
                                   : p != null && p >= SIGNAL_PROBLEM_THRESHOLD
-                                    ? 'text-rose-700'
-                                    : 'text-neutral-700'
+                                    ? 'text-rose-700 dark:text-rose-200'
+                                    : 'text-on-surface-variant'
                               }`}
                               title={lowSample ? `Amostra baixa (< ${SIGNAL_MIN_SAMPLE} ONUs) — % pouco confiável` : undefined}
                             >
                               {p != null ? `${fmt1(p)}%` : '—'}
                               {lowSample ? <span className="ml-1 text-[9px] font-normal">amostra baixa</span> : null}
                             </td>
-                            <td className="px-3 py-2 text-center tabular-nums text-neutral-600">
+                            <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                               {c.onuTotal > 0 ? c.onuOffline : '—'}
                             </td>
                           </>
@@ -980,7 +980,7 @@ export function CondominiumsPanel({ riskRanking }: CondominiumsPanelProps) {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center gap-2 border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400">
+        <div className="flex items-center gap-2 border-t border-neutral-100 dark:border-white/5 px-4 py-2 text-[11px] text-on-surface-variant/60">
           <Target className="size-3.5" aria-hidden />
           {view === 'saturacao'
             ? 'Ocupação média das portas dos splitters do condomínio. ≥85% = candidato a expansão.'
@@ -1004,16 +1004,16 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'war
     <div
       className={`rounded-xl border px-3 py-2.5 ${
         tone === 'danger'
-          ? 'border-rose-300 bg-rose-50/70'
+          ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40'
           : tone === 'warn'
-            ? 'border-amber-300 bg-amber-50/70'
-            : 'border-neutral-200/80 bg-white'
+            ? 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/40'
+            : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'
       }`}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">{label}</p>
       <p
         className={`mt-1 text-xl font-bold tabular-nums ${
-          tone === 'danger' ? 'text-rose-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-900'
+          tone === 'danger' ? 'text-rose-700 dark:text-rose-200' : tone === 'warn' ? 'text-amber-700 dark:text-amber-200' : 'text-on-surface'
         }`}
       >
         {value}

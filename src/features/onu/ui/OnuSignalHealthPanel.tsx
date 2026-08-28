@@ -72,20 +72,20 @@ type NetworkInsights = {
 const HEALTH_TONE: Record<HealthLevel, { label: string; chip: string; text: string; ring: string }> = {
   healthy: {
     label: 'Rede saudável',
-    chip: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    text: 'text-emerald-600',
+    chip: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200',
+    text: 'text-emerald-600 dark:text-emerald-300',
     ring: 'text-emerald-500',
   },
   attention: {
     label: 'Rede sob atenção',
-    chip: 'border-amber-200 bg-amber-50 text-amber-700',
-    text: 'text-amber-600',
+    chip: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-200',
+    text: 'text-amber-600 dark:text-amber-300',
     ring: 'text-amber-500',
   },
   critical: {
     label: 'Rede crítica',
-    chip: 'border-rose-200 bg-rose-50 text-rose-700',
-    text: 'text-rose-600',
+    chip: 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200',
+    text: 'text-rose-600 dark:text-rose-300',
     ring: 'text-rose-500',
   },
 }
@@ -144,10 +144,10 @@ function StatCard({
   icon: typeof Wifi
 }) {
   const toneClasses: Record<typeof tone, string> = {
-    emerald: 'border-emerald-200 bg-emerald-50/70 text-emerald-700',
-    amber: 'border-amber-200 bg-amber-50/70 text-amber-700',
-    rose: 'border-rose-200 bg-rose-50/70 text-rose-700',
-    slate: 'border-slate-200 bg-slate-50/70 text-slate-600',
+    emerald: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200',
+    amber: 'border-amber-200 dark:border-amber-800/50 bg-amber-50/70 dark:bg-amber-950/40 text-amber-700 dark:text-amber-200',
+    rose: 'border-rose-200 dark:border-rose-800/50 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200',
+    slate: 'border-slate-200 dark:border-white/10 bg-surface-container-low/70 text-on-surface-variant',
   }
   return (
     <div className={cn('rounded-2xl border p-4 shadow-sm', toneClasses[tone])}>
@@ -227,7 +227,7 @@ function OnuSplitterSignalRanking() {
 
   if (query.isPending) {
     return (
-      <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <Wifi size={15} className="text-primary" />
           <div className="h-4 w-40 animate-pulse rounded bg-slate-100" />
@@ -268,7 +268,7 @@ function OnuSplitterSignalRanking() {
   const shown = filtered.slice(0, 50)
 
   return (
-    <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Wifi size={15} className="text-primary" />
@@ -293,7 +293,7 @@ function OnuSplitterSignalRanking() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Buscar por nome ou código..."
-        className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary/40 sm:w-64"
+        className="mt-3 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-surface-container-low/80 px-3 py-1.5 text-xs text-slate-700 placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-primary/40 sm:w-64"
       />
 
       <ul className="mt-3 space-y-0.5">
@@ -303,12 +303,12 @@ function OnuSplitterSignalRanking() {
           const isDegraded = !isNull && !isCritical && row.avgRxPower! <= RX_POWER_DEGRADED_DBM
 
           const chipBg = isNull
-            ? 'bg-slate-100 text-slate-500 border-slate-200'
+            ? 'bg-slate-100 text-on-surface-variant border-slate-200 dark:border-white/10'
             : isCritical
-              ? 'bg-rose-100 text-rose-700 border-rose-200'
+              ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200 border-rose-200 dark:border-rose-800/50'
               : isDegraded
-                ? 'bg-amber-100 text-amber-700 border-amber-200'
-                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-200 border-amber-200 dark:border-amber-800/50'
+                : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800/50'
 
           const barColor = isCritical
             ? 'bg-rose-400'
@@ -327,7 +327,7 @@ function OnuSplitterSignalRanking() {
           return (
             <li
               key={row.code}
-              className="group flex items-start gap-2.5 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50"
+              className="group flex items-start gap-2.5 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-container-low"
             >
               {/* Rank */}
               <span className="mt-0.5 w-5 shrink-0 text-right text-[10px] font-black tabular-nums text-on-surface-variant/30">
@@ -345,9 +345,9 @@ function OnuSplitterSignalRanking() {
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="font-mono text-[10px] text-on-surface-variant/45">{row.code}</span>
                   <span className="text-[10px] tabular-nums text-on-surface-variant/50">
-                    <span className="text-emerald-600">{row.online}↑</span>
-                    {row.degraded > 0 ? <span className="text-amber-600"> {row.degraded}⚠</span> : null}
-                    {row.offline > 0 ? <span className="text-rose-600"> {row.offline}↓</span> : null}
+                    <span className="text-emerald-600 dark:text-emerald-300">{row.online}↑</span>
+                    {row.degraded > 0 ? <span className="text-amber-600 dark:text-amber-300"> {row.degraded}⚠</span> : null}
+                    {row.offline > 0 ? <span className="text-rose-600 dark:text-rose-300"> {row.offline}↓</span> : null}
                     <span className="text-on-surface-variant/35"> · {row.total} monit.</span>
                   </span>
                 </div>
@@ -369,7 +369,7 @@ function OnuSplitterSignalRanking() {
                   <span
                     className={cn(
                       'rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums',
-                      delta > 3 ? 'text-rose-600' : delta > 1 ? 'text-amber-600' : 'text-emerald-600',
+                      delta > 3 ? 'text-rose-600 dark:text-rose-300' : delta > 1 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
                     )}
                     title={`Projetado: ${row.projectedRxPower!.toFixed(1)} dBm · Atenuação: ${delta.toFixed(1)} dB`}
                   >
@@ -412,7 +412,7 @@ export function OnuSignalHealthPanel() {
 
   if (query.isPending) {
     return (
-      <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+      <p className="rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-low/80 py-10 text-center text-sm text-on-surface-variant">
         Carregando saúde de sinal da rede…
       </p>
     )
@@ -420,12 +420,12 @@ export function OnuSignalHealthPanel() {
 
   if (query.isError) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-8 text-center text-sm text-rose-700">
+      <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50/70 dark:bg-rose-950/40 px-4 py-8 text-center text-sm text-rose-700 dark:text-rose-200">
         <p>Não foi possível carregar o resumo de sinal das ONUs.</p>
         <button
           type="button"
           onClick={() => query.refetch()}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/40"
         >
           <RefreshCw size={13} /> Tentar novamente
         </button>
@@ -435,7 +435,7 @@ export function OnuSignalHealthPanel() {
 
   if (!summary || !insights) {
     return (
-      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+      <p className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-surface-container-low/80 py-10 text-center text-sm text-on-surface-variant">
         Monitoramento de ONU indisponível (banco não configurado no BFF).
       </p>
     )
@@ -491,9 +491,9 @@ export function OnuSignalHealthPanel() {
             <p>
               <span className="font-semibold text-on-surface">{fmtPct(insights.healthyPct)}</span> das ONUs operam
               com sinal saudável.{' '}
-              <span className="font-semibold text-rose-600">{fmtInt(offline)}</span> estão{' '}
+              <span className="font-semibold text-rose-600 dark:text-rose-300">{fmtInt(offline)}</span> estão{' '}
               <span className="font-semibold">offline</span> ({fmtPct(insights.offlinePct)}) e{' '}
-              <span className="font-semibold text-amber-600">{fmtInt(degraded)}</span> com{' '}
+              <span className="font-semibold text-amber-600 dark:text-amber-300">{fmtInt(degraded)}</span> com{' '}
               <span className="font-semibold">sinal atenuado</span> ({fmtPct(insights.degradedPct)}).
             </p>
 
@@ -508,7 +508,7 @@ export function OnuSignalHealthPanel() {
                   <>
                     {' '}A mais crítica é a{' '}
                     <span className="font-mono font-semibold text-on-surface">{insights.worstOlt.olt}</span>, com{' '}
-                    <span className="font-semibold text-rose-600">
+                    <span className="font-semibold text-rose-600 dark:text-rose-300">
                       {fmtPct(insights.worstOlt.offlineRate * 100)}
                     </span>{' '}
                     de offline (média da rede: {fmtPct(insights.offlinePct)}).
@@ -532,7 +532,7 @@ export function OnuSignalHealthPanel() {
             ) : null}
 
             {criticalSignal > 0 ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-rose-50/80 px-2.5 py-2 text-rose-800">
+              <p className="flex items-start gap-1.5 rounded-lg bg-rose-50/80 dark:bg-rose-950/40 px-2.5 py-2 text-rose-800 dark:text-rose-200">
                 <AlertTriangle size={15} className="mt-0.5 shrink-0" strokeWidth={2} />
                 <span>
                   <span className="font-bold">{fmtInt(criticalSignal)} clientes</span> em nível crítico (≤ -28 dBm)
@@ -542,7 +542,7 @@ export function OnuSignalHealthPanel() {
             ) : null}
 
             {temperature.hot > 0 ? (
-              <p className="flex items-start gap-1.5 rounded-lg bg-orange-50/80 px-2.5 py-2 text-orange-800">
+              <p className="flex items-start gap-1.5 rounded-lg bg-orange-50/80 dark:bg-orange-950/40 px-2.5 py-2 text-orange-800 dark:text-orange-200">
                 <Thermometer size={15} className="mt-0.5 shrink-0" strokeWidth={2} />
                 <span>
                   <span className="font-bold">{fmtInt(temperature.hot)} ONUs</span> operam acima de{' '}
@@ -590,14 +590,14 @@ export function OnuSignalHealthPanel() {
       <OnuRecentChangesFeed />
 
       {/* Estatísticas de distribuição do sinal */}
-      <div className="grid gap-3 rounded-2xl border border-outline-variant bg-white p-4 shadow-sm sm:grid-cols-4">
+      <div className="grid gap-3 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm sm:grid-cols-4">
         <div className="sm:col-span-4 -mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
           <Gauge size={13} /> Distribuição de recepção (ONUs online)
         </div>
         {[
-          { k: 'P10 (10% piores)', v: signalStats.p10, tone: 'text-amber-600' },
+          { k: 'P10 (10% piores)', v: signalStats.p10, tone: 'text-amber-600 dark:text-amber-300' },
           { k: 'Mediana (P50)', v: signalStats.p50, tone: 'text-on-surface' },
-          { k: 'P90 (10% melhores)', v: signalStats.p90, tone: 'text-emerald-600' },
+          { k: 'P90 (10% melhores)', v: signalStats.p90, tone: 'text-emerald-600 dark:text-emerald-300' },
           { k: 'Média', v: signalStats.avg, tone: 'text-on-surface' },
         ].map((m) => (
           <div key={m.k}>
@@ -624,7 +624,7 @@ export function OnuSignalHealthPanel() {
       </div>
 
       {/* Onde está o problema: OLTs mais afetadas */}
-      <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Server size={15} className="text-primary" />
           <h3 className="text-sm font-semibold tracking-tight text-on-surface">
@@ -645,10 +645,10 @@ export function OnuSignalHealthPanel() {
                   <span className="truncate font-mono text-[11px] font-bold text-on-surface">{o.olt}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 text-[10px] font-bold tabular-nums">
-                  <span className="text-rose-600">{fmtInt(o.offline)} off</span>
-                  {o.degraded > 0 ? <span className="text-amber-600">{fmtInt(o.degraded)} aten.</span> : null}
+                  <span className="text-rose-600 dark:text-rose-300">{fmtInt(o.offline)} off</span>
+                  {o.degraded > 0 ? <span className="text-amber-600 dark:text-amber-300">{fmtInt(o.degraded)} aten.</span> : null}
                   {o.critical > 0 ? (
-                    <span className="rounded bg-rose-100 px-1.5 py-0.5 text-rose-700">{fmtInt(o.critical)} crít</span>
+                    <span className="rounded bg-rose-100 dark:bg-rose-950/50 px-1.5 py-0.5 text-rose-700 dark:text-rose-200">{fmtInt(o.critical)} crít</span>
                   ) : null}
                 </div>
               </div>
@@ -668,7 +668,7 @@ export function OnuSignalHealthPanel() {
 
       {/* Temperatura das ONUs */}
       {temperature.sampled > 0 ? (
-        <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
           <div className="flex items-center gap-2">
             <Thermometer size={15} className="text-orange-500" />
             <h3 className="text-sm font-semibold tracking-tight text-on-surface">
@@ -681,16 +681,16 @@ export function OnuSignalHealthPanel() {
           </p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/70 dark:bg-amber-950/40 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-200">
                 Quentes ≥ {temperature.warmThreshold}°C
               </p>
               <p className="mt-1 text-xl font-black tabular-nums text-on-surface">
                 {fmtInt(temperature.warm)}
               </p>
             </div>
-            <div className="rounded-xl border border-orange-300 bg-orange-50/70 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">
+            <div className="rounded-xl border border-orange-300 bg-orange-50/70 dark:bg-orange-950/40 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-200">
                 Críticas ≥ {temperature.hotThreshold}°C
               </p>
               <p className="mt-1 text-xl font-black tabular-nums text-on-surface">
@@ -732,8 +732,8 @@ export function OnuSignalHealthPanel() {
                       className={cn(
                         'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
                         (h.temperature ?? 0) >= temperature.hotThreshold
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-amber-100 text-amber-700',
+                          ? 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-200'
+                          : 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-200',
                       )}
                     >
                       {h.temperature !== null ? `${h.temperature.toFixed(1)} °C` : '—'}
@@ -743,7 +743,7 @@ export function OnuSignalHealthPanel() {
               </ul>
             </>
           ) : (
-            <p className="mt-3 rounded-lg bg-emerald-50/70 px-3 py-2 text-[11px] font-medium text-emerald-700">
+            <p className="mt-3 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 px-3 py-2 text-[11px] font-medium text-emerald-700 dark:text-emerald-200">
               Nenhuma ONU acima de {temperature.warmThreshold} °C no momento.
             </p>
           )}
@@ -752,7 +752,7 @@ export function OnuSignalHealthPanel() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Histograma de potência RX */}
-        <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
           <h3 className="text-sm font-semibold tracking-tight text-on-surface">
             Distribuição de potência RX (ONUs online)
           </h3>
@@ -785,7 +785,7 @@ export function OnuSignalHealthPanel() {
         </div>
 
         {/* Piores clientes */}
-        <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
           <h3 className="text-sm font-semibold tracking-tight text-on-surface">
             Piores sinais agora ({summary.worst.length})
           </h3>
@@ -812,8 +812,8 @@ export function OnuSignalHealthPanel() {
                     className={cn(
                       'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
                       (w.rxPower ?? 0) <= -28
-                        ? 'bg-rose-100 text-rose-700'
-                        : 'bg-amber-100 text-amber-700',
+                        ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-200'
+                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-200',
                     )}
                   >
                     {w.rxPower !== null ? `${w.rxPower.toFixed(1)} dBm` : '—'}
@@ -826,7 +826,7 @@ export function OnuSignalHealthPanel() {
       </div>
 
       {/* Mapa de problemas geolocalizados */}
-      <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
         <h3 className="text-sm font-semibold tracking-tight text-on-surface">
           Mapa de problemas — onde estão os clientes afetados
         </h3>

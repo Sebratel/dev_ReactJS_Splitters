@@ -17,14 +17,14 @@ export function RouteErrorBoundary() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-surface px-6 py-16 text-center">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+      <div className="flex size-16 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-300">
         <AlertTriangle className="size-8" />
       </div>
       <div className="space-y-2">
-        <h1 className="text-2xl font-black tracking-tight text-neutral-900">
+        <h1 className="text-2xl font-black tracking-tight text-on-surface">
           {is404 ? 'Página não encontrada' : 'Algo deu errado'}
         </h1>
-        <p className="mx-auto max-w-md text-sm text-neutral-500">{message}</p>
+        <p className="mx-auto max-w-md text-sm text-on-surface-variant">{message}</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Link
@@ -38,7 +38,7 @@ export function RouteErrorBoundary() {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-5 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 px-5 py-2.5 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-low"
           >
             <RefreshCw className="size-4" />
             Recarregar

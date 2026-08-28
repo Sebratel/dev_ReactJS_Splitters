@@ -27,7 +27,7 @@ function TriggerTag({ trigger }: { trigger: string | null }) {
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
-        isAlarm ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600',
+        isAlarm ? 'bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-200' : 'bg-slate-100 text-on-surface-variant',
       )}
       title={isAlarm ? 'Detectado por trap/alarme da OLT (instantâneo)' : 'Detectado por varredura de status'}
     >
@@ -62,7 +62,7 @@ function EventRow({ e }: { e: OnuStatusChange }) {
       <span
         className={cn(
           'shrink-0 text-[11px] font-bold tabular-nums',
-          isDrop ? 'text-rose-600' : 'text-emerald-600',
+          isDrop ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300',
         )}
       >
         {ago ?? '—'}
@@ -80,7 +80,7 @@ export function OnuRecentChangesFeed() {
   const data = query.data ?? null
 
   return (
-    <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity size={15} className="text-primary" />
@@ -91,10 +91,10 @@ export function OnuRecentChangesFeed() {
         <div className="flex items-center gap-2">
           {data ? (
             <>
-              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+              <span className="rounded-full bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-200">
                 {data.drops} quedas
               </span>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+              <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-200">
                 {data.recoveries} voltaram
               </span>
             </>
@@ -113,18 +113,18 @@ export function OnuRecentChangesFeed() {
           Carregando eventos recentes…
         </p>
       ) : query.isError ? (
-        <div className="mt-4 py-6 text-center text-xs text-rose-700">
+        <div className="mt-4 py-6 text-center text-xs text-rose-700 dark:text-rose-200">
           <p>Não foi possível carregar o feed de eventos.</p>
           <button
             type="button"
             onClick={() => query.refetch()}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-white px-3 py-1.5 font-semibold hover:bg-rose-50"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-surface-container-lowest px-3 py-1.5 font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40"
           >
             <RefreshCw size={12} /> Tentar novamente
           </button>
         </div>
       ) : !data || data.events.length === 0 ? (
-        <p className="mt-4 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/70 py-6 text-center text-xs text-emerald-800">
+        <p className="mt-4 rounded-xl border border-dashed border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/70 dark:bg-emerald-950/40 py-6 text-center text-xs text-emerald-800 dark:text-emerald-200">
           Sem quedas ou recuperações recentes. 🎉
         </p>
       ) : (

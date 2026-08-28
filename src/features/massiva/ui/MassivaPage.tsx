@@ -354,7 +354,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   return (
     <div className="space-y-4 lg:space-y-5 xl:space-y-6">
       <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 min-[1700px]:grid-cols-[minmax(0,7fr)_minmax(380px,3fr)]">
-        <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-surface-container-lowest shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70 dark:ring-white/10">
           <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
             <MassivaStepper
               currentStep={currentStep}
@@ -363,7 +363,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
             />
             {(localPreview.isConnectionsLoading || localPreview.isApplyingFilters) ? (
               <div
-                className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+                className="flex items-center gap-2 rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-sm text-sky-900 dark:text-sky-200"
                 role="status"
                 aria-live="polite"
               >
@@ -396,15 +396,15 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         <RightPanel showProtocolsTab={false} />
       </div>
 
-      <section className="rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70">
-        <div className="border-b border-neutral-200/80 px-4 py-3 sm:px-5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">
+      <section className="rounded-xl bg-surface-container-lowest shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70 dark:ring-white/10">
+        <div className="border-b border-neutral-200/80 dark:border-white/10 px-4 py-3 sm:px-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
             Monitoramento de impacto
           </p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-900 sm:text-lg">
+          <h2 className="mt-1 text-base font-semibold text-on-surface sm:text-lg">
             Protocolos de massiva
           </h2>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="mt-1 text-sm text-on-surface-variant">
             Acompanhamento completo com indicadores, série de afetados por período e lista paginada para operação.
           </p>
         </div>

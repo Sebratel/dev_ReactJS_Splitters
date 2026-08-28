@@ -38,7 +38,7 @@ export function InfraSiteSelect({ value, onChange, disabled }: InfraSiteSelectPr
     <div>
       <label
         htmlFor="infra-site"
-        className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+        className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant"
       >
         Site (obrigatório)
       </label>
@@ -58,16 +58,16 @@ export function InfraSiteSelect({ value, onChange, disabled }: InfraSiteSelectPr
           onBlur={() => window.setTimeout(() => setOpen(false), 150)}
           disabled={disabled}
           placeholder="Digite o código/nome do site (ex.: NHOPN)"
-          className="w-full rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed"
+          className="w-full rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed"
         />
         {open && debounced.length >= 2 ? (
-          <ul className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-neutral-200 bg-white py-1 text-sm shadow-lg">
+          <ul className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest py-1 text-sm shadow-lg">
             {query.isPending ? (
-              <li className="px-3 py-1.5 text-neutral-500">Buscando…</li>
+              <li className="px-3 py-1.5 text-on-surface-variant">Buscando…</li>
             ) : query.isError ? (
-              <li className="px-3 py-1.5 text-red-600">Falha ao buscar sites.</li>
+              <li className="px-3 py-1.5 text-red-600 dark:text-red-300">Falha ao buscar sites.</li>
             ) : results.length === 0 ? (
-              <li className="px-3 py-1.5 text-neutral-500">Nenhum site encontrado.</li>
+              <li className="px-3 py-1.5 text-on-surface-variant">Nenhum site encontrado.</li>
             ) : (
               results.map((site) => (
                 <li key={`${site.id ?? site.title}`}>
@@ -80,11 +80,11 @@ export function InfraSiteSelect({ value, onChange, disabled }: InfraSiteSelectPr
                       setInput(site.title)
                       setOpen(false)
                     }}
-                    className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-amber-50"
+                    className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-amber-50 dark:hover:bg-amber-950/40"
                   >
-                    <span className="font-mono font-semibold text-neutral-900">{site.title}</span>
+                    <span className="font-mono font-semibold text-on-surface">{site.title}</span>
                     {site.city ? (
-                      <span className="truncate text-[11px] text-neutral-500">{site.city}</span>
+                      <span className="truncate text-[11px] text-on-surface-variant">{site.city}</span>
                     ) : null}
                   </button>
                 </li>
@@ -94,11 +94,11 @@ export function InfraSiteSelect({ value, onChange, disabled }: InfraSiteSelectPr
         ) : null}
       </div>
       {value.trim() !== '' ? (
-        <p className="mt-1 text-[10px] text-neutral-600">
+        <p className="mt-1 text-[10px] text-on-surface-variant">
           Site selecionado: <span className="font-mono font-semibold">{value}</span>
         </p>
       ) : (
-        <p className="mt-1 text-[10px] font-medium text-amber-700">
+        <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-200">
           Selecione um site para abrir o protocolo de backbone.
         </p>
       )}

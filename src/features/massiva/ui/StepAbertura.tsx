@@ -30,10 +30,10 @@ function Notice({
 }) {
   const toneClass =
     tone === 'warning'
-      ? 'border-amber-200 bg-amber-50 text-amber-950'
+      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
       : tone === 'error'
-        ? 'border-red-200 bg-red-50 text-red-950'
-        : 'border-neutral-200 bg-neutral-50 text-neutral-900'
+        ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950'
+        : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface'
 
   return (
     <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
@@ -125,8 +125,8 @@ export function StepAbertura({
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-base font-semibold text-neutral-900">Abertura</h3>
-        <p className="mt-1 text-sm text-neutral-600">
+        <h3 className="text-base font-semibold text-on-surface">Abertura</h3>
+        <p className="mt-1 text-sm text-on-surface-variant">
           Complete dados operacionais, gere a descrição técnica e revise bloqueios antes do envio.
         </p>
       </div>
@@ -194,7 +194,7 @@ export function StepAbertura({
       ) : null}
 
       {readiness.status === 'missing-assignment' ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-amber-950">
           <p className="text-sm font-semibold">Campos obrigatórios pendentes</p>
           <ul className="mt-2 space-y-1 text-sm">
             {readiness.issues.map((issue) => (
@@ -212,7 +212,7 @@ export function StepAbertura({
               description="A abertura está pronta para envio. Revise a descrição e use a ação principal fixa no rodapé."
             />
           ) : null}
-          <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sky-950">
+          <div className="rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sky-950">
             <p className="text-sm font-semibold">
               Protocolos previstos: {requestsByAp.length} (1 por ponto de acesso)
             </p>

@@ -51,16 +51,16 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
   }, [uiState])
 
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col rounded-xl bg-neutral-50/80 px-3 py-3 ring-1 ring-neutral-200/70 sm:px-4 sm:py-4">
+    <aside className="flex min-h-0 min-w-0 flex-col rounded-xl bg-surface-container-low/80 px-3 py-3 ring-1 ring-neutral-200/70 dark:ring-white/10 sm:px-4 sm:py-4">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
             Apoio operacional
           </p>
-          <h2 className="mt-1 text-base font-semibold text-neutral-900">
+          <h2 className="mt-1 text-base font-semibold text-on-surface">
             {activeTab === 'autoisp' ? 'AutoISP' : 'Protocolos'}
           </h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-on-surface-variant">
             {activeTab === 'autoisp'
               ? 'Sugestoes de eventos e preenchimento assistido.'
               : 'Consulta e encerramento de protocolos existentes.'}
@@ -68,7 +68,7 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
         </div>
         {showProtocolsTab ? (
           <div
-            className="grid w-full grid-cols-1 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-neutral-200/80 sm:w-auto sm:grid-cols-2 sm:rounded-full"
+            className="grid w-full grid-cols-1 gap-1 rounded-2xl bg-surface-container-lowest p-1 shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10 sm:w-auto sm:grid-cols-2 sm:rounded-full"
             role="tablist"
             aria-label="Abas do painel lateral"
           >
@@ -80,8 +80,8 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
               className={cn(
                 'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
                 tab === 'autoisp'
-                  ? 'bg-sky-50 text-sky-900 ring-1 ring-sky-200'
-                  : 'text-neutral-600 hover:bg-neutral-50',
+                  ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200 ring-1 ring-sky-200'
+                  : 'text-on-surface-variant hover:bg-surface-container-low',
               )}
             >
               <BotMessageSquare size={14} aria-hidden />
@@ -95,8 +95,8 @@ export function RightPanel({ showProtocolsTab = true }: RightPanelProps) {
               className={cn(
                 'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition',
                 tab === 'protocolos'
-                  ? 'bg-white text-neutral-900 ring-1 ring-neutral-200'
-                  : 'text-neutral-600 hover:bg-neutral-50',
+                  ? 'bg-surface-container-lowest text-on-surface ring-1 ring-neutral-200 dark:ring-white/10'
+                  : 'text-on-surface-variant hover:bg-surface-container-low',
               )}
             >
               <ClipboardList size={14} aria-hidden />

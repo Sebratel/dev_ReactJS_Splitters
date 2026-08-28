@@ -37,13 +37,13 @@ export function MassivaOpeningPreparationPanel({
   if (preparation.status === 'invalid') {
     return (
       <div
-        className="rounded-xl border border-amber-200/80 bg-gradient-to-b from-amber-50 to-amber-50/20 px-4 py-3.5 text-sm text-amber-950 shadow-sm ring-1 ring-amber-100/50"
+        className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/20 dark:to-amber-950/20 px-4 py-3.5 text-sm text-amber-950 shadow-sm ring-1 ring-amber-100/50"
         role="status"
       >
         <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700" aria-hidden />
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-200" aria-hidden />
           <div>
-            <p className="font-medium text-amber-900">Seleção inválida para abertura</p>
+            <p className="font-medium text-amber-900 dark:text-amber-200">Seleção inválida para abertura</p>
             <ul className="mt-2 list-inside list-disc space-y-1">
               {preparation.issues.map((issue, index) => (
                 <li key={`${index}-${issue}`}>{issue}</li>
@@ -59,7 +59,7 @@ export function MassivaOpeningPreparationPanel({
 
   return (
     <div
-      className="rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50 via-white to-violet-50/40 px-4 py-4 text-sm text-violet-950 shadow-[0_4px_24px_-8px_rgba(109,40,217,0.18)] ring-1 ring-violet-200/35"
+      className="rounded-2xl border border-violet-200/70 dark:border-violet-800/50 bg-gradient-to-br from-violet-50 dark:from-violet-950/20 via-white dark:via-surface-container-lowest to-violet-50/40 dark:to-violet-950/20 px-4 py-4 text-sm text-violet-950 shadow-[0_4px_24px_-8px_rgba(109,40,217,0.18)] ring-1 ring-violet-200/35"
       role="region"
       aria-label="Resumo da rota para abertura"
     >
@@ -68,7 +68,7 @@ export function MassivaOpeningPreparationPanel({
       </p>
       <p className="mt-1 font-semibold text-violet-950">Pronto para o fluxo de abertura</p>
 
-      <div className="mt-3 rounded-xl border border-violet-100/90 bg-white/70 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+      <div className="mt-3 rounded-xl border border-violet-100/90 bg-surface-container-lowest/70 px-3 py-2.5 shadow-sm backdrop-blur-sm">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-600/90">
           Topologia selecionada
         </p>
@@ -76,7 +76,7 @@ export function MassivaOpeningPreparationPanel({
         <ul className="mt-2 space-y-1.5 text-xs text-violet-950 sm:text-sm">
           {basis.topology.routes.map((route) => (
             <li key={`${route.apCode}-${route.slot}-${route.port}`} className="leading-relaxed">
-              <span className="font-mono font-semibold text-violet-900">{route.apCode}</span>
+              <span className="font-mono font-semibold text-violet-900 dark:text-violet-200">{route.apCode}</span>
               <span className="text-violet-400"> - </span>
               slot <span className="tabular-nums font-semibold">{route.slot}</span>
               <span className="text-violet-400"> - </span>
@@ -91,7 +91,7 @@ export function MassivaOpeningPreparationPanel({
       </div>
 
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-        <div className="rounded-xl border border-violet-100/80 bg-white/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border border-violet-100/80 bg-surface-container-lowest/60 px-3 py-2.5 shadow-sm">
           <dt className="text-[10px] font-bold uppercase tracking-wider text-violet-600/85">
             {t('massiva.affected_total')}
           </dt>
@@ -99,7 +99,7 @@ export function MassivaOpeningPreparationPanel({
             {basis.previewTotals.totalAffected.toLocaleString('pt-BR')}
           </dd>
         </div>
-        <div className="rounded-xl border border-violet-100/80 bg-white/60 px-3 py-2.5 shadow-sm">
+        <div className="rounded-xl border border-violet-100/80 bg-surface-container-lowest/60 px-3 py-2.5 shadow-sm">
           <dt className="text-[10px] font-bold uppercase tracking-wider text-violet-600/85">
             {t('massiva.pppoes_total')}
           </dt>

@@ -38,7 +38,7 @@ export function AppPageHeader({
   return (
     <header
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-amber-50/30 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80',
+        'relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-amber-50/30 dark:to-amber-950/20 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80',
         'animate-in fade-in slide-in-from-top-2 zoom-in-[0.99] duration-300 ease-out',
         'motion-reduce:animate-none motion-reduce:opacity-100',
         className,
@@ -55,17 +55,17 @@ export function AppPageHeader({
       <div className="relative flex flex-col gap-4 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:py-5 xl:px-7">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
           {Icon ? (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 text-amber-900 shadow-inner ring-1 ring-amber-300/50 sm:h-12 sm:w-12">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/25 to-amber-600/10 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-300/50 sm:h-12 sm:w-12">
               <Icon size={22} aria-hidden className="opacity-90" />
             </div>
           ) : null}
           <div className="min-w-0 space-y-1">
-            <span className="inline-flex items-center rounded-full border border-amber-200/80 bg-white/70 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900/90 shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center rounded-full border border-amber-200/80 dark:border-amber-800/50 bg-surface-container-lowest/70 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-900/90 shadow-sm backdrop-blur-sm">
               {badge}
             </span>
-            <h1 className="text-xl font-semibold tracking-tight text-neutral-900 sm:text-2xl">{title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-on-surface sm:text-2xl">{title}</h1>
             {description ? (
-              <p className="max-w-2xl text-xs leading-relaxed text-neutral-600 sm:text-sm md:block line-clamp-3 sm:line-clamp-none">
+              <p className="max-w-2xl text-xs leading-relaxed text-on-surface-variant sm:text-sm md:block line-clamp-3 sm:line-clamp-none">
                 {description}
               </p>
             ) : null}

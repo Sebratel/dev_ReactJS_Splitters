@@ -11,7 +11,7 @@ export function ClienteDetailClienteSection({
 }: ClienteDetailClienteSectionProps) {
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-cliente-heading"
     >
       <div className="flex items-start gap-3">
@@ -35,7 +35,7 @@ export function ClienteDetailClienteSection({
               variant="neutral"
             />
             {cliente.isCorporate ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-800">
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200">
                 <Building2 size={12} strokeWidth={2} />
                 Corporativo
               </span>

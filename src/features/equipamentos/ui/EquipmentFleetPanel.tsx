@@ -61,14 +61,14 @@ function KpiCard({
 }) {
   const toneClass =
     tone === 'emerald'
-      ? 'border-emerald-200 bg-emerald-50/60 text-emerald-700'
+      ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200'
       : tone === 'amber'
-        ? 'border-amber-200 bg-amber-50/60 text-amber-700'
+        ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 text-amber-700 dark:text-amber-200'
         : tone === 'rose'
-          ? 'border-rose-200 bg-rose-50/60 text-rose-700'
+          ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200'
           : tone === 'primary'
             ? 'border-primary/20 bg-primary/[0.06] text-primary'
-            : 'border-outline-variant bg-white text-on-surface-variant'
+            : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant'
   return (
     <div className={cn('rounded-2xl border p-4 shadow-sm', toneClass)}>
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider opacity-80">
@@ -132,7 +132,7 @@ function SignalModelRow({ row }: { row: OnuModelSignalAnalyzed }) {
           </span>
           {row.isOutlier ? (
             <span
-              className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-700"
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-200"
               title="Atenuação acima de 1,5× a média da rede, com volume relevante"
             >
               <AlertTriangle size={9} strokeWidth={2.5} />
@@ -150,7 +150,7 @@ function SignalModelRow({ row }: { row: OnuModelSignalAnalyzed }) {
         <div className="h-full bg-rose-500" style={{ width: `${offlinePct}%` }} title={`Offline: ${fmtPct(offlinePct)}`} />
       </div>
       <div className="mt-1 flex items-center gap-3 text-[10px] font-semibold tabular-nums">
-        <span className="text-amber-600">{fmtPct(row.degradedRate * 100)} atenuado</span>
+        <span className="text-amber-600 dark:text-amber-300">{fmtPct(row.degradedRate * 100)} atenuado</span>
         <span className="text-rose-500">{fmtPct(row.offlineRate * 100)} offline</span>
       </div>
     </li>
@@ -194,7 +194,7 @@ export function EquipmentFleetPanel() {
 
   if (query.isPending) {
     return (
-      <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+      <p className="rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-low/80 py-10 text-center text-sm text-on-surface-variant">
         Carregando frota de equipamentos…
       </p>
     )
@@ -202,7 +202,7 @@ export function EquipmentFleetPanel() {
 
   if (query.isError) {
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50/70 px-4 py-8 text-center text-sm text-rose-700">
+      <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50/70 dark:bg-rose-950/40 px-4 py-8 text-center text-sm text-rose-700 dark:text-rose-200">
         <AlertTriangle className="mx-auto mb-2" size={20} />
         Não foi possível carregar os equipamentos.
         <button
@@ -218,7 +218,7 @@ export function EquipmentFleetPanel() {
 
   if (!data || !derived || derived.total === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+      <p className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 bg-surface-container-low/80 py-10 text-center text-sm text-on-surface-variant">
         Nenhum equipamento ativo encontrado no cadastro.
       </p>
     )
@@ -261,11 +261,11 @@ export function EquipmentFleetPanel() {
             </>
           ) : null}{' '}
           Cobertura de cadastro:{' '}
-          <span className={cn('font-semibold', derived.serialCoverage >= 90 ? 'text-emerald-600' : 'text-amber-600')}>
+          <span className={cn('font-semibold', derived.serialCoverage >= 90 ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300')}>
             {fmtPct(derived.serialCoverage, 0)} com serial
           </span>{' '}
           ·{' '}
-          <span className={cn('font-semibold', derived.macCoverage >= 90 ? 'text-emerald-600' : 'text-amber-600')}>
+          <span className={cn('font-semibold', derived.macCoverage >= 90 ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300')}>
             {fmtPct(derived.macCoverage, 0)} com MAC
           </span>.
         </p>
@@ -293,7 +293,7 @@ export function EquipmentFleetPanel() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* ── Ato 2a: ranking de modelos (Pareto) ───────────────────────── */}
-        <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm lg:col-span-2">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
               <Layers size={15} className="text-primary" />
@@ -326,7 +326,7 @@ export function EquipmentFleetPanel() {
         </div>
 
         {/* ── Ato 2b: composição por tipo (donut) ───────────────────────── */}
-        <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
           <h3 className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
             <Router size={15} className="text-primary" />
             Composição por tipo
@@ -409,15 +409,15 @@ export function EquipmentFleetPanel() {
           <>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
               De <span className="font-semibold text-on-surface">{fmtInt(signalInsights.monitored)}</span> ONUs
-              monitoradas, <span className="font-semibold text-emerald-600">{fmtPct(signalInsights.healthyRate * 100, 0)}</span>{' '}
+              monitoradas, <span className="font-semibold text-emerald-600 dark:text-emerald-300">{fmtPct(signalInsights.healthyRate * 100, 0)}</span>{' '}
               operam saudáveis. A média da rede é de{' '}
-              <span className="font-semibold text-amber-600">{fmtPct(signalInsights.networkDegradedRate * 100)}</span>{' '}
+              <span className="font-semibold text-amber-600 dark:text-amber-300">{fmtPct(signalInsights.networkDegradedRate * 100)}</span>{' '}
               de clientes atenuados.{' '}
               {signalInsights.worstByDegraded[0] && signalInsights.worstByDegraded[0].isOutlier ? (
                 <>
                   O modelo{' '}
                   <span className="font-semibold text-on-surface">{signalInsights.worstByDegraded[0].model}</span>{' '}
-                  é o mais crítico: <span className="font-semibold text-amber-600">
+                  é o mais crítico: <span className="font-semibold text-amber-600 dark:text-amber-300">
                     {fmtPct(signalInsights.worstByDegraded[0].degradedRate * 100)}
                   </span>{' '}
                   dos seus clientes estão atenuados —{' '}
@@ -448,7 +448,7 @@ export function EquipmentFleetPanel() {
       </div>
 
       {/* ── Ato 4: qualidade de cadastro / ações ────────────────────────── */}
-      <div className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
         <h3 className="flex items-center gap-1.5 text-sm font-bold text-on-surface">
           <Fingerprint size={15} className="text-primary" />
           Qualidade de cadastro

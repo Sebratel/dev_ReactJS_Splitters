@@ -35,10 +35,10 @@ function SwitchRow({
   onCheckedChange: (v: boolean) => void
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-200/80 bg-neutral-50/50 px-3 py-3">
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-low/50 px-3 py-3">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-neutral-900">{title}</p>
-        <p className="mt-0.5 text-xs leading-relaxed text-neutral-600">{description}</p>
+        <p className="text-sm font-semibold text-on-surface">{title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-on-surface-variant">{description}</p>
       </div>
       <button
         type="button"
@@ -55,7 +55,7 @@ function SwitchRow({
       >
         <span
           className={cn(
-            'pointer-events-none absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform',
+            'pointer-events-none absolute top-0.5 size-4 rounded-full bg-surface-container-lowest shadow-sm transition-transform',
             checked ? 'translate-x-[1.375rem]' : 'translate-x-0.5',
           )}
         />
@@ -119,22 +119,22 @@ export function UserEditDrawer({
         aria-label="Fechar painel"
         onClick={onClose}
       />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-neutral-200 bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-lg">
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-100 px-5 py-4">
+      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-lg">
+        <div className="flex items-start justify-between gap-3 border-b border-neutral-100 dark:border-white/5 px-5 py-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <SplittersUserAvatar user={user} size="md" className="mt-0.5" />
             <div className="min-w-0">
-              <p id="user-edit-title" className="text-lg font-semibold tracking-tight text-neutral-900">
+              <p id="user-edit-title" className="text-lg font-semibold tracking-tight text-on-surface">
                 Editar usuário
               </p>
-              <p className="mt-1 truncate text-sm text-neutral-600">{user.displayName || 'Sem nome'}</p>
-              <p className="truncate text-xs text-neutral-500">{user.email}</p>
+              <p className="mt-1 truncate text-sm text-on-surface-variant">{user.displayName || 'Sem nome'}</p>
+              <p className="truncate text-xs text-on-surface-variant">{user.email}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+            className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 hover:text-on-surface"
             aria-label="Fechar"
           >
             <X className="size-5" />
@@ -143,7 +143,7 @@ export function UserEditDrawer({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <section className="space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Dados básicos</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Dados básicos</h3>
             <SwitchRow
               title="Conta ativa"
               description="Usuário inativo não acessa o sistema após login."
@@ -154,8 +154,8 @@ export function UserEditDrawer({
           </section>
 
           <section className="mt-6 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Papel (preset)</h3>
-            <p className="text-xs text-neutral-600">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Papel (preset)</h3>
+            <p className="text-xs text-on-surface-variant">
               Presets aplicam um pacote de permissões. Escolha <strong>Personalizado</strong> para ajustar item a item
               abaixo.
             </p>
@@ -165,7 +165,7 @@ export function UserEditDrawer({
                 value={role}
                 disabled={pending}
                 onChange={(e) => setRoleChoice(e.target.value as SplittersRoleId)}
-                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium text-neutral-900 shadow-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm font-medium text-on-surface shadow-sm focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
               >
                 {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                   <option
@@ -185,7 +185,7 @@ export function UserEditDrawer({
           </section>
 
           <section className="mt-6 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Operações</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Operações</h3>
             <SwitchRow
               title="Ver splitters"
               description="Acesso à listagem e detalhes de equipamentos."
@@ -222,7 +222,7 @@ export function UserEditDrawer({
           </section>
 
           <section className="mt-6 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Inteligência</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Inteligência</h3>
             <SwitchRow
               title="Ver inteligência de rede"
               description="Painel analítico (ocupação, risco, mapas)."
@@ -240,7 +240,7 @@ export function UserEditDrawer({
           </section>
 
           <section className="mt-6 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">Administração</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Administração</h3>
             <SwitchRow
               title="Administrador"
               description="Gestão de usuários e permissões. Não pode ser removido do próprio usuário."
@@ -251,11 +251,11 @@ export function UserEditDrawer({
           </section>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 dark:border-white/5 px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+            className="rounded-xl border border-neutral-200 dark:border-white/10 px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-low"
           >
             Cancelar
           </button>

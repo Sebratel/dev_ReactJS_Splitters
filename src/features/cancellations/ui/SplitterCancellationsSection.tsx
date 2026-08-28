@@ -75,11 +75,11 @@ export function SplitterCancellationsSection({
 
   const card = (children: React.ReactNode) => (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm"
       aria-labelledby="splitter-cancellations-heading"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/40 bg-rose-50 text-rose-600">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-300/40 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300">
           <TrendingDown size={18} strokeWidth={1.75} />
         </div>
         <div className="min-w-0 flex-1">
@@ -94,12 +94,12 @@ export function SplitterCancellationsSection({
           </h2>
         </div>
         {tipoLocal === 'CONDOMÍNIO' ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/50 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+          <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/50 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:text-rose-200">
             <Building2 size={12} aria-hidden />
             Condomínio{nomeCondominio ? `: ${nomeCondominio}` : ''}
           </span>
         ) : tipoLocal === 'UNIDADE' ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] font-semibold text-neutral-500">
+          <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-low px-2 py-0.5 text-[11px] font-semibold text-on-surface-variant">
             <Home size={12} aria-hidden />
             Rua / unidade
           </span>
@@ -156,12 +156,12 @@ export function SplitterCancellationsSection({
   return card(
     <div className="space-y-4">
       {/* Leitura rápida */}
-      <p className="flex items-start gap-2 rounded-xl bg-neutral-50 px-3 py-2 text-sm leading-snug text-on-surface-variant/90 ring-1 ring-outline-variant/40">
+      <p className="flex items-start gap-2 rounded-xl bg-surface-container-low px-3 py-2 text-sm leading-snug text-on-surface-variant/90 ring-1 ring-outline-variant/40">
         <Lightbulb className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
         <span>
           Dos <span className="font-semibold text-on-surface">{data.total.toLocaleString('pt-BR')}</span>{' '}
           cancelamentos em 12 meses,{' '}
-          <span className="font-semibold text-rose-600">{totalRede.toLocaleString('pt-BR')} ({redeShare}%)</span>{' '}
+          <span className="font-semibold text-rose-600 dark:text-rose-300">{totalRede.toLocaleString('pt-BR')} ({redeShare}%)</span>{' '}
           foram por rede/qualidade — {redeReading}
           {postReading}
         </span>
@@ -176,7 +176,7 @@ export function SplitterCancellationsSection({
           <p className="text-[11px] text-on-surface-variant/60">cancelamentos no período</p>
         </div>
         <div>
-          <p className="text-2xl font-bold tabular-nums text-rose-600">
+          <p className="text-2xl font-bold tabular-nums text-rose-600 dark:text-rose-300">
             {totalRede.toLocaleString('pt-BR')}
             <span className="ml-1 text-sm font-semibold text-rose-500">({redeShare}%)</span>
           </p>
@@ -189,14 +189,14 @@ export function SplitterCancellationsSection({
         <div
           className={`flex items-start gap-3 rounded-xl border p-3 ${
             post.redeCount > 0
-              ? 'border-rose-300/60 bg-rose-50/70'
-              : 'border-emerald-300/50 bg-emerald-50/60'
+              ? 'border-rose-300/60 bg-rose-50/70 dark:bg-rose-950/40'
+              : 'border-emerald-300/50 bg-emerald-50/60 dark:bg-emerald-950/40'
           }`}
         >
           <Zap
             size={16}
             strokeWidth={2}
-            className={post.redeCount > 0 ? 'mt-0.5 text-rose-600' : 'mt-0.5 text-emerald-600'}
+            className={post.redeCount > 0 ? 'mt-0.5 text-rose-600 dark:text-rose-300' : 'mt-0.5 text-emerald-600 dark:text-emerald-300'}
             aria-hidden
           />
           <div className="min-w-0 text-sm leading-snug">
@@ -208,7 +208,7 @@ export function SplitterCancellationsSection({
                 'Nenhum cancelamento na janela pós-evento.'
               ) : (
                 <>
-                  <span className="font-bold text-rose-600">{post.redeCount}</span> de rede/qualidade
+                  <span className="font-bold text-rose-600 dark:text-rose-300">{post.redeCount}</span> de rede/qualidade
                   {' '}de <span className="font-semibold">{post.totalCount}</span> cancelamentos no
                   período. {post.redeCount > 0
                     ? 'Vale investigar se o evento influenciou o churn nesta área.'
@@ -229,7 +229,7 @@ export function SplitterCancellationsSection({
             <div
               key={cat}
               className={`rounded-lg border px-2.5 py-2 ${
-                isRede ? 'border-rose-300 bg-rose-50/70' : 'border-outline-variant/60 bg-white'
+                isRede ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40' : 'border-outline-variant/60 bg-surface-container-lowest'
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -240,7 +240,7 @@ export function SplitterCancellationsSection({
               </div>
               <p
                 className={`mt-1 text-lg font-bold tabular-nums ${
-                  isRede ? 'text-rose-700' : 'text-on-surface'
+                  isRede ? 'text-rose-700 dark:text-rose-200' : 'text-on-surface'
                 }`}
               >
                 {value.toLocaleString('pt-BR')}

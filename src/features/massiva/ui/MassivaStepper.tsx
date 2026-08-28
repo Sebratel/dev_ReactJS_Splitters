@@ -40,14 +40,14 @@ export function MassivaStepper({
           const isCurrent = currentStep === step.id
           const toneClass =
             step.status === 'success'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
               : step.status === 'warning'
-                ? 'border-amber-200 bg-amber-50 text-amber-950'
+                ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
                 : step.status === 'error'
-                  ? 'border-red-200 bg-red-50 text-red-900'
+                  ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200'
                   : isCurrent
-                    ? 'border-sky-300 bg-sky-50 text-sky-950 shadow-sm'
-                    : 'border-neutral-200 bg-white text-neutral-700'
+                    ? 'border-sky-300 bg-sky-50 dark:bg-sky-950/40 text-sky-950 shadow-sm'
+                    : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant'
 
           return (
             <li key={step.id} className="min-w-0 h-full">
@@ -60,7 +60,7 @@ export function MassivaStepper({
                 )}
                 aria-current={isCurrent ? 'step' : undefined}
               >
-                <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current/20 bg-white/70">
+                <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current/20 bg-surface-container-lowest/70">
                   <StepIcon status={isCurrent ? 'current' : step.status} />
                 </span>
                 <span className="min-w-0">

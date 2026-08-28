@@ -164,10 +164,10 @@ export function FabHintBalloon({
 
   const tailBorderClassName =
     placement === 'right'
-      ? 'absolute right-full top-1/2 -translate-y-1/2 border-y-[9px] border-y-transparent border-r-[10px] border-r-neutral-200'
+      ? 'absolute right-full top-1/2 -translate-y-1/2 border-y-[9px] border-y-transparent border-r-[10px] border-r-neutral-200 dark:border-white/10'
       : placement === 'top-left'
-        ? 'absolute left-7 top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200'
-        : 'absolute left-[calc(100%-1.75rem)] top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200'
+        ? 'absolute left-7 top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200 dark:border-white/10'
+        : 'absolute left-[calc(100%-1.75rem)] top-full -translate-x-1/2 border-x-[9px] border-x-transparent border-t-[10px] border-t-neutral-200 dark:border-white/10'
 
   return (
     <div
@@ -199,7 +199,7 @@ export function FabHintBalloon({
       >
         <div
           className={cn(
-            'relative rounded-2xl border border-neutral-200 bg-gradient-to-br from-white to-neutral-50',
+            'relative rounded-2xl border border-neutral-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-surface-container-lowest to-neutral-50 dark:to-white/5',
             'px-3.5 pb-2.5 pt-2 text-left shadow-[0_14px_40px_-14px_rgba(15,23,42,0.52)] ring-1 ring-black/[0.08]',
           )}
         >
@@ -208,7 +208,7 @@ export function FabHintBalloon({
               <Sparkles className="size-2.5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
               ISA
             </span>
-            <span className="text-[9px] font-semibold tracking-tight text-neutral-400">
+            <span className="text-[9px] font-semibold tracking-tight text-on-surface-variant/60">
               assistente
             </span>
           </div>
@@ -217,7 +217,7 @@ export function FabHintBalloon({
             aria-busy={gateReady && !messageVisible}
           >
             {messageVisible ? (
-              <p className="text-[11px] font-medium leading-relaxed text-neutral-800">{label}</p>
+              <p className="text-[11px] font-medium leading-relaxed text-on-surface">{label}</p>
             ) : (
               <IsaTypingDots className="py-0.5" />
             )}

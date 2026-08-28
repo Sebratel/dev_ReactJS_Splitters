@@ -103,9 +103,9 @@ function MarkerLayer({ markers }: { markers: OnuProblemMarker[] }) {
                   {style.label}
                 </p>
                 <p className="font-mono font-semibold">{m.username ?? '—'}</p>
-                <p className="text-slate-600">{m.oltHostname ?? 'OLT —'}</p>
+                <p className="text-on-surface-variant">{m.oltHostname ?? 'OLT —'}</p>
                 {m.rxPower !== null ? (
-                  <p className="text-slate-600">
+                  <p className="text-on-surface-variant">
                     RX <span className="font-semibold tabular-nums">{fmtDbm(m.rxPower)}</span>
                   </p>
                 ) : null}
@@ -151,7 +151,7 @@ function LegendToggle({
       <input type="checkbox" checked={checked} onChange={onToggle} className="h-3 w-3 accent-slate-700" />
       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
       <span>
-        {label} <span className="tabular-nums text-slate-500">({count.toLocaleString('pt-BR')})</span>
+        {label} <span className="tabular-nums text-on-surface-variant">({count.toLocaleString('pt-BR')})</span>
       </span>
     </label>
   )
@@ -202,14 +202,14 @@ export function OnuSignalHeatMap({
 
   if (heatPoints.length === 0 && problemMarkers.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/70 py-8 text-center text-sm text-emerald-800">
+      <p className="rounded-2xl border border-dashed border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/70 dark:bg-emerald-950/40 py-8 text-center text-sm text-emerald-800 dark:text-emerald-200">
         Nenhum cliente com sinal problemático e coordenadas válidas no momento. 🎉
       </p>
     )
   }
 
   return (
-    <div className="relative h-[min(480px,58vh)] w-full overflow-hidden rounded-2xl border border-slate-200/80 shadow-inner ring-1 ring-slate-200/60">
+    <div className="relative h-[min(480px,58vh)] w-full overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-inner ring-1 ring-slate-200/60 dark:ring-white/10">
       <MapContainer
         center={BR_FALLBACK_CENTER}
         zoom={5}
@@ -227,8 +227,8 @@ export function OnuSignalHeatMap({
       </MapContainer>
 
       {/* Legenda + filtros de camada */}
-      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] space-y-1.5 rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 shadow-md backdrop-blur-sm">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Camadas</p>
+      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] space-y-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-surface-container-lowest/95 px-3 py-2.5 shadow-md backdrop-blur-sm">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Camadas</p>
         <LegendToggle
           label="Offline"
           count={offlineMarkers.length}

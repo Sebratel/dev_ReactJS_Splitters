@@ -16,7 +16,7 @@ type StepSplittersProps = {
 }
 
 const searchClass =
-  'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm transition placeholder:text-neutral-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20'
+  'w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm text-on-surface shadow-sm transition placeholder:text-on-surface-variant/60 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20'
 
 export function StepSplitters({
   connections,
@@ -28,8 +28,8 @@ export function StepSplitters({
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-base font-semibold text-neutral-900">Splitters</h3>
-        <p className="mt-1 text-sm text-neutral-600">
+        <h3 className="text-base font-semibold text-on-surface">Splitters</h3>
+        <p className="mt-1 text-sm text-on-surface-variant">
           Busque e selecione splitters por rota. Sem filtro manual, a rota usa todos os splitters
           daquele AP/slot/PON.
         </p>
@@ -51,14 +51,14 @@ export function StepSplitters({
           return (
             <section
               key={`splitter-route-${index}`}
-              className="space-y-3 rounded-lg bg-white/80 px-4 py-4 shadow-[0_1px_4px_rgba(15,23,42,0.05)] ring-1 ring-neutral-200/70"
+              className="space-y-3 rounded-lg bg-surface-container-lowest/80 px-4 py-4 shadow-[0_1px_4px_rgba(15,23,42,0.05)] ring-1 ring-neutral-200/70 dark:ring-white/10"
             >
               <div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
                     Rota {index + 1}
                   </p>
-                  <p className="mt-1 text-xs text-neutral-600">
+                  <p className="mt-1 text-xs text-on-surface-variant">
                     {routeReady
                       ? `${connection.apLabel.trim() || connection.apId} / ${formatOltTopologySegment(connection.slot ?? 0, connection.porta ?? 0)}`
                       : 'Complete a rota para restringir melhor os splitters'}
@@ -67,7 +67,7 @@ export function StepSplitters({
               </div>
 
               <label className="block">
-                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                   Buscar splitter
                 </span>
                 <input
@@ -90,7 +90,7 @@ export function StepSplitters({
                       key={splitter.id}
                       type="button"
                       onClick={() => onToggleConnectionSplitter(index, splitter)}
-                      className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-950 ring-1 ring-sky-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-medium text-sky-950 ring-1 ring-sky-200"
                       title="Remover splitter"
                     >
                       <span className="font-mono">{splitter.id}</span>
@@ -101,25 +101,25 @@ export function StepSplitters({
                 </div>
               ) : (
                 <div
-                  className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-100"
+                  className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50/70 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 ring-1 ring-amber-100"
                   role="note"
                   aria-live="polite"
                 >
                   <p className="font-semibold">Nenhum splitter selecionado manualmente.</p>
-                  <p className="mt-0.5 text-amber-800">
+                  <p className="mt-0.5 text-amber-800 dark:text-amber-200">
                     Todos os splitters da rota serao considerados automaticamente.
                   </p>
                 </div>
               )}
 
               {search.trim() !== '' ? (
-                <div className="overflow-hidden rounded-lg bg-neutral-50 ring-1 ring-neutral-200/80">
+                <div className="overflow-hidden rounded-lg bg-surface-container-low ring-1 ring-neutral-200/80 dark:ring-white/10">
                   {suggestions.length === 0 ? (
-                    <p className="px-3 py-3 text-sm text-neutral-500">
+                    <p className="px-3 py-3 text-sm text-on-surface-variant">
                       Nenhum splitter encontrado para "{search}".
                     </p>
                   ) : (
-                    <ul className="divide-y divide-neutral-200/80">
+                    <ul className="divide-y divide-neutral-200/80 dark:divide-white/10">
                       {suggestions.map((splitter) => {
                         const selected = selectedIds.has(splitter.code)
                         return (
@@ -133,15 +133,15 @@ export function StepSplitters({
                                 })
                               }
                               disabled={selected}
-                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-surface-container-lowest disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              <span className="font-mono text-xs text-neutral-600">
+                              <span className="font-mono text-xs text-on-surface-variant">
                                 {splitter.code}
                               </span>
-                              <span className="min-w-0 flex-1 truncate text-neutral-900">
+                              <span className="min-w-0 flex-1 truncate text-on-surface">
                                 {splitter.label}
                               </span>
-                              <span className="text-[11px] font-semibold text-neutral-500">
+                              <span className="text-[11px] font-semibold text-on-surface-variant">
                                 {selected ? 'Selecionado' : 'Adicionar'}
                               </span>
                             </button>

@@ -59,8 +59,8 @@ function FitBoundsController({
 
 function MapLegend() {
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-neutral-600">
-      <span className="font-bold uppercase tracking-wide text-neutral-500">Legenda</span>
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-on-surface-variant">
+      <span className="font-bold uppercase tracking-wide text-on-surface-variant">Legenda</span>
       <span className="inline-flex items-center gap-1.5">
         <span
           className="h-2.5 w-2.5 rounded-full shadow-sm ring-2 ring-white"
@@ -198,16 +198,16 @@ export function MassivaClientesMapPreview({
 
   if (points.length === 0) {
     return (
-      <div className="mt-1 overflow-hidden rounded-xl border border-dashed border-neutral-200/90 bg-gradient-to-b from-neutral-50/80 to-neutral-50 px-3 py-4 text-xs text-neutral-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+      <div className="mt-1 overflow-hidden rounded-xl border border-dashed border-neutral-200/90 dark:border-white/10 bg-gradient-to-b from-neutral-50/80 dark:from-white/5 to-neutral-50 dark:to-white/5 px-3 py-4 text-xs text-on-surface-variant shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
         <div className="flex gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-xl bg-white text-neutral-400 shadow-sm ring-1 ring-neutral-200/80">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center self-start rounded-xl bg-surface-container-lowest text-on-surface-variant/60 shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10">
             <MapPin className="h-5 w-5" strokeWidth={1.75} aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="font-semibold text-neutral-800">Sem pins no mapa</p>
-            <p className="mt-1.5 leading-relaxed text-neutral-600">
+            <p className="font-semibold text-on-surface">Sem pins no mapa</p>
+            <p className="mt-1.5 leading-relaxed text-on-surface-variant">
               Ninguém na seleção atual traz coordenadas (lat/lon) do BFF. A coluna{' '}
-              <span className="font-medium text-neutral-700">Local</span> ainda exibe o endereço em
+              <span className="font-medium text-on-surface-variant">Local</span> ainda exibe o endereço em
               texto, quando houver.
             </p>
           </div>
@@ -223,7 +223,7 @@ export function MassivaClientesMapPreview({
         mapHeightClass,
         mapChrome === 'dark'
           ? 'border border-slate-700/80 ring-1 ring-slate-600/50'
-          : 'border border-neutral-200/80 shadow-[0_1px_4px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/50',
+          : 'border border-neutral-200/80 dark:border-white/10 shadow-[0_1px_4px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/50 dark:ring-white/10',
       )}
       role="img"
       aria-label="Mapa de splitters afetados com coordenadas"
@@ -244,24 +244,24 @@ export function MassivaClientesMapPreview({
         {points.map((p) => (
           <Marker key={p.key} position={[p.lat, p.lng]} icon={markerIcon(p.hasCorporate)}>
             <Popup className="!text-sm !font-sans">
-              <p className="m-0 text-[13px] font-semibold leading-tight text-neutral-900">
+              <p className="m-0 text-[13px] font-semibold leading-tight text-on-surface">
                 {p.splitterLabel}
               </p>
-              <p className="m-0 mt-1 font-mono text-[11px] text-neutral-700">
+              <p className="m-0 mt-1 font-mono text-[11px] text-on-surface-variant">
                 {p.splitterCode}
               </p>
-              <p className="m-0 mt-1 text-[12px] text-neutral-700">
+              <p className="m-0 mt-1 text-[12px] text-on-surface-variant">
                 {p.affectedClients} cliente(s) nesta referência
               </p>
               <p
                 className={clsx(
                   'm-0 mt-1 text-[11px] font-semibold',
-                  p.hasCorporate ? 'text-violet-700' : 'text-emerald-700',
+                  p.hasCorporate ? 'text-violet-700 dark:text-violet-200' : 'text-emerald-700 dark:text-emerald-200',
                 )}
               >
                 {p.hasCorporate ? 'Contém corporativo' : 'Sem corporativo'}
               </p>
-              <p className="m-0 mt-1.5 border-t border-neutral-200/80 pt-1.5 text-[12px] leading-snug text-neutral-700">
+              <p className="m-0 mt-1.5 border-t border-neutral-200/80 dark:border-white/10 pt-1.5 text-[12px] leading-snug text-on-surface-variant">
                 {p.endereco}
               </p>
             </Popup>
@@ -275,13 +275,13 @@ export function MassivaClientesMapPreview({
     <div className="mt-1 space-y-2">
       {!minimalChrome ? (
         <>
-          <p className="text-xs text-neutral-500">
-            <span className="font-semibold text-neutral-700">
+          <p className="text-xs text-on-surface-variant">
+            <span className="font-semibold text-on-surface-variant">
               {points.length} de {totalSplitters}
             </span>{' '}
             splitters com coordenadas no mapa
             {points.some((p) => p.hasCorporate) ? (
-              <span className="text-neutral-500"> · há splitters com corporativo</span>
+              <span className="text-on-surface-variant"> · há splitters com corporativo</span>
             ) : null}
           </p>
           <MapLegend />

@@ -571,14 +571,14 @@ export function SplittersPage() {
         description="Gerenciamento de infraestrutura secundária com carregamento inteligente e grade de visualização rápida."
         trailing={
           showSummary ? (
-            <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-neutral-200/90 bg-white/90 px-4 py-3 shadow-sm sm:w-auto sm:max-w-[min(100%,20rem)]">
+            <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest/90 px-4 py-3 shadow-sm sm:w-auto sm:max-w-[min(100%,20rem)]">
               <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15">
                 <span className="absolute h-2 w-2 rounded-full bg-amber-600" />
                 <span className="h-2 w-2 rounded-full bg-amber-500/40 animate-ping" aria-hidden />
               </div>
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-on-surface-variant">
                 Total de{' '}
-                <span className="font-semibold tabular-nums text-neutral-900">{totalCount}</span> equipamentos
+                <span className="font-semibold tabular-nums text-on-surface">{totalCount}</span> equipamentos
               </p>
             </div>
           ) : null
@@ -587,7 +587,7 @@ export function SplittersPage() {
 
       <div className="h-px w-full bg-gradient-to-r from-transparent via-outline-variant/50 to-transparent" />
 
-      <section className="rounded-2xl border border-outline-variant/40 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative min-w-0 flex-1 sm:min-w-[14rem]">
             <Search
@@ -708,7 +708,7 @@ export function SplittersPage() {
                   type="button"
                   onClick={chip.onRemove}
                   aria-label={`Remover filtro ${chip.label}`}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-white hover:text-on-surface"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition hover:bg-surface-container-lowest hover:text-on-surface"
                 >
                   <X size={14} />
                 </button>

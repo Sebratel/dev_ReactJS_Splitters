@@ -90,8 +90,8 @@ function Metric({
 }
 
 const TEMP_VALUE_CLASS: Record<ReturnType<typeof deriveTempLevel>, string> = {
-  hot: 'text-orange-600',
-  warm: 'text-amber-600',
+  hot: 'text-orange-600 dark:text-orange-300',
+  warm: 'text-amber-600 dark:text-amber-300',
   ok: 'text-on-surface',
   unknown: 'text-on-surface',
 }
@@ -138,7 +138,7 @@ export function ClienteDetailOnuSection({
 
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-onu-heading"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -181,8 +181,8 @@ export function ClienteDetailOnuSection({
               className={cn(
                 'mt-4 flex items-start gap-2.5 rounded-xl border p-3',
                 attenuation.level === 'critical'
-                  ? 'border-rose-300 bg-rose-50 text-rose-800'
-                  : 'border-amber-300 bg-amber-50 text-amber-800',
+                  ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
+                  : 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
               )}
               role="alert"
             >
@@ -207,8 +207,8 @@ export function ClienteDetailOnuSection({
               className={cn(
                 'mt-4 flex items-start gap-2.5 rounded-xl border p-3',
                 tempLevel === 'hot'
-                  ? 'border-orange-300 bg-orange-50 text-orange-800'
-                  : 'border-amber-300 bg-amber-50 text-amber-800',
+                  ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200'
+                  : 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
               )}
               role="alert"
             >
@@ -231,7 +231,7 @@ export function ClienteDetailOnuSection({
           {/* Motivo do offline: power_fail ou loss_signal reportado pela OLT. */}
           {offlineReason === 'power_fail' ? (
             <div
-              className="mt-4 flex items-start gap-2.5 rounded-xl border border-orange-300 bg-orange-50 p-3 text-orange-800"
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-950/40 p-3 text-orange-800 dark:text-orange-200"
               role="alert"
             >
               <Zap size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
@@ -244,7 +244,7 @@ export function ClienteDetailOnuSection({
             </div>
           ) : offlineReason === 'loss_signal' ? (
             <div
-              className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-300 bg-rose-50 p-3 text-rose-800"
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 p-3 text-rose-800 dark:text-rose-200"
               role="alert"
             >
               <WifiOff size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
@@ -272,12 +272,12 @@ export function ClienteDetailOnuSection({
               />
             </div>
             {noSignal ? (
-              <p className="mt-1 text-[11px] font-medium text-rose-600">
+              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-300">
                 Sem sinal óptico (0.0 dBm / LOS) — ONU sem luz: possível queda, falta de energia
                 ou problema na fibra. O estado pode levar minutos para consolidar no monitoramento.
               </p>
             ) : diagnostic.rxPower !== null && diagnostic.rxPower <= RX_POWER_CRITICAL_DBM ? (
-              <p className="mt-1 text-[11px] font-medium text-rose-600">
+              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-300">
                 Sinal abaixo do limite recomendado — verificar atenuação na fibra/porta.
               </p>
             ) : null}
@@ -321,9 +321,9 @@ export function ClienteDetailOnuSection({
             className={cn(
               'mt-4 grid gap-3 rounded-xl border px-3 py-2.5 sm:grid-cols-3',
               attenuation.level === 'critical'
-                ? 'border-rose-200 bg-rose-50/50'
+                ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50/50 dark:bg-rose-950/40'
                 : attenuation.level === 'warning'
-                  ? 'border-amber-200 bg-amber-50/50'
+                  ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/40'
                   : 'border-outline-variant/60 bg-surface-container-low/30',
             )}
           >
@@ -339,7 +339,7 @@ export function ClienteDetailOnuSection({
                     : 'Sem projeção na GeoGrid'}
               </p>
               {projectedData?.ambiguous ? (
-                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-700">
+                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-200">
                   <AlertTriangle size={11} strokeWidth={2} className="shrink-0" />
                   Múltiplos registros — confirmar manualmente
                 </p>
@@ -381,7 +381,7 @@ export function ClienteDetailOnuSection({
               </span>
             ) : null}
             {status === 'offline' && offlineSince ? (
-              <span className="text-rose-600">Offline desde {offlineSince}</span>
+              <span className="text-rose-600 dark:text-rose-300">Offline desde {offlineSince}</span>
             ) : null}
             <span>Métricas lidas em {fmtDateTime(diagnostic.statusUpdatedAt)}</span>
           </div>

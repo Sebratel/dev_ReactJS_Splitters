@@ -88,7 +88,7 @@ export function SplittersList({
         {[...Array(8)].map((_, i) => (
           <div
             key={i}
-            className="min-h-[16rem] w-full animate-pulse rounded-2xl border border-outline-variant bg-white p-5 shadow-sm"
+            className="min-h-[16rem] w-full animate-pulse rounded-2xl border border-outline-variant bg-surface-container-lowest p-5 shadow-sm"
           >
             <div className="flex justify-between gap-3">
               <div className="h-11 w-11 rounded-xl bg-surface-container-low" />
@@ -175,7 +175,7 @@ export function SplittersList({
             onClick={() => onPageChange(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1 || isRefetching}
             aria-label={'P\u00E1gina anterior'}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-on-surface shadow-sm border border-outline-variant transition-all hover:bg-primary hover:text-white disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-lowest text-neutral-900 shadow-sm border border-outline-variant transition-all hover:bg-primary hover:text-white disabled:opacity-30 disabled:pointer-events-none active:scale-95"
           >
             <ChevronLeft size={18} />
           </button>
@@ -204,7 +204,7 @@ export function SplittersList({
                     'h-10 min-w-[2.5rem] px-2 rounded-xl text-xs font-black transition-all active:scale-95 disabled:pointer-events-none',
                     isActive
                       ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-[1.08]'
-                      : 'bg-white text-on-surface border border-outline-variant hover:border-primary hover:text-primary',
+                      : 'bg-surface-container-lowest text-on-surface border border-outline-variant hover:border-primary hover:text-primary',
                   )}
                 >
                   {item}
@@ -217,7 +217,7 @@ export function SplittersList({
             onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages || isRefetching}
             aria-label={'Pr\u00F3xima p\u00E1gina'}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-on-surface shadow-sm border border-outline-variant transition-all hover:bg-primary hover:text-white disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-lowest text-neutral-900 shadow-sm border border-outline-variant transition-all hover:bg-primary hover:text-white disabled:opacity-30 disabled:pointer-events-none active:scale-95"
           >
             <ChevronRight size={18} />
           </button>

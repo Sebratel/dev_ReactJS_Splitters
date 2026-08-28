@@ -11,10 +11,10 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div
-      className="rounded-lg border border-red-200 bg-red-50 px-6 py-6 text-left dark:border-red-900 dark:bg-red-950/40"
+      className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-6 py-6 text-left dark:border-red-900 dark:bg-red-950/40"
       role="alert"
     >
-      <p className="font-medium text-red-900 dark:text-red-100">{title}</p>
+      <p className="font-medium text-red-900 dark:text-red-200 dark:text-red-100">{title}</p>
       <p className="mt-2 text-sm text-red-800 dark:text-red-200">{message}</p>
       {onRetry ? (
         <button
