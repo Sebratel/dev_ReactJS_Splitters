@@ -59,18 +59,18 @@ export function RootLayout() {
       ) : null}
 
       {!isDesktopLayout ? (
-        <header className="fixed left-0 right-0 top-0 z-40 flex min-h-14 items-center gap-2 border-b border-neutral-200/90 bg-white/95 px-3 py-2 backdrop-blur-md supports-[padding:max(0px)]:pt-[max(0.5rem,env(safe-area-inset-top))] xl:hidden">
+        <header className="fixed left-0 right-0 top-0 z-40 flex min-h-14 items-center gap-2 border-b border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest/95 px-3 py-2 backdrop-blur-md supports-[padding:max(0px)]:pt-[max(0.5rem,env(safe-area-inset-top))] xl:hidden">
           <button
             type="button"
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 bg-white text-neutral-800 shadow-sm transition hover:bg-neutral-50 active:scale-[0.98]"
+            className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest text-on-surface shadow-sm transition hover:bg-surface-container-low active:scale-[0.98]"
             onClick={() => setMobileNavOpen(true)}
             aria-label="Abrir menu de navegação"
           >
             <Menu className="size-5" strokeWidth={2} aria-hidden />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black tracking-tight text-neutral-900">Monitoramento</p>
-            <p className="truncate text-[9px] font-bold uppercase tracking-widest text-neutral-400">
+            <p className="truncate text-sm font-black tracking-tight text-on-surface">Monitoramento</p>
+            <p className="truncate text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">
               de Splitters
             </p>
           </div>

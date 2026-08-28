@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import operacaoSebratelMark from '@/assets/operacao-sebratel-mark.svg'
 import { cn } from '@/shared/lib/utils'
+import { ThemeToggle } from '@/shared/ui/ThemeToggle'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { isFirebaseAuthConfigured } from '@/shared/config/env'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
@@ -77,8 +78,8 @@ export function Sidebar({
     <aside
       id="splitters-app-sidebar"
       className={cn(
-        'fixed z-50 flex flex-col overflow-hidden bg-white transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
-        'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
+        'fixed z-50 flex flex-col overflow-hidden bg-surface-container-lowest transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
+        'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 dark:max-xl:border-white/10 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
         mobileDrawerOpen ? 'max-xl:translate-x-0' : 'max-xl:-translate-x-full',
         'xl:left-6 xl:top-6 xl:bottom-6 xl:rounded-4xl xl:shadow-xl xl:shadow-surface-container-low',
         navCollapsed
@@ -91,7 +92,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onMobileDrawerClose}
-            className="flex size-11 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-700 shadow-sm transition hover:bg-neutral-50"
+            className="flex size-11 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:bg-surface-container-low"
             aria-label="Fechar menu"
           >
             <X className="size-5" strokeWidth={2} aria-hidden />
@@ -190,6 +191,10 @@ export function Sidebar({
                 </li>
               ))}
             </ul>
+
+            <div className={cn('mt-4', navCollapsed ? '' : 'px-2')}>
+              <ThemeToggle collapsed={navCollapsed} />
+            </div>
 
             {!navCollapsed && isFirebaseAuthConfigured() ? (
               <div className="mt-4 px-2">

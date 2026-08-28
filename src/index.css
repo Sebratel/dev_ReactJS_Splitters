@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Dark mode via classe `.dark` no <html> (ativada em src/shared/lib/theme.ts).
+   Os utilitários (bg-surface, text-on-surface…) já referenciam as CSS vars do
+   @theme, então basta redefini-las sob `.dark` (bloco no fim deste arquivo). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Ken Burns — zoom/pan lento na imagem de fundo do login (spec Sebratel). */
 @keyframes ken-burns {
   0% {
@@ -177,6 +182,25 @@
   --animate-login-mesh-pulse: login-mesh-pulse 10s ease-in-out infinite;
   --animate-login-hero-crawl: login-hero-crawl 14s ease-in-out infinite;
   --animate-login-hero-shimmer: login-hero-shimmer 22s ease-in-out infinite;
+}
+
+/* Tema escuro — redefine só os tokens do @theme. Âmbar continua a marca;
+   superfícies preto-quente (viés amarronzado), texto off-white quente.
+   Fonte: design system Sebratel (skill padroes-frontend → "Tema escuro"). */
+.dark {
+  --color-primary: #ffb000;
+  --color-primary-container: #ffc107;
+  --color-secondary: #ff9e2c;
+  --color-tertiary: #d4694f;
+
+  --color-surface: #15130f;
+  --color-surface-container-low: #1e1b16;
+  --color-surface-container-lowest: #26221b;
+
+  --color-on-surface: #f3eee4;
+  --color-on-surface-variant: #ada597;
+  --color-outline-variant: rgba(255, 255, 255, 0.08);
+  --color-inverse-surface: #f3eee4;
 }
 
 @layer base {
