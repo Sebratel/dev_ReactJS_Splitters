@@ -85,12 +85,12 @@ export function DashboardConnectionMonitor() {
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest via-stone-50/40 dark:via-white/5 to-amber-50/20 dark:to-amber-950/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 dark:via-amber-900/30 to-transparent" />
 
       <div className="relative p-4 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 to-stone-100/80 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-200/40">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 dark:from-amber-950/25 to-stone-100/80 dark:to-white/5 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-200/40">
               <Activity className="h-[1.05rem] w-[1.05rem]" strokeWidth={2} aria-hidden />
             </span>
             <div>

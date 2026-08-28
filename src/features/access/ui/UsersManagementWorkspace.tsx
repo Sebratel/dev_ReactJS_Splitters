@@ -813,7 +813,7 @@ export function UsersManagementWorkspace({
     <div className="space-y-4 pb-20">
       {toast ? (
         <div
-          className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-sm text-amber-950 shadow-sm"
+          className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-sm text-amber-950 dark:text-amber-100 shadow-sm"
           role="status"
         >
           {toast}

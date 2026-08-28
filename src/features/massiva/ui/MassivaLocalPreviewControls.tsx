@@ -212,7 +212,7 @@ export function MassivaLocalPreviewControls({
                       <button
                         key={splitter.id}
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-medium text-amber-950"
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-medium text-amber-950 dark:text-amber-100"
                         onClick={() => onToggleConnectionSplitter(index, splitter)}
                         title="Remover splitter"
                       >

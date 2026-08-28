@@ -38,11 +38,11 @@ function StatusBanner(props: {
     neutral:
       'border-neutral-200 dark:border-white/10 bg-surface-container-low/90 text-on-surface dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-100',
     amber:
-      'border-amber-200 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
-    red: 'border-red-200 dark:border-red-800/50 bg-red-50/90 dark:bg-red-950/40 text-red-950 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-100',
+      'border-amber-200 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
+    red: 'border-red-200 dark:border-red-800/50 bg-red-50/90 dark:bg-red-950/40 text-red-950 dark:text-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-100',
     green:
-      'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100',
-    blue: 'border-sky-200 dark:border-sky-800/50 bg-sky-50/90 dark:bg-sky-950/40 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100',
+      'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100',
+    blue: 'border-sky-200 dark:border-sky-800/50 bg-sky-50/90 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100',
   }[props.variant]
 
   return (

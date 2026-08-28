@@ -112,7 +112,7 @@ export function PlatformSuggestionsPage() {
           primaryAction={{ to: '/', label: 'Voltar ao painel' }}
           trailing={
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-amber-950 shadow-sm">
+              <span className="inline-flex items-center rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-amber-950 dark:text-amber-100 shadow-sm">
                 {suggestions.length} ideias
               </span>
               <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-on-surface-variant shadow-sm">

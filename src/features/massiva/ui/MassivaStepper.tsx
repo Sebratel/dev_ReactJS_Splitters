@@ -42,11 +42,11 @@ export function MassivaStepper({
             step.status === 'success'
               ? 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200'
               : step.status === 'warning'
-                ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
+                ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
                 : step.status === 'error'
                   ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200'
                   : isCurrent
-                    ? 'border-sky-300 bg-sky-50 dark:bg-sky-950/40 text-sky-950 shadow-sm'
+                    ? 'border-sky-300 bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 shadow-sm'
                     : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant'
 
           return (

@@ -314,7 +314,7 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
     return (
       <div>
         <SaturationMapLegend />
-        <p className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 px-4 py-6 text-center text-sm text-amber-950">
+        <p className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 px-4 py-6 text-center text-sm text-amber-950 dark:text-amber-100">
           Há {cells.length} splitter(es) no período, mas nenhum tem coordenadas válidas (caixa de rede ou cadastro
           do splitter) na consulta base.
         </p>

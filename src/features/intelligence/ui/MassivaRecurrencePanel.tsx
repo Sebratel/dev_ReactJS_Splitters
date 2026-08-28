@@ -135,7 +135,7 @@ export function MassivaRecurrencePanel({
                       </Link>
                       <span className="font-mono text-[10px] text-on-surface-variant">{row.splitterCode}</span>
                     </td>
-                    <td className="px-2 py-2 tabular-nums font-bold text-amber-950">
+                    <td className="px-2 py-2 tabular-nums font-bold text-amber-950 dark:text-amber-100">
                       {row.distinctMassivas}
                     </td>
                     <td className="px-2 py-2 tabular-nums">{row.openMassivas}</td>
@@ -247,7 +247,7 @@ export function MassivaRecurrencePanel({
           </div>
         </div>
       ) : insights.splittersWithMassiva > 0 ? (
-        <p className="mt-4 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] leading-relaxed text-amber-950">
+        <p className="mt-4 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] leading-relaxed text-amber-950 dark:text-amber-100">
           Vários equipamentos empatam no mesmo número de massivas — use a tabela acima em vez do gráfico
           de barras. Isso costuma indicar as mesmas ocorrências compartilhadas entre splitters vizinhos.
         </p>
@@ -274,7 +274,7 @@ function KpiCard({
         ? 'border-violet-200/80 dark:border-violet-800/50 bg-violet-50/60 dark:bg-violet-950/40'
         : 'border-slate-200/80 dark:border-white/10 bg-surface-container-low/80'
   const valueClass =
-    tone === 'amber' ? 'text-amber-950' : tone === 'violet' ? 'text-violet-950' : 'text-on-surface'
+    tone === 'amber' ? 'text-amber-950 dark:text-amber-100' : tone === 'violet' ? 'text-violet-950 dark:text-violet-100' : 'text-on-surface'
 
   return (
     <div className={cn('rounded-xl border px-3 py-2.5', toneClass)}>

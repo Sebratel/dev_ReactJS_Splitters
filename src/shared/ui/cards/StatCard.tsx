@@ -53,7 +53,7 @@ export function StatCard({
           className={cn(
             'flex shrink-0 items-center justify-center rounded-xl text-on-surface-variant dark:text-on-surface/85 ring-1 ring-inset transition-colors group-hover:text-on-surface',
             surface === 'elevated'
-              ? 'bg-gradient-to-br from-amber-50/90 dark:from-amber-950/20 to-stone-50/80 dark:to-white/5 ring-amber-200/40 group-hover:from-amber-100/80 group-hover:to-stone-50 dark:group-hover:to-white/5'
+              ? 'bg-gradient-to-br from-amber-50/90 dark:from-amber-950/20 to-stone-50/80 dark:to-white/5 ring-amber-200/40 group-hover:from-amber-100/80 dark:group-hover:from-amber-950/25 group-hover:to-stone-50 dark:group-hover:to-white/5'
               : 'bg-neutral-100 dark:bg-white/5 ring-neutral-200/80 dark:ring-white/10 group-hover:bg-surface-container-low',
             compact ? 'h-9 w-9' : 'h-11 w-11',
           )}

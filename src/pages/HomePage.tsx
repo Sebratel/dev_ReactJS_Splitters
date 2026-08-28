@@ -40,7 +40,7 @@ function formatExpectedCloseTimestamp(ticket: MassivaTicket): string {
 function statusBadgeClasses(status: MassivaStatus): string {
   switch (status) {
     case 'aberta':
-      return 'border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
+      return 'border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
     case 'encerrada':
       return 'border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 text-on-surface-variant'
     default:
@@ -392,7 +392,7 @@ export function HomePage() {
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
                         <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">≤70%</p>
-                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-emerald-950">
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-emerald-950 dark:text-emerald-100">
                           {isLoadingStats ? '—' : g.toLocaleString('pt-BR')}
                         </p>
                       </motion.div>
@@ -402,7 +402,7 @@ export function HomePage() {
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
                         <p className="text-[9px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200">71–99%</p>
-                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-amber-950">
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-amber-950 dark:text-amber-100">
                           {isLoadingStats ? '—' : y.toLocaleString('pt-BR')}
                         </p>
                       </motion.div>
@@ -412,7 +412,7 @@ export function HomePage() {
                         transition={{ type: 'spring', stiffness: 400, damping: 24 }}
                       >
                         <p className="text-[9px] font-bold uppercase tracking-wide text-rose-900 dark:text-rose-200">100%+</p>
-                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-rose-950">
+                        <p className="mt-1 text-base font-bold tabular-nums leading-none text-rose-950 dark:text-rose-100">
                           {isLoadingStats ? '—' : r.toLocaleString('pt-BR')}
                         </p>
                       </motion.div>

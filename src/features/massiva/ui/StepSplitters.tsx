@@ -90,7 +90,7 @@ export function StepSplitters({
                       key={splitter.id}
                       type="button"
                       onClick={() => onToggleConnectionSplitter(index, splitter)}
-                      className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-medium text-sky-950 ring-1 ring-sky-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-medium text-sky-950 dark:text-sky-100 ring-1 ring-sky-200"
                       title="Remover splitter"
                     >
                       <span className="font-mono">{splitter.id}</span>

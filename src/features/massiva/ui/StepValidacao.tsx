@@ -61,7 +61,7 @@ function ValidationTone({
       icon: <CheckCircle2 size={18} aria-hidden />,
       title: t.validacaoPronta,
       text: 'Clientes e topologia consistentes para seguir para a abertura.',
-      className: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950',
+      className: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100',
     }
   }
   if (view.status === 'empty-selection' || openingPreparation.status === 'invalid') {
@@ -72,14 +72,14 @@ function ValidationTone({
         openingPreparation.status === 'invalid'
           ? openingPreparation.issues.join(' ')
           : t.rotaValidaSemClientes,
-      className: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950',
+      className: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100',
     }
   }
   return {
     icon: <ShieldAlert size={18} aria-hidden />,
     title: t.validacaoPendente,
     text: 'Complete rota e splitters para revisar os dados de impacto.',
-    className: 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950',
+    className: 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950 dark:text-red-100',
   }
 }
 
@@ -109,7 +109,7 @@ function ClienteNameCell({
         )}
       >
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200/90 text-[11px] font-bold uppercase text-on-surface-variant shadow-sm ring-2 ring-white"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 dark:from-white/5 to-slate-200/90 dark:to-white/10 text-[11px] font-bold uppercase text-on-surface-variant shadow-sm ring-2 ring-white"
           aria-hidden
         >
           {initialsFromName(name === '?' ? '' : name)}
@@ -434,7 +434,7 @@ export function StepValidacao({
               <p
                 className={clsx(
                   'text-3xl font-bold tabular-nums tracking-tight',
-                  corporateCritical ? 'text-red-600 dark:text-red-300' : 'text-amber-950',
+                  corporateCritical ? 'text-red-600 dark:text-red-300' : 'text-amber-950 dark:text-amber-100',
                 )}
               >
                 {totalCorp}

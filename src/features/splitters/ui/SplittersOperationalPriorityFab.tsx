@@ -125,7 +125,7 @@ function AssistantConversationHistoryPreview(props: {
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {turn.assistantSummary?.decisao_operacional ? (
-                <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 text-[10px] font-semibold text-sky-950">
+                <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 text-[10px] font-semibold text-sky-950 dark:text-sky-100">
                   {turn.assistantSummary.decisao_operacional.replaceAll('_', ' ')}
                 </span>
               ) : null}
@@ -161,13 +161,13 @@ function downloadCsv(filename: string, content: string): void {
 function isaGravidadeBadgeClass(gravidade: string): string {
   switch (gravidade) {
     case 'critica':
-      return 'border-rose-400/90 bg-rose-50 dark:bg-rose-950/40 text-rose-950'
+      return 'border-rose-400/90 bg-rose-50 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100'
     case 'alta':
-      return 'border-orange-300 bg-orange-50 dark:bg-orange-950/40 text-orange-950'
+      return 'border-orange-300 bg-orange-50 dark:bg-orange-950/40 text-orange-950 dark:text-orange-100'
     case 'media':
-      return 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
+      return 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
     case 'baixa':
-      return 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950'
+      return 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100'
     default:
       return 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant'
   }
@@ -176,11 +176,11 @@ function isaGravidadeBadgeClass(gravidade: string): string {
 function isaCapilaridadeBadgeClass(capilaridade: string): string {
   switch (capilaridade) {
     case 'alta':
-      return 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950'
+      return 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100'
     case 'media':
-      return 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
+      return 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
     case 'baixa':
-      return 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-950'
+      return 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100'
     default:
       return 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant'
   }
@@ -279,7 +279,7 @@ function AssistantNeighborCards(props: { rows: IsaCtoVizinhaAnalisada[] }) {
         <p className="text-[10px] font-bold uppercase tracking-wider text-violet-950/90">
           CTOs vizinhas analisadas
         </p>
-        <span className="rounded-full border border-violet-200 dark:border-violet-800/50 bg-surface-container-lowest/80 px-2 py-0.5 text-[10px] font-medium text-violet-950">
+        <span className="rounded-full border border-violet-200 dark:border-violet-800/50 bg-surface-container-lowest/80 px-2 py-0.5 text-[10px] font-medium text-violet-950 dark:text-violet-100">
           {props.rows.length} candidata(s)
         </span>
       </div>
@@ -305,13 +305,13 @@ function AssistantNeighborCards(props: { rows: IsaCtoVizinhaAnalisada[] }) {
             </div>
 
             <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-              <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 font-medium text-sky-950">
+              <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 font-medium text-sky-950 dark:text-sky-100">
                 {row.distancia_operacional || 'Distância N/A'}
               </span>
               <span className="rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-low px-2 py-0.5 font-medium text-on-surface">
                 Ocupação {row.ocupacao || 'N/A'}
               </span>
-              <span className="rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 font-medium text-emerald-950">
+              <span className="rounded-full border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 font-medium text-emerald-950 dark:text-emerald-100">
                 {row.capacidade_livre || 'Livre N/A'}
               </span>
             </div>
@@ -352,7 +352,7 @@ function AssistantThinkingState(props: { splitterCode: string; question: string 
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
           />
           <motion.span
-            className="absolute inset-1 rounded-xl bg-gradient-to-br from-sky-200/70 to-indigo-200/70"
+            className="absolute inset-1 rounded-xl bg-gradient-to-br from-sky-200/70 dark:from-sky-900/30 to-indigo-200/70 dark:to-indigo-900/30"
             animate={{ rotate: [0, 180, 360] }}
             transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
           />
@@ -366,7 +366,7 @@ function AssistantThinkingState(props: { splitterCode: string; question: string 
           </motion.span>
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-sky-950">ISA pensando na melhor leitura</p>
+          <p className="font-semibold text-sky-950 dark:text-sky-100">ISA pensando na melhor leitura</p>
           <p className="mt-1 text-[11px] leading-relaxed text-sky-950/90">
             Cruzando contexto operacional, regra de ruas e histórico recente para responder com mais
             precisão.
@@ -881,14 +881,14 @@ export function SplittersOperationalPriorityFab({
             <div className="flex min-w-0 items-center justify-between gap-2 border-b border-rose-100/90 bg-surface-container-lowest/80 px-3.5 py-2.5">
               <h2
                 id="splitters-priority-fab-title"
-                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-rose-950"
+                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-rose-950 dark:text-rose-100"
               >
                 {"Fila de prioriza\u00E7\u00E3o operacional"}
               </h2>
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-rose-600/80 transition hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:text-rose-950"
+                className="flex size-7 items-center justify-center rounded-lg text-rose-600/80 transition hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:text-rose-950 dark:text-rose-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -911,7 +911,7 @@ export function SplittersOperationalPriorityFab({
 
               {operationalQuery.isError ? (
                 <div
-                  className="rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] text-amber-950"
+                  className="rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] text-amber-950 dark:text-amber-100"
                   role="alert"
                 >
                   <p className="font-semibold">Indisponível</p>
@@ -1032,14 +1032,14 @@ export function SplittersOperationalPriorityFab({
             <div className="flex min-w-0 items-center justify-between gap-2 border-b border-amber-100/90 bg-surface-container-lowest/80 px-3.5 py-2.5">
               <h2
                 id="splitters-relief-fab-title"
-                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-amber-950"
+                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-amber-950 dark:text-amber-100"
               >
                 Fila de planejamento de rede
               </h2>
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-amber-700/85 transition hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:text-amber-950"
+                className="flex size-7 items-center justify-center rounded-lg text-amber-700/85 transition hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:text-amber-950 dark:text-amber-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -1083,7 +1083,7 @@ export function SplittersOperationalPriorityFab({
               ) : null}
 
               {reliefQueueQuery.isSuccess && reliefSnapshotMissing && !reliefSnapshotBuilding ? (
-                <p className="rounded-xl border border-sky-200/90 dark:border-sky-800/50 bg-sky-50/95 dark:bg-sky-950/40 px-3 py-2.5 text-[11px] leading-relaxed text-sky-950">
+                <p className="rounded-xl border border-sky-200/90 dark:border-sky-800/50 bg-sky-50/95 dark:bg-sky-950/40 px-3 py-2.5 text-[11px] leading-relaxed text-sky-950 dark:text-sky-100">
                   {reliefMeta?.message ??
                     'Ainda não há snapshot na tabela (200 m). O servidor grava em background ao subir ou no cron; a primeira gravação leva alguns minutos (só OSRM, sem Nominatim).'}
                 </p>
@@ -1091,7 +1091,7 @@ export function SplittersOperationalPriorityFab({
 
               {reliefQueueQuery.isError ? (
                 <div
-                  className="rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] text-amber-950"
+                  className="rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-3 py-2.5 text-[11px] text-amber-950 dark:text-amber-100"
                   role="alert"
                 >
                   <p className="font-semibold">Indisponível</p>
@@ -1180,7 +1180,7 @@ export function SplittersOperationalPriorityFab({
                         void handleExportReliefCsv()
                       }}
                       disabled={reliefCsvExporting}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-surface-container-lowest px-3 py-2 text-[11px] font-semibold text-amber-950 shadow-sm transition hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-surface-container-lowest px-3 py-2 text-[11px] font-semibold text-amber-950 dark:text-amber-100 shadow-sm transition hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {reliefCsvExporting ? (
                         <>
@@ -1202,7 +1202,7 @@ export function SplittersOperationalPriorityFab({
                         void reliefQueueQuery.fetchNextPage()
                       }}
                       disabled={reliefQueueQuery.isFetchingNextPage}
-                      className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-surface-container-lowest px-3 py-2 text-[11px] font-semibold text-amber-950 shadow-sm transition hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-surface-container-lowest px-3 py-2 text-[11px] font-semibold text-amber-950 dark:text-amber-100 shadow-sm transition hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {reliefQueueQuery.isFetchingNextPage ? (
                         <>
@@ -1237,14 +1237,14 @@ export function SplittersOperationalPriorityFab({
             <div className="flex min-w-0 items-center justify-between gap-2 border-b border-sky-100/90 bg-surface-container-lowest/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
               <h2
                 id="splitters-assistant-fab-title"
-                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-sky-950"
+                className="min-w-0 flex-1 text-xs font-semibold tracking-tight text-sky-950 dark:text-sky-100"
               >
                 Assistente ISA · Planejamento de rede
               </h2>
               <button
                 type="button"
                 onClick={() => setActivePanel(null)}
-                className="flex size-7 items-center justify-center rounded-lg text-sky-700/85 transition hover:bg-sky-100 dark:hover:bg-sky-950/50 hover:text-sky-950"
+                className="flex size-7 items-center justify-center rounded-lg text-sky-700/85 transition hover:bg-sky-100 dark:hover:bg-sky-950/50 hover:text-sky-950 dark:text-sky-100"
                 aria-label="Fechar"
               >
                 <X className="size-4" strokeWidth={2} aria-hidden />
@@ -1290,7 +1290,7 @@ export function SplittersOperationalPriorityFab({
                             A ISA reaproveita as perguntas anteriores desta conversa.
                           </p>
                         </div>
-                        <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-surface-container-lowest/85 px-2.5 py-1 text-[10px] font-semibold text-sky-950">
+                        <span className="rounded-full border border-sky-200 dark:border-sky-800/50 bg-surface-container-lowest/85 px-2.5 py-1 text-[10px] font-semibold text-sky-950 dark:text-sky-100">
                           {assistantPromptCount}/{ISA_CONVERSATION_PROMPT_LIMIT} prompts
                         </span>
                       </div>
@@ -1299,7 +1299,7 @@ export function SplittersOperationalPriorityFab({
                           <button
                             type="button"
                             onClick={handleAssistantResetConversation}
-                            className="text-[10px] font-semibold text-sky-900 dark:text-sky-200 transition hover:text-sky-950"
+                            className="text-[10px] font-semibold text-sky-900 dark:text-sky-200 transition hover:text-sky-950 dark:text-sky-100"
                           >
                             Reiniciar conversa
                           </button>
@@ -1338,7 +1338,7 @@ export function SplittersOperationalPriorityFab({
                         void handleAssistantSubmit()
                       }}
                       disabled={assistantLoading}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-[11px] font-semibold text-sky-950 shadow-sm transition hover:bg-sky-100 dark:hover:bg-sky-950/50 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-[11px] font-semibold text-sky-950 dark:text-sky-100 shadow-sm transition hover:bg-sky-100 dark:hover:bg-sky-950/50 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {assistantLoading ? (
                         <>
@@ -1380,7 +1380,7 @@ export function SplittersOperationalPriorityFab({
                 {assistantHasActivity ? (
                   <div className="min-w-0 space-y-3">
                   {assistantSessionNotice ? (
-                    <div className="rounded-xl border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-[11px] leading-relaxed text-sky-950">
+                    <div className="rounded-xl border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-[11px] leading-relaxed text-sky-950 dark:text-sky-100">
                       {assistantSessionNotice}
                     </div>
                   ) : null}
@@ -1390,10 +1390,10 @@ export function SplittersOperationalPriorityFab({
                       className={cn(
                         'rounded-xl border px-3 py-2 text-[11px] leading-relaxed',
                         assistantLimitWarning.tone === 'info'
-                          ? 'border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-950'
+                          ? 'border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100'
                           : assistantLimitWarning.tone === 'warning'
-                            ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
-                            : 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-950',
+                            ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
+                            : 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100',
                       )}
                     >
                       {assistantLimitWarning.message}
@@ -1401,7 +1401,7 @@ export function SplittersOperationalPriorityFab({
                   ) : null}
 
                   {assistantError ? (
-                    <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-[11px] leading-relaxed text-rose-950">
+                    <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-[11px] leading-relaxed text-rose-950 dark:text-rose-100">
                       {assistantError}
                     </div>
                   ) : null}
@@ -1420,7 +1420,7 @@ export function SplittersOperationalPriorityFab({
                         <AssistantMetaPill
                           label="Modelo"
                           value={assistantReply.model}
-                          className="border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-950 normal-case tracking-normal"
+                          className="border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 normal-case tracking-normal"
                         />
                         <AssistantMetaPill
                           label="Contexto"
@@ -1438,7 +1438,7 @@ export function SplittersOperationalPriorityFab({
                         <AssistantMetaPill
                           label="Geo"
                           value={assistantDisplayStructured.classificacao_geografica.replaceAll('_', ' ')}
-                          className="border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 text-violet-950"
+                          className="border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 text-violet-950 dark:text-violet-100"
                         />
                         <AssistantMetaPill
                           label="Capilaridade"
@@ -1453,7 +1453,7 @@ export function SplittersOperationalPriorityFab({
                         <AssistantMetaPill
                           label="Score"
                           value={assistantDisplayStructured.score_operacional}
-                          className="border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950"
+                          className="border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100"
                         />
                       </div>
 
@@ -1473,7 +1473,7 @@ export function SplittersOperationalPriorityFab({
                             Decisão operacional
                           </p>
                           {assistantDisplayStructured.decisao_operacional ? (
-                            <p className="mt-1.5 font-semibold text-indigo-950">
+                            <p className="mt-1.5 font-semibold text-indigo-950 dark:text-indigo-100">
                               {assistantDisplayStructured.decisao_operacional.replaceAll('_', ' ')}
                             </p>
                           ) : null}
@@ -1739,7 +1739,7 @@ export function SplittersOperationalPriorityFab({
                       : cn(
                           'border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-lg',
                           'hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface',
-                          overlayOpen && 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-950',
+                          overlayOpen && 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100',
                         ),
                   )}
                   aria-expanded={overlayOpen}

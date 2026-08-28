@@ -34,7 +34,7 @@ export function MassivaAutoIspSupportSection() {
       <div className="rounded-xl border border-sky-100/90 bg-gradient-to-br from-sky-50/80 dark:from-sky-950/20 to-white dark:to-surface-container-lowest px-4 py-3 text-sm leading-relaxed text-on-surface-variant shadow-sm ring-1 ring-sky-100/40">
         <p>
           Clique em{' '}
-          <strong className="font-semibold text-sky-950">Aplicar na abertura</strong> para preencher o formulário (relato,
+          <strong className="font-semibold text-sky-950 dark:text-sky-100">Aplicar na abertura</strong> para preencher o formulário (relato,
           origem, horários, afetados) e a rota: de preferência os{' '}
           <strong className="font-semibold text-on-surface">PPPoE</strong> do evento são buscados na base de conexões
           para definir AP, slot, PON e splitter; se faltar match, usa-se o{' '}

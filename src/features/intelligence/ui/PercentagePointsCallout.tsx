@@ -23,7 +23,7 @@ export function PercentagePointsCallout({ periodLabel, className }: PercentagePo
     >
       <CircleHelp size={14} className="mt-0.5 shrink-0 text-sky-700 dark:text-sky-200" aria-hidden />
       <p>
-        <span className="font-semibold text-sky-950">pp = pontos percentuais</span> — quanto a ocupação subiu ou
+        <span className="font-semibold text-sky-950 dark:text-sky-100">pp = pontos percentuais</span> — quanto a ocupação subiu ou
         desceu na escala de 0–100%, somando ou subtraindo direto. Ex.:{' '}
         <span className="font-semibold text-on-surface">70% → 78% = +8 pp</span> (não é “+11% em cima de 70%”).
         {periodHint} Se aparecer <span className="font-semibold">0,00 pp</span>, a ocupação não mudou no histórico

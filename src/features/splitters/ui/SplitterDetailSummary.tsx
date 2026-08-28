@@ -380,7 +380,7 @@ export function SplitterDetailSummary({
               <Link
                 to={`/splitters/${encodeURIComponent(mapReliefInsight.streetReliefNeighbor.code)}`}
                 state={location.state}
-                className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-950 no-underline transition hover:bg-emerald-100/95 dark:hover:bg-emerald-950/50 hover:underline"
+                className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-950 dark:text-emerald-100 no-underline transition hover:bg-emerald-100/95 dark:hover:bg-emerald-950/50 hover:underline"
                 title="Splitter sugerido para alívio de rede (porta livre na regra do mapa)"
               >
                 <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">

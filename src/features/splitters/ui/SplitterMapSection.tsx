@@ -374,7 +374,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             {reliefFootPathPositions !== null ? (
               <div className="flex items-start gap-2 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 px-2.5 py-2 shadow-sm">
                 <CircleDot size={14} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-200" strokeWidth={1.75} />
-                <span className="leading-snug text-emerald-950">
+                <span className="leading-snug text-emerald-950 dark:text-emerald-100">
                   A linha verde liga este splitter a um vizinho com{' '}
                   <span className="font-semibold">porta livre</span> dentro da regra de planejamento (mesma rua até{' '}
                   {SPLITTER_ROUTE_RELIEF_MAX_METERS} m de rota pedestre, ou até 30 m entre ruas).
@@ -394,7 +394,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             {routingUnavailable ? (
               <div className="flex items-start gap-2 rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 shadow-sm">
                 <CircleDot size={14} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-200" strokeWidth={1.75} />
-                <span className="leading-snug text-amber-950">
+                <span className="leading-snug text-amber-950 dark:text-amber-100">
                   Roteamento pedestre temporariamente indisponível — apenas distância em linha reta neste mapa.
                 </span>
               </div>
@@ -404,7 +404,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {splitterFullOccupancy && currentIsCondominium && condominiumReliefAvailable ? (
           <div
-            className="mt-3 rounded-xl border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-3 py-2.5 text-sm text-emerald-950 shadow-sm"
+            className="mt-3 rounded-xl border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-3 py-2.5 text-sm text-emerald-950 dark:text-emerald-100 shadow-sm"
             role="status"
           >
             <p className="font-bold text-emerald-900 dark:text-emerald-200">Condomínio — alívio por outro splitter</p>
@@ -429,7 +429,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {showNetworkPlanningAlert ? (
           <div
-            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 dark:from-rose-950/20 to-amber-50 dark:to-amber-950/20 px-3 py-2.5 text-sm text-rose-950 shadow-sm ring-1 ring-rose-200/60"
+            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 dark:from-rose-950/20 to-amber-50 dark:to-amber-950/20 px-3 py-2.5 text-sm text-rose-950 dark:text-rose-100 shadow-sm ring-1 ring-rose-200/60"
             role="alert"
           >
             <p className="font-bold text-rose-900 dark:text-rose-200">Planejamento de rede — sem alívio disponível</p>
@@ -454,7 +454,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
         ) : null}
 
         {showOltMissing ? (
-          <p className="mt-3 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950">
+          <p className="mt-3 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
             O código OLT deste splitter não foi resolvido na listagem de OLTs; por isso o mapa segue sem linha e sem marcador da OLT.
           </p>
         ) : null}

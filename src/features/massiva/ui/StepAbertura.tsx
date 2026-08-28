@@ -30,9 +30,9 @@ function Notice({
 }) {
   const toneClass =
     tone === 'warning'
-      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950'
+      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
       : tone === 'error'
-        ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950'
+        ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950 dark:text-red-100'
         : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface'
 
   return (
@@ -194,7 +194,7 @@ export function StepAbertura({
       ) : null}
 
       {readiness.status === 'missing-assignment' ? (
-        <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-amber-950">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-amber-950 dark:text-amber-100">
           <p className="text-sm font-semibold">Campos obrigatórios pendentes</p>
           <ul className="mt-2 space-y-1 text-sm">
             {readiness.issues.map((issue) => (
@@ -212,7 +212,7 @@ export function StepAbertura({
               description="A abertura está pronta para envio. Revise a descrição e use a ação principal fixa no rodapé."
             />
           ) : null}
-          <div className="rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sky-950">
+          <div className="rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sky-950 dark:text-sky-100">
             <p className="text-sm font-semibold">
               Protocolos previstos: {requestsByAp.length} (1 por ponto de acesso)
             </p>

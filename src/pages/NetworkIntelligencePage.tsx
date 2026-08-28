@@ -1624,8 +1624,8 @@ export function NetworkIntelligencePage() {
         </details>
       </section>
 
-      <details className="group rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 text-[11px] text-amber-950 shadow-sm">
-        <summary className="cursor-pointer list-none px-3 py-2 font-semibold text-amber-950 [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 text-[11px] text-amber-950 dark:text-amber-100 shadow-sm">
+        <summary className="cursor-pointer list-none px-3 py-2 font-semibold text-amber-950 dark:text-amber-100 [&::-webkit-details-marker]:hidden">
           <span className="underline decoration-amber-300/80 underline-offset-2 group-open:no-underline">
             Como lemos ranking, score e matriz impacto × urgência
           </span>
@@ -1649,7 +1649,7 @@ export function NetworkIntelligencePage() {
 
       {showFullSkeleton && networkStatsPreview ? (
         <div
-          className="rounded-2xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-950 shadow-sm"
+          className="rounded-2xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-950 dark:text-amber-100 shadow-sm"
           role="status"
         >
           <p className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
@@ -1851,7 +1851,7 @@ export function NetworkIntelligencePage() {
               </div>
               <div className="rounded-xl bg-amber-50/80 dark:bg-amber-950/40 px-3 py-2.5 ring-1 ring-amber-200/70">
                 <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-900/80">Abertas</dt>
-                <dd className="mt-0.5 text-xl font-black tabular-nums text-amber-950">
+                <dd className="mt-0.5 text-xl font-black tabular-nums text-amber-950 dark:text-amber-100">
                   {intelligenceSnapshot.massivaAgg.openTickets.toLocaleString('pt-BR')}
                 </dd>
               </div>
@@ -1988,7 +1988,7 @@ export function NetworkIntelligencePage() {
               </div>
               <div className="rounded-xl bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-center ring-1 ring-amber-200/80 sm:min-w-[5.5rem]">
                 <dt className="text-[9px] font-bold uppercase tracking-wide text-amber-900/80">Sem GPS</dt>
-                <dd className="text-lg font-black tabular-nums text-amber-950">
+                <dd className="text-lg font-black tabular-nums text-amber-950 dark:text-amber-100">
                   {intelligenceSnapshot.geoWithoutCoords.toLocaleString('pt-BR')}
                 </dd>
               </div>
@@ -3358,7 +3358,7 @@ export function NetworkIntelligencePage() {
                             <dt className="text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
                               Abertas
                             </dt>
-                            <dd className="mt-0.5 tabular-nums font-bold text-amber-950">
+                            <dd className="mt-0.5 tabular-nums font-bold text-amber-950 dark:text-amber-100">
                               {row.openMaintenances.toLocaleString('pt-BR')}
                             </dd>
                           </div>

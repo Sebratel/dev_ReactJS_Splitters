@@ -654,7 +654,7 @@ export function MassivaTicketCard({
               </span>
               {catalogOutOfBand ? (
                 <span
-                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-700/35 bg-amber-100 dark:bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950"
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-700/35 bg-amber-100 dark:bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100"
                   title="Título diferente dos catálogos esperados (Registro Evento Massivo ou Registro Incidente de Rede)."
                 >
                   Fora do catálogo esperado
@@ -779,7 +779,7 @@ export function MassivaTicketCard({
         </div>
       </div>
 
-      <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 dark:from-amber-950/20 via-amber-50/50 dark:via-amber-950/20 to-amber-100/30 px-3 py-2.5">
+      <div className="flex min-h-[72px] flex-nowrap items-center justify-between gap-2.5 border-b border-amber-100/80 bg-gradient-to-r from-amber-50/90 dark:from-amber-950/20 via-amber-50/50 dark:via-amber-950/20 to-amber-100/30 dark:to-amber-950/25 px-3 py-2.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100/90 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/60">
             <Users size={18} aria-hidden />

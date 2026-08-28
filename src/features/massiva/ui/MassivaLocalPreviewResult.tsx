@@ -39,7 +39,7 @@ export function MassivaLocalPreviewResult({
   if (view.status === 'incomplete') {
     return (
       <div className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/30 dark:to-amber-950/20 px-4 py-3 text-center shadow-sm ring-1 ring-amber-100/60">
-        <p className="text-sm font-semibold text-amber-950">Seleção incompleta</p>
+        <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Seleção incompleta</p>
         <p className="mt-1 text-xs leading-relaxed text-amber-900/85">{view.message}</p>
       </div>
     )
@@ -49,10 +49,10 @@ export function MassivaLocalPreviewResult({
     return (
       <div className="space-y-2">
         <div
-          className="rounded-xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 px-4 py-3 text-xs text-amber-950 shadow-sm"
+          className="rounded-xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 px-4 py-3 text-xs text-amber-950 dark:text-amber-100 shadow-sm"
           role="status"
         >
-          <p className="font-semibold text-amber-950">Nenhum cliente afetado nesta rota</p>
+          <p className="font-semibold text-amber-950 dark:text-amber-100">Nenhum cliente afetado nesta rota</p>
           <p className="mt-1.5 text-[11px] leading-relaxed text-amber-900/88">
             Clientes únicos: {view.totals.totalAffected} · PPPoEs: {view.totals.totalPppoes} ·
             Corporativos: {view.totals.totalCorporateAffected}
@@ -92,7 +92,7 @@ export function MassivaLocalPreviewResult({
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700/90">
             Clientes
           </p>
-          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-emerald-950">
+          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-emerald-950 dark:text-emerald-100">
             {view.totals.totalAffected}
           </p>
         </div>
@@ -100,7 +100,7 @@ export function MassivaLocalPreviewResult({
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700/90">
             PPPoEs
           </p>
-          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-violet-950">
+          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-violet-950 dark:text-violet-100">
             {view.totals.totalPppoes}
           </p>
         </div>
@@ -108,7 +108,7 @@ export function MassivaLocalPreviewResult({
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/90">
             Corporativos
           </p>
-          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-amber-950">
+          <p className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-amber-950 dark:text-amber-100">
             {view.totals.totalCorporateAffected}
           </p>
         </div>

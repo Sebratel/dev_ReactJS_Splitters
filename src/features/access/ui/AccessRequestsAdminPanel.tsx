@@ -72,7 +72,7 @@ export function AccessRequestsAdminPanel({
             Carregando…
           </div>
         ) : (
-          <span className="inline-flex w-fit items-center rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950">
+          <span className="inline-flex w-fit items-center rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950 dark:text-amber-100">
             {sorted.length} pendente{sorted.length === 1 ? '' : 's'}
           </span>
         )}
@@ -108,7 +108,7 @@ export function AccessRequestsAdminPanel({
                         {r.requestedModules.map((id) => (
                           <li
                             key={id}
-                            className="rounded-md border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold text-amber-950"
+                            className="rounded-md border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold text-amber-950 dark:text-amber-100"
                           >
                             {labelForRequestedModule(id)}
                           </li>
@@ -166,7 +166,7 @@ export function AccessRequestsAdminPanel({
                         className={cn(
                           'inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[11px] font-bold shadow-sm transition',
                           rejecting
-                            ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-950'
+                            ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-950 dark:text-rose-100'
                             : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
                         )}
                       >

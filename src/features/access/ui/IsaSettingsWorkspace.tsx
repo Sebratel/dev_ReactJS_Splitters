@@ -92,7 +92,7 @@ export function IsaSettingsWorkspace({
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 p-4 text-sm text-amber-950 shadow-sm">
+      <div className="rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 p-4 text-sm text-amber-950 dark:text-amber-100 shadow-sm">
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-200" aria-hidden />
           <div className="space-y-1">

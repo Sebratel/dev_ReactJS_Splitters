@@ -51,31 +51,31 @@ function statusMeta(status: PlatformSuggestionStatus): {
       return {
         label: 'Aprovada',
         className: 'border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200',
-        accentClassName: 'from-sky-100/90 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
+        accentClassName: 'from-sky-100/90 dark:from-sky-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'in_progress':
       return {
         label: 'Em desenvolvimento',
         className: 'border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200',
-        accentClassName: 'from-violet-100/90 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
+        accentClassName: 'from-violet-100/90 dark:from-violet-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'done':
       return {
         label: 'Concluída',
         className: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200',
-        accentClassName: 'from-emerald-100/90 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
+        accentClassName: 'from-emerald-100/90 dark:from-emerald-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'rejected':
       return {
         label: 'Não será implementada',
         className: 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200',
-        accentClassName: 'from-rose-100/90 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
+        accentClassName: 'from-rose-100/90 dark:from-rose-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     default:
       return {
         label: 'Em análise',
         className: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200',
-        accentClassName: 'from-amber-100/90 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
+        accentClassName: 'from-amber-100/90 dark:from-amber-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
   }
 }

@@ -195,7 +195,7 @@ export function DashboardAccessRequestSection() {
               ) : null}
 
               {pending ? (
-                <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 text-[11px] text-amber-950">
+                <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 text-[11px] text-amber-950 dark:text-amber-100">
                   <p className="font-semibold">Em análise</p>
                   <p className="mt-0.5 leading-relaxed text-amber-950/90">
                     Aguarde a resposta da administração.
@@ -205,7 +205,7 @@ export function DashboardAccessRequestSection() {
                       {pending.requestedModules.map((id) => (
                         <li
                           key={id}
-                          className="rounded-md border border-amber-200/70 dark:border-amber-800/50 bg-surface-container-lowest/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-950"
+                          className="rounded-md border border-amber-200/70 dark:border-amber-800/50 bg-surface-container-lowest/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-950 dark:text-amber-100"
                         >
                           {labelForRequestedModule(id)}
                         </li>
@@ -221,7 +221,7 @@ export function DashboardAccessRequestSection() {
               ) : null}
 
               {!pending && latestResolved?.status === 'approved' ? (
-                <div className="rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 px-2.5 py-2 text-[11px] text-emerald-950">
+                <div className="rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 px-2.5 py-2 text-[11px] text-emerald-950 dark:text-emerald-100">
                   <p className="font-semibold">Aprovado</p>
                   {latestResolved.adminNote ? (
                     <p className="mt-0.5 leading-relaxed">{latestResolved.adminNote}</p>
@@ -229,7 +229,7 @@ export function DashboardAccessRequestSection() {
                   <button
                     type="button"
                     onClick={() => void refreshProfile()}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-emerald-800/15 bg-surface-container-lowest px-2 py-1 text-[10px] font-bold text-emerald-950 shadow-sm hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-emerald-800/15 bg-surface-container-lowest px-2 py-1 text-[10px] font-bold text-emerald-950 dark:text-emerald-100 shadow-sm hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40"
                   >
                     <RefreshCw className="size-3" aria-hidden />
                     Atualizar perfil
@@ -238,7 +238,7 @@ export function DashboardAccessRequestSection() {
               ) : null}
 
               {!pending && latestResolved?.status === 'rejected' ? (
-                <div className="rounded-lg border border-rose-200/80 dark:border-rose-800/50 bg-rose-50/90 dark:bg-rose-950/40 px-2.5 py-2 text-[11px] text-rose-950">
+                <div className="rounded-lg border border-rose-200/80 dark:border-rose-800/50 bg-rose-50/90 dark:bg-rose-950/40 px-2.5 py-2 text-[11px] text-rose-950 dark:text-rose-100">
                   <p className="font-semibold">Não aprovado</p>
                   {latestResolved.adminNote ? (
                     <p className="mt-0.5 leading-relaxed">{latestResolved.adminNote}</p>
@@ -247,7 +247,7 @@ export function DashboardAccessRequestSection() {
               ) : null}
 
               {showAccessCompleteMessage && !pending && !mineQuery.isLoading ? (
-                <div className="rounded-lg border border-emerald-200/85 dark:border-emerald-800/50 bg-gradient-to-br from-emerald-50/95 dark:from-emerald-950/20 to-sky-50/60 dark:to-sky-950/20 px-2.5 py-3 text-[11px] leading-relaxed text-emerald-950 shadow-sm">
+                <div className="rounded-lg border border-emerald-200/85 dark:border-emerald-800/50 bg-gradient-to-br from-emerald-50/95 dark:from-emerald-950/20 to-sky-50/60 dark:to-sky-950/20 px-2.5 py-3 text-[11px] leading-relaxed text-emerald-950 dark:text-emerald-100 shadow-sm">
                   <p className="text-[12px] font-semibold tracking-tight">
                     {isAdmin ? '✨ Acesso completo' : '🎉 Tudo certo por aqui!'}
                   </p>
@@ -417,7 +417,7 @@ export function DashboardAccessRequestSection() {
                     : cn(
                         'border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-lg',
                         'hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface',
-                        open && 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-950',
+                        open && 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100',
                       ),
                 )}
                 aria-expanded={open}

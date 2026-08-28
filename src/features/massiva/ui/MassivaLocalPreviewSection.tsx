@@ -55,7 +55,7 @@ export function MassivaLocalPreviewSection() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/45',
               workspace === 'rota'
-                ? 'bg-surface-container-lowest text-amber-950 shadow-sm ring-1 ring-amber-200/80'
+                ? 'bg-surface-container-lowest text-amber-950 dark:text-amber-100 shadow-sm ring-1 ring-amber-200/80'
                 : 'text-on-surface-variant hover:bg-surface-container-lowest/70 hover:text-on-surface',
             )}
             onClick={() => setWorkspace('rota')}
@@ -70,7 +70,7 @@ export function MassivaLocalPreviewSection() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45',
               workspace === 'abertura'
-                ? 'bg-surface-container-lowest text-violet-950 shadow-sm ring-1 ring-violet-200/80'
+                ? 'bg-surface-container-lowest text-violet-950 dark:text-violet-100 shadow-sm ring-1 ring-violet-200/80'
                 : 'text-on-surface-variant hover:bg-surface-container-lowest/70 hover:text-on-surface',
             )}
             onClick={() => setWorkspace('abertura')}
