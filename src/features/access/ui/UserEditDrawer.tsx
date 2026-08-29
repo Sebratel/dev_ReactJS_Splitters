@@ -212,6 +212,13 @@ export function UserEditDrawer({
               disabled={pending || canOpenMassivaDisabled}
               onCheckedChange={(v) => patchPermissions({ canOpenMassiva: v })}
             />
+            <SwitchRow
+              title="Ver redistribuição"
+              description="Tela de redistribuição de condomínios (clientes em splitter de andar distante)."
+              checked={permissions.canViewRedistribution}
+              disabled={pending}
+              onCheckedChange={(v) => patchPermissions({ canViewRedistribution: v })}
+            />
           </section>
 
           <section className="mt-6 space-y-3">

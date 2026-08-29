@@ -142,6 +142,25 @@ export function MassivaOpenMutationBar({
               Afetados registrados: {successPayload.afetadosPostedCount}
             </p>
           ) : null}
+          {successPayload.infraProtocol != null ? (
+            <div className="mt-2 rounded-md border border-sky-300/80 bg-sky-50/90 px-3 py-2 text-xs text-sky-950 dark:border-sky-800/60 dark:bg-sky-950/30 dark:text-sky-100">
+              <p className="font-semibold">Protocolo de infraestrutura aberto junto</p>
+              <p className="mt-1 font-mono text-[11px] leading-relaxed">
+                <span className="font-sans font-medium">protocolo {successPayload.infraProtocol}</span>
+                {successPayload.infraAssignmentId != null
+                  ? ` · assignment ${successPayload.infraAssignmentId}`
+                  : ''}
+              </p>
+              {(() => {
+                const massivaProtocol = successPayload.results.find((r) => r.protocol != null)?.protocol
+                return massivaProtocol != null ? (
+                  <p className="mt-1 text-[11px] opacity-95">
+                    Vinculado à massiva <span className="font-mono">{massivaProtocol}</span>.
+                  </p>
+                ) : null
+              })()}
+            </div>
+          ) : null}
           {successPayload.followUpWarning != null && successPayload.followUpWarning !== '' ? (
             <p className="mt-2 text-xs font-medium text-amber-900 dark:text-amber-100">
               {successPayload.followUpWarning}

@@ -4,10 +4,22 @@ import {
   collectMapeableAfetadosClientes,
   pickPrimaryOpenResult,
   resolveProtocolAndAssignment,
+  type UsuarioAfetadoEntity,
 } from '@/features/massiva/lib/buildMassivaAfetadosRequestBody'
 import { buildMassivaOpenRequestBody } from '@/features/massiva/lib/buildMassivaOpenRequestBody'
+import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { registerOpenedMassivaHistoryInLocalDb } from '@/features/massiva/api/registerOpenedMassivaHistoryInLocalDb'
+import { registerMassivaAffectedClientsInLocalDb } from '@/features/massiva/api/registerMassivaAffectedClientsInLocalDb'
+import { openInfraSolicitation } from '@/features/massiva/api/openInfraSolicitation'
+import {
+  buildInfraSolicitationDescription,
+  type InfraMaskRoute,
+} from '@/features/massiva/lib/buildInfraSolicitationDescription'
+import { infraProtocolOption } from '@/features/massiva/model/massivaInfraProtocol'
+import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
+import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import {
   formatMassivaOpenApiFailure,
   parseMassivaOpenHttpResult,
@@ -19,6 +31,7 @@ import {
 } from '@/features/massiva/model/massivaOpenMutation'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { bffClient } from '@/shared/api/bffClient'
+import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
@@ -53,6 +66,31 @@ function appendFollowUpWarning(
 
 function closePathConfigured(): boolean {
   return env.massivaClosePath.trim() !== ''
+}
+
+/**
+ * Extrai o motivo real de uma falha do POST de afetados. O gateway devolve o motivo no corpo
+ * (`{ message, errors }`), mas o ApiError.message traz só "HTTP 400 em /api/v1/afetados".
+ * Aqui desembrulhamos o corpo para o operador ver a causa (ex.: indisponibilidade do banco de
+ * afetados no gateway) em vez de um código genérico.
+ */
+function describeAfetadosFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(error.body) as { message?: unknown; errors?: unknown }
+      const parts: string[] = []
+      const message = typeof parsed.message === 'string' ? parsed.message.trim() : ''
+      if (message !== '') parts.push(message)
+      if (Array.isArray(parsed.errors)) {
+        const errs = parsed.errors.map((e) => String(e).trim()).filter((s) => s !== '')
+        if (errs.length > 0) parts.push(errs.join('; '))
+      }
+      if (parts.length > 0) return `${error.message} — ${parts.join(' — ')}`
+    } catch {
+      // corpo não era JSON — cai no formato padrão abaixo
+    }
+  }
+  return formatQueryError(error)
 }
 
 function normalizeAp(value: string | null | undefined): string {
@@ -132,6 +170,109 @@ async function withFullCollectedClientes(
       error,
     )
     return context
+  }
+}
+
+function formatLocalDateTimeShort(local: string | null): string {
+  if (local == null || local.trim() === '') return ''
+  const instant = parseDateTimeLocalToDate(local.slice(0, 16))
+  if (instant === null) return ''
+  return formatBrazilDateTimeShortDisplay(instant)
+}
+
+/**
+ * Abre — quando o operador selecionou um tipo — 1 protocolo de infraestrutura agregando todos os APs.
+ * Best-effort: qualquer falha vira aviso (`followUpWarning`) e NÃO derruba a massiva já aberta.
+ */
+async function openInfraProtocolIfSelected(
+  context: MassivaOpenFinalContext,
+  successes: MassivaOpenSingleResult[],
+): Promise<{ infraProtocol: number | null; infraAssignmentId: number | null; warning: string | null }> {
+  const draft = useMassivaOpenDraftStore.getState()
+  const option = infraProtocolOption(draft.infraProtocolType)
+  if (option === null) {
+    return { infraProtocol: null, infraAssignmentId: null, warning: null }
+  }
+
+  const routes: InfraMaskRoute[] = context.basis.topology.routes.map((route) => ({
+    apCode: route.apCode,
+    apDisplayTitle: route.apDisplayTitle,
+    // Nomenclatura do(s) splitter(s) da rota (ss.title) — vira "Número da CTO".
+    splitterLabel: route.effectiveSplitterDisplay
+      .map((s) => s.label.trim())
+      .filter((label) => label !== '')
+      .join(', '),
+    slot: route.slot,
+    port: route.port,
+    affected: collectMapeableAfetadosClientes(
+      clientesForAccessPoint(context.basis.collectedClientes, route.apCode),
+    ).length,
+  }))
+  const totalAffected = routes.reduce((sum, route) => sum + route.affected, 0)
+
+  const primary = pickPrimaryOpenResult(successes)
+  const primaryIds = primary != null ? resolveProtocolAndAssignment(primary) : null
+
+  const description = buildInfraSolicitationDescription({
+    type: option.code,
+    massivaProtocol: primaryIds?.protocol ?? null,
+    routes,
+    totalAffected,
+    signalDbm: draft.infraSignalDbm,
+    avaria: draft.infraAvaria,
+    responsavel: context.operatorName,
+    eventStartDisplay: formatLocalDateTimeShort(context.assignmentBeginningDateLocal),
+    eventIdentifiedDisplay: formatLocalDateTimeShort(context.eventIdentifiedAtLocal),
+  })
+
+  const primaryAp =
+    context.plan.requests[0]?.authenticationAccessPointCode?.trim() ||
+    context.basis.topology.routes[0]?.apCode?.trim() ||
+    null
+
+  const finalDateIso =
+    massivaLocalDateTimeToGatewayIso(context.assignmentFinalDateLocal) ??
+    context.assignmentFinalDateLocal
+
+  // Backbone exige Site (matriz interna). Sem site, nem chamamos o Elleven — avisamos claro.
+  const siteCode = draft.infraSiteCode?.trim() ?? ''
+  if (option.code === 'backbone' && siteCode === '') {
+    return {
+      infraProtocol: null,
+      infraAssignmentId: null,
+      warning: `Protocolo de infraestrutura (${option.label}) não foi aberto: selecione o Site (obrigatório para Backbone). A massiva foi aberta normalmente.`,
+    }
+  }
+
+  try {
+    const result = await openInfraSolicitation({
+      infraType: option.code,
+      personId: context.personId,
+      authenticationAccessPointCode: primaryAp,
+      authenticationSiteCode: option.code === 'backbone' ? siteCode : null,
+      assignmentTitle: `Infra - ${option.label}`,
+      assignmentDescription: description,
+      assignmentFinalDateIso: finalDateIso,
+    })
+
+    if (result.protocol == null) {
+      return {
+        infraProtocol: null,
+        infraAssignmentId: null,
+        warning: `Protocolo de infraestrutura (${option.label}) foi solicitado, mas a resposta não trouxe o número do protocolo.`,
+      }
+    }
+    return {
+      infraProtocol: result.protocol,
+      infraAssignmentId: result.assignmentId,
+      warning: null,
+    }
+  } catch (e) {
+    return {
+      infraProtocol: null,
+      infraAssignmentId: null,
+      warning: `Falha ao abrir o protocolo de infraestrutura (${option.label}): ${formatQueryError(e)}. A massiva foi aberta normalmente.`,
+    }
   }
 }
 
@@ -233,6 +374,14 @@ export async function openMassivaFromContext(
 
   let afetadosPostedCount = 0
   const afetadosWarnings: string[] = []
+  // A cópia local (massiva_affected_clients) é gravada por AP, mas só DEPOIS do
+  // registerOpenedMassivaHistoryInLocalDb — a gravação é keyed pela linha de massiva_history,
+  // que só existe após aquele registro. Coletamos aqui e persistimos no fim.
+  const localAffectedCopies: Array<{
+    protocol: number
+    assignmentId: number
+    entities: readonly UsuarioAfetadoEntity[]
+  }> = []
 
   for (const opened of successes) {
     const ids = resolveProtocolAndAssignment(opened)
@@ -263,10 +412,19 @@ export async function openMassivaFromContext(
       })
       afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
     } catch (afetadosError) {
-      const msg = afetadosError instanceof Error ? afetadosError.message : String(afetadosError)
+      const msg = describeAfetadosFailure(afetadosError)
       console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
       afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
     }
+
+    // Cópia local (nosso MySQL) da mesma lista de afetados, independente do gateway —
+    // viabiliza a verificação "ainda sem sinal?" pós-encerramento sem depender do DELETE
+    // de limpeza do gateway. Só coletamos aqui; a gravação acontece após o histórico existir.
+    localAffectedCopies.push({
+      protocol: ids.protocol,
+      assignmentId: ids.assignmentId,
+      entities: afetadosBody.usuarioAfetadoEntities,
+    })
   }
 
   let payload: MassivaOpenMutationSuccessPayload = {
@@ -281,11 +439,37 @@ export async function openMassivaFromContext(
     )
   }
 
+  // Protocolo de infraestrutura (opcional): 1 por evento, best-effort com aviso.
+  const infra = await openInfraProtocolIfSelected(context, successes)
+  if (infra.infraProtocol != null) {
+    payload = {
+      ...payload,
+      infraProtocol: infra.infraProtocol,
+      infraAssignmentId: infra.infraAssignmentId,
+    }
+  }
+  if (infra.warning != null) {
+    payload = appendFollowUpWarning(payload, infra.warning)
+  }
+
   try {
     await registerOpenedMassivaHistoryInLocalDb(context, payload)
   } catch (localError) {
     console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
     payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+  }
+
+  // Só agora, com a linha de massiva_history criada, gravamos a cópia local dos afetados
+  // (a gravação é keyed por essa linha). Best-effort: falha aqui não derruba a abertura.
+  for (const copy of localAffectedCopies) {
+    try {
+      await registerMassivaAffectedClientsInLocalDb(copy)
+    } catch (localAffectedError) {
+      console.warn(
+        `[Massiva] Falha ao gravar cópia local dos afetados (protocolo ${copy.protocol}).`,
+        localAffectedError,
+      )
+    }
   }
 
   return payload

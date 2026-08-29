@@ -87,6 +87,31 @@ export function BottomActionBar({
                   </tbody>
                 </table>
               </div>
+              {successPayload.infraProtocol != null ? (
+                <div className="rounded-lg border border-sky-300/70 bg-sky-50 px-2.5 py-2 text-xs text-sky-900">
+                  <p className="font-semibold">Protocolo de infraestrutura aberto junto</p>
+                  <p className="mt-0.5 font-mono">
+                    protocolo {successPayload.infraProtocol}
+                    {successPayload.infraAssignmentId != null
+                      ? ` · assignment ${successPayload.infraAssignmentId}`
+                      : ''}
+                  </p>
+                  {(() => {
+                    const massivaProtocol = successPayload.results.find((r) => r.protocol != null)
+                      ?.protocol
+                    return massivaProtocol != null ? (
+                      <p className="mt-0.5">
+                        Vinculado à massiva <span className="font-mono">{massivaProtocol}</span>.
+                      </p>
+                    ) : null
+                  })()}
+                </div>
+              ) : null}
+              {successPayload.followUpWarning != null && successPayload.followUpWarning.trim() !== '' ? (
+                <p className="whitespace-pre-line rounded-lg border border-amber-300/70 bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900">
+                  {successPayload.followUpWarning}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {isError ? (

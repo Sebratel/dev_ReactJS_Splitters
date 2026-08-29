@@ -8,6 +8,13 @@ type RegisterClosedMassivaHistoryInput = {
   closeDescription: string
   /** Quem encerrou (usuário logado na plataforma). */
   closedBy?: string
+  /** Classificação operacional preenchida no encerramento — enviada ao BFF para gravação no histórico local. */
+  tipoIncidente?: string | null
+  impacto?: string | null
+  area?: string | null
+  tecnologia?: string | null
+  classificacao?: string | null
+  cnl?: string | null
 }
 
 export async function registerClosedMassivaHistoryInLocalDb(
@@ -26,6 +33,12 @@ export async function registerClosedMassivaHistoryInLocalDb(
       closeDescription: input.closeDescription,
       closedBy: input.closedBy ?? '',
       closedAt: nowBrazil,
+      tipoIncidente: input.tipoIncidente ?? null,
+      impacto: input.impacto ?? null,
+      area: input.area ?? null,
+      tecnologia: input.tecnologia ?? null,
+      classificacao: input.classificacao ?? null,
+      cnl: input.cnl ?? null,
     }),
   })
 

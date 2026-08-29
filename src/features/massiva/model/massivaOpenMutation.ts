@@ -19,6 +19,9 @@ export type MassivaOpenMutationSuccessPayload = {
   autoClosedWithoutClients?: boolean
   /** Abertura ok, mas não foi possível encerrar/registrar conforme esperado. */
   followUpWarning?: string
+  /** Protocolo de infraestrutura aberto junto (1 por evento), quando o operador selecionou um tipo. */
+  infraProtocol?: number | null
+  infraAssignmentId?: number | null
 }
 
 /**

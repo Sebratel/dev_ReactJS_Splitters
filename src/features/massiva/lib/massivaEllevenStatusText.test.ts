@@ -23,13 +23,13 @@ describe('massivaEllevenStatusText', () => {
     ).toBe('closed')
   })
 
-  it('parseMassivaTicketFromApi lê situacao Cancelado', () => {
+  it('parseMassivaTicketFromApi lê situacao Cancelado como cancelada', () => {
     const t = parseMassivaTicketFromApi({
       protocol: 1676359,
       situacao: 'Cancelado',
       incidentStatusId: 1,
     })
-    expect(t.status).toBe('encerrada')
+    expect(t.status).toBe('cancelada')
     expect(t.ellevenLifecycle).toBe('closed')
     expect(t.ellevenStatusTexts).toContain('cancelado')
   })

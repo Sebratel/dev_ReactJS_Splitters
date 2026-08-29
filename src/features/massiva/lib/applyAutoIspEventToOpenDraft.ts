@@ -37,7 +37,7 @@ export function applyAutoIspEventToOpenDraft(event: AutoIspEvent): void {
 
   s.setDescriptionAutoSync(true)
   s.setInitialReport((event.eventType ?? '').trim())
-  s.setFieldTechnicianRequesting(false)
+  s.setEventIdentifiedBy('zabbix')
   s.setAssignmentForecastDate('')
   s.setAssignmentForecastTime('')
 

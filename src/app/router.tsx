@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
+import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
 import { PermissionGuard } from '@/app/auth/PermissionGuard'
+import { RouteErrorBoundary } from '@/app/RouteErrorBoundary'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { HomePage } from '@/pages/HomePage'
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage'
@@ -16,8 +18,17 @@ const SplitterDetailPage = lazy(() =>
 const ClienteDetailPage = lazy(() =>
   import('@/pages/ClienteDetailPage').then((m) => ({ default: m.ClienteDetailPage })),
 )
+const MassivaLayoutPage = lazy(() =>
+  import('@/pages/MassivaLayoutPage').then((m) => ({ default: m.MassivaLayoutPage })),
+)
 const MassivaPage = lazy(() =>
   import('@/pages/MassivaPage').then((m) => ({ default: m.MassivaPage })),
+)
+const MassivaDashboardPage = lazy(() =>
+  import('@/pages/MassivaDashboardPage').then((m) => ({ default: m.MassivaDashboardPage })),
+)
+const MassivaMonitorPage = lazy(() =>
+  import('@/pages/MassivaMonitorPage').then((m) => ({ default: m.MassivaMonitorPage })),
 )
 const NetworkIntelligencePage = lazy(() =>
   import('@/pages/NetworkIntelligencePage').then((m) => ({ default: m.NetworkIntelligencePage })),
@@ -30,6 +41,9 @@ const IsaSettingsPage = lazy(() =>
 )
 const PlatformSuggestionsPage = lazy(() =>
   import('@/pages/PlatformSuggestionsPage').then((m) => ({ default: m.PlatformSuggestionsPage })),
+)
+const CondoRedistributionPage = lazy(() =>
+  import('@/pages/CondoRedistributionPage').then((m) => ({ default: m.CondoRedistributionPage })),
 )
 
 function Page({ children }: { children: React.ReactNode }) {
@@ -46,8 +60,24 @@ export const router = createBrowserRouter([
     element: <OidcCallbackPage />,
   },
   {
+    // Painel de parede (CGR/COR) — rota isolada, fora do RootLayout/Sidebar de
+    // propósito: precisa ocupar a tela inteira num monitor físico, sem chrome do app.
+    path: '/massiva/monitor',
+    element: (
+      <ProtectedRoute>
+        <PermissionGuard
+          permission="canViewMassiva"
+          description="Seu perfil não possui acesso ao módulo de massivas."
+        >
+          <Page><MassivaMonitorPage /></Page>
+        </PermissionGuard>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/',
     element: <RootLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         element: <ProtectedAppLayout />,
@@ -61,15 +91,31 @@ export const router = createBrowserRouter([
           },
           { path: 'clientes/:id', element: <Page><ClienteDetailPage /></Page> },
           {
+            path: 'redistribuicao-condominios',
+            element: (
+              <PermissionGuard
+                permission="canViewRedistribution"
+                allowAdmin
+                description="Seu perfil não possui acesso à tela de redistribuição."
+              >
+                <Page><CondoRedistributionPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
             path: 'massiva',
             element: (
               <PermissionGuard
                 permission="canViewMassiva"
                 description="Seu perfil não possui acesso ao módulo de massivas."
               >
-                <Page><MassivaPage /></Page>
+                <Page><MassivaLayoutPage /></Page>
               </PermissionGuard>
             ),
+            children: [
+              { index: true, element: <Page><MassivaPage /></Page> },
+              { path: 'dashboard', element: <Page><MassivaDashboardPage /></Page> },
+            ],
           },
           {
             path: 'intelligence',
@@ -108,4 +154,6 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  // Qualquer rota não encontrada → tela amigável (em vez do erro cru do React Router)
+  { path: '*', element: <RouteErrorBoundary /> },
 ])

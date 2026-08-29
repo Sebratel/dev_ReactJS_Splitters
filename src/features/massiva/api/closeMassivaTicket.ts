@@ -8,6 +8,13 @@ type CloseMassivaInput = {
   closeDescription: string
   /** Usuário logado que está encerrando (registrado como autor no histórico local). */
   closedBy?: string
+  /** Classificação operacional preenchida pelo operador no modal de encerramento. */
+  tipoIncidente?: string | null
+  impacto?: string | null
+  area?: string | null
+  tecnologia?: string | null
+  classificacao?: string | null
+  cnl?: string | null
 }
 
 export type CloseMassivaResult = {
@@ -71,6 +78,12 @@ export async function closeMassivaTicket(input: CloseMassivaInput): Promise<Clos
       assignmentId: input.assignmentId,
       closeDescription: input.closeDescription,
       closedBy: input.closedBy,
+      tipoIncidente: input.tipoIncidente,
+      impacto: input.impacto,
+      area: input.area,
+      tecnologia: input.tecnologia,
+      classificacao: input.classificacao,
+      cnl: input.cnl,
     })
     return { ok: true }
   } catch (localError) {

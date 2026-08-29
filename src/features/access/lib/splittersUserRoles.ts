@@ -21,7 +21,7 @@ export const SPLITTERS_ROLE_DESCRIPTION: Record<
 > = {
   admin: 'Acesso total ao sistema, gestao de usuarios e assistente ISA.',
   operador:
-    'Painel da rede, splitters, massivas e assistente ISA de planejamento, sem administracao.',
+    'Painel da rede, splitters, massivas, redistribuicao e assistente ISA de planejamento, sem administracao.',
   operador_massivas:
     'Splitters e massivas (inclui abrir ocorrencias), sem painel de inteligencia nem assistente ISA.',
   leitura: 'Somente splitters (leitura). Nao inclui massivas, inteligencia nem assistente ISA.',
@@ -42,6 +42,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: true,
     canUsePlanningAssistant: true,
+    canViewRedistribution: true,
     isAdmin: true,
   },
   operador: {
@@ -50,6 +51,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: true,
     canUsePlanningAssistant: true,
+    canViewRedistribution: true,
     isAdmin: false,
   },
   operador_massivas: {
@@ -58,6 +60,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: true,
     canViewIntelligence: false,
     canUsePlanningAssistant: false,
+    canViewRedistribution: false,
     isAdmin: false,
   },
   leitura: {
@@ -66,6 +69,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canOpenMassiva: false,
     canViewIntelligence: false,
     canUsePlanningAssistant: false,
+    canViewRedistribution: false,
     isAdmin: false,
   },
 }
@@ -77,6 +81,7 @@ function permissionsEqual(a: SplittersPermissionSet, b: SplittersPermissionSet):
     a.canOpenMassiva === b.canOpenMassiva &&
     a.canViewIntelligence === b.canViewIntelligence &&
     a.canUsePlanningAssistant === b.canUsePlanningAssistant &&
+    a.canViewRedistribution === b.canViewRedistribution &&
     a.isAdmin === b.isAdmin
   )
 }

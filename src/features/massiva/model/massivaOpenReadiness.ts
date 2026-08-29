@@ -3,6 +3,7 @@ import type {
   MassivaOpeningPlanDraft,
   MassivaOpeningPreparationView,
 } from '@/features/massiva/model/massivaOpeningBasis'
+import type { MassivaEventIdentifiedBy } from '@/features/massiva/store/massivaOpenDraftStore'
 
 /**
  * Contexto final antes do POST de abertura — tudo resolvido exceto a mutação em si.
@@ -11,6 +12,8 @@ import type {
 export type MassivaOpenFinalContext = {
   personId: number
   operatorEmail: string
+  /** Nome do operador logado (para "Responsável pela identificação" no protocolo de infra). */
+  operatorName: string
   basis: MassivaOpeningBasis
   plan: MassivaOpeningPlanDraft
   assignmentDescription: string
@@ -20,6 +23,8 @@ export type MassivaOpenFinalContext = {
   assignmentBeginningDateLocal: string | null
   /** Horário em que o evento foi identificado (campo operacional do formulário de abertura). */
   eventIdentifiedAtLocal: string | null
+  /** Quem identificou o evento (tecnico/zabbix/int6) — persistido no histórico local para indicador. */
+  eventIdentifiedBy: MassivaEventIdentifiedBy
   /** Path configurado para o POST futuro (relativo ao BFF). */
   massivaOpenPath: string
   /** Path do POST de afetados após abertura (relativo ao BFF). */

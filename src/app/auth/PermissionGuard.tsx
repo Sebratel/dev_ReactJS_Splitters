@@ -7,19 +7,27 @@ import type { SplittersPermissionSet } from '@/features/access/model/access.type
 type PermissionGuardProps = {
   permission: keyof SplittersPermissionSet
   description: string
+  /** Se true, administradores sempre passam, mesmo sem a permissão específica. */
+  allowAdmin?: boolean
   children: ReactNode
 }
 
-export function PermissionGuard({ permission, description, children }: PermissionGuardProps) {
+export function PermissionGuard({
+  permission,
+  description,
+  allowAdmin = false,
+  children,
+}: PermissionGuardProps) {
   const hasPermission = useAccessAuthStore((s) => s.hasPermission(permission))
+  const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
 
   if (!isFirebaseAuthConfigured()) {
     return <>{children}</>
   }
 
-  if (!hasPermission) {
-    return <AccessDeniedState description={description} />
+  if (hasPermission || (allowAdmin && isAdmin)) {
+    return <>{children}</>
   }
 
-  return <>{children}</>
+  return <AccessDeniedState description={description} />
 }

@@ -16,6 +16,8 @@ import {
   ScrollText,
   UserPlus,
   Users,
+  Wifi,
+  Wrench,
 } from 'lucide-react'
 import { getOidcUserDisplayName } from '@/app/auth/oidcUserDisplayName'
 import { updateMassivaExpectedClose } from '@/features/massiva/api/updateMassivaExpectedClose'
@@ -39,8 +41,13 @@ import {
   splitOccurrenceIntoParagraphs,
 } from '@/features/massiva/lib/massivaOccurrenceText'
 import { isMassivaCatalogOutOfBand } from '@/features/massiva/lib/massivaCatalogTitle'
+import {
+  verifyMassivaAffectedClients,
+  type VerifyMassivaAffectedClientsResult,
+} from '@/features/massiva/api/verifyMassivaAffectedClients'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { ApiError } from '@/shared/api/apiError'
+import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { env } from '@/shared/config/env'
 import { effectiveMassivaStatus } from '@/features/massiva/lib/applyEffectiveMassivaTicket'
 import {
@@ -50,10 +57,24 @@ import {
 import { MassivaPrevisaoReferenceBlock } from '@/features/massiva/ui/MassivaPrevisaoReferenceBlock'
 import { cn } from '@/shared/lib/utils'
 
+export type MassivaLastAffectedVerification = {
+  checkedAt: Date
+  total: number
+  stillOffline: number
+  stillDegraded: number
+  verifiedBy: string | null
+}
+
 type MassivaTicketCardProps = {
   ticket: MassivaTicket
   closeConfigured: boolean
   onRequestClose: (protocol: number) => void
+  onRequestCancel: (protocol: number) => void
+  onRequestMaintenance: (protocol: number) => void
+  /** Resultado da última verificação "clientes ainda sem sinal?" — null se nunca verificado. */
+  lastAffectedVerification: MassivaLastAffectedVerification | null
+  /** Usuário logado, registrado como quem verificou ao clicar "Verificar clientes". */
+  verifiedByLabel: string
 }
 
 function displayOrDash(value: string, emptyLabel = 'Não informado'): string {
@@ -344,15 +365,145 @@ function CloseDescriptionDialog({
   return createPortal(modalContent, document.body)
 }
 
+function AffectedVerificationDialog({
+  ticket,
+  lastAffectedVerification,
+  verifiedByLabel,
+  onClose,
+}: {
+  ticket: MassivaTicket
+  lastAffectedVerification: MassivaLastAffectedVerification | null
+  verifiedByLabel: string
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [freshResult, setFreshResult] = useState<VerifyMassivaAffectedClientsResult | null>(null)
+
+  const verifyMutation = useMutation({
+    mutationFn: () =>
+      verifyMassivaAffectedClients({
+        protocol: ticket.protocol,
+        assignmentId: ticket.assignmentId,
+        verifiedBy: verifiedByLabel,
+      }),
+    onSuccess: async (result) => {
+      setFreshResult(result)
+      await queryClient.invalidateQueries({ queryKey: massivaKeys.all })
+    },
+  })
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const shown: MassivaLastAffectedVerification | null = freshResult != null
+    ? {
+        checkedAt: freshResult.checkedAt ?? new Date(),
+        total: freshResult.total,
+        stillOffline: freshResult.stillOffline,
+        stillDegraded: freshResult.stillDegraded,
+        verifiedBy: verifiedByLabel,
+      }
+    : lastAffectedVerification
+
+  const protocolLabel = ticket.protocol > 0 ? String(ticket.protocol) : '—'
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="massiva-affected-verify-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="massiva-affected-verify-title" className="text-base font-bold tracking-tight text-neutral-900">
+          Clientes ainda sem sinal?
+        </h3>
+        <p className="mt-0.5 font-mono text-xs text-neutral-500">#{protocolLabel}</p>
+        <p className="mt-2 text-xs leading-relaxed text-neutral-600">
+          Cruza os clientes afetados por esta massiva com o monitoramento de sinal (ONU) agora
+          mesmo. Só roda quando você clica — não é automático.
+        </p>
+
+        {shown !== null ? (
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-neutral-200/80 bg-neutral-50/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Afetados</p>
+              <p className="mt-0.5 text-xl font-bold text-neutral-900">{shown.total}</p>
+            </div>
+            <div className="rounded-lg border border-rose-200/70 bg-rose-50/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-600">Offline</p>
+              <p className="mt-0.5 text-xl font-bold text-rose-700">{shown.stillOffline}</p>
+            </div>
+            <div className="rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2.5 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Degradado</p>
+              <p className="mt-0.5 text-xl font-bold text-amber-800">{shown.stillDegraded}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm italic text-neutral-400">
+            Ainda não verificado. Clique em "Verificar agora" para checar o sinal atual.
+          </p>
+        )}
+
+        {shown !== null ? (
+          <p className="mt-3 text-[11px] text-neutral-500">
+            Última verificação por <span className="font-semibold text-neutral-700">{shown.verifiedBy?.trim() || 'não informado'}</span>
+            {' em '}
+            <span className="font-semibold text-neutral-700">{formatMassivaListDateDisplay(shown.checkedAt)}</span>.
+          </p>
+        ) : null}
+
+        {verifyMutation.isError ? (
+          <p className="mt-2 text-xs text-red-700">{formatQueryError(verifyMutation.error)}</p>
+        ) : null}
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+          >
+            Fechar
+          </button>
+          <button
+            type="button"
+            onClick={() => verifyMutation.mutate()}
+            disabled={verifyMutation.isPending}
+            className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {verifyMutation.isPending ? 'Verificando...' : 'Verificar agora'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
+}
+
 export function MassivaTicketCard({
   ticket,
   closeConfigured,
   onRequestClose,
+  onRequestCancel,
+  onRequestMaintenance,
+  lastAffectedVerification,
+  verifiedByLabel,
 }: MassivaTicketCardProps) {
   const queryClient = useQueryClient()
   const auth = useAuth()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [closeDescOpen, setCloseDescOpen] = useState(false)
+  const [affectedVerifyOpen, setAffectedVerifyOpen] = useState(false)
   const [editingExpectedClose, setEditingExpectedClose] = useState(false)
   const [expectedCloseDraft, setExpectedCloseDraft] = useState('')
   const displayStatus = effectiveMassivaStatus(ticket)
@@ -433,11 +584,11 @@ export function MassivaTicketCard({
   const statusStyles =
     displayStatus === 'aberta'
       ? 'border-emerald-300/80 bg-emerald-50 text-emerald-900'
-      : displayStatus === 'encerrada'
-        ? statusLabel === 'Cancelada'
-          ? 'border-neutral-200 bg-neutral-100 text-neutral-600'
-          : 'border-neutral-200 bg-neutral-100 text-neutral-700'
-        : 'border-amber-200 bg-amber-50 text-amber-900'
+      : displayStatus === 'cancelada'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : displayStatus === 'encerrada'
+          ? 'border-neutral-200 bg-neutral-100 text-neutral-700'
+          : 'border-amber-200 bg-amber-50 text-amber-900'
 
   const apKnown = ticket.apCode.trim() !== ''
   const splitterKnown = ticket.splitterCode.trim() !== ''
@@ -472,9 +623,11 @@ export function MassivaTicketCard({
                   ? 'bg-sky-100 text-sky-800 ring-sky-200/70'
                   : displayStatus === 'aberta'
                     ? 'bg-emerald-100 text-emerald-800 ring-emerald-200/70'
-                    : displayStatus === 'encerrada'
-                      ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
-                      : 'bg-amber-100 text-amber-800 ring-amber-200/70',
+                    : displayStatus === 'cancelada'
+                      ? 'bg-rose-100 text-rose-700 ring-rose-200/70'
+                      : displayStatus === 'encerrada'
+                        ? 'bg-neutral-100 text-neutral-600 ring-neutral-200/80'
+                        : 'bg-amber-100 text-amber-800 ring-amber-200/70',
             )}
           >
             {recordKind === 'incidente' ? (
@@ -515,20 +668,61 @@ export function MassivaTicketCard({
                   Fallback
                 </span>
               ) : null}
+              {ticket.infraProtocol != null && ticket.infraProtocol > 0 ? (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-sky-300/70 bg-sky-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-800"
+                  title={`Protocolo de infraestrutura vinculado a esta massiva: #${ticket.infraProtocol}`}
+                >
+                  <Wrench size={11} strokeWidth={2.2} aria-hidden />
+                  Infra #{ticket.infraProtocol}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
         <div className="flex w-full shrink-0 items-stretch justify-end gap-2 sm:w-auto sm:items-center">
           {displayStatus === 'encerrada' ? (
-            <button
-              type="button"
-              onClick={() => setCloseDescOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:text-neutral-800"
-              title="Ver motivo de encerramento"
-              aria-label="Ver motivo de encerramento"
-            >
-              <ScrollText size={18} strokeWidth={2} />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setCloseDescOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-neutral-300 hover:text-neutral-800"
+                title="Ver motivo de encerramento"
+                aria-label="Ver motivo de encerramento"
+              >
+                <ScrollText size={18} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequestMaintenance(ticket.protocol)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 bg-white text-neutral-500 shadow-sm transition hover:border-sky-300/80 hover:text-sky-800"
+                title="Manutenção — editar classificação do incidente"
+                aria-label="Manutenção — editar classificação do incidente"
+              >
+                <Wrench size={18} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setAffectedVerifyOpen(true)}
+                className={cn(
+                  'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-white shadow-sm transition',
+                  lastAffectedVerification != null &&
+                    (lastAffectedVerification.stillOffline > 0 || lastAffectedVerification.stillDegraded > 0)
+                    ? 'border-rose-300/80 text-rose-600 hover:border-rose-400 hover:text-rose-700'
+                    : 'border-neutral-200/90 text-neutral-500 hover:border-sky-300/80 hover:text-sky-800',
+                )}
+                title="Verificar se os clientes afetados continuam sem sinal"
+                aria-label="Verificar se os clientes afetados continuam sem sinal"
+              >
+                <Wifi size={18} strokeWidth={2} />
+                {lastAffectedVerification != null &&
+                (lastAffectedVerification.stillOffline > 0 || lastAffectedVerification.stillDegraded > 0) ? (
+                  <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-rose-500 text-[8px] font-bold text-white ring-2 ring-white">
+                    !
+                  </span>
+                ) : null}
+              </button>
+            </>
           ) : null}
           <button
             type="button"
@@ -736,16 +930,26 @@ export function MassivaTicketCard({
           </p>
         ) : null}
         <div className="pt-0.5 sm:col-span-2">
-          <div className="flex min-h-[34px] items-center justify-center">
+          <div className="flex min-h-[34px] flex-wrap items-center justify-center gap-2">
             {displayStatus === 'aberta' ? (
-              <button
-                type="button"
-                disabled={!closeConfigured}
-                onClick={() => onRequestClose(ticket.protocol)}
-                className="mx-auto inline-flex min-w-[165px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-              >
-                Encerrar massiva
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={!closeConfigured}
+                  onClick={() => onRequestClose(ticket.protocol)}
+                  className="inline-flex min-w-[150px] items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-gradient-to-b from-amber-500 to-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/20 transition hover:from-amber-500 hover:to-amber-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                >
+                  Encerrar massiva
+                </button>
+                <button
+                  type="button"
+                  disabled={!closeConfigured}
+                  onClick={() => onRequestCancel(ticket.protocol)}
+                  className="inline-flex min-w-[110px] items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </>
             ) : (
               <span aria-hidden="true" className="invisible inline-flex min-w-[165px] px-3.5 py-2 text-xs">
                 placeholder
@@ -764,6 +968,14 @@ export function MassivaTicketCard({
         <CloseDescriptionDialog
           ticket={ticket}
           onClose={() => setCloseDescOpen(false)}
+        />
+      ) : null}
+      {affectedVerifyOpen ? (
+        <AffectedVerificationDialog
+          ticket={ticket}
+          lastAffectedVerification={lastAffectedVerification}
+          verifiedByLabel={verifiedByLabel}
+          onClose={() => setAffectedVerifyOpen(false)}
         />
       ) : null}
     </article>

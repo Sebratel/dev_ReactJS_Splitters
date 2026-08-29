@@ -56,7 +56,7 @@ describe('buildMassivaAssignmentDescriptionForRequest', () => {
     const full = buildMassivaOpeningTechnicalDescription({
       requesterDisplayName: 'Teste',
       initialReport: 'r',
-      fieldTechnicianRequesting: false,
+      eventIdentifiedBy: 'zabbix',
       basis,
       affectedClientsCount: 99,
       eventStartDate: '2026-04-23',

@@ -78,6 +78,18 @@ function isAllowedFirebaseEmail(email: string | null | undefined): boolean {
 function beginSilentGoogleBffTokenRefreshIfNeeded(): void {
   if (!isFirebaseAuthConfigured()) return
 
+  // Rotas standalone (ex.: monitor de parede em nova aba) não devem disparar um
+  // hard-redirect OAuth — o token BFF não é essencial nessas telas e o redirect
+  // quebraria a sessão ao redirecionar a aba para o Google e depois para a raiz.
+  const STANDALONE_ROUTES = ['/massiva/monitor']
+  if (STANDALONE_ROUTES.includes(window.location.pathname)) return
+
+  // Em dev local (localhost) o redirect silencioso causa loop infinito:
+  // Google retorna interaction_required → app redireciona de novo → loop.
+  // O BFF de staging aceita chamadas mesmo sem o token de audience alinhado,
+  // entao o silent refresh nao e necessario para testes locais.
+  if (window.location.hostname === 'localhost') return
+
   const { sessionToken } = useSessionStore.getState()
   const st = typeof sessionToken === 'string' ? sessionToken.trim() : ''
   const aligned =

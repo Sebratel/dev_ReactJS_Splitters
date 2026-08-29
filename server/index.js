@@ -22,6 +22,17 @@ import {
   RELIEF_NEIGHBOR_GEOCODE_MAX,
 } from './splitterNeighborRouting.js';
 import { buildSplittersFilterContext } from './splittersFilterContext.js';
+import {
+  extractBlockFromTitle,
+  extractFloorFromTitle,
+  extractFloorFromComplement,
+  extractBlockFromComplement,
+  extractCondominiumName,
+  isCondominiumTitle,
+  isResidenceTitle,
+  isAlcapaoTitle,
+  normalizeCondoNameForGrouping,
+} from './condominiumClassifier.js';
 import { aggregateCancellations, aggregateSplitterCancellations, correlateMassivaChurn } from './cancellationsInsights.js';
 import { isAutoIspAuthConfigured, getAutoIspToken } from './autoIspAuth.js';
 import {
@@ -36,6 +47,7 @@ import {
   requireAuthenticatedSplittersUser,
   requireIsaAdminAccess,
   requireSplittersAdminAccess,
+  requireSplittersPermission,
 } from './firebaseAdminAuth.js';
 import {
   readIsaPromptConfig,
@@ -659,6 +671,7 @@ SELECT
     ss."number"                       AS "NÚMERO[SPLT.SECUNDARIO]",
     ss.neighborhood                   AS "BAIRRO[SPLT.SECUNDARIO]",
     ss.city                           AS "CIDADE[SPLT.SECUNDARIO]",
+    site.city                         AS "CIDADE[SITE]",
     COALESCE(nba.latitude, ss.lat)    AS "LATITUDE[SPLT.SECUNDARIO]",
     COALESCE(nba.longitude, ss.lng)   AS "LONGITUDE[SPLT.SECUNDARIO]",
     nba.latitude                      AS "LATITUDE_CAIXADEREDE",
@@ -1227,7 +1240,7 @@ app.get('/api/splitters/filter-options', async (_req, res) => {
     const query = `
       SELECT DISTINCT
         NULLIF(TRIM(base."RUA[SPLT.SECUNDARIO]"), '') AS "street",
-        NULLIF(TRIM(base."CIDADE[SPLT.SECUNDARIO]"), '') AS "city",
+        NULLIF(TRIM(base."CIDADE[SITE]"), '') AS "city",
         NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS "condominium"
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE base."ID[SPLT.SECUNDARIO]" IS NOT NULL
@@ -1713,6 +1726,8 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
 
 app.post('/api/massiva/history/open', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1732,6 +1747,16 @@ app.post('/api/massiva/history/open', async (req, res) => {
       autoClosedWithoutClients: req.body?.autoClosedWithoutClients === true,
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
+      eventStartAt: req.body?.eventStartAt ?? null,
+      infraProtocol: req.body?.infraProtocol ?? null,
+      infraAssignmentId: req.body?.infraAssignmentId ?? null,
+      identifiedBy: req.body?.identifiedBy ?? null,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
@@ -1751,6 +1776,8 @@ app.post('/api/massiva/history/open', async (req, res) => {
 
 app.post('/api/massiva/history/close', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1764,6 +1791,12 @@ app.post('/api/massiva/history/close', async (req, res) => {
       closeDescription: String(req.body?.closeDescription ?? '').trim(),
       closedAt: req.body?.closedAt ?? null,
       closedBy: String(req.body?.closedBy ?? '').trim(),
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
     });
 
     res.json({
@@ -1780,6 +1813,214 @@ app.post('/api/massiva/history/close', async (req, res) => {
   }
 });
 
+app.post('/api/massiva/history/cancel', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.registerCancel({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      closeDescription: String(req.body?.closeDescription ?? '').trim(),
+      closedAt: req.body?.closedAt ?? null,
+      closedBy: String(req.body?.closedBy ?? '').trim(),
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao registrar cancelamento local de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar cancelamento local de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+// Manutenção pós-encerramento: reclassifica um protocolo JÁ ENCERRADO (sem tocar na
+// Voalle e sem alterar closed_at/close_description/closed_by). Qualquer atendente pode usar;
+// só guarda o último editor (classification_updated_by/at) — sem histórico completo.
+app.post('/api/massiva/history/update-classification', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.updateClassification({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      updatedBy: String(req.body?.updatedBy ?? '').trim(),
+      tipoIncidente: req.body?.tipoIncidente ?? null,
+      impacto: req.body?.impacto ?? null,
+      area: req.body?.area ?? null,
+      tecnologia: req.body?.tecnologia ?? null,
+      classificacao: req.body?.classificacao ?? null,
+      cnl: req.body?.cnl ?? null,
+    });
+
+    if (result.reason === 'not-closed') {
+      return res.status(409).json({
+        success: false,
+        message: 'Só é possível editar a classificação de uma massiva já encerrada.',
+      });
+    }
+    if (result.reason === 'not-found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Massiva não encontrada no histórico local.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar classificação (manutenção) de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao atualizar classificação de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+// Grava (na abertura) a lista de clientes afetados — cópia nossa da mesma lista enviada
+// ao gateway, para viabilizar a verificação de sinal mesmo depois que o gateway apagar a dele.
+app.post('/api/massiva/history/affected-clients', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const result = await massivaHistoryStore.registerAffectedClients({
+      protocol: req.body?.protocol ?? null,
+      assignmentId: req.body?.assignmentId ?? null,
+      clients: Array.isArray(req.body?.clients) ? req.body.clients : [],
+    });
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao registrar clientes afetados (local) de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
+// Verificação sob demanda: "os clientes desta massiva encerrada continuam sem sinal?"
+// Só roda quando o atendente clica — nada dispara isso sozinho. Cruza a lista de
+// clientes afetados (gravada na abertura) com o monitoramento de ONU (onuPool),
+// e persiste o resultado (única fonte do painel de parede — ver getRecentAffectedVerificationsWithProblems).
+app.post('/api/massiva/history/verify-affected-clients', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const protocol = req.body?.protocol ?? null;
+    const assignmentId = req.body?.assignmentId ?? null;
+    const verifiedBy = String(req.body?.verifiedBy ?? '').trim();
+
+    const { pppoeList } = await massivaHistoryStore.getAffectedClientsPppoeList({ protocol, assignmentId });
+
+    if (pppoeList.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum cliente afetado registrado localmente para esta massiva. Só funciona para massivas abertas depois desta funcionalidade entrar no ar.',
+      });
+    }
+
+    let stillOffline = 0;
+    let stillDegraded = 0;
+
+    if (onuPool) {
+      const sql = `
+        SELECT bucket, COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT ON (gc.pppoe_username)
+            ${ONU_BUCKET_CASE} AS bucket
+          FROM gpon_clients gc
+          LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+          WHERE gc.pppoe_username = ANY($1::text[])
+          ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+        ) sub
+        GROUP BY bucket
+      `;
+      const onuResult = await onuPool.query(sql, [pppoeList]);
+      for (const row of onuResult.rows) {
+        if (row.bucket === 'offline') stillOffline = Number(row.count) || 0;
+        if (row.bucket === 'degraded') stillDegraded = Number(row.count) || 0;
+      }
+    }
+
+    const total = pppoeList.length;
+    await massivaHistoryStore.saveAffectedVerificationResult({
+      protocol,
+      assignmentId,
+      total,
+      stillOffline,
+      stillDegraded,
+      verifiedBy,
+    });
+
+    res.json({
+      success: true,
+      data: { total, stillOffline, stillDegraded, checkedAt: new Date().toISOString() },
+    });
+  } catch (error) {
+    console.error('Erro ao verificar sinal dos clientes afetados de massiva:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao verificar sinal dos clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
+// Painel de parede: massivas encerradas já verificadas (sob demanda) e que ainda têm
+// clientes sem sinal. Só lê resultado já persistido — não dispara verificação nova.
+app.get('/api/massiva/history/affected-verifications', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+    const limitRaw = Number.parseInt(String(req.query.limit ?? '20'), 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+    const data = await massivaHistoryStore.getRecentAffectedVerificationsWithProblems({ limit });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Erro ao consultar verificações de clientes afetados:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar verificações de clientes afetados.',
+      error: error.message,
+    });
+  }
+});
+
 // Auth AutoISP no backend — credenciais ficam no servidor; o front pede só o token.
 app.get('/api/autoisp/config', (req, res) => {
   res.json({ success: true, data: { enabled: isAutoIspAuthConfigured() } });
@@ -1787,19 +2028,24 @@ app.get('/api/autoisp/config', (req, res) => {
 
 app.get('/api/autoisp/token', async (req, res) => {
   try {
+    await requireAuthenticatedSplittersUser(req);
+
     if (!isAutoIspAuthConfigured()) {
       return res.status(503).json({ success: false, message: 'AutoISP não configurado no backend.' });
     }
     const { token, expiresInSec } = await getAutoIspToken();
     res.json({ success: true, data: { token, expiresIn: expiresInSec } });
   } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 502);
     console.error('Erro ao autenticar no AutoISP:', error.message);
-    res.status(502).json({ success: false, message: 'Falha ao autenticar no AutoISP.', error: error.message });
+    res.status(Number.isFinite(statusCode) ? statusCode : 502).json({ success: false, message: 'Falha ao autenticar no AutoISP.', error: error.message });
   }
 });
 
 app.post('/api/massiva/history/update-expected-close', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -1829,6 +2075,8 @@ app.post('/api/massiva/history/update-expected-close', async (req, res) => {
 
 app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({
         success: false,
@@ -2161,6 +2409,27 @@ app.get('/api/massiva/history/list', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao consultar listagem histórica local de massivas.',
+      error: error.message,
+    });
+  }
+});
+
+app.get('/api/massiva/history/mttd-mttr-kpis', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const monthsRaw = Number.parseInt(String(req.query.months ?? '6'), 10);
+    const months = Number.isFinite(monthsRaw) && monthsRaw > 0 ? monthsRaw : 6;
+
+    const data = await massivaHistoryStore.getMttdMttrMonthlyKpis({ months });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Erro ao consultar KPIs MTTD/MTTR mensais:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao consultar KPIs MTTD/MTTR mensais.',
       error: error.message,
     });
   }
@@ -2898,18 +3167,146 @@ async function computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRoute
 
 async function captureNetworkReliefSnapshot({ straightRadiusMeters, maxRouteMeters }) {
   if (!massivaHistoryStore.configured) {
-    return { configured: false, snapshotRunId: null, entryCount: 0, scannedCount: 0 };
+    return { configured: false, snapshotRunId: null, entryCount: 0, scannedCount: 0, relieved: [] };
   }
 
   const data = await computeNetworkReliefSnapshotData({ straightRadiusMeters, maxRouteMeters });
   const persisted = await massivaHistoryStore.replaceNetworkReliefSnapshot(data);
+
+  // ── Diff: detectar splitters que ganharam alívio ────────────────────────
+  let relieved = [];
+  try {
+    const diff = await massivaHistoryStore.diffNetworkReliefSnapshots({
+      currentRunId: persisted.snapshotRunId,
+      straightRadiusMeters,
+      maxRouteMeters,
+    });
+    relieved = diff.relievedSplitters;
+
+    if (relieved.length > 0) {
+      logger.info(
+        `[network-relief-snapshot] ${relieved.length} splitter(s) ganharam alívio: ${relieved.map((s) => s.code).join(', ')}`,
+      );
+      // Dispara webhook N8N (fire-and-forget — não bloqueia a captura)
+      notifyReliefWebhook(relieved).catch((err) => {
+        logger.warn('[network-relief-snapshot] Falha ao notificar webhook de alívio:', { error: err.message });
+      });
+    }
+  } catch (diffError) {
+    // Diff é best-effort: se falhar, o snapshot já foi gravado normalmente.
+    logger.warn('[network-relief-snapshot] Diff de alívio falhou (snapshot OK):', { error: diffError.message });
+  }
+
   return {
     configured: true,
     snapshotRunId: persisted.snapshotRunId,
     entryCount: persisted.entryCount,
     scannedCount: persisted.scannedCount,
     totalEntries: data.totalEntries,
+    relieved,
   };
+}
+
+/**
+ * Envia os splitters que ganharam alívio para o webhook N8N.
+ * Fire-and-forget — não interrompe o fluxo se falhar.
+ * Configurar via env N8N_RELIEF_WEBHOOK_URL.
+ */
+async function notifyReliefWebhook(relievedSplitters) {
+  const webhookUrl = (process.env.N8N_RELIEF_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[network-relief-webhook] N8N_RELIEF_WEBHOOK_URL não configurada — notificação ignorada.');
+    return;
+  }
+
+  const payload = {
+    event: 'splitter_relief_available',
+    timestamp: new Date().toISOString(),
+    count: relievedSplitters.length,
+    splitters: relievedSplitters.map((s) => ({
+      code: s.code,
+      title: s.title,
+      outPorts: s.outPorts,
+      busyCount: s.busyCount,
+    })),
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[network-relief-webhook] Notificação enviada com sucesso (${relievedSplitters.length} splitters).`);
+}
+
+/**
+ * Envia oportunidades de redistribuição de condomínio para o webhook N8N.
+ * Chamada sob demanda (botão na tela) — não é automática.
+ * Configurar via env N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL.
+ */
+async function notifyCondoRedistributionWebhook(opportunities) {
+  const webhookUrl = (process.env.N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[condo-redistribution-webhook] N8N_CONDO_REDISTRIBUTION_WEBHOOK_URL não configurada — notificação ignorada.');
+    return { sent: false, reason: 'webhook_not_configured' };
+  }
+
+  // Agrupar por condomínio para o e-mail
+  const byCondominium = new Map();
+  for (const opp of opportunities) {
+    const key = opp.condoName;
+    if (!byCondominium.has(key)) byCondominium.set(key, []);
+    byCondominium.get(key).push(opp);
+  }
+
+  const payload = {
+    event: 'condo_redistribution_available',
+    timestamp: new Date().toISOString(),
+    totalOpportunities: opportunities.length,
+    condominiums: [...byCondominium.entries()].map(([name, opps]) => ({
+      name,
+      opportunityCount: opps.length,
+      clients: opps.map((o) => ({
+        clientName: o.client.name,
+        pppoeUser: o.client.pppoeUser,
+        complement: o.client.complement,
+        clientFloor: o.client.floor,
+        block: o.client.block,
+        currentSplitter: {
+          code: o.currentSplitter.code,
+          title: o.currentSplitter.title,
+          floor: o.currentSplitter.floor,
+        },
+        suggestedSplitter: {
+          code: o.suggestedSplitter.code,
+          title: o.suggestedSplitter.title,
+          floor: o.suggestedSplitter.floor,
+          availablePorts: o.suggestedSplitter.availablePorts,
+        },
+        floorImprovement: o.floorDifference.improvement,
+      })),
+    })),
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[condo-redistribution-webhook] Notificação enviada com sucesso (${opportunities.length} oportunidades em ${byCondominium.size} condomínio(s)).`);
+  return { sent: true, count: opportunities.length, condominiums: byCondominium.size };
 }
 
 /**
@@ -3440,6 +3837,267 @@ app.get(['/api/splitters/:code/connections', '/api/splitters/connections'], asyn
     });
   } catch (error) {
     console.error('Erro ao buscar conexões detalhadas:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ── Análise de redistribuição em condomínios ──────────────────────────────────
+// Para cada condomínio+bloco, identifica clientes que estão conectados em um
+// splitter de andar diferente do seu apartamento, quando existe um splitter mais
+// próximo (em andar) com portas disponíveis.
+// ───────────────────────────────────────────────────────────────────────────────
+app.get('/api/splitters/condo-redistribution', async (req, res) => {
+  try {
+    // Uma ÚNICA query que traz todos os clientes de condomínio com dados do splitter.
+    // A lógica de agrupamento e comparação é feita em JS (mais rápido que N queries).
+    const allCondoQuery = `
+      SELECT
+        base."CÓDIGO[SPLT.SECUNDARIO]"        AS splitter_code,
+        base."SPLT.SECUNDARIO"                AS splitter_title,
+        base."CAPACIDADE[SPLT.SECUNDARIO]"    AS out_ports,
+        base."BUSY_COUNT"                     AS busy_count,
+        base."NOME CONDOMÍNIO"                AS condo_name,
+        base."TIPO LOCAL"                     AS tipo_local,
+        base."NOME CLIENTE"                   AS client_name,
+        base."USUÁRIO[CLIENTE]"               AS pppoe_user,
+        base."ENDERECO COMPLE."               AS complement,
+        base."RUA"                            AS client_street,
+        base."NUMERO"                         AS client_number,
+        base."CELULAR"                        AS client_phone,
+        base."ID CONEXAO[CLIENTE]"            AS connection_id,
+        base."SITE"                           AS site,
+        base."CIDADE[SITE]"                   AS city
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE base."TIPO LOCAL" = 'CONDOMÍNIO'
+        AND base."CAPACIDADE[SPLT.SECUNDARIO]" IS NOT NULL
+      ORDER BY base."NOME CONDOMÍNIO", base."CÓDIGO[SPLT.SECUNDARIO]"
+    `;
+    const result = await pool.query(allCondoQuery);
+    const rows = result.rows;
+
+    if (rows.length === 0) {
+      return res.json({ success: true, opportunities: [], pendingFloorInfo: [], stats: { condos: 0, splitters: 0, clientsAnalyzed: 0, opportunitiesFound: 0, pendingCount: 0 } });
+    }
+
+    // 1. Construir mapa de splitters únicos (deduplica linhas de clientes)
+    /** @type {Map<string, { code: string, title: string, outPorts: number, busyCount: number, availablePorts: number, condoName: string, block: string|null, floor: number|null }>} */
+    const splitterMap = new Map();
+    for (const row of rows) {
+      const code = (row.splitter_code ?? '').trim();
+      if (code && !splitterMap.has(code)) {
+        const outPorts = Number(row.out_ports ?? 0);
+        const busyCount = Number(row.busy_count ?? 0);
+        splitterMap.set(code, {
+          code,
+          title: (row.splitter_title ?? '').trim(),
+          outPorts,
+          busyCount,
+          availablePorts: Math.max(0, outPorts - busyCount),
+          condoName: normalizeCondoNameForGrouping(row.condo_name),
+          block: extractBlockFromTitle(row.splitter_title),
+          floor: extractFloorFromTitle(row.splitter_title),
+          city: (row.city ?? '').trim(),
+          site: (row.site ?? '').trim(),
+        });
+      }
+    }
+
+    // 2. Agrupar splitters por condomínio normalizado + bloco.
+    //    RES. (residências individuais) são excluídos: não têm andar por natureza
+    //    e não fazem parte da análise de redistribuição vertical.
+    //    normalizeCondoNameForGrouping remove o sufixo de andar (ex: "- 8°")
+    //    para que splitters do mesmo edifício/bloco mas de andares diferentes
+    //    caiam no mesmo grupo.
+    /** @type {Map<string, Array<{ code: string, title: string, outPorts: number, busyCount: number, availablePorts: number, condoName: string, block: string|null, floor: number }>>} */
+    const groups = new Map();
+    for (const s of splitterMap.values()) {
+      // RES. (residência) e ALÇ° (alçapão/forro) ignorados em toda a análise
+      if (isResidenceTitle(s.title) || isAlcapaoTitle(s.title)) continue;
+      const key = `${s.condoName}|||${s.block ?? '__SEM_BLOCO__'}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    }
+
+    // 3. Filtrar grupos com >= 2 splitters
+    const relevantGroups = new Map();
+    for (const [key, splitters] of groups) {
+      if (splitters.length >= 2) relevantGroups.set(key, splitters);
+    }
+
+    // Códigos de splitters que pertencem a um grupo relevante
+    const relevantCodes = new Set();
+    for (const splitters of relevantGroups.values()) {
+      for (const s of splitters) relevantCodes.add(s.code);
+    }
+
+    // 4. Analisar cada cliente
+    const opportunities = [];
+    /** @type {Array<{ client: object, currentSplitter: object, condoName: string, pendingReason: 'splitter_sem_andar' | 'cliente_sem_complemento' }>} */
+    const pendingFloorInfo = [];
+    const pendingClientsSeen = new Set(); // evita duplicar o mesmo cliente
+    let totalClientsAnalyzed = 0;
+
+    for (const row of rows) {
+      const clientName = (row.client_name ?? '').trim();
+      if (!clientName) continue; // linha sem cliente (porta vazia)
+
+      const splitterCode = (row.splitter_code ?? '').trim();
+      if (!relevantCodes.has(splitterCode)) continue; // splitter não está em grupo relevante
+
+      totalClientsAnalyzed++;
+
+      const currentSplitter = splitterMap.get(splitterCode);
+      if (!currentSplitter) continue;
+
+      const pppoeUser = (row.pppoe_user ?? '').trim();
+      const complement = (row.complement ?? '').trim();
+      const clientFloor = extractFloorFromComplement(complement);
+
+      // RES. = residência individual (sem andar por natureza) e ALÇ° = alçapão/forro
+      // (andar conhecido, colocado deliberadamente). Ambos ignorados por completo:
+      // não geram pendência nem oportunidade.
+      if (isResidenceTitle(currentSplitter.title) || isAlcapaoTitle(currentSplitter.title)) continue;
+
+      // Cliente sem andar identificável no complemento
+      if (clientFloor === null) {
+        if (!pendingClientsSeen.has(pppoeUser)) {
+          pendingClientsSeen.add(pppoeUser);
+          pendingFloorInfo.push({
+            client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
+            currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
+            condoName: currentSplitter.condoName,
+            city: currentSplitter.city,
+            site: currentSplitter.site,
+            pendingReason: 'cliente_sem_complemento',
+          });
+        }
+        continue;
+      }
+
+      // Splitter sem andar cadastrado no título (só COND./ED. chegam aqui)
+      if (currentSplitter.floor === null) {
+        if (!pendingClientsSeen.has(pppoeUser)) {
+          pendingClientsSeen.add(pppoeUser);
+          pendingFloorInfo.push({
+            client: { name: clientName, pppoeUser, complement, phone: (row.client_phone ?? '').trim(), connectionId: row.connection_id },
+            currentSplitter: { code: currentSplitter.code, title: currentSplitter.title },
+            condoName: currentSplitter.condoName,
+            city: currentSplitter.city,
+            site: currentSplitter.site,
+            pendingReason: 'splitter_sem_andar',
+          });
+        }
+        continue;
+      }
+
+      const clientBlock = extractBlockFromComplement(complement);
+
+      // Bloco do cliente vs bloco do splitter
+      if (clientBlock && currentSplitter.block && clientBlock !== currentSplitter.block) continue;
+
+      const currentDistance = Math.abs(clientFloor - currentSplitter.floor);
+
+      // Encontrar grupo deste splitter
+      const groupKey = `${currentSplitter.condoName}|||${currentSplitter.block ?? '__SEM_BLOCO__'}`;
+      const groupSplitters = relevantGroups.get(groupKey);
+      if (!groupSplitters) continue;
+
+      // Encontrar melhor candidato (mais próximo do andar do cliente, com portas livres)
+      let bestCandidate = null;
+      let bestDistance = currentDistance;
+
+      for (const candidate of groupSplitters) {
+        if (candidate.code === splitterCode) continue;
+        if (candidate.availablePorts <= 0) continue;
+        if (candidate.floor === null) continue; // candidato sem andar cadastrado — ignorar
+        if (clientBlock && candidate.block && clientBlock !== candidate.block) continue;
+
+        const candidateDistance = Math.abs(clientFloor - candidate.floor);
+        if (candidateDistance < bestDistance) {
+          bestDistance = candidateDistance;
+          bestCandidate = candidate;
+        }
+      }
+
+      if (bestCandidate) {
+        opportunities.push({
+          client: {
+            name: clientName,
+            pppoeUser,
+            complement,
+            floor: clientFloor,
+            block: clientBlock,
+            street: (row.client_street ?? '').trim(),
+            number: (row.client_number ?? '').trim(),
+            phone: (row.client_phone ?? '').trim(),
+            connectionId: row.connection_id,
+          },
+          currentSplitter: {
+            code: currentSplitter.code,
+            title: currentSplitter.title,
+            floor: currentSplitter.floor,
+            block: currentSplitter.block,
+          },
+          suggestedSplitter: {
+            code: bestCandidate.code,
+            title: bestCandidate.title,
+            floor: bestCandidate.floor,
+            block: bestCandidate.block,
+            availablePorts: bestCandidate.availablePorts,
+          },
+          floorDifference: {
+            current: currentDistance,
+            suggested: bestDistance,
+            improvement: currentDistance - bestDistance,
+          },
+          condoName: currentSplitter.condoName,
+          city: currentSplitter.city,
+          site: currentSplitter.site,
+        });
+      }
+    }
+
+    // 5. Ordenar por maior melhoria descendente
+    opportunities.sort((a, b) => b.floorDifference.improvement - a.floorDifference.improvement);
+
+    // 6. Ordenar pendências: primeiro os de splitter sem andar, depois os sem complemento
+    pendingFloorInfo.sort((a, b) => {
+      if (a.pendingReason === b.pendingReason) return a.condoName.localeCompare(b.condoName);
+      return a.pendingReason === 'splitter_sem_andar' ? -1 : 1;
+    });
+
+    const uniqueCondos = new Set(opportunities.map((o) => o.condoName));
+
+    res.json({
+      success: true,
+      opportunities,
+      pendingFloorInfo,
+      stats: {
+        condos: uniqueCondos.size,
+        splitters: splitterMap.size,
+        clientsAnalyzed: totalClientsAnalyzed,
+        opportunitiesFound: opportunities.length,
+        pendingCount: pendingFloorInfo.length,
+      },
+    });
+  } catch (error) {
+    logger.error('[condo-redistribution] Erro na análise:', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Disparo manual de notificação de redistribuição para o CAOC
+app.post('/api/splitters/condo-redistribution/notify', async (req, res) => {
+  try {
+    const { opportunities } = req.body ?? {};
+    if (!Array.isArray(opportunities) || opportunities.length === 0) {
+      return res.status(400).json({ success: false, message: 'Nenhuma oportunidade enviada.' });
+    }
+
+    const result = await notifyCondoRedistributionWebhook(opportunities);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    logger.error('[condo-redistribution-notify] Erro ao notificar:', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });

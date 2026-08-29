@@ -301,6 +301,26 @@ export async function requireSplittersAdminAccess(
   return actor;
 }
 
+/**
+ * Exige que o usuario autenticado tenha uma permissao especifica (ex.: 'canViewMassiva').
+ * Admin passa por qualquer permissao (isAdmin implica acesso total).
+ * @param {import('express').Request} req
+ * @param {string} permission — chave em profile.permissions
+ * @param {string} [message]
+ */
+export async function requireSplittersPermission(
+  req,
+  permission,
+  message = 'Voce nao tem permissao para executar esta acao.',
+) {
+  const actor = await requireAuthenticatedSplittersUser(req);
+  const perms = actor.profile?.permissions ?? {};
+  if (perms.isAdmin === true || perms[permission] === true) {
+    return actor;
+  }
+  throw buildError(message, 403);
+}
+
 export async function requireIsaAdminAccess(req) {
   return requireSplittersAdminAccess(
     req,

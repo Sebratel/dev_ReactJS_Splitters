@@ -1,4 +1,5 @@
 import type { MassivaOpeningBasis } from '@/features/massiva/model/massivaOpeningBasis'
+import type { MassivaEventIdentifiedBy } from '@/features/massiva/store/massivaOpenDraftStore'
 import { parseDateTimeLocalToDate } from '@/features/massiva/lib/formatMassivaListDate'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { formatOltTopologyDescriptionLine } from '@/shared/lib/oltTopologyLabels'
@@ -128,7 +129,7 @@ export function buildCtosAfetadasBlock(basis: MassivaOpeningBasis | null): strin
 export type MassivaTechnicalDescriptionDraft = {
   requesterDisplayName: string
   initialReport: string
-  fieldTechnicianRequesting: boolean
+  eventIdentifiedBy: MassivaEventIdentifiedBy
   basis: MassivaOpeningBasis | null
   affectedClientsCount: number
   eventStartDate: string
@@ -143,9 +144,12 @@ export function buildMassivaOpeningTechnicalDescription(
   params: MassivaTechnicalDescriptionDraft,
 ): string {
   const relato = params.initialReport.trim() || 'Nao informado'
-  const origem = params.fieldTechnicianRequesting
-    ? 'tecnico em campo solicitando abertura'
-    : 'evento de rompimento'
+  const EVENT_IDENTIFIED_BY_LABEL: Record<MassivaEventIdentifiedBy, string> = {
+    tecnico: 'tecnico em campo',
+    zabbix: 'monitoramento Zabbix',
+    int6: 'sistema INT6',
+  }
+  const origem = EVENT_IDENTIFIED_BY_LABEL[params.eventIdentifiedBy] ?? 'nao informado'
 
   const topologyLine = buildTopologySummaryLine(params.basis)
   const ctosLine = buildCtosAfetadasBlock(params.basis)

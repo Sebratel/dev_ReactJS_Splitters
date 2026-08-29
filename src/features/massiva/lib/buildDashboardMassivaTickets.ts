@@ -10,7 +10,12 @@ import {
   bffSaysMassivaOpen,
 } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { restorationHoursBetweenDates } from '@/features/massiva/lib/formatMassivaListDate'
-import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
+import type { MassivaStatus, MassivaTicket } from '@/features/massiva/model/massivaTicket'
+
+/** Sabor de "fechado" preservando cancelamento distinto do encerramento. */
+function closedFlavor(...candidates: readonly (MassivaStatus | undefined)[]): 'encerrada' | 'cancelada' {
+  return candidates.some((s) => s === 'cancelada') ? 'cancelada' : 'encerrada'
+}
 
 export const LOCAL_OPEN_TRUST_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -41,7 +46,8 @@ function withAffectedClients(
 }
 
 function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTicket {
-  const closed = row.status === 'encerrada' || row.closedAt != null
+  const closed =
+    row.status === 'encerrada' || row.status === 'cancelada' || row.closedAt != null
   return applyEffectiveMassivaTicket({
     protocol: row.protocol ?? 0,
     assignmentId: row.assignmentId,
@@ -67,6 +73,9 @@ function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTi
     affectedClientsResidential: null,
     affectedClientsCorporate: null,
     usedFallback: false,
+    infraProtocol: row.infraProtocol,
+    infraAssignmentId: row.infraAssignmentId,
+    identifiedBy: row.identifiedBy,
   })
 }
 
@@ -75,15 +84,18 @@ function applyClosedMassivaFromLocalRow(
   row: MassivaHistoryListRow,
   bff?: MassivaTicket,
 ): MassivaTicket {
+  const flavor = closedFlavor(row.status)
   const base = applyEffectiveMassivaTicket({
     ...massivaTicketFromLocalHistoryRow(row),
-    status: 'encerrada',
+    status: flavor,
     ellevenLifecycle: 'closed',
     closedAt: row.closedAt ?? bff?.closedAt ?? null,
   })
   if (!bff) return base
 
   const bffEffective = applyEffectiveMassivaTicket(bff)
+  // Cancelado prevalece se qualquer lado (local ou Elleven) indicar cancelamento.
+  const mergedFlavor = closedFlavor(row.status, bffEffective.status)
   return withAffectedClients(
     {
       ...base,
@@ -101,7 +113,7 @@ function applyClosedMassivaFromLocalRow(
       openedAt: base.openedAt ?? bffEffective.openedAt,
       closedAt: base.closedAt ?? bffEffective.closedAt,
       expectedCloseAt: bffEffective.expectedCloseAt ?? base.expectedCloseAt,
-      status: 'encerrada',
+      status: mergedFlavor,
       ellevenLifecycle: 'closed',
       affectedClientsResidential: bffEffective.affectedClientsResidential,
       affectedClientsCorporate: bffEffective.affectedClientsCorporate,
@@ -156,12 +168,17 @@ function mergeBffOntoLocal(
   const trustLocalOpen = shouldTrustLocalOpenOverBff(localRow, bff, nowMs)
   const bffEffective = applyEffectiveMassivaTicket(bff)
 
-  if ((bffEffective.status === 'encerrada' || bff.ellevenLifecycle === 'closed') && !trustLocalOpen) {
+  if (
+    (bffEffective.status === 'encerrada' ||
+      bffEffective.status === 'cancelada' ||
+      bff.ellevenLifecycle === 'closed') &&
+    !trustLocalOpen
+  ) {
     return withAffectedClients(
       {
         ...local,
         ...bffEffective,
-        status: 'encerrada',
+        status: closedFlavor(bffEffective.status, local.status),
         ellevenLifecycle: 'closed',
         ellevenIncidentStatusId: bffEffective.ellevenIncidentStatusId,
         closedAt: bffEffective.closedAt ?? local.closedAt,
@@ -370,7 +387,11 @@ export function buildDashboardMassivaTickets(input: {
             ellevenLifecycle:
               existing.ellevenLifecycle === 'closed' ? 'closed' : recent.ellevenLifecycle,
             status:
-              effectiveMassivaStatus(existing) === 'encerrada' ? 'encerrada' : 'aberta',
+              effectiveMassivaStatus(existing) === 'cancelada'
+                ? 'cancelada'
+                : effectiveMassivaStatus(existing) === 'encerrada'
+                  ? 'encerrada'
+                  : 'aberta',
           }),
           localRow ?? null,
           existing,

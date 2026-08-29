@@ -9,7 +9,7 @@ export type MassivaHistoryListRow = {
   title: string
   operatorEmail: string
   affectedClients: number
-  status: 'aberta' | 'encerrada'
+  status: 'aberta' | 'encerrada' | 'cancelada'
   openedAt: Date | null
   expectedCloseAt: Date | null
   closedAt: Date | null
@@ -17,7 +17,47 @@ export type MassivaHistoryListRow = {
   closeDescription: string | null
   /** Autor do encerramento (usuário da plataforma). */
   closedBy: string | null
+  /** Início do evento (base para cálculo de MTTD). Null se não informado na abertura. */
+  eventStartAt: Date | null
+  /**
+   * MTTD em minutos: de `eventStartAt` até `eventIdentifiedAt`.
+   * Null se `eventStartAt` não foi registrado ou os timestamps são inválidos.
+   */
+  mttdMinutes: number | null
+  /**
+   * MTTR em minutos: de `eventIdentifiedAt` até `closedAt`.
+   * Null se a massiva ainda está aberta ou os timestamps são inválidos.
+   */
+  mttrMinutes: number | null
   updatedAt: Date | null
+  /** Protocolo de infraestrutura vinculado (1 por evento). Null quando não foi aberto. */
+  infraProtocol: number | null
+  infraAssignmentId: number | null
+  /** Quem identificou o evento (tecnico/zabbix/int6). Null para massivas anteriores à coluna. */
+  identifiedBy: 'tecnico' | 'zabbix' | 'int6' | null
+  /** Campos de classificação operacional — preenchidos ao encerrar a massiva (podem ser null). */
+  tipoIncidente: string | null
+  impacto: string | null
+  area: string | null
+  tecnologia: string | null
+  classificacao: string | null
+  cnl: string | null
+  /**
+   * Manutenção pós-encerramento: quem editou a classificação por último (independente
+   * de quem encerrou) e quando. Null se a classificação nunca foi editada após o encerramento.
+   */
+  classificationUpdatedBy: string | null
+  classificationUpdatedAt: Date | null
+  /**
+   * Última verificação (sob demanda) "clientes ainda sem sinal?" — null se nunca foi
+   * verificado. Só existe pra massivas cuja lista de afetados foi gravada na abertura
+   * (depois desta funcionalidade entrar no ar).
+   */
+  affectedVerificationCheckedAt: Date | null
+  affectedVerificationTotal: number | null
+  affectedVerificationStillOffline: number | null
+  affectedVerificationStillDegraded: number | null
+  affectedVerificationBy: string | null
 }
 
 function toNullableDate(value: unknown): Date | null {
@@ -34,7 +74,7 @@ function toInt(value: unknown): number {
 }
 
 export async function fetchMassivaHistoryListFromLocalDb(input: {
-  status?: 'aberta' | 'encerrada' | null
+  status?: 'aberta' | 'encerrada' | 'cancelada' | null
   startDate?: Date | null
   endDate?: Date | null
   limit?: number
@@ -65,7 +105,12 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
     title: String(row.title ?? '').trim(),
     operatorEmail: String(row.operatorEmail ?? '').trim(),
     affectedClients: Math.max(0, toInt(row.affectedClients)),
-    status: String(row.status ?? '').trim().toLowerCase() === 'encerrada' ? 'encerrada' : 'aberta',
+    status: ((): 'aberta' | 'encerrada' | 'cancelada' => {
+      const s = String(row.status ?? '').trim().toLowerCase()
+      if (s === 'encerrada') return 'encerrada'
+      if (s === 'cancelada') return 'cancelada'
+      return 'aberta'
+    })(),
     openedAt: toNullableDate(row.openedAt),
     expectedCloseAt: toNullableDate(row.expectedCloseAt),
     closedAt: toNullableDate(row.closedAt),
@@ -75,6 +120,48 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
     closedBy: row.closedBy != null && String(row.closedBy).trim() !== ''
       ? String(row.closedBy).trim()
       : null,
+    eventStartAt: toNullableDate(row.eventStartAt),
+    mttdMinutes: row.mttdMinutes != null && Number.isFinite(Number(row.mttdMinutes))
+      ? Math.round(Number(row.mttdMinutes))
+      : null,
+    mttrMinutes: row.mttrMinutes != null && Number.isFinite(Number(row.mttrMinutes))
+      ? Math.round(Number(row.mttrMinutes))
+      : null,
     updatedAt: toNullableDate(row.updatedAt),
+    infraProtocol: row.infraProtocol == null ? null : toInt(row.infraProtocol),
+    infraAssignmentId: row.infraAssignmentId == null ? null : toInt(row.infraAssignmentId),
+    identifiedBy: ((): 'tecnico' | 'zabbix' | 'int6' | null => {
+      const v = String(row.identifiedBy ?? '').trim().toLowerCase()
+      return v === 'tecnico' || v === 'zabbix' || v === 'int6' ? v : null
+    })(),
+    tipoIncidente: row.tipoIncidente != null && String(row.tipoIncidente).trim() !== ''
+      ? String(row.tipoIncidente).trim()
+      : null,
+    impacto: row.impacto != null && String(row.impacto).trim() !== ''
+      ? String(row.impacto).trim()
+      : null,
+    area: row.area != null && String(row.area).trim() !== ''
+      ? String(row.area).trim()
+      : null,
+    tecnologia: row.tecnologia != null && String(row.tecnologia).trim() !== ''
+      ? String(row.tecnologia).trim()
+      : null,
+    classificacao: row.classificacao != null && String(row.classificacao).trim() !== ''
+      ? String(row.classificacao).trim()
+      : null,
+    cnl: row.cnl != null && String(row.cnl).trim() !== ''
+      ? String(row.cnl).trim()
+      : null,
+    classificationUpdatedBy: row.classificationUpdatedBy != null && String(row.classificationUpdatedBy).trim() !== ''
+      ? String(row.classificationUpdatedBy).trim()
+      : null,
+    classificationUpdatedAt: toNullableDate(row.classificationUpdatedAt),
+    affectedVerificationCheckedAt: toNullableDate(row.affectedVerificationCheckedAt),
+    affectedVerificationTotal: row.affectedVerificationTotal == null ? null : toInt(row.affectedVerificationTotal),
+    affectedVerificationStillOffline: row.affectedVerificationStillOffline == null ? null : toInt(row.affectedVerificationStillOffline),
+    affectedVerificationStillDegraded: row.affectedVerificationStillDegraded == null ? null : toInt(row.affectedVerificationStillDegraded),
+    affectedVerificationBy: row.affectedVerificationBy != null && String(row.affectedVerificationBy).trim() !== ''
+      ? String(row.affectedVerificationBy).trim()
+      : null,
   }))
 }

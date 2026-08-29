@@ -6,6 +6,7 @@ import {
 import {
   ellevenStatusTextIndicatesClosed,
   ellevenStatusTextIndicatesOpen,
+  ellevenStatusTextsIndicateCancelled,
   ellevenStatusTextsIndicateClosed,
 } from '@/features/massiva/lib/massivaEllevenStatusText'
 import { MASSIVA_API_GATEWAY_DEFAULTS } from '@/features/massiva/model/massivaApiGatewayConstants'
@@ -17,7 +18,7 @@ export type { EllevenMassivaLifecycle }
 /**
  * Paridade com `MassivaStatus` / `MassivaTicket` em `lib/models/massiva_models.dart`.
  */
-export type MassivaStatus = 'aberta' | 'encerrada' | 'desconhecida'
+export type MassivaStatus = 'aberta' | 'encerrada' | 'cancelada' | 'desconhecida'
 
 export type MassivaTicket = {
   protocol: number
@@ -65,6 +66,18 @@ export type MassivaTicket = {
   affectedClientsResidential: number | null
   affectedClientsCorporate: number | null
   usedFallback: boolean
+  /**
+   * Protocolo de infraestrutura aberto junto com a massiva (1 por evento). Só existe na origem
+   * local (histórico MySQL) — o payload ao vivo do Elleven não expõe esse vínculo. Null/ausente
+   * quando não houve abertura de infra.
+   */
+  infraProtocol?: number | null
+  infraAssignmentId?: number | null
+  /**
+   * Quem identificou o evento (tecnico/zabbix/int6). Só existe na origem local (histórico MySQL);
+   * o payload ao vivo do Elleven não expõe. Null/ausente quando não informado ou massiva antiga.
+   */
+  identifiedBy?: 'tecnico' | 'zabbix' | 'int6' | null
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -198,6 +211,16 @@ export function resolveMassivaStatusFromIncidentStatusId(
   incidentStatusId: number | null,
   statusTexts: readonly string[] = [],
 ): MassivaStatus | null {
+  // Cancelamento tem precedência sobre encerramento.
+  if (ellevenStatusTextsIndicateCancelled(statusTexts)) return 'cancelada'
+
+  const cancelFromEnv = Number.parseInt(env.massivaCancelIncidentStatusId, 10)
+  const cancelledIds = new Set<number>([
+    8,
+    ...(Number.isFinite(cancelFromEnv) && cancelFromEnv > 0 ? [cancelFromEnv] : []),
+  ])
+  if (incidentStatusId !== null && cancelledIds.has(incidentStatusId)) return 'cancelada'
+
   if (ellevenStatusTextsIndicateClosed(statusTexts)) return 'encerrada'
 
   if (incidentStatusId === null) return null
@@ -224,6 +247,7 @@ export function resolveMassivaStatusFromIncidentStatusId(
 
 /** Qualquer campo de situação com hint de encerramento/cancelamento prevalece sobre “Em andamento”. */
 function resolveMassivaStatusFromTexts(texts: readonly string[]): MassivaStatus {
+  if (ellevenStatusTextsIndicateCancelled(texts)) return 'cancelada'
   if (texts.some(ellevenStatusTextIndicatesClosed)) return 'encerrada'
   if (texts.some(ellevenStatusTextIndicatesOpen)) return 'aberta'
   return 'desconhecida'
@@ -234,6 +258,9 @@ export function formatMassivaStatusLabel(
   options?: { statusTexts?: readonly string[] },
 ): string {
   const texts = options?.statusTexts ?? []
+  if (status === 'cancelada' || ellevenStatusTextsIndicateCancelled(texts)) {
+    return 'Cancelada'
+  }
   if (status === 'encerrada' || ellevenStatusTextsIndicateClosed(texts)) {
     if (texts.some((t) => /cancelad/i.test(t))) return 'Cancelada'
     return 'Encerrada'
@@ -260,11 +287,14 @@ export function formatMassivaTicketStatusLabel(ticket: {
     ticket.description ?? '',
   ]
   const effective: MassivaStatus =
-    ticket.ellevenLifecycle === 'closed' ||
-    ticket.status === 'encerrada' ||
-    ellevenStatusTextsIndicateClosed(ticket.ellevenStatusTexts ?? [])
-      ? 'encerrada'
-      : ticket.status
+    ticket.status === 'cancelada' ||
+    ellevenStatusTextsIndicateCancelled(ticket.ellevenStatusTexts ?? [])
+      ? 'cancelada'
+      : ticket.ellevenLifecycle === 'closed' ||
+          ticket.status === 'encerrada' ||
+          ellevenStatusTextsIndicateClosed(ticket.ellevenStatusTexts ?? [])
+        ? 'encerrada'
+        : ticket.status
   return formatMassivaStatusLabel(effective, { statusTexts: hintTexts })
 }
 
@@ -571,16 +601,16 @@ export function parseMassivaTicketFromApi(
     statusTexts,
   )
   const textsIndicateClosed = ellevenStatusTextsIndicateClosed(statusTexts)
+  const textsIndicateCancelled = ellevenStatusTextsIndicateCancelled(statusTexts)
 
   const status: MassivaStatus =
-    closedAtEarly != null ||
-    cancelledAtEarly != null ||
-    ellevenLifecycle === 'closed' ||
-    textsIndicateClosed
-      ? 'encerrada'
-      : ellevenLifecycle === 'open'
-        ? 'aberta'
-        : statusFromIncidentId ?? statusFromTexts
+    cancelledAtEarly != null || textsIndicateCancelled || statusFromIncidentId === 'cancelada'
+      ? 'cancelada'
+      : closedAtEarly != null || ellevenLifecycle === 'closed' || textsIndicateClosed
+        ? 'encerrada'
+        : ellevenLifecycle === 'open'
+          ? 'aberta'
+          : statusFromIncidentId ?? statusFromTexts
 
   const title = pickString(
     merged.title ??

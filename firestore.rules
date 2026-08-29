@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore — plataforma de Splitters.
+//
+// Modelo: as permissões vivem em `splitters_users/{uid}.permissions` (6 booleans,
+// incl. isAdmin). Como o app grava direto do cliente, ESTAS regras são a unica
+// barreira real contra escalonamento de privilegio. Principios:
+//   - Ninguem anonimo le/escreve nada (exige request.auth).
+//   - Um usuario le e atualiza SÓ o proprio doc, e NUNCA pode mexer nas proprias
+//     `permissions` nem no proprio `isActive` (evita auto-promocao a admin).
+//   - Somente admin (isAdmin == true no proprio doc) altera permissoes de qualquer um.
+//
+// Bootstrap: o primeiro admin deve ser semeado manualmente no console
+// (editar o doc em splitters_users e por permissions.isAdmin = true). A regra de
+// create abaixo bloqueia de proposito qualquer tentativa de nascer admin pelo cliente.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myDoc() {
+      return get(/databases/$(database)/documents/splitters_users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/splitters_users/$(request.auth.uid))
+        && myDoc().isActive == true
+        && myDoc().permissions.isAdmin == true;
+    }
+
+    // ── Perfis de usuario + permissoes ─────────────────────────────────────────
+    match /splitters_users/{uid} {
+
+      // Ler: o proprio usuario le o seu doc; admin le todos.
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+
+      // Criar o proprio doc no primeiro login — sem poder se dar admin, ja ativo.
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.permissions.isAdmin == false;
+
+      // Atualizar:
+      //  - admin altera qualquer campo de qualquer usuario;
+      //  - o proprio usuario atualiza o seu doc (login: displayName/photo/lastLoginAt)
+      //    DESDE QUE nao mude as proprias permissions nem o proprio isActive.
+      allow update: if isAdmin()
+        || (
+          isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.permissions == resource.data.permissions
+          && request.resource.data.isActive == resource.data.isActive
+        );
+
+      // Remover: apenas admin.
+      allow delete: if isAdmin();
+    }
+
+    // ── Solicitacoes de acesso ─────────────────────────────────────────────────
+    match /splitters_access_requests/{requestId} {
+
+      // Ler: o solicitante le as proprias; admin le todas.
+      allow read: if isSignedIn()
+        && (resource.data.uid == request.auth.uid || isAdmin());
+
+      // Criar: o usuario abre uma solicitacao PARA SI, sempre como 'pending'.
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // Resolver (aprovar/rejeitar) e remover: apenas admin.
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Negacao explicita para qualquer outra colecao ──────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
