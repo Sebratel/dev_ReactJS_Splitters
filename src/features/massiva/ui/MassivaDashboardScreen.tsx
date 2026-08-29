@@ -20,7 +20,6 @@ import {
   TrendingUp,
   Wrench,
   X,
-  SlidersHorizontal,
   Clock,
   ShieldAlert,
   CheckCircle2,
@@ -426,12 +425,12 @@ export function MassivaDashboardScreen() {
     const encerradas = filteredRows.filter((r) => r.status === 'encerrada').length
     const abertas = filteredRows.filter((r) => r.status === 'aberta').length
     const totalAfetados = filteredRows.reduce((s, r) => s + Math.max(0, r.affectedClients), 0)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sla = summarizeMassivaSla(filteredRows.map((r) => ({
       status: r.status, closedAt: r.closedAt, expectedCloseAt: r.expectedCloseAt,
       protocol: r.protocol ?? 0, assignmentId: null, apCode: r.accessPointCode, splitterCode: '',
       affectedClients: r.affectedClients, openedAt: r.openedAt, title: r.title, description: '',
       createdBy: r.operatorEmail, responsible: '', mttdMinutes: r.mttdMinutes, mttrMinutes: r.mttrMinutes,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     })) as any)
     return { total, encerradas, abertas, totalAfetados, sla }
   }, [filteredRows])
@@ -482,12 +481,12 @@ export function MassivaDashboardScreen() {
   const apRanking = useMemo(
     () =>
       rankMassivaAccessPoints(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         filteredRows.map((r) => ({
           protocol: r.protocol ?? 0, assignmentId: null, apCode: r.accessPointCode, splitterCode: '',
           affectedClients: r.affectedClients, openedAt: r.openedAt, status: r.status,
           closedAt: r.closedAt, expectedCloseAt: r.expectedCloseAt, title: r.title, description: '',
           createdBy: r.operatorEmail, responsible: '', mttdMinutes: r.mttdMinutes, mttrMinutes: r.mttrMinutes,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         })) as any,
         8,
       ),

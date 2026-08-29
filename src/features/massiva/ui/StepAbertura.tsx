@@ -4,7 +4,10 @@ import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
-import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaOpenReadiness'
+import type {
+  MassivaOpenFinalContext,
+  MassivaOpenReadinessView,
+} from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { MassivaOpenDraftFields } from '@/features/massiva/ui/MassivaOpenDraftFields'
 import { isGoogleIdentityConfigured } from '@/shared/config/env'
@@ -51,6 +54,7 @@ export function StepAbertura({
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
+  const eventIdentifiedBy = useMassivaOpenDraftStore((s) => s.eventIdentifiedBy)
 
   // Preview por AP usa amostra de 50 do batch-summary; na abertura buscamos a lista
   // completa por rota para a contagem de afetados bater com a validação.
@@ -82,18 +86,20 @@ export function StepAbertura({
       ? openingPreparation.plan.requests
       : []
 
-  const contextForPreview = readiness.status === 'ready-to-open'
+  const contextForPreview: MassivaOpenFinalContext | null = readiness.status === 'ready-to-open'
     ? readiness.context
     : openingPreparation.status === 'prepared'
       ? {
           personId: 0,
           operatorEmail: '',
+          operatorName: '',
           basis: openingPreparation.basis,
           plan: openingPreparation.plan,
           assignmentDescription,
           assignmentFinalDateLocal: '',
           assignmentBeginningDateLocal: null,
           eventIdentifiedAtLocal: null,
+          eventIdentifiedBy,
           massivaOpenPath: '',
           massivaAfetadosPath: '',
           affectedUsersQuantityFlutterParity: openingPreparation.plan.affectedUsersQuantityFlutterParity,
@@ -101,7 +107,7 @@ export function StepAbertura({
         }
       : null
 
-  const effectiveContextForPreview =
+  const effectiveContextForPreview: MassivaOpenFinalContext | null =
     contextForPreview !== null &&
     fullConnections.length > contextForPreview.basis.collectedClientes.length
       ? {
