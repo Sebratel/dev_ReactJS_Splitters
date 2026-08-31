@@ -668,35 +668,32 @@ export function SplittersOperationalPriorityFab({
     sidebarDockCenterX,
   ])
 
-  // Menu e painéis operacional/planejamento (largura ~20rem quando ancorados na
-  // sidebar) não têm o auto-clamp do assistente. Com a sidebar estreita/encostada,
-  // o popover centrado no FAB estourava para fora da tela à esquerda. Este shift
-  // reposiciona para caber (mesma lógica do assistente, com a largura fixa deles).
+  // A bolha do FAB e os popovers moram no MESMO container centrado no FAB (centro
+  // da sidebar). Para manter a bolha centrada mas abrir os popovers À DIREITA da
+  // sidebar (sem cortar), aplicamos este translateX SÓ nos popovers não-assistente
+  // (menu/operacional/planejamento) — o assistente já tem o seu próprio. O alvo é
+  // a borda direita da sidebar + folga, com clamp para não estourar à direita.
   const dockNonAssistantTranslateXp = useMemo(() => {
     if (!isDockedOnSidebar || activePanel === 'assistant' || sidebarDockCenterX == null) return 0
     const vw = assistantDockViewportW
-    const pad = 20
+    const pad = 16
     const panelW = Math.min(vw - 32, 20 * 16)
     if (panelW < 24) return 0
     const half = panelW / 2
-    const naturalLeft = sidebarDockCenterX - half
-    const naturalRight = sidebarDockCenterX + half
-    const minShift = pad - naturalLeft
-    const maxShift = vw - pad - naturalRight
-    if (minShift <= maxShift) {
-      if (minShift <= 0 && maxShift >= 0) return 0
-      if (minShift > 0) return Math.round(minShift)
-      return Math.round(maxShift)
-    }
-    return Math.round(minShift)
+    const containerLeft = sidebarDockCenterX - half // posição atual (centrada no FAB)
+    const sidebarRight = sidebarDockCenterX * 2 // sidebar encostada em left-0
+    let desiredLeft = sidebarRight + 12 // abre à direita da sidebar
+    const maxLeft = vw - pad - panelW
+    if (desiredLeft > maxLeft) desiredLeft = maxLeft
+    if (desiredLeft < pad) desiredLeft = pad
+    return Math.round(desiredLeft - containerLeft)
   }, [isDockedOnSidebar, activePanel, sidebarDockCenterX, assistantDockViewportW])
 
-  // Estilo do container dos popovers: no caso ancorado não-assistente, soma o
-  // shift de clamp ao translateX(-50%) da posição base.
-  const fabPanelContainerStyle: CSSProperties =
-    isDockedOnSidebar && activePanel !== 'assistant' && dockNonAssistantTranslateXp !== 0
-      ? { ...fabPositionStyle, transform: `translateX(-50%) translateX(${dockNonAssistantTranslateXp}px)` }
-      : fabPositionStyle
+  // Aplicado apenas aos popovers não-assistente (não à bolha).
+  const dockPanelShiftStyle: CSSProperties | undefined =
+    isDockedOnSidebar && dockNonAssistantTranslateXp !== 0
+      ? { transform: `translateX(${dockNonAssistantTranslateXp}px)` }
+      : undefined
 
   const handleFabPrimaryClick = () => {
     if (activePanel !== null) {
@@ -897,12 +894,13 @@ export function SplittersOperationalPriorityFab({
             ? 'bottom-[max(10rem,calc(env(safe-area-inset-bottom)+8rem))]'
             : '',
         )}
-        style={fabPanelContainerStyle}
+        style={fabPositionStyle}
       >
         {activePanel === 'operational' ? (
           <div
             id="splitters-priority-fab-panel"
             className="pointer-events-auto w-full min-w-0 overflow-hidden rounded-2xl border border-rose-200/90 dark:border-rose-800/50 bg-gradient-to-b from-rose-50/98 dark:from-rose-950/20 to-white dark:to-surface-container-lowest shadow-[0_12px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-rose-950/[0.06]"
+            style={dockPanelShiftStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="splitters-priority-fab-title"
@@ -1054,6 +1052,7 @@ export function SplittersOperationalPriorityFab({
           <div
             id="splitters-relief-fab-panel"
             className="pointer-events-auto w-full min-w-0 overflow-hidden rounded-2xl border border-amber-200/90 dark:border-amber-800/50 bg-gradient-to-b from-amber-50/98 dark:from-amber-950/20 to-white dark:to-surface-container-lowest shadow-[0_12px_40px_-12px_rgba(15,23,42,0.22)] ring-1 ring-amber-950/[0.06]"
+            style={dockPanelShiftStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="splitters-relief-fab-title"
@@ -1623,6 +1622,7 @@ export function SplittersOperationalPriorityFab({
             role="menu"
             aria-label="Escolher painel da ISA"
             className="pointer-events-auto w-[min(calc(100vw-2rem),20rem)] overflow-hidden rounded-2xl border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest shadow-[0_12px_36px_-10px_rgba(15,23,42,0.28)] ring-1 ring-neutral-950/[0.04]"
+            style={dockPanelShiftStyle}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="border-b border-neutral-100 dark:border-white/5 px-3 py-2">
