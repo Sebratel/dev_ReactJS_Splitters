@@ -598,7 +598,7 @@ export function MassivaTicketCard({
   return (
     <article
       className={cn(
-        'h-full overflow-hidden rounded-2xl border bg-surface-container-lowest shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)] animate-in fade-in zoom-in-[0.99] slide-in-from-bottom-1',
+        'overflow-hidden rounded-2xl border bg-surface-container-lowest shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-10px_rgba(15,23,42,0.14)]',
         catalogOutOfBand
           ? 'border-amber-400/80 ring-amber-400/35'
           : 'border-neutral-200/85 dark:border-white/10',

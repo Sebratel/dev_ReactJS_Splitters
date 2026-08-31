@@ -1058,9 +1058,9 @@ const { data: recentOpenTickets = [] } = useQuery({
           </p>
         ) : (
           <>
-            <ul className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
+            <ul className="grid w-full grid-cols-1 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
               {visibleTickets.map((t, i) => (
-                <li key={ticketKey(t, i)} className="h-full">
+                <li key={ticketKey(t, i)}>
                   <MassivaTicketCard
                     ticket={t}
                     closeConfigured={closeConfigured}
