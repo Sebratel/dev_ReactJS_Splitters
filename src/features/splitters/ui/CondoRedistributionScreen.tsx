@@ -633,7 +633,7 @@ export function CondoRedistributionScreen() {
                   <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
 
                   <div className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-lg">
-                    <p className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60">
+                    <p className="border-b border-neutral-100 dark:border-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60">
                       {activeTab === 'opportunities' ? 'Oportunidades' : 'Pendências'}
                     </p>
                     <button
@@ -658,7 +658,7 @@ export function CondoRedistributionScreen() {
                         if (activeTab === 'opportunities') exportAllOpportunitiesToPDF(data.opportunities)
                         else exportAllPendingToPDF(data.pendingFloorInfo)
                       }}
-                      className="flex w-full items-center gap-3 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2.5 text-left text-xs text-on-surface-variant transition hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-200"
+                      className="flex w-full items-center gap-3 border-t border-neutral-100 dark:border-white/5 px-3 py-2.5 text-left text-xs text-on-surface-variant transition hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-200"
                     >
                       <FileText className="size-4 shrink-0 text-red-500" />
                       <div>
@@ -690,7 +690,7 @@ export function CondoRedistributionScreen() {
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
           <Loader2 className="size-8 animate-spin text-amber-500" />
           <p className="text-sm text-on-surface-variant">Analisando condomínios...</p>
         </div>
@@ -770,7 +770,7 @@ export function CondoRedistributionScreen() {
 
           {/* Empty */}
           {filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
               <Building2 className="size-10 text-emerald-400" />
               <p className="text-sm font-semibold text-on-surface-variant">
                 {search ? 'Nenhum resultado para a busca' : 'Nenhuma oportunidade encontrada'}
@@ -911,7 +911,7 @@ export function CondoRedistributionScreen() {
 
           {/* Empty */}
           {filteredPending.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest py-16">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest py-16">
               <AlertTriangle className="size-10 text-emerald-400" />
               <p className="text-sm font-semibold text-on-surface-variant">
                 {pendingSearch ? 'Nenhum resultado para a busca' : 'Sem pendências de andar'}
@@ -997,7 +997,7 @@ export function CondoRedistributionScreen() {
           {/* Painel */}
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-6 py-4">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50">
                 <Building2 className="size-5 text-amber-700 dark:text-amber-200" />
               </div>
@@ -1137,7 +1137,7 @@ export function CondoRedistributionScreen() {
           {/* Painel */}
           <div className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-2xl sm:rounded-2xl dark:ring-1 dark:ring-white/10">
             {/* Header */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-6 py-4">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-6 py-4">
               <div className="flex size-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-950/50">
                 <AlertTriangle className="size-5 text-orange-600 dark:text-orange-300" />
               </div>

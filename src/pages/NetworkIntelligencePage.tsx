@@ -2166,7 +2166,7 @@ export function NetworkIntelligencePage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                 {contextualRiskRanking.slice(0, 12).map((row) => (
                   <tr key={row.splitterCode} className="hover:bg-surface-container-low/70">
                     <td className="px-2 py-2">
@@ -2350,7 +2350,7 @@ export function NetworkIntelligencePage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                 {contextualRiskRanking.slice(0, 12).map((row) => (
                   <tr key={row.splitterCode} className="hover:bg-surface-container-low/70">
                     <td className="px-2 py-2">
@@ -2421,7 +2421,7 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Vínculos</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                 {contextualLifecycle.buckets.map((row) => (
                   <tr key={row.bucket} className="hover:bg-surface-container-low/70">
                     <td className="px-2 py-2 font-semibold">{row.bucket}</td>
@@ -2484,7 +2484,7 @@ export function NetworkIntelligencePage() {
                 <th className="px-2 py-2">Incidentes/ano</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-white/8">
               {lifecycleCohorts.map((row) => (
                 <tr key={row.cohortYear} className="hover:bg-surface-container-low/70">
                   <td className="px-2 py-2 font-semibold">{row.cohortYear}</td>
@@ -2775,7 +2775,7 @@ export function NetworkIntelligencePage() {
                         <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                       {contextualRegionalInsights.topCidades.map((row) => (
                         <tr key={row.label} className="align-top hover:bg-surface-container-low/70">
                           <td className="px-1.5 py-1.5 font-semibold text-on-surface">{row.label}</td>
@@ -2805,7 +2805,7 @@ export function NetworkIntelligencePage() {
                     </tbody>
                   </table>
                 </div>
-                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2">
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 pt-2">
                   {contextualRegionalInsights.topCidades.slice(0, 4).map((row) => (
                     <li key={`d-${row.label}`} className="text-[10px] leading-snug text-on-surface-variant">
                       <span className="font-semibold text-on-surface-variant">{row.label}:</span> {row.directive}
@@ -2835,7 +2835,7 @@ export function NetworkIntelligencePage() {
                         <th className="px-1.5 py-1.5 font-bold text-[#7c3aed]">PJ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                       {contextualRegionalInsights.topBairros.map((row) => (
                         <tr key={row.label} className="align-top hover:bg-surface-container-low/70">
                           <td className="max-w-[14rem] px-1.5 py-1.5 font-semibold text-on-surface">
@@ -2867,7 +2867,7 @@ export function NetworkIntelligencePage() {
                     </tbody>
                   </table>
                 </div>
-                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2">
+                <ul className="mt-2 space-y-1.5 border-t border-slate-100 dark:border-white/5 pt-2">
                   {contextualRegionalInsights.topBairros.slice(0, 5).map((row) => (
                     <li key={`bd-${row.label}`} className="text-[10px] leading-snug text-on-surface-variant">
                       <span className="font-semibold text-on-surface-variant">{row.label}:</span> {row.directive}
@@ -2924,7 +2924,7 @@ export function NetworkIntelligencePage() {
                   <th className="px-2 py-2">Massivas</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                 {contextualOltDrilldown.map((row) => (
                   <tr key={`${row.oltCode}-${row.oltDescription}`} className="hover:bg-surface-container-low/70">
                     <td className="px-2 py-2">
@@ -3379,7 +3379,7 @@ export function NetworkIntelligencePage() {
                             </dd>
                           </div>
                         </dl>
-                        <p className="mt-3 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2 text-[11px] leading-snug text-on-surface-variant">
+                        <p className="mt-3 border-t border-slate-100 dark:border-white/5 pt-2 text-[11px] leading-snug text-on-surface-variant">
                           <span className="font-semibold text-on-surface-variant">Última</span>{' '}
                           {row.latestCreatedAt ? formatBrazilDateTimeShortDisplay(row.latestCreatedAt) : '—'}
                         </p>
@@ -3401,7 +3401,7 @@ export function NetworkIntelligencePage() {
                           <th className="px-2 py-2">Última</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                         {contextualMaintenanceRows.slice(0, 80).map((row) => (
                           <tr key={`${row.splitterCode}-${row.accessPointCode}`} className="hover:bg-surface-container-low/70">
                             <td className="px-2 py-2">

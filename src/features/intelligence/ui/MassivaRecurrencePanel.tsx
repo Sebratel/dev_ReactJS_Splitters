@@ -120,7 +120,7 @@ export function MassivaRecurrencePanel({
                   <th className="px-2 py-2">Local</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/8">
                 {insights.ranking.map((row, index) => (
                   <tr key={row.splitterCode} className="hover:bg-amber-50/40 dark:hover:bg-amber-950/40">
                     <td className="px-2 py-2 tabular-nums text-on-surface-variant">{index + 1}</td>

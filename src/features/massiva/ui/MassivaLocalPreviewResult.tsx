@@ -137,7 +137,7 @@ export function MassivaLocalPreviewResult({
               {view.sampleClientes.map((c) => (
                 <tr
                   key={massivaClientDedupeKey(c)}
-                  className="border-b border-neutral-100/90 dark:border-white/5 dark:border-white/10 odd:bg-surface-container-low/40 last:border-0"
+                  className="border-b border-neutral-100/90 dark:border-white/5 odd:bg-surface-container-low/40 last:border-0"
                 >
                   <td className="max-w-[9rem] truncate px-3 py-2 text-[13px] text-on-surface">
                     {c.name.trim() !== '' ? c.name : '—'}

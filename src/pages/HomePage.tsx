@@ -479,7 +479,7 @@ export function HomePage() {
       >
         <div className="min-w-0 lg:col-span-8">
           <div className="overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-surface-container-lowest/90 shadow-[0_12px_48px_-24px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-sm">
-              <header className="flex flex-col gap-2 border-b border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-gradient-to-r from-stone-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
+              <header className="flex flex-col gap-2 border-b border-stone-100/90 dark:border-white/5 bg-gradient-to-r from-stone-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
                 <div className="min-w-0 space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-on-surface-variant sm:text-[11px]">
                     Fila operacional
@@ -500,7 +500,7 @@ export function HomePage() {
                 </Link>
               </header>
 
-              <div className="divide-y divide-stone-100/90 p-1.5 md:p-2">
+              <div className="divide-y divide-stone-100/90 dark:divide-white/8 p-1.5 md:p-2">
                 {recentMassivas.length > 0 ? (
                   recentMassivas.map((ticket, ti) => (
                     <motion.article

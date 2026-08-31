@@ -157,7 +157,7 @@ function NodeMetrics({
         ) : null}
       </div>
       {metrics.monitoredOnus > 0 ? (
-        <div className="mt-3 border-t border-slate-100 dark:border-white/5 dark:border-white/10 pt-2.5">
+        <div className="mt-3 border-t border-slate-100 dark:border-white/5 pt-2.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-on-surface-variant">
             <span className="inline-flex items-center gap-1">
               <Radio className="size-3.5 text-on-surface-variant/60" aria-hidden />

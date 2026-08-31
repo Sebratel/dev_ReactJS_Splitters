@@ -610,7 +610,7 @@ export function MassivaTicketCard({
           'flex flex-col gap-2.5 border-b p-3 sm:flex-row sm:items-start sm:justify-between',
           catalogOutOfBand
             ? 'border-amber-200/90 dark:border-amber-800/50 bg-gradient-to-r from-amber-50/80 dark:from-amber-950/20 to-orange-50/40 dark:to-orange-950/20'
-            : 'border-neutral-100/90 dark:border-white/5 dark:border-white/10 bg-gradient-to-r from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5',
+            : 'border-neutral-100/90 dark:border-white/5 bg-gradient-to-r from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5',
         )}
       >
         <div className="flex min-w-0 flex-1 gap-3">
@@ -738,7 +738,7 @@ export function MassivaTicketCard({
 
       <div
         className={cn(
-          'flex items-start gap-2.5 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2.5',
+          'flex items-start gap-2.5 border-b border-neutral-100 dark:border-white/5 px-3 py-2.5',
           apKnown || splitterKnown
             ? 'bg-sky-50/40 dark:bg-sky-950/40'
             : 'bg-amber-50/35 dark:bg-amber-950/40',

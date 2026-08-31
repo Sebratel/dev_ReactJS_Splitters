@@ -768,7 +768,7 @@ export function MassivaDashboardScreen() {
         </div>
 
         {/* Divisor + Filtros */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-2.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 pt-2.5">
           <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
             {STATUS_OPTIONS.map(({ value, label }) => (
               <button
@@ -880,7 +880,7 @@ export function MassivaDashboardScreen() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-xs">
               <thead>
-                <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 text-left">
+                <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
                   <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Protocolo</th>
                   <th className="px-2 py-2 font-semibold text-on-surface-variant">OLT / AP</th>
                   <th className="px-2 py-2 font-semibold text-on-surface-variant">Operador</th>
@@ -1301,7 +1301,7 @@ export function MassivaDashboardScreen() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-xs">
                   <thead>
-                    <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 text-left">
+                    <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
                       <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Operador</th>
                       <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">Protocolos</th>
                       <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">MTTD médio</th>

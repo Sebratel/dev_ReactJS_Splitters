@@ -114,7 +114,7 @@ export function DashboardConnectionMonitor() {
         </div>
 
         <ul className="mt-4 space-y-2.5">
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(statsTone))}
@@ -140,7 +140,7 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(massivaTone))}
@@ -170,7 +170,7 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(autoIspTone))}

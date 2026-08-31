@@ -1595,7 +1595,7 @@ export function SplittersOperationalPriorityFab({
             className="pointer-events-auto w-[min(calc(100vw-2rem),20rem)] overflow-hidden rounded-2xl border border-neutral-200/95 dark:border-white/10 bg-surface-container-lowest shadow-[0_12px_36px_-10px_rgba(15,23,42,0.28)] ring-1 ring-neutral-950/[0.04]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2">
+            <div className="border-b border-neutral-100 dark:border-white/5 px-3 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Painéis ISA</p>
             </div>
             <div className="flex flex-col p-1.5">

@@ -443,7 +443,7 @@ function placeMenuNearAnchor(
 
 function UsersTableSkeleton() {
   return (
-    <div className="divide-y divide-neutral-100">
+    <div className="divide-y divide-neutral-100 dark:divide-white/8">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-4">
           <div className="size-10 rounded-full bg-neutral-200 dark:bg-white/10" />
@@ -1149,7 +1149,7 @@ export function UsersManagementWorkspace({
         <div className="overflow-x-auto pb-8">
           <table className="w-full min-w-[720px] text-left">
             <thead>
-              <tr className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/90 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <tr className="border-b border-neutral-100 dark:border-white/5 bg-surface-container-low/90 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <th className="w-10 px-3 py-3">
                   <input
                     type="checkbox"
@@ -1200,7 +1200,7 @@ export function UsersManagementWorkspace({
                 <th className="w-12 px-2 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {isInitialLoading ? (
                 <tr>
                   <td colSpan={6} className="p-0">

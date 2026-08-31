@@ -359,7 +359,7 @@ export function CancellationsExplorer({
           </button>
         </div>
         <CancellationMotiveFilter
-          className="mt-3 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-3"
+          className="mt-3 border-t border-neutral-100 dark:border-white/5 pt-3"
           selected={categoryFilter}
           onChange={setCategoryFilter}
           counts={motiveCounts}
@@ -455,7 +455,7 @@ export function CancellationsExplorer({
       {/* Resumo agregado por nível (acompanha o drill) */}
       {levelGroups.length > 0 ? (
         <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-          <div className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-2.5">
+          <div className="border-b border-neutral-100 dark:border-white/5 px-4 py-2.5">
             <p className="text-sm font-semibold text-on-surface">
               Churn por {level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}
               <span className="ml-2 text-[11px] font-normal text-on-surface-variant">clique para descer o nível</span>
@@ -472,7 +472,7 @@ export function CancellationsExplorer({
                   <th className="px-3 py-2 text-center">Taxa/100</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
                 {levelGroups.map((g) => {
                   const rate = ratePer100(g.rede, g.active)
                   return (
@@ -495,7 +495,7 @@ export function CancellationsExplorer({
 
       {/* Ranking / drill */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Filter className="size-4 text-on-surface-variant" aria-hidden />
             Splitters no recorte {ranking.length > 0 ? `(top ${ranking.length})` : ''}
@@ -526,7 +526,7 @@ export function CancellationsExplorer({
                 <th className="px-3 py-2.5 text-center">Pós-massiva</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {ranking.map((r) => (
                 <tr key={r.splitterCode || r.splitterTitle} className="hover:bg-surface-container-low/70">
                   <td className="px-4 py-2 font-medium text-on-surface">{r.splitterTitle}</td>
@@ -584,7 +584,7 @@ export function CancellationsExplorer({
             </tbody>
           </table>
         </div>
-        <p className="flex items-center gap-1.5 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-2 text-[11px] text-on-surface-variant/60">
+        <p className="flex items-center gap-1.5 border-t border-neutral-100 dark:border-white/5 px-4 py-2 text-[11px] text-on-surface-variant/60">
           <AlertTriangle className="size-3.5 text-amber-500" aria-hidden />
           Clique na OLT ou no Slot/PON para descer o recorte. &quot;Sinal&quot; = % de ONUs atenuadas ou offline (verde saudável, âmbar ≥8%, vermelho ≥15%). &quot;Pós-massiva&quot; = churn de rede em até 30 dias após uma massiva do splitter.
         </p>

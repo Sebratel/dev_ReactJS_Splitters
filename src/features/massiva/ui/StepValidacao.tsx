@@ -458,7 +458,7 @@ export function StepValidacao({
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <section className="overflow-hidden rounded-xl border border-white dark:border-white/10 bg-surface-container-lowest shadow-[0_2px_8px_rgba(15,23,42,0.06)] ring-1 ring-neutral-200/70 dark:ring-white/10">
-            <div className="flex flex-col gap-3 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex flex-col gap-3 border-b border-neutral-100 dark:border-white/5 bg-surface-container-low/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <h4 className="text-lg font-semibold tracking-tight text-on-surface">Clientes</h4>
               <div className="flex w-full flex-1 flex-col gap-2 sm:max-w-md sm:flex-row sm:items-center sm:justify-end">
                 <div className="relative w-full min-w-0 sm:max-w-xs">
@@ -512,7 +512,7 @@ export function StepValidacao({
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100 bg-surface-container-lowest">
+                    <tbody className="divide-y divide-neutral-100 dark:divide-white/8 bg-surface-container-lowest">
                       {tableSampleRows.map((cliente) => (
                         <tr
                           key={massivaClientDedupeKey(cliente)}
@@ -575,7 +575,7 @@ export function StepValidacao({
                     </button>
                   </div>
                 </div>
-                <p className="border-t border-neutral-100 dark:border-white/5 dark:border-white/10 px-3 py-2 text-[10px] leading-relaxed text-on-surface-variant">
+                <p className="border-t border-neutral-100 dark:border-white/5 px-3 py-2 text-[10px] leading-relaxed text-on-surface-variant">
                   <span className="font-medium text-on-surface-variant">Local:</span>{' '}
                   {`ponto alinhado ao mapa (azul / \u00e2mbar) ou cinza quando s\u00f3 h\u00e1 endere\u00e7o em texto.`}
                 </p>
@@ -709,7 +709,7 @@ export function StepValidacao({
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-100 bg-surface-container-lowest">
+                  <tbody className="divide-y divide-neutral-100 dark:divide-white/8 bg-surface-container-lowest">
                     {fullClientes.slice(0, expandedVisibleCount).map((cliente) => (
                       <tr key={massivaClientDedupeKey(cliente)} className="hover:bg-surface-container-low/60">
                         <ClienteNameCell cliente={cliente} wide />

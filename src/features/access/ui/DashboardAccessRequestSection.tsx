@@ -173,7 +173,7 @@ export function DashboardAccessRequestSection() {
             aria-modal="true"
             aria-labelledby="access-fab-panel-title"
           >
-            <div className="flex items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-3.5 py-2.5">
+            <div className="flex items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-3.5 py-2.5">
               <h2 id="access-fab-panel-title" className="text-xs font-semibold tracking-tight text-on-surface">
                 Solicitar acesso
               </h2>
@@ -295,7 +295,7 @@ export function DashboardAccessRequestSection() {
                     {moduleOptions.map((opt) => (
                       <label
                         key={opt.id}
-                        className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-low/40 px-2 py-1.5 transition hover:border-neutral-200 dark:hover:border-white/10 dark:hover:border-white/10 hover:bg-surface-container-low/90"
+                        className="flex cursor-pointer items-start gap-2 rounded-lg border border-neutral-100 dark:border-white/5 bg-surface-container-low/40 px-2 py-1.5 transition hover:border-neutral-200 dark:hover:border-white/10 dark:hover:border-white/10 hover:bg-surface-container-low/90"
                       >
                         <input
                           type="checkbox"

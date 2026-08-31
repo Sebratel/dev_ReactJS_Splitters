@@ -55,7 +55,7 @@ export function SplitterGeoGridPanel({ rows }: SplitterGeoGridPanelProps) {
             {rows.map((row) => (
               <tr
                 key={row.porta}
-                className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 dark:border-neutral-800"
+                className="border-b border-neutral-100 dark:border-white/5 dark:border-neutral-800"
               >
                 <td className="py-2 pr-3 font-mono font-medium text-on-surface dark:text-neutral-100">
                   {row.porta}

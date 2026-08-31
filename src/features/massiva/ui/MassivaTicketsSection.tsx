@@ -1015,8 +1015,8 @@ const { data: recentOpenTickets = [] } = useQuery({
       <div
         className={
           embedded
-            ? 'border-t border-neutral-100/80 dark:border-white/5 dark:border-white/10 bg-gradient-to-b from-neutral-50/30 dark:from-white/5 to-white dark:to-surface-container-lowest px-1 py-4 sm:px-2'
-            : 'border-t border-neutral-100/80 dark:border-white/5 dark:border-white/10 bg-surface-container-low/20 px-4 py-5'
+            ? 'border-t border-neutral-100/80 dark:border-white/5 bg-gradient-to-b from-neutral-50/30 dark:from-white/5 to-white dark:to-surface-container-lowest px-1 py-4 sm:px-2'
+            : 'border-t border-neutral-100/80 dark:border-white/5 bg-surface-container-low/20 px-4 py-5'
         }
       >
         {/* Painel de abertas em risco de SLA */}
@@ -1170,7 +1170,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 ) : null}
 
                 {/* Classificação do incidente */}
-                <div className="border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-3">
+                <div className="border-t border-neutral-100 dark:border-white/5 pt-3">
                   <div className="mb-2.5 flex items-center justify-between">
                     <p className="text-xs font-semibold text-on-surface-variant">Classificação do incidente</p>
                     <span className="text-[10px] text-on-surface-variant/60">Opcional</span>

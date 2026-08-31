@@ -177,7 +177,7 @@ export function AccessRequestsAdminPanel({
                   </div>
                 </div>
                 {rejecting ? (
-                  <div className="mt-3 border-t border-neutral-100 dark:border-white/5 dark:border-white/10 pt-3">
+                  <div className="mt-3 border-t border-neutral-100 dark:border-white/5 pt-3">
                     <label className="block text-[11px] font-semibold text-on-surface-variant" htmlFor={`reject-${r.id}`}>
                       Mensagem para o usuário (opcional)
                     </label>
@@ -220,7 +220,7 @@ export function AccessRequestsAdminPanel({
           })}
         </ul>
       ) : loading ? (
-        <div className="mt-4 rounded-xl border border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest/60 px-4 py-8 text-center text-sm text-on-surface-variant">
+        <div className="mt-4 rounded-xl border border-neutral-100 dark:border-white/5 bg-surface-container-lowest/60 px-4 py-8 text-center text-sm text-on-surface-variant">
           Buscando solicitações…
         </div>
       ) : null}

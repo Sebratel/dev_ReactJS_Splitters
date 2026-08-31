@@ -518,7 +518,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Áreas em risco: massiva → churn */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Zap className="size-4 text-amber-500" aria-hidden />
             Áreas em risco — churn de rede após massiva ({WINDOW_DAYS}d)
@@ -552,7 +552,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                   <th className="px-3 py-2.5 text-center">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
                 {impactRows.map((row) => (
                   <tr key={row.splitterTitle} className="hover:bg-surface-container-low/70">
                     <td className="px-4 py-2 font-medium text-on-surface">
@@ -605,7 +605,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Ranking por área */}
       <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
           <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Router className="size-4 text-on-surface-variant" aria-hidden />
             Áreas com mais churn de rede
@@ -652,7 +652,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             </div>
           </div>
         </div>
-        <div className="border-b border-neutral-100 dark:border-white/5 dark:border-white/10 px-4 py-3">
+        <div className="border-b border-neutral-100 dark:border-white/5 px-4 py-3">
           <CancellationMotiveFilter
             selected={categoryFilter}
             onChange={setCategoryFilter}
@@ -670,7 +670,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                 <th className="px-3 py-2.5 text-center">% rede</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {rankingRows
                 .slice(0, 50)
                 .sort((a, b) =>

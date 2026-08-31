@@ -457,7 +457,7 @@ export function MassivaOpenDraftFields({
           </div>
 
           <section className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-2.5 shadow-sm sm:p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 dark:border-white/10 pb-1.5">
+            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 pb-1.5">
               <FileText className="size-3.5 text-on-surface-variant/60" aria-hidden />
               <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">
                 Descrição técnica
@@ -482,7 +482,7 @@ export function MassivaOpenDraftFields({
                         </span>
                       </span>
                     </summary>
-                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 dark:border-white/5 dark:border-white/10 bg-surface-container-lowest px-2 py-2 text-[11px] leading-relaxed text-on-surface">
+                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-2 py-2 text-[11px] leading-relaxed text-on-surface">
                       {item.description}
                     </pre>
                   </details>
