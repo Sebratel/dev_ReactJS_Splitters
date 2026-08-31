@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Menu, Moon, PanelLeft, Sun } from 'lucide-react'
+import { ChevronRight, Menu, Moon, PanelLeft, Sun } from 'lucide-react'
 import operacaoSebratelMark from '@/assets/operacao-sebratel-mark.svg'
 import { cn } from '@/shared/lib/utils'
 import { getPreferredTheme, toggleTheme, type ThemeMode } from '@/shared/lib/theme'
@@ -55,8 +55,8 @@ export function Topbar({ onMenuClick, isDesktop }: TopbarProps) {
         'supports-[padding:max(0px)]:pt-[env(safe-area-inset-top)] supports-[padding:max(0px)]:h-[calc(3.5rem+env(safe-area-inset-top))]',
       )}
     >
-      {/* Marca */}
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      {/* Menu + marca + trilha (breadcrumb: app › página) */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
         <button
           type="button"
           onClick={onMenuClick}
@@ -66,23 +66,25 @@ export function Topbar({ onMenuClick, isDesktop }: TopbarProps) {
           {isDesktop ? <PanelLeft className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
         </button>
 
-        <Link to="/" className="flex min-w-0 items-center gap-2.5" aria-label="Ir para o início">
-          <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary shadow-sm shadow-primary/20 dark:shadow-primary/10">
-            <img src={operacaoSebratelMark} alt="" className="size-6 object-contain" width={24} height={24} decoding="async" />
-          </span>
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate text-sm font-black tracking-tight text-on-surface">Monitoramento</span>
-            <span className="block truncate text-[9px] font-bold uppercase tracking-widest text-on-surface-variant/70">
-              de Splitters
-            </span>
-          </span>
+        <Link
+          to="/"
+          aria-label="Ir para o início"
+          className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary shadow-sm shadow-primary/20 dark:shadow-primary/10"
+        >
+          <img src={operacaoSebratelMark} alt="" className="size-6 object-contain" width={24} height={24} decoding="async" />
         </Link>
-      </div>
 
-      {/* Título da página — preenche o meio no desktop */}
-      <p className="hidden min-w-0 truncate text-[15px] font-bold tracking-tight text-on-surface xl:block xl:pl-1">
-        {pageTitle}
-      </p>
+        <nav aria-label="Você está em" className="flex min-w-0 items-center gap-1.5">
+          <Link
+            to="/"
+            className="hidden shrink-0 text-sm font-semibold text-on-surface-variant transition hover:text-on-surface md:inline"
+          >
+            Monitoramento
+          </Link>
+          <ChevronRight className="hidden size-4 shrink-0 text-on-surface-variant/40 md:block" aria-hidden />
+          <span className="truncate text-[15px] font-bold tracking-tight text-on-surface">{pageTitle}</span>
+        </nav>
+      </div>
 
       <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
         <ThemeToggleIcon />
