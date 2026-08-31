@@ -593,26 +593,29 @@ export function CondoRedistributionScreen() {
         </div>
       )}
 
-      {/* Abas */}
-      <div className="flex items-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 p-1">
-        <TabButton
-          active={activeTab === 'opportunities'}
-          onClick={() => setActiveTab('opportunities')}
-          icon={<ArrowRightLeft className="size-4" />}
-          label="Oportunidades"
-          count={opportunitiesCount}
-          countColor="amber"
-        />
-        <TabButton
-          active={activeTab === 'pending'}
-          onClick={() => setActiveTab('pending')}
-          icon={<AlertTriangle className="size-4" />}
-          label="Pendências"
-          count={pendingCount}
-          countColor="orange"
-          alertCount={alerts.length}
-          alertLoading={alertsLoading}
-        />
+      {/* Abas + ações — no mobile as ações quebram para baixo em vez de espremer */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 p-1">
+          <TabButton
+            active={activeTab === 'opportunities'}
+            onClick={() => setActiveTab('opportunities')}
+            icon={<ArrowRightLeft className="size-4" />}
+            label="Oportunidades"
+            count={opportunitiesCount}
+            countColor="amber"
+          />
+          <TabButton
+            active={activeTab === 'pending'}
+            onClick={() => setActiveTab('pending')}
+            icon={<AlertTriangle className="size-4" />}
+            label="Pendências"
+            count={pendingCount}
+            countColor="orange"
+            alertCount={alerts.length}
+            alertLoading={alertsLoading}
+          />
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           {/* Exportar tudo — só aparece com dados */}
           {data && !isLoading && (
@@ -620,10 +623,11 @@ export function CondoRedistributionScreen() {
               <button
                 type="button"
                 onClick={() => setExportMenuOpen((p) => !p)}
-                className="inline-flex h-8 items-center gap-2 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low"
+                className="inline-flex h-8 items-center gap-2 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2.5 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low sm:px-3"
+                aria-label="Exportar tudo"
               >
                 <Download className="size-3.5" />
-                Exportar tudo
+                <span className="hidden sm:inline">Exportar tudo</span>
                 <ChevronDown className="size-3" />
               </button>
 
@@ -680,10 +684,11 @@ export function CondoRedistributionScreen() {
             type="button"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="inline-flex h-8 items-center gap-2 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-2 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2.5 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low disabled:opacity-50 sm:px-3"
+            aria-label="Atualizar"
           >
             <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
-            Atualizar
+            <span className="hidden sm:inline">Atualizar</span>
           </button>
         </div>
       </div>
@@ -1045,7 +1050,7 @@ export function CondoRedistributionScreen() {
 
             {/* Tabela com scroll */}
             <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[880px] text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-surface-container-low">
                   <tr className="border-b border-neutral-200 dark:border-white/10">
                     <th className="px-4 py-3 font-semibold text-on-surface-variant">Cliente</th>
@@ -1185,7 +1190,7 @@ export function CondoRedistributionScreen() {
 
             {/* Tabela com scroll */}
             <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[600px] text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-surface-container-low">
                   <tr className="border-b border-neutral-200 dark:border-white/10">
                     <th className="px-4 py-3 font-semibold text-on-surface-variant">Cliente</th>
