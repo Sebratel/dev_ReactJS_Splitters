@@ -75,8 +75,8 @@ export function RootLayout() {
       <div
         className={
           sidebarCollapsed
-            ? 'ml-0 flex min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:ml-28'
-            : 'ml-0 flex min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:ml-80'
+            ? 'ml-0 flex min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:ml-20'
+            : 'ml-0 flex min-h-0 min-w-0 flex-1 flex-col transition-[margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:ml-[15.5rem]'
         }
       >
         {globalLoading && (

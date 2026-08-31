@@ -76,11 +76,11 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
     <aside
       id="splitters-app-sidebar"
       className={cn(
-        'fixed z-50 flex flex-col overflow-hidden bg-surface-container-lowest transition-[width,padding,box-shadow,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
+        'fixed z-50 flex flex-col overflow-hidden bg-surface-container-lowest transition-[width,padding,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width,transform]',
         'max-xl:inset-y-0 max-xl:left-0 max-xl:h-full max-xl:w-[min(20rem,90vw)] max-xl:rounded-none max-xl:border-r max-xl:border-neutral-200/70 dark:max-xl:border-white/10 max-xl:p-5 max-xl:shadow-2xl max-xl:shadow-neutral-900/10',
         mobileDrawerOpen ? 'max-xl:translate-x-0' : 'max-xl:-translate-x-full',
-        'xl:left-6 xl:top-[4.75rem] xl:bottom-6 xl:rounded-4xl xl:shadow-xl xl:shadow-surface-container-low',
-        navCollapsed ? 'xl:w-24 xl:p-4 xl:shadow-lg xl:shadow-surface-container-low/70' : 'xl:w-80 xl:p-6',
+        'xl:left-0 xl:top-14 xl:bottom-0 xl:rounded-none xl:border-r xl:border-neutral-200/70 dark:xl:border-white/10',
+        navCollapsed ? 'xl:w-20 xl:p-3' : 'xl:w-[15.5rem] xl:p-4',
       )}
     >
       <div className="flex h-full min-h-0 flex-1 flex-col">
