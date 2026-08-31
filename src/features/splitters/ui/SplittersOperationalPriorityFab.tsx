@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type {
   InfiniteData,
   UseInfiniteQueryResult,
@@ -531,12 +531,12 @@ export function SplittersOperationalPriorityFab({
 
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return
-    if (activePanel !== 'assistant' || !isDockedOnSidebar) return
+    if (!isDockedOnSidebar) return
     const snap = () => setAssistantDockViewportW(window.innerWidth)
     snap()
     window.addEventListener('resize', snap)
     return () => window.removeEventListener('resize', snap)
-  }, [activePanel, isDockedOnSidebar])
+  }, [isDockedOnSidebar])
 
   const overlayOpen = menuOpen || activePanel !== null
 
@@ -667,6 +667,36 @@ export function SplittersOperationalPriorityFab({
     isDockedOnSidebar,
     sidebarDockCenterX,
   ])
+
+  // Menu e painéis operacional/planejamento (largura ~20rem quando ancorados na
+  // sidebar) não têm o auto-clamp do assistente. Com a sidebar estreita/encostada,
+  // o popover centrado no FAB estourava para fora da tela à esquerda. Este shift
+  // reposiciona para caber (mesma lógica do assistente, com a largura fixa deles).
+  const dockNonAssistantTranslateXp = useMemo(() => {
+    if (!isDockedOnSidebar || activePanel === 'assistant' || sidebarDockCenterX == null) return 0
+    const vw = assistantDockViewportW
+    const pad = 20
+    const panelW = Math.min(vw - 32, 20 * 16)
+    if (panelW < 24) return 0
+    const half = panelW / 2
+    const naturalLeft = sidebarDockCenterX - half
+    const naturalRight = sidebarDockCenterX + half
+    const minShift = pad - naturalLeft
+    const maxShift = vw - pad - naturalRight
+    if (minShift <= maxShift) {
+      if (minShift <= 0 && maxShift >= 0) return 0
+      if (minShift > 0) return Math.round(minShift)
+      return Math.round(maxShift)
+    }
+    return Math.round(minShift)
+  }, [isDockedOnSidebar, activePanel, sidebarDockCenterX, assistantDockViewportW])
+
+  // Estilo do container dos popovers: no caso ancorado não-assistente, soma o
+  // shift de clamp ao translateX(-50%) da posição base.
+  const fabPanelContainerStyle: CSSProperties =
+    isDockedOnSidebar && activePanel !== 'assistant' && dockNonAssistantTranslateXp !== 0
+      ? { ...fabPositionStyle, transform: `translateX(-50%) translateX(${dockNonAssistantTranslateXp}px)` }
+      : fabPositionStyle
 
   const handleFabPrimaryClick = () => {
     if (activePanel !== null) {
@@ -867,7 +897,7 @@ export function SplittersOperationalPriorityFab({
             ? 'bottom-[max(10rem,calc(env(safe-area-inset-bottom)+8rem))]'
             : '',
         )}
-        style={fabPositionStyle}
+        style={fabPanelContainerStyle}
       >
         {activePanel === 'operational' ? (
           <div
