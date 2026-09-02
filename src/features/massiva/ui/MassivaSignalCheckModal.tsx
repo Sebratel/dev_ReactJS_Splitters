@@ -1,6 +1,9 @@
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Loader2,
   MessageSquare,
@@ -13,8 +16,12 @@ import {
 import { cn } from '@/shared/lib/utils'
 import {
   fetchMassivaAffectedSignal,
+  type MassivaAffectedClientSignal,
   type MassivaAffectedSignalBucket,
 } from '@/features/massiva/api/fetchMassivaAffectedSignal'
+import { dispatchMassivaHsm } from '@/features/massiva/api/dispatchMassivaHsm'
+
+type HsmStatus = 'sending' | 'sent' | 'error'
 
 type MassivaSignalCheckModalProps = {
   protocol: number
@@ -42,7 +49,54 @@ export function MassivaSignalCheckModal({ protocol, assignmentId, onClose }: Mas
 
   const data = query.data
 
-  return (
+  const [hsmStatus, setHsmStatus] = useState<Record<string, HsmStatus>>({})
+  const [banner, setBanner] = useState<{ kind: 'error' | 'success'; text: string } | null>(null)
+
+  async function fireHsm(clients: MassivaAffectedClientSignal[]) {
+    const targets = clients.filter(
+      (c) => c.phone && hsmStatus[c.pppoe] !== 'sent' && hsmStatus[c.pppoe] !== 'sending',
+    )
+    if (targets.length === 0) return
+
+    setBanner(null)
+    setHsmStatus((prev) => {
+      const next = { ...prev }
+      for (const c of targets) next[c.pppoe] = 'sending'
+      return next
+    })
+
+    try {
+      const res = await dispatchMassivaHsm({
+        protocol,
+        clients: targets.map((c) => ({
+          pppoe: c.pppoe,
+          name: c.name,
+          phone: c.phone,
+          contract: c.contract,
+        })),
+      })
+      setHsmStatus((prev) => {
+        const next = { ...prev }
+        for (const c of targets) next[c.pppoe] = 'sent'
+        return next
+      })
+      setBanner({ kind: 'success', text: `HSM disparado para ${res.dispatched} cliente(s).` })
+    } catch (err) {
+      setHsmStatus((prev) => {
+        const next = { ...prev }
+        for (const c of targets) next[c.pppoe] = 'error'
+        return next
+      })
+      setBanner({ kind: 'error', text: err instanceof Error ? err.message : 'Falha ao disparar HSM.' })
+    }
+  }
+
+  const anySending = Object.values(hsmStatus).some((s) => s === 'sending')
+  const pendingWithPhone = data
+    ? data.notRecovered.filter((c) => c.phone && hsmStatus[c.pppoe] !== 'sent')
+    : []
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
       role="dialog"
@@ -176,15 +230,43 @@ export function MassivaSignalCheckModal({ protocol, assignmentId, onClose }: Mas
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          disabled
-                          title="Disparo de HSM chega na próxima etapa"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-low px-2.5 py-1.5 text-[11px] font-semibold text-on-surface-variant opacity-60"
-                        >
-                          <MessageSquare className="size-3.5" />
-                          Disparar HSM
-                        </button>
+                        {(() => {
+                          const st = hsmStatus[c.pppoe]
+                          if (st === 'sent') {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-200">
+                                <Check className="size-3.5" />
+                                Enviado
+                              </span>
+                            )
+                          }
+                          return (
+                            <button
+                              type="button"
+                              disabled={!hasPhone || st === 'sending'}
+                              onClick={() => fireHsm([c])}
+                              title={
+                                hasPhone
+                                  ? 'Disparar HSM (WhatsApp via Matrix) para este cliente'
+                                  : 'Cliente sem telefone cadastrado'
+                              }
+                              className={cn(
+                                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition',
+                                st === 'error'
+                                  ? 'border-rose-300 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-950/60'
+                                  : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface hover:bg-surface-container-lowest',
+                                (!hasPhone || st === 'sending') && 'cursor-not-allowed opacity-50',
+                              )}
+                            >
+                              {st === 'sending' ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <MessageSquare className="size-3.5" />
+                              )}
+                              {st === 'sending' ? 'Enviando…' : st === 'error' ? 'Tentar de novo' : 'Disparar HSM'}
+                            </button>
+                          )
+                        })()}
                       </td>
                     </tr>
                   )
@@ -196,22 +278,46 @@ export function MassivaSignalCheckModal({ protocol, assignmentId, onClose }: Mas
 
         {/* Rodapé */}
         {data && data.notRecovered.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 dark:border-white/10 px-5 py-3">
-            <p className="text-[11px] text-on-surface-variant/70">
-              O disparo de HSM (WhatsApp via Matrix) entra na próxima etapa.
-            </p>
-            <button
-              type="button"
-              disabled
-              title="Disparo de HSM chega na próxima etapa"
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-neutral-900 opacity-60"
-            >
-              <MessageSquare className="size-4" />
-              Disparar para todos ({data.notRecoveredCount})
-            </button>
+          <div className="border-t border-neutral-200 dark:border-white/10">
+            {banner ? (
+              <div
+                className={cn(
+                  'flex items-center gap-2 px-5 py-2 text-xs font-medium',
+                  banner.kind === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200',
+                )}
+              >
+                {banner.kind === 'success' ? (
+                  <CheckCircle2 className="size-3.5 shrink-0" />
+                ) : (
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                )}
+                <span className="min-w-0">{banner.text}</span>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <p className="text-[11px] text-on-surface-variant/70">
+                HSM enviado por WhatsApp (Matrix). O atendimento encerra sozinho após 24h sem resposta.
+              </p>
+              <button
+                type="button"
+                disabled={pendingWithPhone.length === 0 || anySending}
+                onClick={() => data && fireHsm(data.notRecovered)}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-neutral-900 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {anySending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <MessageSquare className="size-4" />
+                )}
+                Disparar para todos ({pendingWithPhone.length})
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

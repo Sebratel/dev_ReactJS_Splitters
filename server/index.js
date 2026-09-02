@@ -2107,6 +2107,54 @@ app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
   }
 });
 
+// Disparo manual de HSM (WhatsApp via Matrix/N8N) para os clientes de uma massiva
+// encerrada que NÃO subiram. Recebe a lista já filtrada pelo operador no modal e
+// repassa ao webhook do N8N. Fire-and-wait: responde só depois do webhook aceitar.
+app.post('/api/massivas/hsm', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    const protocol = req.body?.protocol ?? null;
+    const rawClients = Array.isArray(req.body?.clients) ? req.body.clients : [];
+
+    // Normaliza e mantém apenas quem tem telefone (o HSM não vai sem número).
+    const clientes = rawClients
+      .map((c) => ({
+        nome: typeof c?.name === 'string' ? c.name.trim() : '',
+        telefone: typeof c?.phone === 'string' ? c.phone.trim() : '',
+        contrato: c?.contract == null ? '' : String(c.contract).trim(),
+        pppoe: typeof c?.pppoe === 'string' ? c.pppoe.trim() : '',
+      }))
+      .filter((c) => c.telefone !== '');
+
+    if (clientes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum cliente com telefone válido para disparar o HSM.',
+      });
+    }
+
+    const result = await notifyMassivaHsmWebhook({ protocolo: protocol, clientes });
+    if (!result.sent) {
+      return res.status(503).json({
+        success: false,
+        message: 'Automação de HSM não configurada no servidor (N8N_MASSIVA_HSM_WEBHOOK_URL).',
+        reason: result.reason,
+      });
+    }
+
+    res.json({ success: true, dispatched: clientes.length });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    logger.error('[massiva-hsm] Erro ao disparar HSM:', { error: error.message });
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: 'Erro ao disparar HSM para os clientes da massiva.',
+      error: error.message,
+    });
+  }
+});
+
 // Painel de parede: massivas encerradas já verificadas (sob demanda) e que ainda têm
 // clientes sem sinal. Só lê resultado já persistido — não dispara verificação nova.
 app.get('/api/massiva/history/affected-verifications', async (req, res) => {
@@ -3350,6 +3398,42 @@ async function notifyReliefWebhook(relievedSplitters) {
   }
 
   logger.info(`[network-relief-webhook] Notificação enviada com sucesso (${relievedSplitters.length} splitters).`);
+}
+
+/**
+ * Dispara o HSM pós-massiva (WhatsApp via Matrix) para os clientes que não subiram.
+ * Chamada sob demanda (botão no modal de validação de sinal).
+ * O N8N normaliza telefone/nome, envia o HSM 238, grava log (sucesso/erro) e
+ * encerra o atendimento após 24h de inatividade.
+ * Configurar via env N8N_MASSIVA_HSM_WEBHOOK_URL.
+ */
+async function notifyMassivaHsmWebhook({ protocolo, clientes }) {
+  const webhookUrl = (process.env.N8N_MASSIVA_HSM_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[massiva-hsm-webhook] N8N_MASSIVA_HSM_WEBHOOK_URL não configurada — disparo ignorado.');
+    return { sent: false, reason: 'webhook_not_configured' };
+  }
+
+  const payload = {
+    event: 'massiva_post_close_hsm',
+    timestamp: new Date().toISOString(),
+    protocolo: protocolo == null ? '' : String(protocolo),
+    clientes,
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[massiva-hsm-webhook] Disparo enviado (${clientes.length} clientes, protocolo ${protocolo}).`);
+  return { sent: true };
 }
 
 /**
