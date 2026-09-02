@@ -45,6 +45,7 @@ import {
   verifyMassivaAffectedClients,
   type VerifyMassivaAffectedClientsResult,
 } from '@/features/massiva/api/verifyMassivaAffectedClients'
+import { MassivaSignalCheckModal } from '@/features/massiva/ui/MassivaSignalCheckModal'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { ApiError } from '@/shared/api/apiError'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
@@ -504,6 +505,7 @@ export function MassivaTicketCard({
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [closeDescOpen, setCloseDescOpen] = useState(false)
   const [affectedVerifyOpen, setAffectedVerifyOpen] = useState(false)
+  const [signalListOpen, setSignalListOpen] = useState(false)
   const [editingExpectedClose, setEditingExpectedClose] = useState(false)
   const [expectedCloseDraft, setExpectedCloseDraft] = useState('')
   const displayStatus = effectiveMassivaStatus(ticket)
@@ -721,6 +723,15 @@ export function MassivaTicketCard({
                     !
                   </span>
                 ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSignalListOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-rose-300/80 hover:text-rose-700 dark:hover:text-rose-200"
+                title="Ver clientes que não subiram (sinal por cliente)"
+                aria-label="Ver clientes que não subiram"
+              >
+                <Users size={18} strokeWidth={2} />
               </button>
             </>
           ) : null}
@@ -976,6 +987,13 @@ export function MassivaTicketCard({
           lastAffectedVerification={lastAffectedVerification}
           verifiedByLabel={verifiedByLabel}
           onClose={() => setAffectedVerifyOpen(false)}
+        />
+      ) : null}
+      {signalListOpen ? (
+        <MassivaSignalCheckModal
+          protocol={ticket.protocol}
+          assignmentId={ticket.assignmentId}
+          onClose={() => setSignalListOpen(false)}
         />
       ) : null}
     </article>

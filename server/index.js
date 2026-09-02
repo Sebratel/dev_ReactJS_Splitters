@@ -2000,6 +2000,113 @@ app.post('/api/massiva/history/verify-affected-clients', async (req, res) => {
   }
 });
 
+// Lista por cliente do sinal dos afetados de uma massiva encerrada (sob demanda).
+// Cruza a lista de afetados (MySQL, por pppoe) com o monitoramento de ONU (onuPool)
+// e com o ERP (pool) para trazer nome + telefone. "Subiu" = bucket 'online'; os
+// demais (offline/degraded/unknown) contam como "não subiram". Só leitura — não
+// dispara nada. É a base do modal de validação + (futuro) disparo de HSM.
+app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
+  try {
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({ success: false, message: 'Histórico local de massivas não configurado no MySQL.' });
+    }
+
+    const protocol = req.body?.protocol ?? null;
+    const assignmentId = req.body?.assignmentId ?? null;
+
+    const { pppoeList } = await massivaHistoryStore.getAffectedClientsPppoeList({ protocol, assignmentId });
+    if (pppoeList.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum cliente afetado registrado localmente para esta massiva. Só funciona para massivas abertas depois desta funcionalidade entrar no ar.',
+      });
+    }
+
+    // Sinal atual por pppoe (banco de ONU).
+    const onuByPppoe = new Map();
+    if (onuPool) {
+      const sql = `
+        SELECT pppoe_username AS pppoe, bucket, rx_power
+        FROM (
+          SELECT DISTINCT ON (gc.pppoe_username)
+            gc.pppoe_username,
+            ${ONU_BUCKET_CASE} AS bucket,
+            os.rx_power
+          FROM gpon_clients gc
+          LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+          WHERE gc.pppoe_username = ANY($1::text[])
+          ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+        ) sub
+      `;
+      const onuResult = await onuPool.query(sql, [pppoeList]);
+      for (const row of onuResult.rows) {
+        onuByPppoe.set(row.pppoe, {
+          bucket: row.bucket ?? 'unknown',
+          rxPower: row.rx_power == null ? null : Number(row.rx_power),
+        });
+      }
+    }
+
+    // Nome + telefone por pppoe (ERP espelhado).
+    const erpByPppoe = new Map();
+    try {
+      const erpSql = `
+        SELECT auth_contract.user AS pppoe,
+               client.name AS name,
+               client.cell_phone_1 AS phone,
+               contract.contract_number AS contract
+        FROM authentication_contracts auth_contract
+        JOIN contracts contract ON contract.id = auth_contract.contract_id
+        JOIN people client ON client.id = contract.client_id
+        WHERE auth_contract.user = ANY($1::text[])
+      `;
+      const erpResult = await pool.query(erpSql, [pppoeList]);
+      for (const row of erpResult.rows) {
+        const key = (row.pppoe ?? '').trim();
+        if (key && !erpByPppoe.has(key)) {
+          erpByPppoe.set(key, {
+            name: (row.name ?? '').trim(),
+            phone: (row.phone ?? '').trim(),
+            contract: row.contract == null ? null : String(row.contract).trim(),
+          });
+        }
+      }
+    } catch (erpErr) {
+      logger.warn('[massiva-affected-signal] Falha ao buscar nome/telefone no ERP:', { error: erpErr.message });
+    }
+
+    const clients = pppoeList.map((pppoe) => {
+      const onu = onuByPppoe.get(pppoe) ?? { bucket: 'unknown', rxPower: null };
+      const erp = erpByPppoe.get(pppoe) ?? { name: null, phone: null, contract: null };
+      return {
+        pppoe,
+        name: erp.name || null,
+        phone: erp.phone || null,
+        contract: erp.contract,
+        bucket: onu.bucket, // 'online' | 'degraded' | 'offline' | 'unknown'
+        rxPower: onu.rxPower,
+        recovered: onu.bucket === 'online',
+      };
+    });
+
+    const notRecovered = clients.filter((c) => !c.recovered);
+
+    res.json({
+      success: true,
+      data: {
+        total: clients.length,
+        recovered: clients.length - notRecovered.length,
+        notRecoveredCount: notRecovered.length,
+        notRecovered,
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao listar sinal dos clientes afetados de massiva:', error);
+    res.status(500).json({ success: false, message: 'Erro interno ao listar sinal dos clientes afetados.', error: error.message });
+  }
+});
+
 // Painel de parede: massivas encerradas já verificadas (sob demanda) e que ainda têm
 // clientes sem sinal. Só lê resultado já persistido — não dispara verificação nova.
 app.get('/api/massiva/history/affected-verifications', async (req, res) => {
