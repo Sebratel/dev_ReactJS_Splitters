@@ -681,8 +681,9 @@ export function SplittersOperationalPriorityFab({
     if (panelW < 24) return 0
     const half = panelW / 2
     const containerLeft = sidebarDockCenterX - half // posição atual (centrada no FAB)
-    const sidebarRight = sidebarDockCenterX * 2 // sidebar encostada em left-0
-    let desiredLeft = sidebarRight + 12 // abre à direita da sidebar
+    // Cola o popover ao ícone: borda esquerda ~ na borda esquerda do FAB (bolha de
+    // 5rem/80px → raio 40), abrindo para a direita a partir da bolha.
+    let desiredLeft = sidebarDockCenterX - 40
     const maxLeft = vw - pad - panelW
     if (desiredLeft > maxLeft) desiredLeft = maxLeft
     if (desiredLeft < pad) desiredLeft = pad
