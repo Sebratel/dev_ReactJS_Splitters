@@ -2110,10 +2110,10 @@ app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
 // Disparo manual de HSM (WhatsApp via Matrix/N8N) para os clientes de uma massiva
 // encerrada que NÃO subiram. Recebe a lista já filtrada pelo operador no modal e
 // repassa ao webhook do N8N. Fire-and-wait: responde só depois do webhook aceitar.
+// Sem auth no BFF, seguindo os endpoints irmãos (affected-clients / -signal): a
+// tela de massiva já é protegida pela rota `canViewMassiva` no front.
 app.post('/api/massivas/hsm', async (req, res) => {
   try {
-    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
-
     const protocol = req.body?.protocol ?? null;
     const rawClients = Array.isArray(req.body?.clients) ? req.body.clients : [];
 
