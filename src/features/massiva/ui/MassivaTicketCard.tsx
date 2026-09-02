@@ -16,7 +16,6 @@ import {
   ScrollText,
   UserPlus,
   Users,
-  Wifi,
   Wrench,
 } from 'lucide-react'
 import { getOidcUserDisplayName } from '@/app/auth/oidcUserDisplayName'
@@ -702,27 +701,6 @@ export function MassivaTicketCard({
                 aria-label="Manutenção — editar classificação do incidente"
               >
                 <Wrench size={18} strokeWidth={2} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setAffectedVerifyOpen(true)}
-                className={cn(
-                  'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-surface-container-lowest shadow-sm transition',
-                  lastAffectedVerification != null &&
-                    (lastAffectedVerification.stillOffline > 0 || lastAffectedVerification.stillDegraded > 0)
-                    ? 'border-rose-300/80 text-rose-600 dark:text-rose-300 hover:border-rose-400 hover:text-rose-700 dark:hover:text-rose-200'
-                    : 'border-neutral-200/90 dark:border-white/10 text-on-surface-variant hover:border-sky-300/80 hover:text-sky-800 dark:hover:text-sky-200',
-                )}
-                title="Verificar se os clientes afetados continuam sem sinal"
-                aria-label="Verificar se os clientes afetados continuam sem sinal"
-              >
-                <Wifi size={18} strokeWidth={2} />
-                {lastAffectedVerification != null &&
-                (lastAffectedVerification.stillOffline > 0 || lastAffectedVerification.stillDegraded > 0) ? (
-                  <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-rose-500 text-[8px] font-bold text-white ring-2 ring-white">
-                    !
-                  </span>
-                ) : null}
               </button>
               <button
                 type="button"
