@@ -54,6 +54,7 @@ export function StepAbertura({
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
   const resetDraft = useMassivaOpenDraftStore((s) => s.reset)
+  const resetOpenFieldsForSelection = useMassivaOpenDraftStore((s) => s.resetOpenFieldsForSelection)
 
   // Preview por AP usa amostra de 50 do batch-summary; na abertura buscamos a lista
   // completa por rota para a contagem de afetados bater com a validação.
@@ -78,6 +79,20 @@ export function StepAbertura({
     staleTime: 60_000,
   })
   const fullConnections = fullConnectionsQuery.data ?? []
+
+  // Assinatura da seleção (AP/slot/porta/splitters). Quando muda de fato, reseta os
+  // campos da abertura (relato, quem identificou, protocolo de infra) para o padrão —
+  // preservando um ir-e-voltar sem mudança. Datas/previsão têm lógica própria.
+  const selectionKey = useMemo(() => {
+    const routes = preparedBasis?.topology.routes ?? []
+    return routes
+      .map((r) => `${r.apCode}#${r.slot}#${r.port}#${[...r.effectiveSplitterCodes].sort().join(',')}`)
+      .sort()
+      .join('|')
+  }, [preparedBasis])
+  useEffect(() => {
+    if (selectionKey !== '') resetOpenFieldsForSelection(selectionKey)
+  }, [selectionKey, resetOpenFieldsForSelection])
 
   // "CTO Sinal Alto": auto-preenche o Sinal aferido (dBm) com o avgRxPower do splitter
   // (mesmo dado do card "SINAL ONU — MÉDIA DO SPLITTER"). Por CTO quando há mais de uma.

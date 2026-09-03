@@ -53,6 +53,13 @@ type MassivaOpenDraftState = {
    */
   infraSignalAutofillKey: string
 
+  /**
+   * Assinatura da seleção (AP/slot/porta/splitters) para a qual os campos da abertura
+   * (relato, quem identificou, protocolo de infra) valem. Quando a seleção muda, esses
+   * campos são resetados para o padrão. Persistido para não resetar num reload.
+   */
+  openFieldsSelectionKey: string
+
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
   setAssignmentForecastDate: (value: string) => void
@@ -73,6 +80,11 @@ type MassivaOpenDraftState = {
   autofillEventDatesToNowOnce: () => void
   /** Rearma o auto-preenchimento (ex.: ao reiniciar o fluxo na Rota). */
   resetEventDatesAutofill: () => void
+  /**
+   * Reseta relato/quem identificou/infra para o padrão quando a assinatura da seleção
+   * (`key`) muda. No-op quando `key` é igual à última (preserva ir-e-voltar sem mudança).
+   */
+  resetOpenFieldsForSelection: (key: string) => void
   /**
    * Preenche o "Sinal aferido (dBm)" do CTO Sinal Alto quando a assinatura das CTOs
    * (`key`) difere da última — refaz ao trocar splitters/tipo, preserva ajuste manual.
@@ -123,6 +135,7 @@ function buildInitialDraft() {
     infraSiteCode: '',
     eventDatesAutofilledForFlow: false,
     infraSignalAutofillKey: '',
+    openFieldsSelectionKey: '',
   }
 }
 
@@ -146,6 +159,7 @@ const createInitialState = () => ({
   infraSiteCode: '',
   eventDatesAutofilledForFlow: false,
   infraSignalAutofillKey: '',
+  openFieldsSelectionKey: '',
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -182,6 +196,21 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
             : { ...nowEventDates(), eventDatesAutofilledForFlow: true },
         ),
       resetEventDatesAutofill: () => set({ eventDatesAutofilledForFlow: false }),
+      resetOpenFieldsForSelection: (key) =>
+        set((state) =>
+          state.openFieldsSelectionKey === key
+            ? {}
+            : {
+                initialReport: '',
+                eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
+                infraProtocolType: 'none' as MassivaInfraProtocolSelection,
+                infraSignalDbm: '',
+                infraAvaria: '',
+                infraSiteCode: '',
+                infraSignalAutofillKey: '',
+                openFieldsSelectionKey: key,
+              },
+        ),
       autofillInfraSignal: (value, key) =>
         set((state) =>
           value.trim() === '' || state.infraSignalAutofillKey === key
@@ -209,6 +238,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
         infraSignalDbm: state.infraSignalDbm,
         infraAvaria: state.infraAvaria,
         infraSiteCode: state.infraSiteCode,
+        openFieldsSelectionKey: state.openFieldsSelectionKey,
       }),
     },
   ),
