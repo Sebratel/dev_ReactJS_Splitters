@@ -275,12 +275,12 @@ function Panel({
   className?: string
 }) {
   return (
-    <div className={cn('rounded-[10px] border border-[#253150] bg-[#121a2b] p-4', className)}>
+    <div className={cn('flex flex-col rounded-[10px] border border-[#253150] bg-[#121a2b] p-4', className)}>
       <div className="mb-2.5 flex items-baseline justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wide text-[#8593b8]">{title}</p>
         {extra}
       </div>
-      {children}
+      <div className="min-h-0 flex-1">{children}</div>
     </div>
   )
 }
@@ -677,25 +677,39 @@ export function MassivaMonitorScreen() {
               </span>
             }
           >
-            <div className="flex h-16 items-end gap-1.5">
-              {hourBuckets.bars.map((b) => (
-                <div key={b.hour} className="flex h-full flex-1 flex-col items-center justify-end">
-                  <span
-                    className={cn(
-                      'w-full rounded-t-[3px]',
-                      b.isPeak ? 'bg-amber-400' : b.isNow ? 'bg-teal-400' : 'bg-[#1a2540]',
-                    )}
-                    style={{ height: `${Math.max(4, b.pct)}%` }}
-                  />
-                  <span className="mt-1 font-mono text-[9.5px] text-[#5a6685]">{formatHourLabel(b.hour)}</span>
-                </div>
-              ))}
+            <div className="flex h-full flex-col justify-center gap-2">
+              <div className="flex items-end gap-2" style={{ height: 120 }}>
+                {hourBuckets.bars.map((b) => (
+                  <div key={b.hour} className="flex h-full flex-1 flex-col items-center justify-end">
+                    {b.count > 0 ? (
+                      <span
+                        className={cn(
+                          'mb-1 font-mono text-[11px] font-bold',
+                          b.isPeak ? 'text-amber-300' : b.isNow ? 'text-teal-300' : 'text-[#8593b8]',
+                        )}
+                      >
+                        {b.count}
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        'w-full rounded-t-[4px]',
+                        b.isPeak ? 'bg-amber-400' : b.isNow ? 'bg-teal-400' : 'bg-[#1a2540]',
+                      )}
+                      style={{ height: `${Math.max(4, b.pct)}%` }}
+                    />
+                    <span className="mt-1.5 font-mono text-[10.5px] text-[#5a6685]">{formatHourLabel(b.hour)}</span>
+                  </div>
+                ))}
+              </div>
+              {hourBuckets.peakCount > 0 ? (
+                <p className="text-center text-[12px] text-amber-400">
+                  Pico às {formatHourLabel(hourBuckets.peakHour)} — {hourBuckets.peakCount} aberturas na hora
+                </p>
+              ) : (
+                <p className="text-center text-[12px] text-[#5a6685]">Sem aberturas registradas hoje.</p>
+              )}
             </div>
-            {hourBuckets.peakCount > 0 ? (
-              <p className="mt-1 text-[11px] text-amber-400">
-                Pico às {formatHourLabel(hourBuckets.peakHour)} — {hourBuckets.peakCount} aberturas na hora
-              </p>
-            ) : null}
           </Panel>
         ) : (
           <Panel
@@ -711,27 +725,29 @@ export function MassivaMonitorScreen() {
             }
           >
             {recurrenceToday.length === 0 ? (
-              <p className="py-3 text-center text-xs text-[#5a6685]">Nenhum AP recorrente hoje.</p>
+              <div className="flex h-full flex-col items-center justify-center gap-1 py-6 text-center">
+                <span className="text-2xl">✅</span>
+                <p className="text-[13px] text-[#5a6685]">Nenhum ponto de acesso recorrente hoje.</p>
+              </div>
             ) : (
-              recurrenceToday.map((r) => (
-                <div
-                  key={r.code}
-                  className="flex items-center justify-between border-b border-[#253150]/50 py-1.5 text-[12.5px] last:border-none"
-                >
-                  <span>
-                    {r.title.trim() !== '' ? r.title : r.code}
-                    <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{r.code}</span>
-                  </span>
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 font-mono text-[11.5px] font-bold',
-                      r.count >= 3 ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300',
-                    )}
-                  >
-                    {r.count}× hoje
-                  </span>
-                </div>
-              ))
+              <div className="flex h-full flex-col justify-center divide-y divide-[#253150]/50">
+                {recurrenceToday.map((r) => (
+                  <div key={r.code} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+                    <span className="min-w-0 truncate">
+                      {r.title.trim() !== '' ? r.title : r.code}
+                      <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{r.code}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2.5 py-0.5 font-mono text-[12px] font-bold',
+                        r.count >= 3 ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300',
+                      )}
+                    >
+                      {r.count}× hoje
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </Panel>
         )}
