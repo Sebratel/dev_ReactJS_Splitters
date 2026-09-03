@@ -39,6 +39,7 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  toDateValue,
   toMonthValue,
   type MassivaBucketGranularity,
   type MassivaPeriodPreset,
@@ -255,6 +256,7 @@ const PERIOD_PRESETS: Array<{ value: MassivaPeriodPreset; label: string }> = [
   { value: '6m', label: '6 meses' },
   { value: '12m', label: '12 meses' },
   { value: 'month', label: 'Mês' },
+  { value: 'custom', label: 'Personalizado' },
 ]
 
 const STATUS_OPTIONS: Array<{ value: MassivaStatusFilter; label: string }> = [
@@ -297,6 +299,9 @@ const SECTION_HEADER_CLS = 'border-b border-neutral-200/80 dark:border-white/10 
 export function MassivaDashboardScreen() {
   const [periodPreset, setPeriodPreset] = useState<MassivaPeriodPreset>('30d')
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()))
+  const [customStart, setCustomStart] = useState(() => toDateValue(new Date(Date.now() - 6 * 86_400_000)))
+  const [customEnd, setCustomEnd] = useState(() => toDateValue(new Date()))
+  const todayValue = useMemo(() => toDateValue(new Date()), [])
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
   const [chartMetric, setChartMetric] = useState<ChartMetric>('afetados')
   const [statusFilter, setStatusFilter] = useState<MassivaStatusFilter>('all')
@@ -308,8 +313,14 @@ export function MassivaDashboardScreen() {
   const queryClient = useQueryClient()
 
   const range = useMemo(
-    () => resolveMassivaPeriod(periodPreset, periodPreset === 'month' ? selectedMonth : null),
-    [periodPreset, selectedMonth],
+    () =>
+      resolveMassivaPeriod(
+        periodPreset,
+        periodPreset === 'month' ? selectedMonth : null,
+        undefined,
+        periodPreset === 'custom' ? { start: customStart, end: customEnd } : null,
+      ),
+    [periodPreset, selectedMonth, customStart, customEnd],
   )
   const historyListStart = range.fetchStart
   const historyListLimit = massivaHistoryLimitForRange(range)
@@ -704,7 +715,37 @@ export function MassivaDashboardScreen() {
       <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-3 shadow-sm sm:p-4">
         {/* Linha 1: período + meta */}
         <div className="flex flex-wrap items-center gap-2">
-          {periodPreset === 'month' ? (
+          {periodPreset === 'custom' ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setPeriodPreset('30d')}
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-on-surface-variant transition hover:bg-surface-container-lowest hover:text-on-surface"
+                aria-label="Voltar aos períodos rápidos"
+                title="Voltar aos períodos"
+              >
+                <ChevronLeft className="size-4" aria-hidden />
+              </button>
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd || todayValue}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="rounded-md bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10 focus:ring-amber-400 focus:outline-none"
+                aria-label="Data inicial"
+              />
+              <span className="text-xs text-on-surface-variant/60">→</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={todayValue}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="rounded-md bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10 focus:ring-amber-400 focus:outline-none"
+                aria-label="Data final"
+              />
+            </div>
+          ) : periodPreset === 'month' ? (
             <div className="flex items-center gap-1 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
               <button
                 type="button"

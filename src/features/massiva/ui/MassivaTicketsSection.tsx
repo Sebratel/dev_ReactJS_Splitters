@@ -43,6 +43,7 @@ import {
   listRecentMonths,
   massivaHistoryLimitForRange,
   resolveMassivaPeriod,
+  toDateValue,
   toMonthValue,
   type MassivaPeriodPreset,
 } from '@/features/massiva/lib/massivaPeriod'
@@ -222,13 +223,15 @@ type MassivaTicketsSectionProps = {
 function massivaTicketsUiStateKey(layout: MassivaTicketsSectionLayout): string {
   return `${MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX}.${layout}.v1`
 }
-const PERIOD_PRESETS: readonly PeriodPreset[] = ['7d', '30d', '90d', '6m', '12m', 'month']
+const PERIOD_PRESETS: readonly PeriodPreset[] = ['7d', '30d', '90d', '6m', '12m', 'month', 'custom']
 
 function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
   query: string
   scope: MassivaListScope
   periodPreset: PeriodPreset
   selectedMonth: string
+  customStart: string
+  customEnd: string
   chartMetric: ChartMetric
   impactRange: ImpactRange
   recordTypeFilter: MassivaRecordTypeFilter
@@ -242,6 +245,8 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
     scope: 'abertas' as MassivaListScope,
     periodPreset: '30d' as PeriodPreset,
     selectedMonth: toMonthValue(new Date()),
+    customStart: toDateValue(new Date(Date.now() - 6 * 86_400_000)),
+    customEnd: toDateValue(new Date()),
     chartMetric: 'afetados' as ChartMetric,
     impactRange: 'all' as ImpactRange,
     recordTypeFilter: 'all' as MassivaRecordTypeFilter,
@@ -272,6 +277,14 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
         typeof parsed.selectedMonth === 'string' && /^\d{4}-\d{2}$/.test(parsed.selectedMonth)
           ? parsed.selectedMonth
           : initialState.selectedMonth,
+      customStart:
+        typeof parsed.customStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.customStart)
+          ? parsed.customStart
+          : initialState.customStart,
+      customEnd:
+        typeof parsed.customEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.customEnd)
+          ? parsed.customEnd
+          : initialState.customEnd,
       chartMetric:
         parsed.chartMetric === 'protocolos' ? 'protocolos' : initialState.chartMetric,
       impactRange:
@@ -313,6 +326,8 @@ export function MassivaTicketsSection({
     scope,
     periodPreset,
     selectedMonth,
+    customStart,
+    customEnd,
     chartMetric,
     impactRange,
     recordTypeFilter,
@@ -322,6 +337,7 @@ export function MassivaTicketsSection({
     visibleCount,
   } = uiState
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
+  const todayValue = useMemo(() => toDateValue(new Date()), [])
   const { view, refetch: refetchBffList, isRefreshing } = useMassivaTickets({
     refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : undefined,
   })
@@ -422,8 +438,14 @@ export function MassivaTicketsSection({
   })
 
   const range = useMemo(
-    () => resolveMassivaPeriod(periodPreset, selectedMonth),
-    [periodPreset, selectedMonth],
+    () =>
+      resolveMassivaPeriod(
+        periodPreset,
+        selectedMonth,
+        undefined,
+        periodPreset === 'custom' ? { start: customStart, end: customEnd } : null,
+      ),
+    [periodPreset, selectedMonth, customStart, customEnd],
   )
   const periodStart = range.start
   const periodEnd = range.end
@@ -853,7 +875,37 @@ const { data: recentOpenTickets = [] } = useQuery({
             className={`rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-on-surface-variant/60 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
           <div className="flex min-h-10 items-center gap-1 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            {periodPreset === 'month' ? (
+            {periodPreset === 'custom' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setUiState((prev) => ({ ...prev, periodPreset: '30d' }))}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
+                  aria-label="Voltar aos períodos rápidos"
+                  title="Voltar aos períodos"
+                >
+                  <ChevronLeft className="size-4" aria-hidden />
+                </button>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || todayValue}
+                  onChange={(e) => setUiState((prev) => ({ ...prev, customStart: e.target.value }))}
+                  className="min-w-0 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-neutral-400 focus:outline-none"
+                  aria-label="Data inicial"
+                />
+                <span className="shrink-0 text-xs text-on-surface-variant/60">→</span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart}
+                  max={todayValue}
+                  onChange={(e) => setUiState((prev) => ({ ...prev, customEnd: e.target.value }))}
+                  className="min-w-0 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-neutral-400 focus:outline-none"
+                  aria-label="Data final"
+                />
+              </>
+            ) : periodPreset === 'month' ? (
               <>
                 <button
                   type="button"
@@ -883,6 +935,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 { id: '6m', label: '6m' },
                 { id: '12m', label: '12m' },
                 { id: 'month', label: 'Mês' },
+                { id: 'custom', label: 'Personalizado' },
               ] as Array<{ id: PeriodPreset; label: string }>).map((opt) => (
                 <button
                   key={opt.id}
