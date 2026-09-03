@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Gauge,
   Radio,
   Timer,
   Users,
@@ -344,6 +345,42 @@ function KpiTile({
   )
 }
 
+function SlaGaugeTile({
+  compliance,
+  meta = 90,
+}: {
+  compliance: { pct: number; within: number; total: number } | null
+  meta?: number
+}) {
+  const pct = compliance?.pct ?? null
+  const ok = pct != null && pct >= meta
+  const near = pct != null && pct >= meta - 10
+  const color = pct == null ? '#34415f' : ok ? '#1d9e75' : near ? '#eab308' : '#e24b4a'
+  const turn = pct == null ? 0 : Math.max(0, Math.min(1, pct / 100))
+  return (
+    <div className="relative overflow-hidden rounded-[10px] border border-[#253150] bg-[#121a2b] px-4 py-3.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#8593b8]">
+        <Gauge size={13} className="text-[#5a6685]" /> SLA cumprido
+        <span className="font-mono text-[9.5px] font-normal text-[#5a6685]">(mês)</span>
+      </p>
+      <div className="mt-1.5 flex items-center gap-3">
+        <div
+          className="flex size-12 shrink-0 items-center justify-center rounded-full"
+          style={{ background: `conic-gradient(${color} 0turn ${turn}turn, #253150 ${turn}turn 1turn)` }}
+        >
+          <span className="flex size-9 items-center justify-center rounded-full bg-[#121a2b] font-mono text-[12px] font-bold" style={{ color }}>
+            {pct != null ? `${pct}%` : '—'}
+          </span>
+        </div>
+        <div className="text-[11px] text-[#5a6685]">
+          <div>meta {meta}%</div>
+          {compliance ? <div className="font-mono">{compliance.within}/{compliance.total} no prazo</div> : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Panel({
   title,
   extra,
@@ -440,6 +477,27 @@ export function MassivaMonitorScreen() {
     staleTime: ONU_REFETCH_MS / 2,
     refetchInterval: ONU_REFETCH_MS,
   })
+
+  // SLA cumprido no mês: encerradas com closedAt <= previsão / total encerradas (com ambos).
+  const monthStart = useMemo(() => new Date(now.getFullYear(), now.getMonth(), 1), [now])
+  const slaMonthQuery = useQuery({
+    queryKey: ['massiva', 'sla-month', `${monthStart.getFullYear()}-${monthStart.getMonth()}`],
+    queryFn: () =>
+      fetchMassivaHistoryListFromLocalDb({ status: 'encerrada', startDate: monthStart, limit: 3000 }),
+    staleTime: HISTORY_REFETCH_MS / 2,
+    refetchInterval: HISTORY_REFETCH_MS,
+  })
+  const slaCompliance = useMemo(() => {
+    let within = 0
+    let total = 0
+    for (const r of slaMonthQuery.data ?? []) {
+      if (r.closedAt && r.expectedCloseAt) {
+        total += 1
+        if (r.closedAt.getTime() <= r.expectedCloseAt.getTime()) within += 1
+      }
+    }
+    return total > 0 ? { pct: Math.round((within / total) * 100), within, total } : null
+  }, [slaMonthQuery.data])
 
   const nowMs = now.getTime()
 
@@ -608,7 +666,7 @@ export function MassivaMonitorScreen() {
         </div>
       </div>
 
-      <div className="grid grid-cols-6 gap-3">
+      <div className="grid grid-cols-7 gap-3">
         <KpiTile
           label="Abertas agora"
           value={String(kpis.abertasAgora)}
@@ -656,6 +714,7 @@ export function MassivaMonitorScreen() {
           Icon={WifiOff}
           note="sinal ONU × abertas"
         />
+        <SlaGaugeTile compliance={slaCompliance} />
       </div>
 
       <Panel title={`Massivas abertas — ao vivo (${incidentRows.length})`} className="mt-3.5">
