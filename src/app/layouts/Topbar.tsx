@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/utils'
 import { getPreferredTheme, toggleTheme, type ThemeMode } from '@/shared/lib/theme'
 import { NotificationsBell } from '@/app/layouts/topbar/NotificationsBell'
 import { ProfileMenu } from '@/app/layouts/topbar/ProfileMenu'
+import { MassivaAlertsControl } from '@/features/massiva/ui/MassivaAlertsControl'
 
 const PAGE_TITLES: ReadonlyArray<{ test: (p: string) => boolean; title: string }> = [
   { test: (p) => p === '/', title: 'Dashboard' },
@@ -88,6 +89,7 @@ export function Topbar({ onMenuClick, isDesktop }: TopbarProps) {
 
       <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
         <ThemeToggleIcon />
+        <MassivaAlertsControl />
         <NotificationsBell />
         <ProfileMenu />
       </div>
