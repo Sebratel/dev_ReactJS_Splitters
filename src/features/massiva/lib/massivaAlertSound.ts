@@ -33,21 +33,26 @@ export async function primeMassivaAudio(): Promise<void> {
   }
 }
 
-type Tone = { freq: number; start: number; duration: number }
+type Tone = { freq: number; start: number; duration: number; type?: OscillatorType }
 
-function playTones(tones: Tone[], gainPeak = 0.18): void {
+/**
+ * Toca uma sequência de tons. Onda quadrada por padrão (som de alarme, bem mais
+ * perceptível que a senoide). `gainPeak` alto = mais chamativo.
+ */
+function playTones(tones: Tone[], gainPeak = 0.32): void {
   const ctx = getCtx()
   if (!ctx || ctx.state !== 'running') return
   const now = ctx.currentTime
   for (const t of tones) {
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
-    osc.type = 'sine'
+    osc.type = t.type ?? 'square'
     osc.frequency.value = t.freq
     const s = now + t.start
     const e = s + t.duration
     gain.gain.setValueAtTime(0.0001, s)
-    gain.gain.linearRampToValueAtTime(gainPeak, s + 0.015)
+    gain.gain.linearRampToValueAtTime(gainPeak, s + 0.008)
+    gain.gain.setValueAtTime(gainPeak, e - 0.03)
     gain.gain.exponentialRampToValueAtTime(0.0001, e)
     osc.connect(gain).connect(ctx.destination)
     osc.start(s)
@@ -60,27 +65,42 @@ export type MassivaAlertKind = 'new' | 'near' | 'expired' | 'test'
 /** Toca o som correspondente ao tipo de alerta (no-op se o áudio não estiver liberado). */
 export function playMassivaAlert(kind: MassivaAlertKind): void {
   switch (kind) {
-    case 'new': // duas notas ascendentes — evento novo
-      playTones([
-        { freq: 660, start: 0, duration: 0.14 },
-        { freq: 990, start: 0.15, duration: 0.2 },
-      ])
-      break
-    case 'near': // um beep médio — atenção
-      playTones([{ freq: 560, start: 0, duration: 0.2 }])
-      break
-    case 'expired': // três beeps descendentes — urgente
+    case 'new': // arpejo ascendente forte — evento novo
       playTones(
         [
-          { freq: 500, start: 0, duration: 0.13 },
-          { freq: 500, start: 0.17, duration: 0.13 },
-          { freq: 400, start: 0.34, duration: 0.26 },
+          { freq: 523, start: 0, duration: 0.13 },
+          { freq: 659, start: 0.14, duration: 0.13 },
+          { freq: 880, start: 0.28, duration: 0.26 },
         ],
-        0.22,
+        0.3,
+      )
+      break
+    case 'near': // beeps duplos repetidos — atenção
+      playTones(
+        [
+          { freq: 784, start: 0, duration: 0.13 },
+          { freq: 784, start: 0.17, duration: 0.13 },
+          { freq: 784, start: 0.45, duration: 0.13 },
+          { freq: 784, start: 0.62, duration: 0.16 },
+        ],
+        0.32,
+      )
+      break
+    case 'expired': // sirene alternando grave/agudo — urgente
+      playTones(
+        [
+          { freq: 900, start: 0, duration: 0.16 },
+          { freq: 620, start: 0.18, duration: 0.16 },
+          { freq: 900, start: 0.36, duration: 0.16 },
+          { freq: 620, start: 0.54, duration: 0.16 },
+          { freq: 900, start: 0.72, duration: 0.16 },
+          { freq: 620, start: 0.9, duration: 0.28 },
+        ],
+        0.38,
       )
       break
     case 'test': // confirmação ao ligar
-      playTones([{ freq: 880, start: 0, duration: 0.12 }])
+      playTones([{ freq: 880, start: 0, duration: 0.16 }], 0.3)
       break
   }
 }
