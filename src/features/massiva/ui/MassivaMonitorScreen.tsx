@@ -87,6 +87,26 @@ const stripeClass: Record<SlaState['severity'], string> = {
   crit: 'bg-rose-400',
 }
 
+/** Emoji animado por severidade de SLA (crit tremendo, warn virando, ok respirando). */
+const slaEmoji: Record<SlaState['severity'], { emoji: string; anim: string }> = {
+  crit: { emoji: '🚨', anim: 'slaa-shake' },
+  warn: { emoji: '⏳', anim: 'slaa-flip' },
+  ok: { emoji: '🟢', anim: 'slaa-breathe' },
+}
+
+const SLA_ANIM_CSS = `
+@keyframes slaa-shake{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-10deg)}80%{transform:rotate(8deg)}}
+@keyframes slaa-flip{0%,58%{transform:rotate(0)}78%,100%{transform:rotate(180deg)}}
+@keyframes slaa-breathe{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.14);opacity:1}}
+@keyframes slaa-pill{0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,.45)}70%{box-shadow:0 0 0 6px rgba(244,63,94,0)}}
+.slaa{display:inline-block;margin-right:5px}
+.slaa-shake{animation:slaa-shake .7s ease-in-out infinite}
+.slaa-flip{animation:slaa-flip 2.2s ease-in-out infinite}
+.slaa-breathe{animation:slaa-breathe 2.4s ease-in-out infinite}
+.slaa-pill{animation:slaa-pill 1.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.slaa-shake,.slaa-flip,.slaa-breathe,.slaa-pill{animation:none}}
+`
+
 /** Rótulo curto de "quem identificou o evento" para a coluna Origem. */
 const MASSIVA_IDENTIFIED_BY_LABEL: Record<string, string> = {
   tecnico: 'Técnico',
@@ -301,6 +321,7 @@ export function MassivaMonitorScreen() {
 
   return (
     <div className="min-h-dvh bg-[#0a0f1a] px-6 py-5 font-sans text-[#eaf0fa]">
+      <style>{SLA_ANIM_CSS}</style>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-[13px] font-bold uppercase tracking-wide text-[#8593b8]">
           Painel operacional · massivas
@@ -383,7 +404,16 @@ export function MassivaMonitorScreen() {
                       <td className="py-2.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
                       <td className="py-2.5 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
                       <td className="py-2.5">
-                        <span className={cn('rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold', chipClass[sla.severity])}>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
+                            chipClass[sla.severity],
+                            sla.severity === 'crit' && 'slaa-pill',
+                          )}
+                        >
+                          <span className={cn('slaa', slaEmoji[sla.severity].anim)} aria-hidden>
+                            {slaEmoji[sla.severity].emoji}
+                          </span>
                           {sla.label}
                         </span>
                       </td>
