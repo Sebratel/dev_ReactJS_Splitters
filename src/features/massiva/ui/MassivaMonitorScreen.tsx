@@ -128,13 +128,14 @@ const SLA_ANIM_CSS = `
 function MonColgroup() {
   return (
     <colgroup>
-      <col style={{ width: '9%' }} />
-      <col style={{ width: '27%' }} />
       <col style={{ width: '8%' }} />
-      <col style={{ width: '9%' }} />
-      <col style={{ width: '13%' }} />
-      <col style={{ width: '9%' }} />
-      <col style={{ width: '13%' }} />
+      <col style={{ width: '11%' }} />
+      <col style={{ width: '22%' }} />
+      <col style={{ width: '7%' }} />
+      <col style={{ width: '8%' }} />
+      <col style={{ width: '12%' }} />
+      <col style={{ width: '8%' }} />
+      <col style={{ width: '12%' }} />
       <col style={{ width: '12%' }} />
     </colgroup>
   )
@@ -167,13 +168,15 @@ function IncidentRow({
     progress && progress.total > 0 ? Math.round((progress.recovered / progress.total) * 100) : null
   return (
     <tr className="border-t border-[#253150]/50 align-top">
+      <td className="py-2 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
       <td className="py-2">
-        <div className="font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</div>
         {t.infraProtocol != null && t.infraProtocol > 0 ? (
-          <span className="mt-1 inline-flex items-center rounded-full bg-violet-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-violet-300">
-            🔗 infra #{t.infraProtocol}
+          <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[12px] font-bold text-violet-300">
+            🔗 {t.infraProtocol}
           </span>
-        ) : null}
+        ) : (
+          <span className="font-mono text-[11px] text-[#3f4c6b]">—</span>
+        )}
       </td>
       <td className="overflow-hidden py-2">
         <div>
@@ -727,6 +730,7 @@ export function MassivaMonitorScreen() {
               <thead>
                 <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-[#5a6685]">
                   <th className="pb-2">Protocolo</th>
+                  <th className="pb-2">Infra</th>
                   <th className="pb-2">Ponto de acesso</th>
                   <th className="pb-2">Afetados</th>
                   <th className="pb-2">Aberta há</th>
@@ -743,7 +747,7 @@ export function MassivaMonitorScreen() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-2 text-center text-[11px] text-emerald-300/70">
+                    <td colSpan={9} className="py-2 text-center text-[11px] text-emerald-300/70">
                       Nenhuma vencida ou perto de vencer.
                     </td>
                   </tr>
