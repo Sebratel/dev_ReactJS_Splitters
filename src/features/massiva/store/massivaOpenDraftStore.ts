@@ -47,11 +47,11 @@ type MassivaOpenDraftState = {
   eventDatesAutofilledForFlow: boolean
 
   /**
-   * true quando o "Sinal aferido (dBm)" já foi auto-preenchido para a seleção atual
-   * de "CTO Sinal Alto". Evita sobrescrever ajuste manual. Rearma ao trocar o tipo.
-   * Não é persistido.
+   * Assinatura (códigos das CTOs) do último auto-preenchimento do "Sinal aferido".
+   * Enquanto igual, não refaz (preserva ajuste manual); quando os splitters mudam
+   * ou o tipo é trocado, a assinatura muda e o valor é reavaliado. Não é persistido.
    */
-  infraSignalAutofilledForType: boolean
+  infraSignalAutofillKey: string
 
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
@@ -73,8 +73,11 @@ type MassivaOpenDraftState = {
   autofillEventDatesToNowOnce: () => void
   /** Rearma o auto-preenchimento (ex.: ao reiniciar o fluxo na Rota). */
   resetEventDatesAutofill: () => void
-  /** Preenche o "Sinal aferido (dBm)" do CTO Sinal Alto — só 1x por seleção do tipo. */
-  autofillInfraSignalOnce: (value: string) => void
+  /**
+   * Preenche o "Sinal aferido (dBm)" do CTO Sinal Alto quando a assinatura das CTOs
+   * (`key`) difere da última — refaz ao trocar splitters/tipo, preserva ajuste manual.
+   */
+  autofillInfraSignal: (value: string, key: string) => void
   reset: () => void
 }
 
@@ -119,7 +122,7 @@ function buildInitialDraft() {
     infraAvaria: '',
     infraSiteCode: '',
     eventDatesAutofilledForFlow: false,
-    infraSignalAutofilledForType: false,
+    infraSignalAutofillKey: '',
   }
 }
 
@@ -142,7 +145,7 @@ const createInitialState = () => ({
   infraAvaria: '',
   infraSiteCode: '',
   eventDatesAutofilledForFlow: false,
-  infraSignalAutofilledForType: false,
+  infraSignalAutofillKey: '',
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -167,7 +170,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
         set({ affectedUsersQuantityAutoIspOverride }),
       setInfraProtocolType: (infraProtocolType) =>
-        set({ infraProtocolType, infraSignalAutofilledForType: false }),
+        set({ infraProtocolType, infraSignalAutofillKey: '' }),
       setInfraSignalDbm: (infraSignalDbm) => set({ infraSignalDbm }),
       setInfraAvaria: (infraAvaria) => set({ infraAvaria }),
       setInfraSiteCode: (infraSiteCode) => set({ infraSiteCode }),
@@ -179,11 +182,11 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
             : { ...nowEventDates(), eventDatesAutofilledForFlow: true },
         ),
       resetEventDatesAutofill: () => set({ eventDatesAutofilledForFlow: false }),
-      autofillInfraSignalOnce: (value) =>
+      autofillInfraSignal: (value, key) =>
         set((state) =>
-          state.infraSignalAutofilledForType || value.trim() === ''
+          value.trim() === '' || state.infraSignalAutofillKey === key
             ? {}
-            : { infraSignalDbm: value, infraSignalAutofilledForType: true },
+            : { infraSignalDbm: value, infraSignalAutofillKey: key },
         ),
       reset: () => set(buildInitialDraft()),
     }),

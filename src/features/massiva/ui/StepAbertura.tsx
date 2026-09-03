@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Eraser } from 'lucide-react'
 import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
@@ -52,6 +53,7 @@ export function StepAbertura({
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
+  const resetDraft = useMassivaOpenDraftStore((s) => s.reset)
 
   // Preview por AP usa amostra de 50 do batch-summary; na abertura buscamos a lista
   // completa por rota para a contagem de afetados bater com a validação.
@@ -80,7 +82,7 @@ export function StepAbertura({
   // "CTO Sinal Alto": auto-preenche o Sinal aferido (dBm) com o avgRxPower do splitter
   // (mesmo dado do card "SINAL ONU — MÉDIA DO SPLITTER"). Por CTO quando há mais de uma.
   const infraProtocolType = useMassivaOpenDraftStore((s) => s.infraProtocolType)
-  const autofillInfraSignalOnce = useMassivaOpenDraftStore((s) => s.autofillInfraSignalOnce)
+  const autofillInfraSignal = useMassivaOpenDraftStore((s) => s.autofillInfraSignal)
   const splitterSignalQuery = useQuery({
     queryKey: ['onu', 'summary-by-splitter'],
     queryFn: fetchOnuSummaryBySplitter,
@@ -110,11 +112,17 @@ export function StepAbertura({
       ? comSinal[0].avg.toFixed(1)
       : comSinal.map((c) => `${c.label}: ${c.avg.toFixed(1)} dBm`).join('\n')
   }, [infraProtocolType, splitterSignalQuery.data, ctosDaRota])
+  // Assinatura das CTOs selecionadas: muda quando o operador troca de splitters,
+  // rearmando o auto-preenchimento (sem isso, ficaria o sinal das CTOs anteriores).
+  const ctoCodesKey = useMemo(
+    () => ctosDaRota.map((c) => c.code).sort().join('|'),
+    [ctosDaRota],
+  )
   useEffect(() => {
     if (infraProtocolType === 'cto_sinal_alto' && infraSignalAutofillValue !== '') {
-      autofillInfraSignalOnce(infraSignalAutofillValue)
+      autofillInfraSignal(infraSignalAutofillValue, ctoCodesKey)
     }
-  }, [infraProtocolType, infraSignalAutofillValue, autofillInfraSignalOnce])
+  }, [infraProtocolType, infraSignalAutofillValue, ctoCodesKey, autofillInfraSignal])
 
   const requestsByAp = readiness.status === 'ready-to-open'
     ? readiness.context.plan.requests
@@ -164,11 +172,27 @@ export function StepAbertura({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h3 className="text-base font-semibold text-on-surface">Abertura</h3>
-        <p className="mt-1 text-sm text-on-surface-variant">
-          Complete dados operacionais, gere a descrição técnica e revise bloqueios antes do envio.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-on-surface">Abertura</h3>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Complete dados operacionais, gere a descrição técnica e revise bloqueios antes do envio.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Limpar os dados da abertura? (datas voltam para agora, protocolo de infra, sinal, quem identificou e relato são resetados)')) {
+              resetDraft()
+            }
+          }}
+          disabled={!draftFormEnabled}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low disabled:opacity-50"
+          title="Limpar os campos da abertura e recomeçar"
+        >
+          <Eraser className="size-3.5" />
+          <span className="hidden sm:inline">Limpar dados</span>
+        </button>
       </div>
 
       {readiness.status === 'blocked-preparation' ? (
