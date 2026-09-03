@@ -2007,6 +2007,8 @@ app.post('/api/massiva/history/verify-affected-clients', async (req, res) => {
 // dispara nada. É a base do modal de validação + (futuro) disparo de HSM.
 app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     if (!massivaHistoryStore.configured) {
       return res.status(503).json({ success: false, message: 'Histórico local de massivas não configurado no MySQL.' });
     }
@@ -2103,17 +2105,19 @@ app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao listar sinal dos clientes afetados de massiva:', error);
-    res.status(500).json({ success: false, message: 'Erro interno ao listar sinal dos clientes afetados.', error: error.message });
+    const statusCode = Number(error?.statusCode ?? 500);
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({ success: false, message: 'Erro interno ao listar sinal dos clientes afetados.', error: error.message });
   }
 });
 
 // Disparo manual de HSM (WhatsApp via Matrix/N8N) para os clientes de uma massiva
 // encerrada que NÃO subiram. Recebe a lista já filtrada pelo operador no modal e
 // repassa ao webhook do N8N. Fire-and-wait: responde só depois do webhook aceitar.
-// Sem auth no BFF, seguindo os endpoints irmãos (affected-clients / -signal): a
-// tela de massiva já é protegida pela rota `canViewMassiva` no front.
+// Exige permissão de massiva: dispara mensagem real a clientes (ação sensível).
 app.post('/api/massivas/hsm', async (req, res) => {
   try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
     const protocol = req.body?.protocol ?? null;
     const rawClients = Array.isArray(req.body?.clients) ? req.body.clients : [];
 
