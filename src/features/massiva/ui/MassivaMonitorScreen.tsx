@@ -4,6 +4,7 @@ import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { fetchMassivaHistoryMttdMttrKpis } from '@/features/massiva/api/fetchMassivaHistoryMttdMttrKpis'
 import { fetchOnuNetworkSummary } from '@/features/onu/api/fetchOnuNetworkSummary'
+import { fetchMassivaSignalProgress } from '@/features/massiva/api/fetchMassivaSignalProgress'
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import { isMassivaOpenForGlobalDashboard } from '@/features/massiva/lib/massivaDashboardEligibility'
 import type { OnuOltBreakdown } from '@/features/onu/model/onuNetworkSummary'
@@ -126,18 +127,70 @@ function MonColgroup() {
   )
 }
 
-function IncidentRow({ t, sla, nowMs }: { t: MassivaTicket; sla: SlaState; nowMs: number }) {
+type SignalProgress = { recovered: number; total: number }
+const EMPTY_PROGRESS: Map<number, SignalProgress> = new Map()
+
+function IncidentRow({
+  t,
+  sla,
+  nowMs,
+  tipo,
+  recurrence,
+  progress,
+}: {
+  t: MassivaTicket
+  sla: SlaState
+  nowMs: number
+  tipo?: string | null
+  recurrence?: number
+  progress?: SignalProgress | null
+}) {
   const operator = (t.createdBy ?? '').trim()
   const operatorDisplay = operator.includes('@') ? operator.split('@')[0] : operator || '—'
+  const res = t.affectedClientsResidential
+  const corp = t.affectedClientsCorporate
+  const showRecurrence = typeof recurrence === 'number' && recurrence >= 2
+  const pct =
+    progress && progress.total > 0 ? Math.round((progress.recovered / progress.total) * 100) : null
   return (
-    <tr className="border-t border-[#253150]/50">
-      <td className="py-2 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
-      <td className="overflow-hidden py-2">
-        <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
-        <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
-        {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
+    <tr className="border-t border-[#253150]/50 align-top">
+      <td className="py-2">
+        <div className="font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</div>
+        {t.infraProtocol != null && t.infraProtocol > 0 ? (
+          <span className="mt-1 inline-flex items-center rounded-full bg-violet-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-violet-300">
+            🔗 infra #{t.infraProtocol}
+          </span>
+        ) : null}
       </td>
-      <td className="py-2">{t.affectedClients.toLocaleString('pt-BR')}</td>
+      <td className="overflow-hidden py-2">
+        <div>
+          <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
+          <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
+          {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
+        </div>
+        {tipo || showRecurrence ? (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {tipo ? (
+              <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-300">
+                {tipo}
+              </span>
+            ) : null}
+            {showRecurrence ? (
+              <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-300">
+                🔁 {recurrence}× hoje
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </td>
+      <td className="py-2">
+        <div>{t.affectedClients.toLocaleString('pt-BR')}</div>
+        {res != null && corp != null ? (
+          <div className="font-mono text-[9px] text-[#5a6685]">
+            {res}R · {corp}C
+          </div>
+        ) : null}
+      </td>
       <td className="py-2">{formatDurationSince(t.openedAt, nowMs)}</td>
       <td className="overflow-hidden py-2 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
       <td className="py-2 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
@@ -154,6 +207,16 @@ function IncidentRow({ t, sla, nowMs }: { t: MassivaTicket; sla: SlaState; nowMs
           </span>
           {sla.label}
         </span>
+        {pct != null ? (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span className="h-[5px] w-14 overflow-hidden rounded-full bg-[#253150]">
+              <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+            </span>
+            <span className="font-mono text-[10px] font-bold text-emerald-300">
+              {progress!.recovered}/{progress!.total} ↑
+            </span>
+          </div>
+        ) : null}
       </td>
     </tr>
   )
@@ -380,6 +443,48 @@ export function MassivaMonitorScreen() {
   const okRows = useMemo(() => rowsWithSla.filter((r) => r.sla.severity === 'ok'), [rowsWithSla])
   const okScroll = okRows.length > OK_SCROLL_THRESHOLD
 
+  // Tipo/classificação por protocolo e recorrência por ponto de acesso (do histórico).
+  const tipoByProtocol = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const row of historyQuery.data ?? []) {
+      if (row.protocol && row.protocol > 0 && row.tipoIncidente) {
+        if (!m.has(row.protocol)) m.set(row.protocol, row.tipoIncidente)
+      }
+    }
+    return m
+  }, [historyQuery.data])
+  const recurrenceByApCode = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const row of historyQuery.data ?? []) {
+      const code = row.accessPointCode.trim()
+      if (code === '') continue
+      m.set(code, (m.get(code) ?? 0) + 1)
+    }
+    return m
+  }, [historyQuery.data])
+
+  // Progresso de recuperação de sinal ao vivo (batch, leve, ~60s) por massiva aberta.
+  const signalProgressItems = useMemo(
+    () =>
+      incidentRows
+        .filter((t) => t.protocol > 0)
+        .map((t) => ({ protocol: t.protocol, assignmentId: t.assignmentId ?? null })),
+    [incidentRows],
+  )
+  const signalProgressQuery = useQuery({
+    queryKey: [
+      'massiva',
+      'signal-progress',
+      signalProgressItems.map((i) => i.protocol).sort((a, b) => a - b).join(','),
+    ],
+    queryFn: () => fetchMassivaSignalProgress(signalProgressItems),
+    enabled: signalProgressItems.length > 0,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const signalProgress = signalProgressQuery.data ?? EMPTY_PROGRESS
+
   // Rodízio automático (~10s) do slot secundário: Aberturas/hora <-> Recorrência.
   const [rotIndex, setRotIndex] = useState(0)
   useEffect(() => {
@@ -456,7 +561,7 @@ export function MassivaMonitorScreen() {
               <tbody>
                 {criticalRows.length > 0 ? (
                   criticalRows.map(({ t, sla }) => (
-                    <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                    <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
                   ))
                 ) : (
                   <tr>
@@ -483,7 +588,7 @@ export function MassivaMonitorScreen() {
                       <MonColgroup />
                       <tbody>
                         {okRows.map(({ t, sla }) => (
-                          <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                          <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
                         ))}
                       </tbody>
                     </table>
@@ -492,7 +597,7 @@ export function MassivaMonitorScreen() {
                         <MonColgroup />
                         <tbody>
                           {okRows.map(({ t, sla }) => (
-                            <IncidentRow key={`dup-${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                            <IncidentRow key={`dup-${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
                           ))}
                         </tbody>
                       </table>
