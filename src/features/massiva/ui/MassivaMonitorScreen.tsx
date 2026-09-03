@@ -120,9 +120,10 @@ function MonColgroup() {
       <col />
       <col style={{ width: '70px' }} />
       <col style={{ width: '80px' }} />
-      <col style={{ width: '104px' }} />
-      <col style={{ width: '72px' }} />
-      <col style={{ width: '152px' }} />
+      <col style={{ width: '100px' }} />
+      <col style={{ width: '70px' }} />
+      <col style={{ width: '132px' }} />
+      <col style={{ width: '120px' }} />
     </colgroup>
   )
 }
@@ -207,8 +208,10 @@ function IncidentRow({
           </span>
           {sla.label}
         </span>
+      </td>
+      <td className="py-2">
         {pct != null ? (
-          <div className="mt-1.5 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <span className="h-[5px] w-14 overflow-hidden rounded-full bg-[#253150]">
               <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
             </span>
@@ -216,7 +219,9 @@ function IncidentRow({
               {progress!.recovered}/{progress!.total} ↑
             </span>
           </div>
-        ) : null}
+        ) : (
+          <span className="font-mono text-[10px] text-[#3f4c6b]">—</span>
+        )}
       </td>
     </tr>
   )
@@ -556,6 +561,7 @@ export function MassivaMonitorScreen() {
                   <th className="pb-2">Operador</th>
                   <th className="pb-2">Origem</th>
                   <th className="pb-2">SLA</th>
+                  <th className="pb-2">Sinal</th>
                 </tr>
               </thead>
               <tbody>
@@ -565,7 +571,7 @@ export function MassivaMonitorScreen() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-2 text-center text-[11px] text-emerald-300/70">
+                    <td colSpan={8} className="py-2 text-center text-[11px] text-emerald-300/70">
                       Nenhuma vencida ou perto de vencer.
                     </td>
                   </tr>
