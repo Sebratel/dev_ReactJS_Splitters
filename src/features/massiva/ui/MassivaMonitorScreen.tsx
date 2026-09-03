@@ -99,7 +99,7 @@ const SLA_ANIM_CSS = `
 @keyframes slaa-flip{0%,58%{transform:rotate(0)}78%,100%{transform:rotate(180deg)}}
 @keyframes slaa-breathe{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.14);opacity:1}}
 @keyframes slaa-pill{0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,.45)}70%{box-shadow:0 0 0 6px rgba(244,63,94,0)}}
-.slaa{display:inline-block;margin-right:5px}
+.slaa{display:inline-block;margin-right:5px;font-size:16px;line-height:1}
 .slaa-shake{animation:slaa-shake .7s ease-in-out infinite}
 .slaa-flip{animation:slaa-flip 2.2s ease-in-out infinite}
 .slaa-breathe{animation:slaa-breathe 2.4s ease-in-out infinite}
