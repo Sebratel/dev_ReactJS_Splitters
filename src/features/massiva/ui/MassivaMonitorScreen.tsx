@@ -116,14 +116,14 @@ const SLA_ANIM_CSS = `
 function MonColgroup() {
   return (
     <colgroup>
-      <col style={{ width: '88px' }} />
-      <col />
-      <col style={{ width: '70px' }} />
-      <col style={{ width: '80px' }} />
-      <col style={{ width: '100px' }} />
-      <col style={{ width: '70px' }} />
-      <col style={{ width: '132px' }} />
-      <col style={{ width: '120px' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '27%' }} />
+      <col style={{ width: '8%' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '13%' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '13%' }} />
+      <col style={{ width: '12%' }} />
     </colgroup>
   )
 }
