@@ -25,6 +25,13 @@ export function InfraSiteSelect({ value, onChange, disabled }: InfraSiteSelectPr
     return () => clearTimeout(timer)
   }, [input])
 
+  // Reflete no input visível qualquer mudança externa do valor (auto-preenchido pelo
+  // OLT da rota ou escolhido nos chips de candidatos). Digitação não é afetada: só
+  // altera `input`, e o `value` do store não muda até selecionar/limpar.
+  useEffect(() => {
+    setInput(value)
+  }, [value])
+
   const query = useQuery({
     queryKey: ['massiva', 'auth-sites', debounced],
     queryFn: ({ signal }) => searchAuthenticationSites(debounced, signal),

@@ -5,6 +5,8 @@ import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
 import { fetchOnuSummaryBySplitter } from '@/features/onu/api/fetchOnuSummaryBySplitter'
+import { searchAuthenticationSites } from '@/features/massiva/api/searchAuthenticationSites'
+import { extractSiteTokenFromApTitle } from '@/features/massiva/lib/extractSiteTokenFromApTitle'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
@@ -138,6 +140,46 @@ export function StepAbertura({
       autofillInfraSignal(infraSignalAutofillValue, ctoCodesKey)
     }
   }, [infraProtocolType, infraSignalAutofillValue, ctoCodesKey, autofillInfraSignal])
+
+  // "Rompimento de Backbone": deriva o Site do título do OLT/AP e valida no catálogo.
+  // 1 site validado → auto-preenche (editável); vários → lista candidatos pro operador.
+  const infraSiteCode = useMassivaOpenDraftStore((s) => s.infraSiteCode)
+  const setInfraSiteCode = useMassivaOpenDraftStore((s) => s.setInfraSiteCode)
+  const siteTokens = useMemo(() => {
+    const set = new Set<string>()
+    for (const route of preparedBasis?.topology.routes ?? []) {
+      const token = extractSiteTokenFromApTitle(route.apDisplayTitle)
+      if (token) set.add(token)
+    }
+    return [...set]
+  }, [preparedBasis])
+  const siteCandidatesQuery = useQuery({
+    queryKey: ['massiva', 'infra-site-candidates', [...siteTokens].sort().join('|')],
+    queryFn: async ({ signal }) => {
+      const found = new Set<string>()
+      for (const token of siteTokens) {
+        const results = await searchAuthenticationSites(token, signal)
+        const exact = results.find((s) => s.title.toUpperCase() === token.toUpperCase())
+        if (exact) found.add(exact.title)
+      }
+      return [...found]
+    },
+    enabled: infraProtocolType === 'backbone' && siteTokens.length > 0,
+    staleTime: 60_000,
+  })
+  const siteCandidates = useMemo(
+    () => siteCandidatesQuery.data ?? [],
+    [siteCandidatesQuery.data],
+  )
+  useEffect(() => {
+    if (
+      infraProtocolType === 'backbone' &&
+      siteCandidates.length === 1 &&
+      infraSiteCode.trim() === ''
+    ) {
+      setInfraSiteCode(siteCandidates[0])
+    }
+  }, [infraProtocolType, siteCandidates, infraSiteCode, setInfraSiteCode])
 
   const requestsByAp = readiness.status === 'ready-to-open'
     ? readiness.context.plan.requests
@@ -309,6 +351,7 @@ export function StepAbertura({
       <MassivaOpenDraftFields
         disabled={!draftFormEnabled}
         descriptionByAp={descriptionByAp}
+        siteCandidates={siteCandidates}
       />
     </div>
   )

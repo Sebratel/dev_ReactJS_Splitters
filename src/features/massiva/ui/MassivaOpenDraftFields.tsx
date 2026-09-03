@@ -27,6 +27,8 @@ type DescriptionByApItem = {
 type MassivaOpenDraftFieldsProps = {
   disabled: boolean
   descriptionByAp?: DescriptionByApItem[]
+  /** Sites derivados/validados a partir dos OLTs da rota (Backbone). Vários = escolher. */
+  siteCandidates?: string[]
 }
 
 function DraftSection({
@@ -106,6 +108,7 @@ const inputClassName =
 export function MassivaOpenDraftFields({
   disabled,
   descriptionByAp = [],
+  siteCandidates = [],
 }: MassivaOpenDraftFieldsProps) {
   const enableDescriptionAutoSync = useMassivaOpenDraftStore((s) => s.enableDescriptionAutoSync)
 
@@ -423,11 +426,39 @@ export function MassivaOpenDraftFields({
             ) : null}
 
             {infraManualField === 'site' ? (
-              <InfraSiteSelect
-                value={infraSiteCode}
-                onChange={setInfraSiteCode}
-                disabled={disabled}
-              />
+              <>
+                <InfraSiteSelect
+                  value={infraSiteCode}
+                  onChange={setInfraSiteCode}
+                  disabled={disabled}
+                />
+                {siteCandidates.length > 1 ? (
+                  <div className="mt-1.5">
+                    <p className="text-[10px] text-on-surface-variant/80">
+                      A massiva envolve mais de um site — escolha qual abrir o backbone:
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {siteCandidates.map((site) => (
+                        <button
+                          key={site}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setInfraSiteCode(site)}
+                          className={cn(
+                            'inline-flex items-center rounded-lg border px-2.5 py-1 font-mono text-xs font-semibold transition',
+                            infraSiteCode === site
+                              ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100'
+                              : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
+                            'disabled:opacity-50',
+                          )}
+                        >
+                          {site}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             {infraProtocolType !== 'none' ? (
