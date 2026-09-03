@@ -76,9 +76,11 @@ export function buildInfraSolicitationDescription(input: BuildInfraDescriptionIn
   }
 
   // Tipos de CTO (cto_lo, cto_sinal_alto, cto_avariada)
+  const signalTrimmed = input.signalDbm?.trim()
   const signalExtra =
-    type === 'cto_sinal_alto' && input.signalDbm?.trim()
-      ? `📶 ${input.signalDbm.trim()} dBm`
+    type === 'cto_sinal_alto' && signalTrimmed
+      ? // Não duplica a unidade quando o valor já traz "dBm" (caso multi-CTO).
+        `📶 ${signalTrimmed}${/dbm/i.test(signalTrimmed) ? '' : ' dBm'}`
       : undefined
 
   routes.forEach((route, index) => {

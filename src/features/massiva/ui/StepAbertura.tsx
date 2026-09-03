@@ -1,8 +1,9 @@
-﻿import { useMemo } from 'react'
+﻿import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
+import { fetchOnuSummaryBySplitter } from '@/features/onu/api/fetchOnuSummaryBySplitter'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import type { MassivaOpenReadinessView } from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
@@ -75,6 +76,45 @@ export function StepAbertura({
     staleTime: 60_000,
   })
   const fullConnections = fullConnectionsQuery.data ?? []
+
+  // "CTO Sinal Alto": auto-preenche o Sinal aferido (dBm) com o avgRxPower do splitter
+  // (mesmo dado do card "SINAL ONU — MÉDIA DO SPLITTER"). Por CTO quando há mais de uma.
+  const infraProtocolType = useMassivaOpenDraftStore((s) => s.infraProtocolType)
+  const autofillInfraSignalOnce = useMassivaOpenDraftStore((s) => s.autofillInfraSignalOnce)
+  const splitterSignalQuery = useQuery({
+    queryKey: ['onu', 'summary-by-splitter'],
+    queryFn: fetchOnuSummaryBySplitter,
+    staleTime: 60_000,
+    enabled: infraProtocolType === 'cto_sinal_alto',
+  })
+  const ctosDaRota = useMemo(() => {
+    const byCode = new Map<string, string>()
+    for (const route of preparedBasis?.topology.routes ?? []) {
+      for (const s of route.effectiveSplitterDisplay ?? []) {
+        const code = String(s.code ?? '').trim()
+        if (code && !byCode.has(code)) byCode.set(code, String(s.label ?? code).trim() || code)
+      }
+    }
+    return [...byCode.entries()].map(([code, label]) => ({ code, label }))
+  }, [preparedBasis])
+  const infraSignalAutofillValue = useMemo(() => {
+    if (infraProtocolType !== 'cto_sinal_alto') return ''
+    const summary = splitterSignalQuery.data
+    if (!summary || ctosDaRota.length === 0) return ''
+    const comSinal = ctosDaRota
+      .map((cto) => ({ ...cto, avg: summary.get(cto.code)?.avgRxPower ?? null }))
+      .filter((c): c is { code: string; label: string; avg: number } => c.avg != null)
+    if (comSinal.length === 0) return ''
+    // 1 CTO: número puro (a descrição acrescenta " dBm"). Várias: lista por CTO com dBm.
+    return comSinal.length === 1
+      ? comSinal[0].avg.toFixed(1)
+      : comSinal.map((c) => `${c.label}: ${c.avg.toFixed(1)} dBm`).join('; ')
+  }, [infraProtocolType, splitterSignalQuery.data, ctosDaRota])
+  useEffect(() => {
+    if (infraProtocolType === 'cto_sinal_alto' && infraSignalAutofillValue !== '') {
+      autofillInfraSignalOnce(infraSignalAutofillValue)
+    }
+  }, [infraProtocolType, infraSignalAutofillValue, autofillInfraSignalOnce])
 
   const requestsByAp = readiness.status === 'ready-to-open'
     ? readiness.context.plan.requests
