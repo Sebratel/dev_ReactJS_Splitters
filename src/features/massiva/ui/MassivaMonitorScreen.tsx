@@ -677,7 +677,7 @@ export function MassivaMonitorScreen() {
               </span>
             }
           >
-            <div className="flex h-full flex-col justify-center gap-2">
+            <div className="flex h-full flex-col justify-end gap-2 pb-1">
               <div className="flex items-end gap-2" style={{ height: 120 }}>
                 {hourBuckets.bars.map((b) => (
                   <div key={b.hour} className="flex h-full flex-1 flex-col items-center justify-end">
