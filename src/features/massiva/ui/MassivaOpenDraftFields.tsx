@@ -385,16 +385,20 @@ export function MassivaOpenDraftFields({
                 >
                   Sinal aferido (dBm)
                 </label>
-                <input
+                <textarea
                   id="infra-signal"
-                  type="text"
-                  inputMode="decimal"
                   value={infraSignalDbm}
                   onChange={(e) => setInfraSignalDbm(e.target.value)}
                   disabled={disabled}
+                  rows={Math.min(Math.max(infraSignalDbm.split('\n').length, 1), 8)}
                   placeholder="Ex.: -24.0"
-                  className="w-full rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full resize-y rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 font-mono text-xs leading-relaxed text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
+                {infraSignalDbm.includes('\n') ? (
+                  <p className="mt-1 text-[10px] text-on-surface-variant/70">
+                    Sinal médio por CTO (preenchido automaticamente) — editável.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 

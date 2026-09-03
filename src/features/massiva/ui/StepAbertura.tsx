@@ -105,10 +105,10 @@ export function StepAbertura({
       .map((cto) => ({ ...cto, avg: summary.get(cto.code)?.avgRxPower ?? null }))
       .filter((c): c is { code: string; label: string; avg: number } => c.avg != null)
     if (comSinal.length === 0) return ''
-    // 1 CTO: número puro (a descrição acrescenta " dBm"). Várias: lista por CTO com dBm.
+    // 1 CTO: número puro (a descrição acrescenta " dBm"). Várias: 1 CTO por linha.
     return comSinal.length === 1
       ? comSinal[0].avg.toFixed(1)
-      : comSinal.map((c) => `${c.label}: ${c.avg.toFixed(1)} dBm`).join('; ')
+      : comSinal.map((c) => `${c.label}: ${c.avg.toFixed(1)} dBm`).join('\n')
   }, [infraProtocolType, splitterSignalQuery.data, ctosDaRota])
   useEffect(() => {
     if (infraProtocolType === 'cto_sinal_alto' && infraSignalAutofillValue !== '') {
