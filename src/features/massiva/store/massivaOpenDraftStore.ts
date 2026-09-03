@@ -119,12 +119,21 @@ function nowEventDates() {
   }
 }
 
+/** Padrão da previsão de finalização: agora + N horas (editável pelo operador). */
+const MASSIVA_DEFAULT_FORECAST_HOURS = 4
+function defaultForecastDates() {
+  const t = new Date(Date.now() + MASSIVA_DEFAULT_FORECAST_HOURS * 60 * 60 * 1000)
+  return {
+    assignmentForecastDate: formatDateInputValue(t),
+    assignmentForecastTime: formatTimeInputValue(t),
+  }
+}
+
 function buildInitialDraft() {
   return {
     assignmentDescription: '',
     descriptionAutoSync: true,
-    assignmentForecastDate: '',
-    assignmentForecastTime: '',
+    ...defaultForecastDates(),
     ...nowEventDates(),
     initialReport: '',
     eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
@@ -144,8 +153,8 @@ const initial = buildInitialDraft()
 const createInitialState = () => ({
   assignmentDescription: '',
   descriptionAutoSync: true,
-  assignmentForecastDate: '',
-  assignmentForecastTime: '',
+  assignmentForecastDate: initial.assignmentForecastDate,
+  assignmentForecastTime: initial.assignmentForecastTime,
   eventStartDate: initial.eventStartDate,
   eventStartTime: initial.eventStartTime,
   eventIdentifiedDate: initial.eventIdentifiedDate,
@@ -193,7 +202,11 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
         set((state) =>
           state.eventDatesAutofilledForFlow
             ? {}
-            : { ...nowEventDates(), eventDatesAutofilledForFlow: true },
+            : {
+                ...nowEventDates(),
+                ...defaultForecastDates(),
+                eventDatesAutofilledForFlow: true,
+              },
         ),
       resetEventDatesAutofill: () => set({ eventDatesAutofilledForFlow: false }),
       resetOpenFieldsForSelection: (key) =>
