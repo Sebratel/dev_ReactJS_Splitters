@@ -16,7 +16,9 @@ const HISTORY_REFETCH_MS = 60_000
 const ONU_REFETCH_MS = 30_000
 const CLOCK_TICK_MS = 1_000
 const SLA_RISK_WINDOW_MIN = 60
-const INCIDENT_ROWS_LIMIT = 8
+const INCIDENT_ROWS_LIMIT = 60
+/** Acima disto, a lista "no prazo" entra em auto-scroll (não cabe na tela da TV). */
+const OK_SCROLL_THRESHOLD = 10
 const RECURRENCE_ROWS_LIMIT = 5
 const SINAL_ROWS_LIMIT = 6
 
@@ -104,8 +106,58 @@ const SLA_ANIM_CSS = `
 .slaa-flip{animation:slaa-flip 2.2s ease-in-out infinite}
 .slaa-breathe{animation:slaa-breathe 2.4s ease-in-out infinite}
 .slaa-pill{animation:slaa-pill 1.4s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.slaa-shake,.slaa-flip,.slaa-breathe,.slaa-pill{animation:none}}
+@keyframes slaa-marquee{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.slaa-marquee{animation-name:slaa-marquee;animation-timing-function:linear;animation-iteration-count:infinite}
+@media (prefers-reduced-motion:reduce){.slaa-shake,.slaa-flip,.slaa-breathe,.slaa-pill,.slaa-marquee{animation:none}}
 `
+
+/** Larguras fixas das colunas — iguais nas duas tabelas (fixas no topo + rolando). */
+function MonColgroup() {
+  return (
+    <colgroup>
+      <col style={{ width: '88px' }} />
+      <col />
+      <col style={{ width: '70px' }} />
+      <col style={{ width: '80px' }} />
+      <col style={{ width: '104px' }} />
+      <col style={{ width: '72px' }} />
+      <col style={{ width: '152px' }} />
+    </colgroup>
+  )
+}
+
+function IncidentRow({ t, sla, nowMs }: { t: MassivaTicket; sla: SlaState; nowMs: number }) {
+  const operator = (t.createdBy ?? '').trim()
+  const operatorDisplay = operator.includes('@') ? operator.split('@')[0] : operator || '—'
+  return (
+    <tr className="border-t border-[#253150]/50">
+      <td className="py-2 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
+      <td className="overflow-hidden py-2">
+        <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
+        <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
+        {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
+      </td>
+      <td className="py-2">{t.affectedClients.toLocaleString('pt-BR')}</td>
+      <td className="py-2">{formatDurationSince(t.openedAt, nowMs)}</td>
+      <td className="overflow-hidden py-2 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
+      <td className="py-2 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
+      <td className="py-2">
+        <span
+          className={cn(
+            'inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
+            chipClass[sla.severity],
+            sla.severity === 'crit' && 'slaa-pill',
+          )}
+        >
+          <span className={cn('slaa', slaEmoji[sla.severity].anim)} aria-hidden>
+            {slaEmoji[sla.severity].emoji}
+          </span>
+          {sla.label}
+        </span>
+      </td>
+    </tr>
+  )
+}
 
 /** Rótulo curto de "quem identificou o evento" para a coluna Origem. */
 const MASSIVA_IDENTIFIED_BY_LABEL: Record<string, string> = {
@@ -319,6 +371,22 @@ export function MassivaMonitorScreen() {
     [openTickets],
   )
 
+  // Crítico (vencido/perto) fica fixo no topo; "no prazo" rola sozinho se estourar a tela.
+  const rowsWithSla = useMemo(
+    () => incidentRows.map((t) => ({ t, sla: formatSla(t.expectedCloseAt, nowMs) })),
+    [incidentRows, nowMs],
+  )
+  const criticalRows = useMemo(() => rowsWithSla.filter((r) => r.sla.severity !== 'ok'), [rowsWithSla])
+  const okRows = useMemo(() => rowsWithSla.filter((r) => r.sla.severity === 'ok'), [rowsWithSla])
+  const okScroll = okRows.length > OK_SCROLL_THRESHOLD
+
+  // Rodízio automático (~10s) do slot secundário: Aberturas/hora <-> Recorrência.
+  const [rotIndex, setRotIndex] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => setRotIndex((i) => (i + 1) % 2), 10_000)
+    return () => window.clearInterval(id)
+  }, [])
+
   return (
     <div className="min-h-dvh bg-[#0a0f1a] px-6 py-5 font-sans text-[#eaf0fa]">
       <style>{SLA_ANIM_CSS}</style>
@@ -367,12 +435,13 @@ export function MassivaMonitorScreen() {
         />
       </div>
 
-      <div className="mt-3.5 grid grid-cols-[1.7fr_1fr] gap-3.5">
-        <Panel title="Massivas abertas — ao vivo">
-          {incidentRows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-[#5a6685]">Nenhuma massiva aberta agora.</p>
-          ) : (
-            <table className="w-full text-[13px]">
+      <Panel title={`Massivas abertas — ao vivo (${incidentRows.length})`} className="mt-3.5">
+        {incidentRows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[#5a6685]">Nenhuma massiva aberta agora.</p>
+        ) : (
+          <div>
+            <table className="w-full table-fixed text-[13px]">
+              <MonColgroup />
               <thead>
                 <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-[#5a6685]">
                   <th className="pb-2">Protocolo</th>
@@ -385,48 +454,151 @@ export function MassivaMonitorScreen() {
                 </tr>
               </thead>
               <tbody>
-                {incidentRows.map((t) => {
-                  const sla = formatSla(t.expectedCloseAt, nowMs)
-                  const operator = (t.createdBy ?? '').trim()
-                  const operatorDisplay = operator.includes('@')
-                    ? operator.split('@')[0]
-                    : operator || '—'
-                  return (
-                    <tr key={`${t.protocol}-${t.assignmentId ?? 'x'}`} className="border-t border-[#253150]/50">
-                      <td className="py-2.5 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
-                      <td className="py-2.5">
-                        <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
-                        {t.title.trim() !== '' ? t.title : t.apCode || '—'}
-                        {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
-                      </td>
-                      <td className="py-2.5">{t.affectedClients.toLocaleString('pt-BR')}</td>
-                      <td className="py-2.5">{formatDurationSince(t.openedAt, nowMs)}</td>
-                      <td className="py-2.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
-                      <td className="py-2.5 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
-                      <td className="py-2.5">
-                        <span
-                          className={cn(
-                            'inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
-                            chipClass[sla.severity],
-                            sla.severity === 'crit' && 'slaa-pill',
-                          )}
-                        >
-                          <span className={cn('slaa', slaEmoji[sla.severity].anim)} aria-hidden>
-                            {slaEmoji[sla.severity].emoji}
-                          </span>
-                          {sla.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {criticalRows.length > 0 ? (
+                  criticalRows.map(({ t, sla }) => (
+                    <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-2 text-center text-[11px] text-emerald-300/70">
+                      Nenhuma vencida ou perto de vencer.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {okRows.length > 0 ? (
+              <>
+                <div className="mt-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-[#5a6685]">
+                  No prazo · {okRows.length}
+                  {okScroll ? ' · rolando' : ''}
+                </div>
+                <div className={okScroll ? 'relative max-h-[300px] overflow-hidden' : ''}>
+                  <div
+                    className={okScroll ? 'slaa-marquee' : ''}
+                    style={okScroll ? { animationDuration: `${Math.max(14, okRows.length * 2.4)}s` } : undefined}
+                  >
+                    <table className="w-full table-fixed text-[13px]">
+                      <MonColgroup />
+                      <tbody>
+                        {okRows.map(({ t, sla }) => (
+                          <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                        ))}
+                      </tbody>
+                    </table>
+                    {okScroll ? (
+                      <table className="w-full table-fixed text-[13px]" aria-hidden>
+                        <MonColgroup />
+                        <tbody>
+                          {okRows.map(({ t, sla }) => (
+                            <IncidentRow key={`dup-${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} />
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+      </Panel>
+
+      <div className="mt-3.5 grid grid-cols-[1.15fr_1fr] gap-3.5">
+        <Panel
+          title="Sinal — possível problema ainda não aberto"
+          extra={
+            <span className="font-mono text-[10.5px] text-[#5a6685]">fonte: ONU × massivas abertas</span>
+          }
+        >
+          {!onuQuery.data ? (
+            <p className="py-4 text-center text-xs text-[#5a6685]">
+              Monitoramento de sinal não configurado ou sem dados no momento.
+            </p>
+          ) : sinalRows.length === 0 ? (
+            <p className="py-4 text-center text-xs text-[#5a6685]">
+              Nenhuma OLT com queda relevante no momento.
+            </p>
+          ) : (
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-[#5a6685]">
+                  <th className="pb-2">OLT</th>
+                  <th className="pb-2">Degradados</th>
+                  <th className="pb-2">Offline</th>
+                  <th className="pb-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sinalRows.map((r) => (
+                  <tr key={r.olt} className="border-t border-[#253150]/50">
+                    <td className="py-2.5">{r.olt}</td>
+                    <td className="py-2.5">{r.degraded}</td>
+                    <td className="py-2.5">{r.offline}</td>
+                    <td className="py-2.5">
+                      <span
+                        className={cn(
+                          'rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
+                          r.hasOpenMassiva ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300',
+                        )}
+                      >
+                        {r.hasOpenMassiva ? 'massiva já aberta' : 'sem massiva aberta'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
         </Panel>
 
-        <div className="flex flex-col gap-3.5">
-          <Panel title="Recorrência hoje">
+        {rotIndex === 0 ? (
+          <Panel
+            title="Aberturas por hora — hoje"
+            extra={
+              <span className="flex items-center gap-2 font-mono text-[10px] text-[#5a6685]">
+                <span className="flex gap-1">
+                  <span className="h-1 w-3 rounded-full bg-[#8593b8]" />
+                  <span className="h-1 w-3 rounded-full bg-[#34415f]" />
+                </span>
+                auto · 10s
+              </span>
+            }
+          >
+            <div className="flex h-16 items-end gap-1.5">
+              {hourBuckets.bars.map((b) => (
+                <div key={b.hour} className="flex h-full flex-1 flex-col items-center justify-end">
+                  <span
+                    className={cn(
+                      'w-full rounded-t-[3px]',
+                      b.isPeak ? 'bg-amber-400' : b.isNow ? 'bg-teal-400' : 'bg-[#1a2540]',
+                    )}
+                    style={{ height: `${Math.max(4, b.pct)}%` }}
+                  />
+                  <span className="mt-1 font-mono text-[9.5px] text-[#5a6685]">{formatHourLabel(b.hour)}</span>
+                </div>
+              ))}
+            </div>
+            {hourBuckets.peakCount > 0 ? (
+              <p className="mt-1 text-[11px] text-amber-400">
+                Pico às {formatHourLabel(hourBuckets.peakHour)} — {hourBuckets.peakCount} aberturas na hora
+              </p>
+            ) : null}
+          </Panel>
+        ) : (
+          <Panel
+            title="Recorrência hoje"
+            extra={
+              <span className="flex items-center gap-2 font-mono text-[10px] text-[#5a6685]">
+                <span className="flex gap-1">
+                  <span className="h-1 w-3 rounded-full bg-[#34415f]" />
+                  <span className="h-1 w-3 rounded-full bg-[#8593b8]" />
+                </span>
+                auto · 10s
+              </span>
+            }
+          >
             {recurrenceToday.length === 0 ? (
               <p className="py-3 text-center text-xs text-[#5a6685]">Nenhum AP recorrente hoje.</p>
             ) : (
@@ -451,80 +623,8 @@ export function MassivaMonitorScreen() {
               ))
             )}
           </Panel>
-
-          <Panel title="Aberturas por hora — hoje">
-            <div className="flex h-16 items-end gap-1.5">
-              {hourBuckets.bars.map((b) => (
-                <div key={b.hour} className="flex h-full flex-1 flex-col items-center justify-end">
-                  <span
-                    className={cn(
-                      'w-full rounded-t-[3px]',
-                      b.isPeak ? 'bg-amber-400' : b.isNow ? 'bg-teal-400' : 'bg-[#1a2540]',
-                    )}
-                    style={{ height: `${Math.max(4, b.pct)}%` }}
-                  />
-                  <span className="mt-1 font-mono text-[9.5px] text-[#5a6685]">{formatHourLabel(b.hour)}</span>
-                </div>
-              ))}
-            </div>
-            {hourBuckets.peakCount > 0 ? (
-              <p className="mt-1 text-[11px] text-amber-400">
-                Pico às {formatHourLabel(hourBuckets.peakHour)} — {hourBuckets.peakCount} aberturas na hora
-              </p>
-            ) : null}
-          </Panel>
-        </div>
-      </div>
-
-      <Panel
-        title="Sinal — possível problema ainda não aberto"
-        extra={
-          <span className="font-mono text-[10.5px] text-[#5a6685]">
-            fonte: monitoramento de sinal (ONU) × massivas abertas
-          </span>
-        }
-        className="mt-3.5"
-      >
-        {!onuQuery.data ? (
-          <p className="py-4 text-center text-xs text-[#5a6685]">
-            Monitoramento de sinal não configurado ou sem dados no momento.
-          </p>
-        ) : sinalRows.length === 0 ? (
-          <p className="py-4 text-center text-xs text-[#5a6685]">
-            Nenhuma OLT com queda relevante no momento.
-          </p>
-        ) : (
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-left text-[10.5px] font-bold uppercase tracking-wide text-[#5a6685]">
-                <th className="pb-2">OLT</th>
-                <th className="pb-2">Degradados</th>
-                <th className="pb-2">Offline</th>
-                <th className="pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sinalRows.map((r) => (
-                <tr key={r.olt} className="border-t border-[#253150]/50">
-                  <td className="py-2.5">{r.olt}</td>
-                  <td className="py-2.5">{r.degraded}</td>
-                  <td className="py-2.5">{r.offline}</td>
-                  <td className="py-2.5">
-                    <span
-                      className={cn(
-                        'rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
-                        r.hasOpenMassiva ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300',
-                      )}
-                    >
-                      {r.hasOpenMassiva ? 'massiva já aberta' : 'sem massiva aberta'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
-      </Panel>
+      </div>
     </div>
   )
 }
