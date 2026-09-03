@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Radio,
+  Timer,
+  Users,
+  WifiOff,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { fetchMassivaHistoryMttdMttrKpis } from '@/features/massiva/api/fetchMassivaHistoryMttdMttrKpis'
@@ -234,30 +245,100 @@ const MASSIVA_IDENTIFIED_BY_LABEL: Record<string, string> = {
   int6: 'INT6',
 }
 
+type KpiTrend = { deltaLabel: string; better: boolean }
+
+/** Tendência de uma métrica de tempo (min): menor = melhor → seta pra baixo verde. */
+function computeTimeTrend(current: number | null, previous: number | null): KpiTrend | null {
+  if (current == null || previous == null || current === previous) return null
+  const abs = Math.abs(current - previous)
+  const deltaLabel = abs >= 60 ? `${Math.floor(abs / 60)}h${String(abs % 60).padStart(2, '0')}` : `${abs}min`
+  return { deltaLabel, better: current < previous }
+}
+
+/** Sparkline minimalista (SVG) — tendência dos últimos meses. */
+function Sparkline({ data }: { data: number[] }) {
+  if (data.length < 2) return null
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const points = data
+    .map((v, i) => `${(i / (data.length - 1)) * 100},${22 - ((v - min) / range) * 20}`)
+    .join(' ')
+  return (
+    <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="mt-1.5 h-4 w-full" aria-hidden>
+      <polyline points={points} fill="none" stroke="#5dcaa5" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
 function KpiTile({
   label,
   value,
   note,
   tone = 'default',
+  Icon,
+  trend,
+  spark,
 }: {
   label: string
   value: string
   note?: string
   tone?: 'default' | 'warn' | 'crit'
+  Icon?: LucideIcon
+  trend?: KpiTrend | null
+  spark?: number[] | null
 }) {
+  const crit = tone === 'crit'
+  const warn = tone === 'warn'
   return (
-    <div className="rounded-[10px] border border-[#253150] bg-[#121a2b] px-4 py-3.5">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-[#8593b8]">{label}</p>
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-[10px] border px-4 py-3.5',
+        crit
+          ? 'border-rose-800/60 bg-rose-950/30 slaa-pill'
+          : warn
+            ? 'border-amber-800/50 bg-amber-950/25'
+            : 'border-[#253150] bg-[#121a2b]',
+      )}
+    >
+      <span
+        className={cn(
+          'absolute inset-y-0 left-0 w-[3px]',
+          crit ? 'bg-rose-500' : warn ? 'bg-amber-400' : 'bg-transparent',
+        )}
+      />
+      <div className="flex items-start justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#8593b8]">
+          {Icon ? (
+            <Icon
+              size={13}
+              className={crit ? 'text-rose-300' : warn ? 'text-amber-300' : 'text-[#5a6685]'}
+            />
+          ) : null}
+          {label}
+        </p>
+        {trend ? (
+          <span
+            className={cn(
+              'inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-bold',
+              trend.better ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300',
+            )}
+            title={trend.better ? 'melhorou vs mês passado' : 'piorou vs mês passado'}
+          >
+            {trend.better ? <ArrowDownRight size={10} /> : <ArrowUpRight size={10} />}
+            {trend.deltaLabel}
+          </span>
+        ) : null}
+      </div>
       <p
         className={cn(
-          'font-mono text-[28px] font-bold leading-none tabular-nums',
-          tone === 'warn' && 'text-amber-400',
-          tone === 'crit' && 'text-rose-400',
-          tone === 'default' && 'text-[#eaf0fa]',
+          'mt-1.5 font-mono text-[28px] font-bold leading-none tabular-nums',
+          crit ? 'text-rose-400' : warn ? 'text-amber-400' : 'text-[#eaf0fa]',
         )}
       >
         {value}
       </p>
+      {spark && spark.length > 1 ? <Sparkline data={spark} /> : null}
       {note ? <p className="mt-1 text-[11px] text-[#5a6685]">{note}</p> : null}
     </div>
   )
@@ -347,8 +428,8 @@ export function MassivaMonitorScreen() {
   })
 
   const mttdMttrQuery = useQuery({
-    queryKey: massivaKeys.mttdMttrKpis(1),
-    queryFn: () => fetchMassivaHistoryMttdMttrKpis(1),
+    queryKey: massivaKeys.mttdMttrKpis(6),
+    queryFn: () => fetchMassivaHistoryMttdMttrKpis(6),
     staleTime: HISTORY_REFETCH_MS / 2,
     refetchInterval: HISTORY_REFETCH_MS,
   })
@@ -373,7 +454,19 @@ export function MassivaMonitorScreen() {
     return { abertasAgora, afetados, slaRisk }
   }, [openTickets, nowMs])
 
-  const latestMttdMttr = mttdMttrQuery.data?.[mttdMttrQuery.data.length - 1] ?? null
+  const mttdMttrSeries = mttdMttrQuery.data ?? []
+  const latestMttdMttr = mttdMttrSeries[mttdMttrSeries.length - 1] ?? null
+  const prevMttdMttr = mttdMttrSeries[mttdMttrSeries.length - 2] ?? null
+  const mttdSpark = useMemo(
+    () => mttdMttrSeries.map((m) => m.avgMttdMinutes).filter((v): v is number => v != null),
+    [mttdMttrSeries],
+  )
+  const mttrSpark = useMemo(
+    () => mttdMttrSeries.map((m) => m.avgMttrMinutes).filter((v): v is number => v != null),
+    [mttdMttrSeries],
+  )
+  const mttdTrend = computeTimeTrend(latestMttdMttr?.avgMttdMinutes ?? null, prevMttdMttr?.avgMttdMinutes ?? null)
+  const mttrTrend = computeTimeTrend(latestMttdMttr?.avgMttrMinutes ?? null, prevMttdMttr?.avgMttrMinutes ?? null)
 
   const recurrenceToday = useMemo(() => {
     const byAp = new Map<string, { title: string; count: number }>()
@@ -516,17 +609,33 @@ export function MassivaMonitorScreen() {
       </div>
 
       <div className="grid grid-cols-6 gap-3">
-        <KpiTile label="Abertas agora" value={String(kpis.abertasAgora)} tone={kpis.abertasAgora > 0 ? 'warn' : 'default'} />
+        <KpiTile
+          label="Abertas agora"
+          value={String(kpis.abertasAgora)}
+          tone={kpis.abertasAgora > 0 ? 'warn' : 'default'}
+          Icon={Radio}
+          note={kpis.abertasAgora > 0 ? 'massivas em andamento' : 'nenhuma massiva aberta'}
+        />
         <KpiTile
           label="Clientes afetados"
           value={kpis.afetados.toLocaleString('pt-BR')}
-          note={`em ${kpis.abertasAgora} protocolos`}
+          Icon={Users}
+          note={`em ${kpis.abertasAgora} protocolo${kpis.abertasAgora === 1 ? '' : 's'}`}
         />
-        <KpiTile label="SLA em risco" value={String(kpis.slaRisk)} tone={kpis.slaRisk > 0 ? 'crit' : 'default'} />
+        <KpiTile
+          label="SLA em risco"
+          value={String(kpis.slaRisk)}
+          tone={kpis.slaRisk > 0 ? 'crit' : 'default'}
+          Icon={AlertTriangle}
+          note={kpis.slaRisk > 0 ? 'precisa de ação' : 'tudo dentro do prazo'}
+        />
         <KpiTile
           label="MTTD médio"
           value={latestMttdMttr?.avgMttdMinutes != null ? `${latestMttdMttr.avgMttdMinutes}min` : '—'}
-          note="mês atual"
+          Icon={Timer}
+          trend={mttdTrend}
+          spark={mttdSpark}
+          note="mês atual · vs mês passado"
         />
         <KpiTile
           label="MTTR médio"
@@ -535,12 +644,16 @@ export function MassivaMonitorScreen() {
               ? `${Math.floor(latestMttdMttr.avgMttrMinutes / 60)}h ${String(latestMttdMttr.avgMttrMinutes % 60).padStart(2, '0')}min`
               : '—'
           }
-          note="mês atual"
+          Icon={Wrench}
+          trend={mttrTrend}
+          spark={mttrSpark}
+          note="mês atual · vs mês passado"
         />
         <KpiTile
           label="Queda sem massiva"
           value={String(quedaSemMassivaCount)}
           tone={quedaSemMassivaCount > 0 ? 'crit' : 'default'}
+          Icon={WifiOff}
           note="sinal ONU × abertas"
         />
       </div>
