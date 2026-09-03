@@ -16,6 +16,7 @@ import { StepAbertura } from '@/features/massiva/ui/StepAbertura'
 import { StepRota } from '@/features/massiva/ui/StepRota'
 import { StepSplitters } from '@/features/massiva/ui/StepSplitters'
 import { StepValidacao } from '@/features/massiva/ui/StepValidacao'
+import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
 
 function countConfiguredRoutes(
@@ -198,6 +199,20 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
       JSON.stringify(pageUiState),
     )
   }, [pageUiState])
+
+  // Início/identificação do evento partem da data e hora ATUAIS a cada abertura:
+  // ao chegar no passo "Abertura" preenche com "agora" (1x por fluxo, preservando
+  // ajuste manual ao reentrar); ao voltar à "Rota" (novo fluxo) rearma.
+  const autofillEventDatesToNowOnce = useMassivaOpenDraftStore(
+    (s) => s.autofillEventDatesToNowOnce,
+  )
+  const resetEventDatesAutofill = useMassivaOpenDraftStore(
+    (s) => s.resetEventDatesAutofill,
+  )
+  useEffect(() => {
+    if (currentStep === 'abertura') autofillEventDatesToNowOnce()
+    else if (currentStep === 'rota') resetEventDatesAutofill()
+  }, [currentStep, autofillEventDatesToNowOnce, resetEventDatesAutofill])
 
   useEffect(() => {
     if (didApplyPrefillRef.current) return

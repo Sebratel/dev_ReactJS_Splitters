@@ -39,6 +39,13 @@ type MassivaOpenDraftState = {
   /** Código do Site (authenticationSiteCode) — campo manual do tipo Backbone. */
   infraSiteCode: string
 
+  /**
+   * true quando as datas do evento (início/identificação) já foram auto-preenchidas
+   * com a hora atual neste fluxo de abertura. Evita sobrescrever um ajuste manual ao
+   * reentrar no passo. Não é persistido — cada fluxo começa rearmado.
+   */
+  eventDatesAutofilledForFlow: boolean
+
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
   setAssignmentForecastDate: (value: string) => void
@@ -55,6 +62,10 @@ type MassivaOpenDraftState = {
   setInfraAvaria: (value: string) => void
   setInfraSiteCode: (value: string) => void
   enableDescriptionAutoSync: () => void
+  /** Preenche início/identificação com a hora atual — só na 1ª vez do fluxo. */
+  autofillEventDatesToNowOnce: () => void
+  /** Rearma o auto-preenchimento (ex.: ao reiniciar o fluxo na Rota). */
+  resetEventDatesAutofill: () => void
   reset: () => void
 }
 
@@ -71,20 +82,26 @@ function formatTimeInputValue(date: Date): string {
   return `${hour}:${minute}`
 }
 
-function buildInitialDraft() {
+/** Datas de início/identificação do evento com a data e hora atuais. */
+function nowEventDates() {
   const now = new Date()
   const today = formatDateInputValue(now)
   const currentTime = formatTimeInputValue(now)
+  return {
+    eventStartDate: today,
+    eventStartTime: currentTime,
+    eventIdentifiedDate: today,
+    eventIdentifiedTime: currentTime,
+  }
+}
 
+function buildInitialDraft() {
   return {
     assignmentDescription: '',
     descriptionAutoSync: true,
     assignmentForecastDate: '',
     assignmentForecastTime: '',
-    eventStartDate: today,
-    eventStartTime: currentTime,
-    eventIdentifiedDate: today,
-    eventIdentifiedTime: currentTime,
+    ...nowEventDates(),
     initialReport: '',
     eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
     affectedUsersQuantityAutoIspOverride: null,
@@ -92,6 +109,7 @@ function buildInitialDraft() {
     infraSignalDbm: '',
     infraAvaria: '',
     infraSiteCode: '',
+    eventDatesAutofilledForFlow: false,
   }
 }
 
@@ -113,6 +131,7 @@ const createInitialState = () => ({
   infraSignalDbm: '',
   infraAvaria: '',
   infraSiteCode: '',
+  eventDatesAutofilledForFlow: false,
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -141,6 +160,13 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setInfraAvaria: (infraAvaria) => set({ infraAvaria }),
       setInfraSiteCode: (infraSiteCode) => set({ infraSiteCode }),
       enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
+      autofillEventDatesToNowOnce: () =>
+        set((state) =>
+          state.eventDatesAutofilledForFlow
+            ? {}
+            : { ...nowEventDates(), eventDatesAutofilledForFlow: true },
+        ),
+      resetEventDatesAutofill: () => set({ eventDatesAutofilledForFlow: false }),
       reset: () => set(buildInitialDraft()),
     }),
     {
