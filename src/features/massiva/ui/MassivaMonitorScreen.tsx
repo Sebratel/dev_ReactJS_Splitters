@@ -368,18 +368,18 @@ function SlaGaugeTile({
         <Gauge size={13} className="text-[#5a6685]" /> SLA cumprido
         <span className="font-mono text-[9.5px] font-normal text-[#5a6685]">(mês)</span>
       </p>
-      <div className="mt-1.5 flex items-center gap-3">
+      <div className="mt-2 flex items-center gap-3.5">
         <div
-          className="flex size-12 shrink-0 items-center justify-center rounded-full"
+          className="flex size-[68px] shrink-0 items-center justify-center rounded-full"
           style={{ background: `conic-gradient(${color} 0turn ${turn}turn, #253150 ${turn}turn 1turn)` }}
         >
-          <span className="flex size-9 items-center justify-center rounded-full bg-[#121a2b] font-mono text-[12px] font-bold" style={{ color }}>
+          <span className="flex size-[52px] items-center justify-center rounded-full bg-[#121a2b] font-mono text-[19px] font-bold" style={{ color }}>
             {pct != null ? `${pct}%` : '—'}
           </span>
         </div>
-        <div className="text-[11px] text-[#5a6685]">
+        <div className="text-[13px] text-[#5a6685]">
           <div>meta {meta}%</div>
-          {compliance ? <div className="font-mono">{compliance.within}/{compliance.total} no prazo</div> : null}
+          {compliance ? <div className="mt-0.5 font-mono text-[12px]">{compliance.within}/{compliance.total} no prazo</div> : null}
         </div>
       </div>
     </div>
