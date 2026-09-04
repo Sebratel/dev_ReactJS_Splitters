@@ -3962,7 +3962,8 @@ app.get('/api/usage-events/summary', async (req, res) => {
       const d = Number.isFinite(days) && days > 0 && days <= 366 ? days : 7;
       startDate = new Date(endDate.getTime() - d * 24 * 60 * 60 * 1000);
     }
-    const summary = await summarizeUsage({ startDate, endDate });
+    const userEmail = typeof req.query?.user === 'string' ? req.query.user : '';
+    const summary = await summarizeUsage({ startDate, endDate, userEmail });
     return res.json({ success: true, data: summary });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);

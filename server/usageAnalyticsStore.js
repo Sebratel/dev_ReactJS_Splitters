@@ -246,8 +246,13 @@ export async function summarizeUsage(input = {}) {
   assertConfigured();
   const { startSql, endSql } = resolveRange(input);
   const pool = getMysqlPool();
-  const where = `WHERE app_id = ? AND occurred_at >= ? AND occurred_at <= ?`;
+  const userEmail = toCleanString(input?.userEmail).toLowerCase();
+  let where = `WHERE app_id = ? AND occurred_at >= ? AND occurred_at <= ?`;
   const params = [APP_ID, startSql, endSql];
+  if (userEmail !== '') {
+    where += ' AND user_email = ?';
+    params.push(userEmail);
+  }
 
   try {
     await ensureUsageTable();

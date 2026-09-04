@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -11,13 +11,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Activity, Clock, MousePointerClick, Radar, RefreshCw, Users } from 'lucide-react'
+import { Activity, Clock, Download, MousePointerClick, Radar, RefreshCw, Users } from 'lucide-react'
 import { useUsageAnalytics } from '@/features/analytics/hooks/useUsageAnalytics'
 import {
   USAGE_MODULE_LABEL,
   type UsageModuleKey,
 } from '@/features/analytics/lib/resolveModuleFromPath'
-import type { UsageSummary } from '@/features/analytics/model/usageSummary'
+import { downloadUsageCsv } from '@/features/analytics/lib/exportUsageCsv'
+import type { UsageSummary, UsageUserStat } from '@/features/analytics/model/usageSummary'
 import { cn } from '@/shared/lib/utils'
 
 const PERIODS = [
@@ -319,7 +320,17 @@ function ActionsPanel({ summary }: { summary: UsageSummary }) {
 
 export function UsageRadarScreen() {
   const [days, setDays] = useState<number>(7)
-  const { data, isLoading, isError, error, refetch, isFetching } = useUsageAnalytics(days)
+  const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const { data, isLoading, isError, error, refetch, isFetching } = useUsageAnalytics(days, selectedUser)
+
+  // Lista de usuários para o seletor — capturada do carregamento SEM filtro,
+  // para não sumir quando um usuário estiver selecionado.
+  const [userOptions, setUserOptions] = useState<UsageUserStat[]>([])
+  useEffect(() => {
+    if (selectedUser === null && data) {
+      setUserOptions(data.byUser)
+    }
+  }, [selectedUser, data])
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
@@ -332,7 +343,7 @@ export function UsageRadarScreen() {
             Quais módulos são mais acessados e por quem — para priorizar as próximas atualizações.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
             {PERIODS.map((p) => (
               <button
@@ -350,6 +361,29 @@ export function UsageRadarScreen() {
               </button>
             ))}
           </div>
+          <select
+            value={selectedUser ?? ''}
+            onChange={(e) => setSelectedUser(e.target.value === '' ? null : e.target.value)}
+            className="h-9 rounded-lg bg-surface-container-lowest px-2.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 focus:outline-none focus:ring-primary dark:ring-white/10"
+            aria-label="Filtrar por usuário"
+            title="Filtrar por usuário"
+          >
+            <option value="">Todos os usuários</option>
+            {userOptions.map((u) => (
+              <option key={u.email} value={u.email}>
+                {firstName(u.name, u.email)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => data && downloadUsageCsv(data, { days, userEmail: selectedUser })}
+            disabled={!data || data.byUserModule.length === 0}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-50 dark:ring-white/10"
+            title="Exportar CSV (usuário × módulo)"
+          >
+            <Download size={15} /> CSV
+          </button>
           <button
             type="button"
             onClick={() => void refetch()}
