@@ -324,6 +324,19 @@ export async function summarizeUsage(input = {}) {
       params,
     );
 
+    // Usuários ativos por janela móvel (24h/7d/30d) — sempre GLOBAL (ignora o
+    // filtro de usuário e o período selecionado), pois é métrica de plataforma.
+    const [activeRows] = await pool.query(
+      `SELECT
+         COUNT(DISTINCT CASE WHEN occurred_at >= NOW() - INTERVAL 1 DAY  THEN user_email END) AS dau,
+         COUNT(DISTINCT CASE WHEN occurred_at >= NOW() - INTERVAL 7 DAY  THEN user_email END) AS wau,
+         COUNT(DISTINCT CASE WHEN occurred_at >= NOW() - INTERVAL 30 DAY THEN user_email END) AS mau
+       FROM ${EVENTS_TABLE}
+       WHERE app_id = ? AND occurred_at >= NOW() - INTERVAL 30 DAY`,
+      [APP_ID],
+    );
+    const active = Array.isArray(activeRows) && activeRows[0] ? activeRows[0] : {};
+
     return {
       range: { start: startSql, end: endSql },
       totals: {
@@ -365,6 +378,11 @@ export async function summarizeUsage(input = {}) {
         events: Number(r.events ?? 0),
         users: Number(r.users ?? 0),
       })),
+      activeUsers: {
+        dau: Number(active.dau ?? 0),
+        wau: Number(active.wau ?? 0),
+        mau: Number(active.mau ?? 0),
+      },
     };
   } catch (error) {
     assertTableAvailableError(error);

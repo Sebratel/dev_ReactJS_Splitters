@@ -18,6 +18,7 @@ function makeSummary(): UsageSummary {
     byHour: [],
     byDay: [],
     byAction: [],
+    activeUsers: { dau: 0, wau: 0, mau: 0 },
   }
 }
 

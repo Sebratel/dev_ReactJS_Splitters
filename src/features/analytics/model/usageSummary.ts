@@ -33,4 +33,5 @@ export type UsageSummary = {
   byHour: UsageHourStat[]
   byDay: UsageDayStat[]
   byAction: UsageActionStat[]
+  activeUsers: { dau: number; wau: number; mau: number }
 }

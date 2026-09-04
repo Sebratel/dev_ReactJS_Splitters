@@ -99,6 +99,40 @@ function KpiCard({
   )
 }
 
+function ActiveUsersCard({ summary }: { summary: UsageSummary }) {
+  const dau = summary.activeUsers?.dau ?? 0
+  const wau = summary.activeUsers?.wau ?? 0
+  const mau = summary.activeUsers?.mau ?? 0
+  const stickiness = mau > 0 ? Math.round((dau / mau) * 100) : 0
+  const cells: { label: string; value: number; hint: string }[] = [
+    { label: 'DAU', value: dau, hint: 'ativos nas últimas 24h' },
+    { label: 'WAU', value: wau, hint: 'ativos nos últimos 7 dias' },
+    { label: 'MAU', value: mau, hint: 'ativos nos últimos 30 dias' },
+  ]
+  return (
+    <div className={cn(CARD, 'p-4')}>
+      <p className="mb-3 flex items-center gap-1.5 text-sm font-bold text-on-surface">
+        <Users size={15} className="text-primary" /> Usuários ativos da plataforma
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        {cells.map((c) => (
+          <div key={c.label} className="rounded-lg bg-surface-container-low/60 p-3 text-center" title={c.hint}>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">{c.label}</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-on-surface">
+              {c.value.toLocaleString('pt-BR')}
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-on-surface-variant">
+        Aderência (DAU/MAU):{' '}
+        <span className="font-mono font-bold text-on-surface">{stickiness}%</span> — quanto maior, mais
+        recorrente é o uso.
+      </p>
+    </div>
+  )
+}
+
 function ModuleRanking({ summary }: { summary: UsageSummary }) {
   const data = useMemo(
     () =>
@@ -414,6 +448,8 @@ export function UsageRadarScreen() {
             <KpiCard label="Usuários ativos" value={data.totals.activeUsers.toLocaleString('pt-BR')} Icon={Users} />
             <KpiCard label="Sessões" value={data.totals.sessions.toLocaleString('pt-BR')} Icon={Clock} />
           </div>
+
+          <ActiveUsersCard summary={data} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ModuleRanking summary={data} />
