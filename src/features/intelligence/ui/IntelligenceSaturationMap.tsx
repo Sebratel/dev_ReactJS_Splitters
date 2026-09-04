@@ -187,12 +187,12 @@ function SaturationMapLegend() {
   return (
     <div className="mb-3 space-y-3">
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Leitura do mapa</p>
-        <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-600">
-          Não é só GPS: o <span className="font-semibold text-slate-800">tamanho do marcador</span> reflete um índice de
+        <p className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">Leitura do mapa</p>
+        <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-on-surface-variant">
+          Não é só GPS: o <span className="font-semibold text-on-surface">tamanho do marcador</span> reflete um índice de
           atenção (ocupação + massivas abertas + tendência de crescimento). O{' '}
-          <span className="font-semibold text-slate-800">círculo semitransparente</span> ao redor estima a{' '}
-          <span className="font-semibold text-slate-800">pegada de impacto</span> pelos clientes afetados em massivas no
+          <span className="font-semibold text-on-surface">círculo semitransparente</span> ao redor estima a{' '}
+          <span className="font-semibold text-on-surface">pegada de impacto</span> pelos clientes afetados em massivas no
           período. O calor de fundo agrega pressão regional e{' '}
           <span className="font-semibold" style={{ color: CORPORATE_BRAND_PURPLE }}>
             reforça violeta/corporativo + incidentes
@@ -201,15 +201,15 @@ function SaturationMapLegend() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-600">
-        <span className="font-bold uppercase tracking-wide text-slate-500">Calor</span>
-        <span className="max-w-xl text-[11px] font-normal leading-snug text-slate-600">
+      <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-on-surface-variant">
+        <span className="font-bold uppercase tracking-wide text-on-surface-variant">Calor</span>
+        <span className="max-w-xl text-[11px] font-normal leading-snug text-on-surface-variant">
           Verde → âmbar → vermelho: concentração de pressão regional (uso + reforço por PJ e massivas). Quanto mais
           saturado o fundo, maior o acúmulo de pontos “quentes” naquela área.
         </span>
       </div>
       <div
-        className="h-2.5 max-w-md rounded-full shadow-inner ring-1 ring-slate-200/80"
+        className="h-2.5 max-w-md rounded-full shadow-inner ring-1 ring-slate-200/80 dark:ring-white/10"
         style={{
           background:
             'linear-gradient(90deg, #10b981 0%, #65a30d 22%, #ca8a04 44%, #ea580c 62%, #ef4444 80%, #9f1239 100%)',
@@ -218,18 +218,18 @@ function SaturationMapLegend() {
         aria-label="Escala do mapa de calor"
       />
 
-      <div className="flex flex-wrap items-start gap-x-5 gap-y-2 text-[11px] text-slate-600">
-        <span className="font-bold uppercase tracking-wide text-slate-500">Marcador</span>
+      <div className="flex flex-wrap items-start gap-x-5 gap-y-2 text-[11px] text-on-surface-variant">
+        <span className="font-bold uppercase tracking-wide text-on-surface-variant">Marcador</span>
         <span className="inline-flex items-center gap-1.5 font-semibold">
-          <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm ring-1 ring-slate-200" />
+          <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-sm ring-1 ring-slate-200 dark:ring-white/10" />
           &lt; 70%
         </span>
         <span className="inline-flex items-center gap-1.5 font-semibold">
-          <span className="h-3 w-3 rounded-full bg-amber-500 shadow-sm ring-1 ring-slate-200" />
+          <span className="h-3 w-3 rounded-full bg-amber-500 shadow-sm ring-1 ring-slate-200 dark:ring-white/10" />
           70–94%
         </span>
         <span className="inline-flex items-center gap-1.5 font-semibold">
-          <span className="h-3 w-3 rounded-full bg-rose-500 shadow-sm ring-1 ring-slate-200" />
+          <span className="h-3 w-3 rounded-full bg-rose-500 shadow-sm ring-1 ring-slate-200 dark:ring-white/10" />
           ≥ 95%
         </span>
         <span className="inline-flex items-center gap-1.5 font-semibold">
@@ -241,7 +241,7 @@ function SaturationMapLegend() {
           </span>
           Corporativo (anel + selo)
         </span>
-        <span className="font-normal text-slate-500">
+        <span className="font-normal text-on-surface-variant">
           Tamanho maior = índice de atenção mais alto · halo maior = mais vínculos com massivas distintas no período.
         </span>
       </div>
@@ -302,7 +302,7 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
           'rounded-2xl border border-dashed py-8 text-center text-sm',
           corporateEmpty
             ? 'border-[#7c3aed]/40 bg-[#7c3aed]/[0.06] text-[#4c1d95]'
-            : 'border-slate-200 bg-slate-50/80 text-slate-500',
+            : 'border-slate-200 dark:border-white/10 bg-surface-container-low/80 text-on-surface-variant',
         )}
       >
         {hint}
@@ -314,7 +314,7 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
     return (
       <div>
         <SaturationMapLegend />
-        <p className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/80 px-4 py-6 text-center text-sm text-amber-950">
+        <p className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800/50 bg-amber-50/80 dark:bg-amber-950/40 px-4 py-6 text-center text-sm text-amber-950 dark:text-amber-100">
           Há {cells.length} splitter(es) no período, mas nenhum tem coordenadas válidas (caixa de rede ou cadastro
           do splitter) na consulta base.
         </p>
@@ -326,11 +326,11 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
     <div>
       <SaturationMapLegend />
       {skipped > 0 ? (
-        <p className="mb-2 text-[11px] font-medium text-slate-500">
+        <p className="mb-2 text-[11px] font-medium text-on-surface-variant">
           {skipped} splitter(es) sem coordenadas — não aparecem no mapa.
         </p>
       ) : null}
-      <div className="relative h-[min(420px,55vh)] w-full overflow-hidden rounded-2xl border border-slate-200/80 shadow-inner ring-1 ring-slate-200/60">
+      <div className="relative h-[min(420px,55vh)] w-full overflow-hidden rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-inner ring-1 ring-slate-200/60 dark:ring-white/10">
         <MapContainer
           center={fitPoints[0] ?? BR_FALLBACK_CENTER}
           zoom={5}
@@ -433,8 +433,8 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
                 </Tooltip>
                 <Popup>
                   <div className="min-w-[220px] text-sm">
-                    <p className="font-semibold text-slate-900">{title !== '' ? title : cell.splitterCode}</p>
-                    <p className="font-mono text-xs text-slate-600">{cell.splitterCode}</p>
+                    <p className="font-semibold text-on-surface">{title !== '' ? title : cell.splitterCode}</p>
+                    <p className="font-mono text-xs text-on-surface-variant">{cell.splitterCode}</p>
                     {cell.hasCorporateClients ? (
                       <p
                         className="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold text-white"
@@ -443,23 +443,23 @@ export function IntelligenceSaturationMap({ cells, mapEmptyHint }: IntelligenceS
                         Cliente corporativo (PJ)
                       </p>
                     ) : null}
-                    <p className="mt-1 text-xs text-slate-700">
+                    <p className="mt-1 text-xs text-on-surface-variant">
                       Índice de atenção:{' '}
                       <span className="font-semibold tabular-nums">{cell.attentionScore.toFixed(0)}</span>/100
                     </p>
-                    <p className="text-xs text-slate-700">
+                    <p className="text-xs text-on-surface-variant">
                       Uso:{' '}
                       <span className="font-semibold tabular-nums">{cell.usagePercent.toFixed(1)}%</span>
                       {' · '}
                       {cell.label}
                     </p>
-                    <p className="text-xs text-slate-600">
+                    <p className="text-xs text-on-surface-variant">
                       Massivas abertas: {cell.openTickets} · Distintas no período:{' '}
                       {cell.totalTickets.toLocaleString('pt-BR')}
                     </p>
                     <Link
                       to={`/splitters/${encodeURIComponent(cell.splitterCode)}`}
-                      className="mt-2 inline-block text-xs font-bold text-amber-700 underline-offset-2 hover:underline"
+                      className="mt-2 inline-block text-xs font-bold text-amber-700 dark:text-amber-200 underline-offset-2 hover:underline"
                     >
                       Abrir splitter
                     </Link>

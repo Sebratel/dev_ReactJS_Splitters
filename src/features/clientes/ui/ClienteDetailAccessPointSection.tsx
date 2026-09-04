@@ -10,7 +10,7 @@ export function ClienteDetailAccessPointSection({
 }: ClienteDetailAccessPointSectionProps) {
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-ap-heading"
     >
       <div className="flex items-start gap-3">

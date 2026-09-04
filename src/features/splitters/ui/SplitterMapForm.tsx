@@ -53,7 +53,7 @@ export function SplitterMapForm({
       setSuccessMessage(`Mapa "${data.mapName}" criado com sucesso!`)
       refetch()
     } catch (error) {
-      console.error('Erro ao enviar formulário:', error)
+      console.error('Erro ao enviar formulï¿½rio:', error)
       setError('mapName', { type: 'manual', message: 'Erro ao criar o mapa.' })
     } finally {
       setIsSubmitting(false)
@@ -72,7 +72,7 @@ export function SplitterMapForm({
       {globalErrorMessage !== null && (
         <div
           data-testid="splitter-map.form.error-message"
-          className="relative rounded border border-red-400 bg-red-100 px-4 py-3 text-red-700"
+          className="relative rounded border border-red-400 bg-red-100 dark:bg-red-950/50 px-4 py-3 text-red-700 dark:text-red-200"
           role="alert"
         >
           <strong className="font-bold">Erro:</strong>
@@ -81,7 +81,7 @@ export function SplitterMapForm({
       )}
 
       <div>
-        <label htmlFor="mapName" className="block text-sm font-medium text-gray-700">
+        <label htmlFor="mapName" className="block text-sm font-medium text-on-surface-variant">
           Nome do Mapa
         </label>
         <input
@@ -92,7 +92,7 @@ export function SplitterMapForm({
           className={`mt-1 block w-full rounded-md border p-2 shadow-sm ${errors.mapName ? 'border-red-500' : 'border-gray-300'}`}
         />
         {errors.mapName && (
-          <p data-testid="splitter-map.input.name-error" className="mt-2 text-sm text-red-600">
+          <p data-testid="splitter-map.input.name-error" className="mt-2 text-sm text-red-600 dark:text-red-300">
             {String(errors.mapName.message ?? '')}
           </p>
         )}
@@ -110,7 +110,7 @@ export function SplitterMapForm({
       {successMessage && (
         <div
           data-testid="splitter-map.form.success-message"
-          className="relative rounded border border-green-400 bg-green-100 px-4 py-3 text-green-700"
+          className="relative rounded border border-green-400 bg-green-100 dark:bg-green-950/50 px-4 py-3 text-green-700 dark:text-green-200"
           role="alert"
         >
           <strong className="font-bold">Sucesso:</strong>

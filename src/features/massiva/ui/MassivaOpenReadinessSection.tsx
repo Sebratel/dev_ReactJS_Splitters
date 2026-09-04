@@ -21,10 +21,10 @@ export function MassivaOpenReadinessSection({
 
   return (
     <div className="space-y-1">
-      <h3 className="text-sm font-semibold tracking-tight text-neutral-900">
+      <h3 className="text-sm font-semibold tracking-tight text-on-surface">
         Preparação e abertura
       </h3>
-      <p className="mb-3 max-w-prose text-xs leading-relaxed text-neutral-600">
+      <p className="mb-3 max-w-prose text-xs leading-relaxed text-on-surface-variant">
         Revise permissões e envie com o contexto da rota já montado.
       </p>
       <MassivaOpenReadinessPanel

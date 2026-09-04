@@ -34,7 +34,7 @@ function SelectField({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+      <label htmlFor={id} className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
         {label}
       </label>
       <div className="relative">
@@ -43,14 +43,14 @@ function SelectField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-white py-1.5 pl-2.5 pr-7 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full cursor-pointer appearance-none rounded-md border border-neutral-300 bg-surface-container-lowest py-1.5 pl-2.5 pr-7 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">— selecione —</option>
           {options.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-on-surface-variant/60" aria-hidden />
       </div>
     </div>
   )

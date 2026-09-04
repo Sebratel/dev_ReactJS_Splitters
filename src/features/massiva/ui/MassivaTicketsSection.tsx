@@ -43,6 +43,7 @@ import {
   listRecentMonths,
   massivaHistoryLimitForRange,
   resolveMassivaPeriod,
+  toDateValue,
   toMonthValue,
   type MassivaPeriodPreset,
 } from '@/features/massiva/lib/massivaPeriod'
@@ -222,13 +223,15 @@ type MassivaTicketsSectionProps = {
 function massivaTicketsUiStateKey(layout: MassivaTicketsSectionLayout): string {
   return `${MASSIVA_TICKETS_SECTION_UI_STATE_PREFIX}.${layout}.v1`
 }
-const PERIOD_PRESETS: readonly PeriodPreset[] = ['7d', '30d', '90d', '6m', '12m', 'month']
+const PERIOD_PRESETS: readonly PeriodPreset[] = ['7d', '30d', '90d', '6m', '12m', 'month', 'custom']
 
 function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
   query: string
   scope: MassivaListScope
   periodPreset: PeriodPreset
   selectedMonth: string
+  customStart: string
+  customEnd: string
   chartMetric: ChartMetric
   impactRange: ImpactRange
   recordTypeFilter: MassivaRecordTypeFilter
@@ -242,6 +245,8 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
     scope: 'abertas' as MassivaListScope,
     periodPreset: '30d' as PeriodPreset,
     selectedMonth: toMonthValue(new Date()),
+    customStart: toDateValue(new Date(Date.now() - 6 * 86_400_000)),
+    customEnd: toDateValue(new Date()),
     chartMetric: 'afetados' as ChartMetric,
     impactRange: 'all' as ImpactRange,
     recordTypeFilter: 'all' as MassivaRecordTypeFilter,
@@ -272,6 +277,14 @@ function readMassivaTicketsUiState(layout: MassivaTicketsSectionLayout): {
         typeof parsed.selectedMonth === 'string' && /^\d{4}-\d{2}$/.test(parsed.selectedMonth)
           ? parsed.selectedMonth
           : initialState.selectedMonth,
+      customStart:
+        typeof parsed.customStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.customStart)
+          ? parsed.customStart
+          : initialState.customStart,
+      customEnd:
+        typeof parsed.customEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.customEnd)
+          ? parsed.customEnd
+          : initialState.customEnd,
       chartMetric:
         parsed.chartMetric === 'protocolos' ? 'protocolos' : initialState.chartMetric,
       impactRange:
@@ -313,6 +326,8 @@ export function MassivaTicketsSection({
     scope,
     periodPreset,
     selectedMonth,
+    customStart,
+    customEnd,
     impactRange,
     recordTypeFilter,
     catalogFilter,
@@ -321,6 +336,7 @@ export function MassivaTicketsSection({
     visibleCount,
   } = uiState
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
+  const todayValue = useMemo(() => toDateValue(new Date()), [])
   const { view, refetch: refetchBffList, isRefreshing } = useMassivaTickets({
     refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : undefined,
   })
@@ -421,8 +437,14 @@ export function MassivaTicketsSection({
   })
 
   const range = useMemo(
-    () => resolveMassivaPeriod(periodPreset, selectedMonth),
-    [periodPreset, selectedMonth],
+    () =>
+      resolveMassivaPeriod(
+        periodPreset,
+        selectedMonth,
+        undefined,
+        periodPreset === 'custom' ? { start: customStart, end: customEnd } : null,
+      ),
+    [periodPreset, selectedMonth, customStart, customEnd],
   )
   const periodStart = range.start
   const periodEnd = range.end
@@ -784,8 +806,8 @@ const { data: recentOpenTickets = [] } = useQuery({
   }
 
   const shellClass = embedded
-    ? 'flex flex-col bg-white'
-    : 'overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm'
+    ? 'flex flex-col bg-surface-container-lowest'
+    : 'overflow-hidden rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-sm'
 
   return (
     <section
@@ -797,13 +819,13 @@ const { data: recentOpenTickets = [] } = useQuery({
         className={
           embedded
             ? 'sr-only'
-            : 'border-b border-neutral-200 px-4 py-3 text-base font-bold text-neutral-900'
+            : 'border-b border-neutral-200 dark:border-white/10 px-4 py-3 text-base font-bold text-on-surface'
         }
       >
         Massivas
       </h2>
       <div
-        className={`shrink-0 border-b border-neutral-200/80 bg-gradient-to-b from-neutral-50/90 to-neutral-50/40 ${embedded ? 'px-3 py-3' : 'px-4 py-3'}`}
+        className={`shrink-0 border-b border-neutral-200/80 dark:border-white/10 bg-gradient-to-b from-neutral-50/90 dark:from-white/5 to-neutral-50/40 dark:to-white/5 ${embedded ? 'px-3 py-3' : 'px-4 py-3'}`}
       >
         <div
           className={
@@ -813,7 +835,7 @@ const { data: recentOpenTickets = [] } = useQuery({
           }
         >
           <div
-            className={`flex items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${embedded ? 'sm:col-span-2' : 'md:col-span-4'}`}
+            className={`flex items-center gap-1 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${embedded ? 'sm:col-span-2' : 'md:col-span-4'}`}
           >
             {([
               { id: 'abertas', label: 'Abertas' },
@@ -827,8 +849,8 @@ const { data: recentOpenTickets = [] } = useQuery({
                 onClick={() => setUiState((prev) => ({ ...prev, scope: opt.id }))}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
                   scope === opt.id
-                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200'
-                    : 'text-neutral-600 hover:bg-neutral-50'
+                    ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200 dark:ring-amber-800/50'
+                    : 'text-on-surface-variant hover:bg-surface-container-low'
                 }`}
               >
                 {opt.label}
@@ -839,15 +861,45 @@ const { data: recentOpenTickets = [] } = useQuery({
             value={query}
             onChange={(e) => setUiState((prev) => ({ ...prev, query: e.target.value }))}
             placeholder="Pesquisar…"
-            className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
+            className={`rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-on-surface-variant/60 focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : 'md:col-span-2'}`}
           />
-          <div className="flex min-h-10 items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-            {periodPreset === 'month' ? (
+          <div className="flex min-h-10 items-center gap-1 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            {periodPreset === 'custom' ? (
               <>
                 <button
                   type="button"
                   onClick={() => setUiState((prev) => ({ ...prev, periodPreset: '30d' }))}
-                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800"
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
+                  aria-label="Voltar aos períodos rápidos"
+                  title="Voltar aos períodos"
+                >
+                  <ChevronLeft className="size-4" aria-hidden />
+                </button>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || todayValue}
+                  onChange={(e) => setUiState((prev) => ({ ...prev, customStart: e.target.value }))}
+                  className="min-w-0 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-neutral-400 focus:outline-none"
+                  aria-label="Data inicial"
+                />
+                <span className="shrink-0 text-xs text-on-surface-variant/60">→</span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart}
+                  max={todayValue}
+                  onChange={(e) => setUiState((prev) => ({ ...prev, customEnd: e.target.value }))}
+                  className="min-w-0 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-neutral-400 focus:outline-none"
+                  aria-label="Data final"
+                />
+              </>
+            ) : periodPreset === 'month' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setUiState((prev) => ({ ...prev, periodPreset: '30d' }))}
+                  className="inline-flex shrink-0 items-center justify-center rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                   aria-label="Voltar aos períodos rápidos"
                   title="Voltar aos períodos"
                 >
@@ -856,7 +908,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 <select
                   value={selectedMonth}
                   onChange={(e) => setUiState((prev) => ({ ...prev, selectedMonth: e.target.value }))}
-                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-neutral-400 focus:outline-none"
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-neutral-400 focus:outline-none"
                   aria-label="Selecionar mês"
                 >
                   {monthOptions.map((m) => (
@@ -872,6 +924,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 { id: '6m', label: '6m' },
                 { id: '12m', label: '12m' },
                 { id: 'month', label: 'Mês' },
+                { id: 'custom', label: 'Personalizado' },
               ] as Array<{ id: PeriodPreset; label: string }>).map((opt) => (
                 <button
                   key={opt.id}
@@ -880,7 +933,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                   className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                     periodPreset === opt.id
                       ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-600 hover:bg-neutral-50'
+                      : 'text-on-surface-variant hover:bg-surface-container-low'
                   }`}
                 >
                   {opt.label}
@@ -891,7 +944,7 @@ const { data: recentOpenTickets = [] } = useQuery({
           <select
             value={impactRange}
             onChange={(e) => setUiState((prev) => ({ ...prev, impactRange: e.target.value as ImpactRange }))}
-            className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
+            className="rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Impacto: todos</option>
             <option value="none">Sem afetados</option>
@@ -902,7 +955,7 @@ const { data: recentOpenTickets = [] } = useQuery({
           <select
             value={recordTypeFilter}
             onChange={(e) => setUiState((prev) => ({ ...prev, recordTypeFilter: e.target.value as MassivaRecordTypeFilter }))}
-            className="rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
+            className="rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15"
           >
             <option value="all">Tipo: todos</option>
             <option value="incidente">Tipo: incidente massivo</option>
@@ -915,7 +968,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 ...prev,
                 catalogFilter: e.target.value as MassivaCatalogFilter,
               }))}
-            className={`rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : ''}`}
+            className={`rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/80 focus:outline-none focus:ring-2 focus:ring-amber-500/15 ${embedded ? 'sm:col-span-2' : ''}`}
           >
             <option value="all">Catálogo: fluxo padrão</option>
             <option value="catalogo_esperado">Catálogo: só esperados</option>
@@ -927,7 +980,7 @@ const { data: recentOpenTickets = [] } = useQuery({
               value={classifTipoFilter}
               onChange={(e) =>
                 setUiState((prev) => ({ ...prev, classifTipoFilter: e.target.value }))}
-              className={`rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifTipoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 focus:border-sky-500/80'}`}
+              className={`rounded-xl border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifTipoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 dark:border-white/10 focus:border-sky-500/80'}`}
             >
               <option value="">Tipo incidente: todos</option>
               {classifOptions.tipos.map((t) => (
@@ -940,7 +993,7 @@ const { data: recentOpenTickets = [] } = useQuery({
               value={classifImpactoFilter}
               onChange={(e) =>
                 setUiState((prev) => ({ ...prev, classifImpactoFilter: e.target.value }))}
-              className={`rounded-xl border bg-white px-3 py-2 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifImpactoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 focus:border-sky-500/80'}`}
+              className={`rounded-xl border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:outline-none focus:ring-2 focus:ring-sky-500/15 ${classifImpactoFilter !== '' ? 'border-sky-400 focus:border-sky-500' : 'border-neutral-200/90 dark:border-white/10 focus:border-sky-500/80'}`}
             >
               <option value="">Impacto: todos</option>
               {classifOptions.impactos.map((i) => (
@@ -953,7 +1006,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             <button
               type="button"
               onClick={() => setUiState((prev) => ({ ...prev, classifTipoFilter: '', classifImpactoFilter: '' }))}
-              className="rounded-xl border border-sky-200/80 bg-sky-50/60 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:bg-sky-100/70"
+              className="rounded-xl border border-sky-200/80 dark:border-sky-800/50 bg-sky-50/60 dark:bg-sky-950/40 px-3 py-2 text-xs font-semibold text-sky-700 dark:text-sky-200 transition hover:bg-sky-100/70 dark:hover:bg-sky-950/50"
             >
               ✕ Limpar classificação
             </button>
@@ -963,7 +1016,7 @@ const { data: recentOpenTickets = [] } = useQuery({
           <button
             type="button"
             onClick={() => refreshDashboard()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/25"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface-variant shadow-sm transition hover:border-neutral-300 hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/25"
           >
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             Atualizar
@@ -971,12 +1024,12 @@ const { data: recentOpenTickets = [] } = useQuery({
           <button
             type="button"
             onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200/90 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/25"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface-variant shadow-sm transition hover:border-neutral-300 hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/25"
           >
             <Download size={13} />
             CSV
           </button>
-          <span className="text-[11px] text-neutral-500">
+          <span className="text-[11px] text-on-surface-variant">
             {classifFilteredTickets.length}
             {classifFilteredTickets.length !== filteredTickets.length
               ? `/${filteredTickets.length}`
@@ -984,19 +1037,19 @@ const { data: recentOpenTickets = [] } = useQuery({
             no período
           </span>
           {historyQuery.isFetching ? (
-            <span className="text-[11px] text-neutral-500">sincronizando histórico…</span>
+            <span className="text-[11px] text-on-surface-variant">sincronizando histórico…</span>
           ) : null}
           {csvCopied ? (
-            <span className="text-[11px] font-semibold text-emerald-700">
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-200">
               CSV copiado
             </span>
           ) : null}
         </div>
         {!closeConfigured ? (
-          <p className={`text-[11px] font-medium text-amber-800 ${embedded ? 'mt-2' : 'mt-3'}`}>
+          <p className={`text-[11px] font-medium text-amber-800 dark:text-amber-200 ${embedded ? 'mt-2' : 'mt-3'}`}>
             Encerramento desabilitado: defina{' '}
-            <code className="rounded bg-amber-100 px-1">VITE_MASSIVA_CLOSE_PATH</code> no build (ex.{' '}
-            <code className="rounded bg-amber-100 px-1">/api/v1/massivas/finalizar-chamado-via-api</code>
+            <code className="rounded bg-amber-100 dark:bg-amber-950/50 px-1">VITE_MASSIVA_CLOSE_PATH</code> no build (ex.{' '}
+            <code className="rounded bg-amber-100 dark:bg-amber-950/50 px-1">/api/v1/massivas/finalizar-chamado-via-api</code>
             ).
           </p>
         ) : null}
@@ -1004,14 +1057,14 @@ const { data: recentOpenTickets = [] } = useQuery({
       <div
         className={
           embedded
-            ? 'border-t border-neutral-100/80 bg-gradient-to-b from-neutral-50/30 to-white px-1 py-4 sm:px-2'
-            : 'border-t border-neutral-100/80 bg-neutral-50/20 px-4 py-5'
+            ? 'border-t border-neutral-100/80 dark:border-white/5 bg-gradient-to-b from-neutral-50/30 dark:from-white/5 to-white dark:to-surface-container-lowest px-1 py-4 sm:px-2'
+            : 'border-t border-neutral-100/80 dark:border-white/5 bg-surface-container-low/20 px-4 py-5'
         }
       >
         {/* Painel de abertas em risco de SLA */}
         {slaAtRiskTickets.length > 0 ? (
-          <div className="mb-4 rounded-xl border border-rose-200/80 bg-rose-50/60 px-4 py-3">
-            <p className="mb-2 text-xs font-semibold text-rose-800">
+          <div className="mb-4 rounded-xl border border-rose-200/80 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/40 px-4 py-3">
+            <p className="mb-2 text-xs font-semibold text-rose-800 dark:text-rose-200">
               ⚠ {slaAtRiskTickets.length} massiva{slaAtRiskTickets.length > 1 ? 's' : ''} em risco de SLA
             </p>
             <div className="space-y-1.5">
@@ -1020,18 +1073,18 @@ const { data: recentOpenTickets = [] } = useQuery({
                 return (
                   <div
                     key={t.protocol}
-                    className={`flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-[11px] ${isPast ? 'bg-rose-100/80' : 'bg-amber-50/80'}`}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-[11px] ${isPast ? 'bg-rose-100/80 dark:bg-rose-950/50' : 'bg-amber-50/80 dark:bg-amber-950/40'}`}
                   >
-                    <span className="font-semibold text-neutral-800">
+                    <span className="font-semibold text-on-surface">
                       #{t.protocol > 0 ? t.protocol : '—'}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-neutral-600">
+                    <span className="min-w-0 flex-1 truncate text-on-surface-variant">
                       {t.apCode || t.title}
                     </span>
-                    <span className={`shrink-0 font-bold ${isPast ? 'text-rose-700' : 'text-amber-700'}`}>
+                    <span className={`shrink-0 font-bold ${isPast ? 'text-rose-700 dark:text-rose-200' : 'text-amber-700 dark:text-amber-200'}`}>
                       {t.expectedCloseAt ? formatSlaRisk(t.expectedCloseAt) : '—'}
                     </span>
-                    <span className="shrink-0 text-neutral-400">
+                    <span className="shrink-0 text-on-surface-variant/60">
                       {t.affectedClients.toLocaleString('pt-BR')} af.
                     </span>
                   </div>
@@ -1042,14 +1095,14 @@ const { data: recentOpenTickets = [] } = useQuery({
         ) : null}
 
         {classifFilteredTickets.length === 0 ? (
-          <p className="py-8 text-center text-sm text-neutral-500">
+          <p className="py-8 text-center text-sm text-on-surface-variant">
             Nenhuma massiva corresponde aos filtros aplicados.
           </p>
         ) : (
           <>
-            <ul className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
+            <ul className="grid w-full grid-cols-1 items-start gap-4 md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-4">
               {visibleTickets.map((t, i) => (
-                <li key={ticketKey(t, i)} className="h-full">
+                <li key={ticketKey(t, i)}>
                   <MassivaTicketCard
                     ticket={t}
                     closeConfigured={closeConfigured}
@@ -1096,7 +1149,7 @@ const { data: recentOpenTickets = [] } = useQuery({
                 <button
                   type="button"
                   onClick={() => setUiState((prev) => ({ ...prev, visibleCount: prev.visibleCount + MASSIVA_PAGE_SIZE }))}
-                  className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  className="rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-4 py-2 text-xs font-semibold text-on-surface-variant transition hover:bg-surface-container-low"
                 >
                   Carregar mais ({visibleTickets.length}/{classifFilteredTickets.length})
                 </button>
@@ -1108,9 +1161,9 @@ const { data: recentOpenTickets = [] } = useQuery({
 
       {selectedClosingTicket !== null ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
-            <h3 className="text-lg font-bold text-neutral-900">Encerrar massiva</h3>
-            <p className="mt-1 text-sm text-neutral-600">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-on-surface">Encerrar massiva</h3>
+            <p className="mt-1 text-sm text-on-surface-variant">
               Protocolo <span className="font-mono font-semibold">{selectedClosingTicket.protocol}</span>
               {selectedClosingTicket.assignmentId !== null
                 ? (
@@ -1123,7 +1176,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             </p>
 
             {selectedClosingTicket.assignmentId === null ? (
-              <p className="mt-3 text-sm text-red-700">
+              <p className="mt-3 text-sm text-red-700 dark:text-red-200">
                 Não é possível encerrar sem o identificador do atendimento (assignment) neste
                 protocolo. A listagem do BFF precisa expor esse campo (ex.:{' '}
                 <code className="text-[11px]">assignmentId</code>,{' '}
@@ -1133,36 +1186,36 @@ const { data: recentOpenTickets = [] } = useQuery({
               </p>
             ) : (
               <div className="mt-4 space-y-3">
-                <label className="block text-xs font-semibold text-neutral-700">
+                <label className="block text-xs font-semibold text-on-surface-variant">
                   Descrição de encerramento
                 </label>
                 <textarea
                   value={closeDescription}
                   onChange={(e) => setCloseDescription(e.target.value)}
                   rows={4}
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
+                  className="w-full rounded-md border border-neutral-300 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
                   placeholder="Informe a descrição final do encerramento…"
                 />
-                <p className="text-[11px] text-neutral-500">
+                <p className="text-[11px] text-on-surface-variant">
                   Mínimo de {CLOSE_DESCRIPTION_MIN_LEN} caracteres (
                   {closeDescription.trim().length}/{CLOSE_DESCRIPTION_MIN_LEN}).
                 </p>
                 {closeMutation.isError ? (
-                  <p className="text-xs text-red-700">
+                  <p className="text-xs text-red-700 dark:text-red-200">
                     {formatQueryError(closeMutation.error)}
                   </p>
                 ) : null}
                 {closeLocalWarning !== null ? (
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-amber-700 dark:text-amber-200">
                     ⚠️ {closeLocalWarning}
                   </p>
                 ) : null}
 
                 {/* Classificação do incidente */}
-                <div className="border-t border-neutral-100 pt-3">
+                <div className="border-t border-neutral-100 dark:border-white/5 pt-3">
                   <div className="mb-2.5 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-neutral-700">Classificação do incidente</p>
-                    <span className="text-[10px] text-neutral-400">Opcional</span>
+                    <p className="text-xs font-semibold text-on-surface-variant">Classificação do incidente</p>
+                    <span className="text-[10px] text-on-surface-variant/60">Opcional</span>
                   </div>
                   <MassivaClassificationFields
                     idPrefix="close"
@@ -1176,7 +1229,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
                 onClick={() => {
                   setClosingProtocol(null)
                   setCloseDescription('')
@@ -1220,9 +1273,9 @@ const { data: recentOpenTickets = [] } = useQuery({
 
       {selectedCancellingTicket !== null ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
-            <h3 className="text-lg font-bold text-neutral-900">Cancelar protocolo</h3>
-            <p className="mt-1 text-sm text-neutral-600">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-on-surface">Cancelar protocolo</h3>
+            <p className="mt-1 text-sm text-on-surface-variant">
               Protocolo <span className="font-mono font-semibold">{selectedCancellingTicket.protocol}</span>
               {selectedCancellingTicket.assignmentId !== null
                 ? (
@@ -1233,39 +1286,39 @@ const { data: recentOpenTickets = [] } = useQuery({
                 )
                 : null}
             </p>
-            <p className="mt-2 rounded-lg border border-rose-200/70 bg-rose-50/60 px-3 py-2 text-[11px] leading-snug text-rose-700">
+            <p className="mt-2 rounded-lg border border-rose-200/70 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/40 px-3 py-2 text-[11px] leading-snug text-rose-700 dark:text-rose-200">
               O cancelamento marca o protocolo como <strong>Cancelado</strong> na Voalle (não é
               encerramento). Use para aberturas equivocadas ou duplicadas.
             </p>
 
             {selectedCancellingTicket.assignmentId === null ? (
-              <p className="mt-3 text-sm text-red-700">
+              <p className="mt-3 text-sm text-red-700 dark:text-red-200">
                 Não é possível cancelar sem o identificador do atendimento (assignment) neste
                 protocolo.
               </p>
             ) : (
               <div className="mt-4 space-y-3">
-                <label className="block text-xs font-semibold text-neutral-700">
+                <label className="block text-xs font-semibold text-on-surface-variant">
                   Motivo do cancelamento
                 </label>
                 <textarea
                   value={cancelDescription}
                   onChange={(e) => setCancelDescription(e.target.value)}
                   rows={4}
-                  className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900"
+                  className="w-full rounded-md border border-neutral-300 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface"
                   placeholder="Descreva por que o protocolo está sendo cancelado…"
                 />
-                <p className="text-[11px] text-neutral-500">
+                <p className="text-[11px] text-on-surface-variant">
                   Mínimo de {CLOSE_DESCRIPTION_MIN_LEN} caracteres (
                   {cancelDescription.trim().length}/{CLOSE_DESCRIPTION_MIN_LEN}).
                 </p>
                 {cancelMutation.isError ? (
-                  <p className="text-xs text-red-700">
+                  <p className="text-xs text-red-700 dark:text-red-200">
                     {formatQueryError(cancelMutation.error)}
                   </p>
                 ) : null}
                 {cancelLocalWarning !== null ? (
-                  <p className="text-xs text-amber-700">⚠️ {cancelLocalWarning}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-200">⚠️ {cancelLocalWarning}</p>
                 ) : null}
               </div>
             )}
@@ -1273,7 +1326,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
                 onClick={() => {
                   setCancellingProtocol(null)
                   setCancelDescription('')
@@ -1310,9 +1363,9 @@ const { data: recentOpenTickets = [] } = useQuery({
 
       {selectedMaintenanceTicket !== null ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl">
-            <h3 className="text-lg font-bold text-neutral-900">Manutenção — Classificação do incidente</h3>
-            <p className="mt-1 text-sm text-neutral-600">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-on-surface">Manutenção — Classificação do incidente</h3>
+            <p className="mt-1 text-sm text-on-surface-variant">
               Protocolo <span className="font-mono font-semibold">{selectedMaintenanceTicket.protocol}</span>
               {selectedMaintenanceTicket.assignmentId !== null
                 ? (
@@ -1324,16 +1377,16 @@ const { data: recentOpenTickets = [] } = useQuery({
                 : null}
             </p>
 
-            <div className="mt-2 space-y-1 rounded-lg border border-neutral-200/70 bg-neutral-50/60 px-3 py-2 text-[11px] text-neutral-600">
+            <div className="mt-2 space-y-1 rounded-lg border border-neutral-200/70 dark:border-white/10 bg-surface-container-low/60 px-3 py-2 text-[11px] text-on-surface-variant">
               <p>
                 Encerrado por{' '}
-                <span className="font-semibold text-neutral-800">
+                <span className="font-semibold text-on-surface">
                   {selectedMaintenanceTicket.closedBy?.trim() || 'não informado'}
                 </span>
                 {selectedMaintenanceTicket.closedAt !== null ? (
                   <>
                     {' em '}
-                    <span className="font-semibold text-neutral-800">
+                    <span className="font-semibold text-on-surface">
                       {formatMassivaListDateDisplay(selectedMaintenanceTicket.closedAt)}
                     </span>
                   </>
@@ -1347,11 +1400,11 @@ const { data: recentOpenTickets = [] } = useQuery({
                   return (
                     <p>
                       Última manutenção por{' '}
-                      <span className="font-semibold text-neutral-800">{entry.classificationUpdatedBy}</span>
+                      <span className="font-semibold text-on-surface">{entry.classificationUpdatedBy}</span>
                       {entry.classificationUpdatedAt !== null ? (
                         <>
                           {' em '}
-                          <span className="font-semibold text-neutral-800">
+                          <span className="font-semibold text-on-surface">
                             {formatMassivaListDateDisplay(entry.classificationUpdatedAt)}
                           </span>
                         </>
@@ -1374,7 +1427,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             </div>
 
             {maintenanceMutation.isError ? (
-              <p className="mt-2 text-xs text-red-700">
+              <p className="mt-2 text-xs text-red-700 dark:text-red-200">
                 {formatQueryError(maintenanceMutation.error)}
               </p>
             ) : null}
@@ -1382,7 +1435,7 @@ const { data: recentOpenTickets = [] } = useQuery({
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-on-surface-variant"
                 onClick={() => {
                   setMaintenanceProtocol(null)
                   setMaintenanceClassif({ ...MASSIVA_CLASSIFICATION_RESET })

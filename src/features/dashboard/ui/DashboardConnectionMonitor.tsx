@@ -41,7 +41,7 @@ function toneDot(tone: RowTone): string {
     case 'err':
       return 'bg-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.28)]'
     default:
-      return 'bg-stone-300 shadow-[0_0_0_4px_rgba(168,162,158,0.35)]'
+      return 'bg-stone-300 dark:bg-white/15 shadow-[0_0_0_4px_rgba(168,162,158,0.35)]'
   }
 }
 
@@ -84,20 +84,20 @@ export function DashboardConnectionMonitor() {
   const busy = statsQ.isFetching || listConnectivity.isFetching || autoIspQ.isFetching
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 bg-gradient-to-b from-white via-stone-50/40 to-amber-50/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 to-transparent" />
+    <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest via-stone-50/40 dark:via-white/5 to-amber-50/20 dark:to-amber-950/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 dark:via-amber-900/30 to-transparent" />
 
       <div className="relative p-4 md:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 to-stone-100/80 text-amber-900 shadow-inner ring-1 ring-amber-200/40">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100/90 dark:from-amber-950/25 to-stone-100/80 dark:to-white/5 text-amber-900 dark:text-amber-200 shadow-inner ring-1 ring-amber-200/40 dark:ring-amber-800/50">
               <Activity className="h-[1.05rem] w-[1.05rem]" strokeWidth={2} aria-hidden />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 sm:text-[11px]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-on-surface-variant sm:text-[11px]">
                 Integrações
               </p>
-              <h3 className="text-lg font-semibold tracking-tight text-stone-900">
+              <h3 className="text-lg font-semibold tracking-tight text-on-surface">
                 Saúde das APIs
               </h3>
             </div>
@@ -106,7 +106,7 @@ export function DashboardConnectionMonitor() {
             type="button"
             onClick={onRefreshAll}
             disabled={busy}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200/90 bg-white/90 px-4 py-2 text-[12px] font-semibold text-stone-800 shadow-sm transition-[transform,box-shadow,background] hover:bg-white hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200/90 dark:border-white/10 bg-surface-container-lowest/90 px-4 py-2 text-[12px] font-semibold text-on-surface shadow-sm transition-[transform,box-shadow,background] hover:bg-surface-container-lowest hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className={cn('h-4 w-4', busy && 'animate-spin')} aria-hidden />
             Atualizar
@@ -114,24 +114,24 @@ export function DashboardConnectionMonitor() {
         </div>
 
         <ul className="mt-4 space-y-2.5">
-          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(statsTone))}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold text-stone-900">Dados Splitters</p>
-                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
+                <p className="text-[14px] font-semibold text-on-surface">Dados Splitters</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dt className="text-on-surface-variant">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {formatUpdatedAt(statsQ.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dt className="text-on-surface-variant">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {formatRefetchEvery(STATS_REFETCH_MS)}
                     </dd>
                   </div>
@@ -140,26 +140,26 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(massivaTone))}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold text-stone-900">Dados Massiva</p>
-                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
+                <p className="text-[14px] font-semibold text-on-surface">Dados Massiva</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dt className="text-on-surface-variant">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {!listConnectivity.configured
                         ? '—'
                         : formatUpdatedAt(listConnectivity.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dt className="text-on-surface-variant">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {!listConnectivity.configured
                         ? '—'
                         : formatRefetchEvery(MASSIVA_REFETCH_MS)}
@@ -170,24 +170,24 @@ export function DashboardConnectionMonitor() {
             </div>
           </li>
 
-          <li className="rounded-2xl border border-stone-100/90 bg-white/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
+          <li className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0">
             <div className="flex items-start gap-3">
               <div
                 className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(autoIspTone))}
                 aria-hidden
               />
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold text-stone-900">Dados AutoISP</p>
-                <dl className="mt-2 space-y-1 text-[12px] text-stone-600">
+                <p className="text-[14px] font-semibold text-on-surface">Dados AutoISP</p>
+                <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Última atualização</dt>
-                    <dd className="shrink-0 font-medium tabular-nums text-stone-800">
+                    <dt className="text-on-surface-variant">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">
                       {!autoIspConfigured ? '—' : formatUpdatedAt(autoIspQ.dataUpdatedAt)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500">Intervalo</dt>
-                    <dd className="shrink-0 font-medium text-stone-800">
+                    <dt className="text-on-surface-variant">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-on-surface">
                       {!autoIspConfigured ? '—' : formatRefetchEvery(AUTOISP_REFETCH_MS)}
                     </dd>
                   </div>

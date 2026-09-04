@@ -19,7 +19,7 @@ export function SplitterAddressPanel({ address }: SplitterAddressPanelProps) {
 
   return (
     <section
-      className="h-full rounded-2xl border border-outline-variant bg-white p-4 shadow-sm"
+      className="h-full rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm"
       aria-labelledby="splitter-address-geo-heading"
     >
       <div className="flex items-start gap-3">

@@ -20,7 +20,7 @@ const ChurnHeatMap = lazy(async () => ({
 }))
 
 const MapPlaceholder = () => (
-  <div className="flex h-[min(460px,56vh)] w-full items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 text-sm text-neutral-400">
+  <div className="flex h-[min(460px,56vh)] w-full items-center justify-center rounded-xl border border-dashed border-neutral-200 dark:border-white/10 bg-surface-container-low/60 text-sm text-on-surface-variant/60">
     Carregando mapa…
   </div>
 )
@@ -311,24 +311,24 @@ export function CancellationsExplorer({
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
   }
 
-  const selectCls = 'rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-700'
+  const selectCls = 'rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface-variant'
 
   return (
     <div className="space-y-4">
       {/* Filtros / drill-down */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
+        <p className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-on-surface-variant">
           <Radio className="size-4 text-indigo-500" aria-hidden />
           Explorar a rede
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <div className="relative w-full sm:w-56">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-neutral-400" aria-hidden />
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-on-surface-variant/60" aria-hidden />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar splitter, código ou OLT…"
-              className="w-full rounded-lg border border-neutral-200 bg-white py-1.5 pl-7 pr-2 text-xs text-neutral-700"
+              className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest py-1.5 pl-7 pr-2 text-xs text-on-surface-variant"
             />
           </div>
           <select value={olt} onChange={(e) => { setOlt(e.target.value); setSlot('all'); setPon('all') }} className={selectCls}>
@@ -344,22 +344,22 @@ export function CancellationsExplorer({
             {ponOptions.map((p) => <option key={p} value={String(p)}>PON {p}</option>)}
           </select>
           <div className="flex items-center gap-1.5 sm:ml-auto">
-            <span className="text-lg font-bold tabular-nums text-neutral-800">{fmt(scope.churnedSplitters)}</span>
-            <span className="text-[10px] leading-tight text-neutral-500">splitters<br />com churn</span>
+            <span className="text-lg font-bold tabular-nums text-on-surface">{fmt(scope.churnedSplitters)}</span>
+            <span className="text-[10px] leading-tight text-on-surface-variant">splitters<br />com churn</span>
           </div>
           <button
             type="button"
             onClick={clearFilters}
             disabled={!hasFilter}
             className={`rounded-lg border px-2 py-1.5 text-xs font-bold transition ${
-              hasFilter ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100' : 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400'
+              hasFilter ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/50' : 'cursor-not-allowed border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-white/5 text-on-surface-variant/60'
             }`}
           >
             Limpar
           </button>
         </div>
         <CancellationMotiveFilter
-          className="mt-3 border-t border-neutral-100 pt-3"
+          className="mt-3 border-t border-neutral-100 dark:border-white/5 pt-3"
           selected={categoryFilter}
           onChange={setCategoryFilter}
           counts={motiveCounts}
@@ -378,8 +378,8 @@ export function CancellationsExplorer({
           />
           <Kpi label="Pós-massiva (rede)" value={fmt(scope.postMassiva)} tone={scope.postMassiva > 0 ? 'warn' : undefined} />
         </div>
-        <div className="rounded-xl border border-neutral-200/80 bg-white p-3 lg:w-64">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Mix de motivos no recorte</p>
+        <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-3 lg:w-64">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">Mix de motivos no recorte</p>
           {scope.total > 0 ? (
             <div className="space-y-1">
               {(categoryFilter.length === 0 || categoryFilter.includes('rede')) && scope.mix.rede > 0 ? (
@@ -401,23 +401,23 @@ export function CancellationsExplorer({
                 <MixBar label="Operacional" value={scope.mix.operacional} total={scope.total} color="bg-neutral-400" />
               ) : null}
               {(categoryFilter.length === 0 || categoryFilter.includes('outros')) && scope.mix.outros > 0 ? (
-                <MixBar label="Outros" value={scope.mix.outros} total={scope.total} color="bg-neutral-300" />
+                <MixBar label="Outros" value={scope.mix.outros} total={scope.total} color="bg-neutral-300 dark:bg-white/15" />
               ) : null}
             </div>
           ) : (
-            <p className="text-xs text-neutral-400">Sem cancelamentos no recorte.</p>
+            <p className="text-xs text-on-surface-variant/60">Sem cancelamentos no recorte.</p>
           )}
         </div>
       </div>
 
       {/* Mapa de calor com camadas */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-sm">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-3 shadow-sm">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+          <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface">
             <MapPin className="size-4 text-rose-500" aria-hidden />
             Mapa de calor {hasFilter ? '(recorte filtrado)' : '(rede toda)'}
           </p>
-          <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-0.5">
             {([
               { id: 'churn', label: 'Churn de rede' },
               { id: 'saturacao', label: 'Saturação' },
@@ -428,7 +428,7 @@ export function CancellationsExplorer({
                 type="button"
                 onClick={() => setHeatMetric(opt.id)}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
-                  heatMetric === opt.id ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                  heatMetric === opt.id ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-surface-container-low'
                 }`}
               >
                 {opt.label}
@@ -443,7 +443,7 @@ export function CancellationsExplorer({
         ) : (
           <MapPlaceholder />
         )}
-        <p className="mt-1.5 text-[11px] text-neutral-400">
+        <p className="mt-1.5 text-[11px] text-on-surface-variant/60">
           {heatMetric === 'churn'
             ? 'Intensidade = cancelamentos de rede por splitter.'
             : heatMetric === 'saturacao'
@@ -454,17 +454,17 @@ export function CancellationsExplorer({
 
       {/* Resumo agregado por nível (acompanha o drill) */}
       {levelGroups.length > 0 ? (
-        <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-          <div className="border-b border-neutral-100 px-4 py-2.5">
-            <p className="text-sm font-semibold text-neutral-900">
+        <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+          <div className="border-b border-neutral-100 dark:border-white/5 px-4 py-2.5">
+            <p className="text-sm font-semibold text-on-surface">
               Churn por {level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}
-              <span className="ml-2 text-[11px] font-normal text-neutral-500">clique para descer o nível</span>
+              <span className="ml-2 text-[11px] font-normal text-on-surface-variant">clique para descer o nível</span>
             </p>
           </div>
           <div className="max-h-64 overflow-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="sticky top-0 z-[1] bg-white">
-                <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+              <thead className="sticky top-0 z-[1] bg-surface-container-lowest">
+                <tr className="border-b border-neutral-200/90 dark:border-white/10 text-[11px] uppercase tracking-wide text-on-surface-variant">
                   <th className="px-4 py-2">{level === 'olt' ? 'OLT' : level === 'slot' ? 'Slot' : 'PON'}</th>
                   <th className="px-3 py-2 text-center">Splitters c/ churn</th>
                   <th className="px-3 py-2 text-center">Rede</th>
@@ -472,16 +472,16 @@ export function CancellationsExplorer({
                   <th className="px-3 py-2 text-center">Taxa/100</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
                 {levelGroups.map((g) => {
                   const rate = ratePer100(g.rede, g.active)
                   return (
-                    <tr key={g.key} className="cursor-pointer hover:bg-indigo-50/50" onClick={g.drill}>
-                      <td className="px-4 py-2 font-medium text-indigo-700 hover:underline">{g.label}</td>
-                      <td className="px-3 py-2 text-center tabular-nums text-neutral-600">{g.splitters}</td>
-                      <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">{g.rede > 0 ? fmt(g.rede) : '—'}</td>
-                      <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{fmt(g.total)}</td>
-                      <td className={`px-3 py-2 text-center tabular-nums ${rate != null && rate >= 2 ? 'font-bold text-rose-700' : 'text-neutral-500'}`}>
+                    <tr key={g.key} className="cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40" onClick={g.drill}>
+                      <td className="px-4 py-2 font-medium text-indigo-700 dark:text-indigo-200 hover:underline">{g.label}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">{g.splitters}</td>
+                      <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700 dark:text-rose-200">{g.rede > 0 ? fmt(g.rede) : '—'}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">{fmt(g.total)}</td>
+                      <td className={`px-3 py-2 text-center tabular-nums ${rate != null && rate >= 2 ? 'font-bold text-rose-700 dark:text-rose-200' : 'text-on-surface-variant'}`}>
                         {rate != null ? rate.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—'}
                       </td>
                     </tr>
@@ -494,17 +494,17 @@ export function CancellationsExplorer({
       ) : null}
 
       {/* Ranking / drill */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <Filter className="size-4 text-neutral-500" aria-hidden />
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
+            <Filter className="size-4 text-on-surface-variant" aria-hidden />
             Splitters no recorte {ranking.length > 0 ? `(top ${ranking.length})` : ''}
           </p>
           <button
             type="button"
             onClick={exportCsv}
             disabled={ranking.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:text-neutral-300"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:text-on-surface-variant/60"
           >
             <Download className="size-3.5" aria-hidden />
             Exportar CSV
@@ -512,8 +512,8 @@ export function CancellationsExplorer({
         </div>
         <div className="max-h-[30rem] overflow-auto">
           <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="sticky top-0 z-[1] bg-white">
-              <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+            <thead className="sticky top-0 z-[1] bg-surface-container-lowest">
+              <tr className="border-b border-neutral-200/90 dark:border-white/10 text-[11px] uppercase tracking-wide text-on-surface-variant">
                 <th className="px-4 py-2.5">Splitter</th>
                 <th className="px-3 py-2.5">OLT</th>
                 <th className="px-3 py-2.5">Slot/PON</th>
@@ -526,23 +526,23 @@ export function CancellationsExplorer({
                 <th className="px-3 py-2.5 text-center">Pós-massiva</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {ranking.map((r) => (
-                <tr key={r.splitterCode || r.splitterTitle} className="hover:bg-neutral-50/70">
-                  <td className="px-4 py-2 font-medium text-neutral-900">{r.splitterTitle}</td>
+                <tr key={r.splitterCode || r.splitterTitle} className="hover:bg-surface-container-low/70">
+                  <td className="px-4 py-2 font-medium text-on-surface">{r.splitterTitle}</td>
                   <td className="px-3 py-2">
-                    <button type="button" onClick={() => { setOlt(r.oltLabel); setSlot('all'); setPon('all') }} className="text-indigo-600 hover:underline">
+                    <button type="button" onClick={() => { setOlt(r.oltLabel); setSlot('all'); setPon('all') }} className="text-indigo-600 dark:text-indigo-300 hover:underline">
                       {r.oltLabel}
                     </button>
                   </td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-neutral-600">
+                  <td className="px-3 py-2 font-mono text-[12px] text-on-surface-variant">
                     {r.slot != null && r.pon != null ? (
                       <button type="button" onClick={() => { setOlt(r.oltLabel); setSlot(String(r.slot)); setPon(String(r.pon)) }} className="hover:underline">
                         {r.slot} / {r.pon}
                       </button>
                     ) : '—'}
                   </td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700' : 'text-neutral-600'}`}>
+                  <td className={`px-3 py-2 text-center tabular-nums ${r.usage >= 85 ? 'font-bold text-amber-700 dark:text-amber-200' : 'text-on-surface-variant'}`}>
                     {Math.round(r.usage)}%
                   </td>
                   <td className="px-3 py-2 text-center tabular-nums">
@@ -550,22 +550,22 @@ export function CancellationsExplorer({
                       const tone = describeSignalProblemRate(r.signalPct)
                       const cellClass =
                         tone.level === 'critical'
-                          ? 'font-bold text-rose-700'
+                          ? 'font-bold text-rose-700 dark:text-rose-200'
                           : tone.level === 'attention'
-                            ? 'font-semibold text-amber-700'
-                            : 'font-medium text-emerald-700'
+                            ? 'font-semibold text-amber-700 dark:text-amber-200'
+                            : 'font-medium text-emerald-700 dark:text-emerald-200'
                       return (
                         <span className={cellClass} title={`${tone.label} — ${tone.hint}`}>
                           {r.signalPct.toFixed(1)}%
                         </span>
                       )
                     })() : (
-                      <span className="text-neutral-400">—</span>
+                      <span className="text-on-surface-variant/60">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
-                  <td className="px-3 py-2 text-center tabular-nums text-neutral-700">{fmt(r.total)}</td>
-                  <td className={`px-3 py-2 text-center tabular-nums ${r.postMassivaRede > 0 ? 'font-semibold text-amber-700' : 'text-neutral-400'}`}>
+                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700 dark:text-rose-200">{r.rede > 0 ? fmt(r.rede) : '—'}</td>
+                  <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">{fmt(r.total)}</td>
+                  <td className={`px-3 py-2 text-center tabular-nums ${r.postMassivaRede > 0 ? 'font-semibold text-amber-700 dark:text-amber-200' : 'text-on-surface-variant/60'}`}>
                     {r.postMassivaRede > 0 ? (
                       <span className="inline-flex items-center gap-1" title="Churn de rede em até 30d após massiva">
                         <Zap className="size-3" aria-hidden />{r.postMassivaRede}
@@ -576,7 +576,7 @@ export function CancellationsExplorer({
               ))}
               {ranking.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-on-surface-variant">
                     Nenhum cancelamento no recorte selecionado.
                   </td>
                 </tr>
@@ -584,7 +584,7 @@ export function CancellationsExplorer({
             </tbody>
           </table>
         </div>
-        <p className="flex items-center gap-1.5 border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400">
+        <p className="flex items-center gap-1.5 border-t border-neutral-100 dark:border-white/5 px-4 py-2 text-[11px] text-on-surface-variant/60">
           <AlertTriangle className="size-3.5 text-amber-500" aria-hidden />
           Clique na OLT ou no Slot/PON para descer o recorte. &quot;Sinal&quot; = % de ONUs atenuadas ou offline (verde saudável, âmbar ≥8%, vermelho ≥15%). &quot;Pós-massiva&quot; = churn de rede em até 30 dias após uma massiva do splitter.
         </p>
@@ -595,9 +595,9 @@ export function CancellationsExplorer({
 
 function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'warn' }) {
   return (
-    <div className={`rounded-xl border px-3 py-2.5 ${tone === 'danger' ? 'border-rose-300 bg-rose-50/70' : tone === 'warn' ? 'border-amber-300 bg-amber-50/70' : 'border-neutral-200/80 bg-white'}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${tone === 'danger' ? 'text-rose-700' : tone === 'warn' ? 'text-amber-700' : 'text-neutral-900'}`}>{value}</p>
+    <div className={`rounded-xl border px-3 py-2.5 ${tone === 'danger' ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40' : tone === 'warn' ? 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/40' : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">{label}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums ${tone === 'danger' ? 'text-rose-700 dark:text-rose-200' : tone === 'warn' ? 'text-amber-700 dark:text-amber-200' : 'text-on-surface'}`}>{value}</p>
     </div>
   )
 }
@@ -607,10 +607,10 @@ function MixBar({ label, value, total, color }: { label: string; value: number; 
   return (
     <div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className="text-neutral-600">{label}</span>
-        <span className="font-semibold tabular-nums text-neutral-800">{value.toLocaleString('pt-BR')} ({pct}%)</span>
+        <span className="text-on-surface-variant">{label}</span>
+        <span className="font-semibold tabular-nums text-on-surface">{value.toLocaleString('pt-BR')} ({pct}%)</span>
       </div>
-      <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>

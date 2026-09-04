@@ -112,13 +112,13 @@ export function PlatformSuggestionsPage() {
           primaryAction={{ to: '/', label: 'Voltar ao painel' }}
           trailing={
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-amber-200/90 bg-white/85 px-3 py-2 text-xs font-semibold text-amber-950 shadow-sm">
+              <span className="inline-flex items-center rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-amber-950 dark:text-amber-100 shadow-sm">
                 {suggestions.length} ideias
               </span>
-              <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white/85 px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm">
+              <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-on-surface-variant shadow-sm">
                 {totals.votes} votos
               </span>
-              <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white/85 px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm">
+              <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/85 px-3 py-2 text-xs font-semibold text-on-surface-variant shadow-sm">
                 {totals.comments} comentários
               </span>
             </div>
@@ -131,16 +131,16 @@ export function PlatformSuggestionsPage() {
               initial={reduceMotion ? false : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24 }}
-              className="rounded-[28px] border border-amber-200/70 bg-gradient-to-br from-white via-amber-50/35 to-white p-4 shadow-sm sm:p-5"
+              className="rounded-[28px] border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-white dark:from-surface-container-lowest via-amber-50/35 dark:via-amber-950/20 to-white dark:to-surface-container-lowest p-4 shadow-sm sm:p-5"
             >
               <div className="flex flex-col gap-3">
-                <div className="flex min-h-[46px] items-center gap-3 rounded-2xl border border-neutral-200 bg-white px-3 shadow-sm">
-                  <Search className="size-4 text-neutral-500" aria-hidden />
+                <div className="flex min-h-[46px] items-center gap-3 rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 shadow-sm">
+                  <Search className="size-4 text-on-surface-variant" aria-hidden />
                   <input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Pesquisar sugestões, comentários ou setores"
-                    className="w-full bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400"
+                    className="w-full bg-transparent text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60"
                   />
                 </div>
 
@@ -154,7 +154,7 @@ export function PlatformSuggestionsPage() {
                         'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
                         sortMode === option.value
                           ? 'border-amber-700 bg-amber-700 text-white shadow-sm'
-                          : 'border-neutral-200 bg-white text-neutral-700 hover:border-amber-200 hover:bg-amber-50',
+                          : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-amber-200 dark:hover:border-amber-800/50 hover:bg-amber-50 dark:hover:bg-amber-950/40',
                       )}
                     >
                       {option.label}
@@ -164,7 +164,7 @@ export function PlatformSuggestionsPage() {
                     href={hubSuggestionsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-auto inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100"
+                    className="ml-auto inline-flex items-center gap-2 rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-1.5 text-xs font-semibold text-sky-800 dark:text-sky-200 transition hover:bg-sky-100 dark:hover:bg-sky-950/50"
                   >
                     <ExternalLink className="size-4" aria-hidden />
                     Abrir no Hub Apps
@@ -175,7 +175,7 @@ export function PlatformSuggestionsPage() {
                   <select
                     value={sectorFilter}
                     onChange={(event) => setSectorFilter(event.target.value)}
-                    className="min-h-[46px] rounded-2xl border border-neutral-200 bg-white px-3 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                   >
                     <option value="all">Todos os setores</option>
                     {sectors.map((item) => (
@@ -190,7 +190,7 @@ export function PlatformSuggestionsPage() {
                     onChange={(event) =>
                       setStatusFilter(event.target.value as 'all' | PlatformSuggestionStatus)
                     }
-                    className="min-h-[46px] rounded-2xl border border-neutral-200 bg-white px-3 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                    className="min-h-[46px] rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -203,17 +203,17 @@ export function PlatformSuggestionsPage() {
             </motion.div>
 
             {suggestionsQuery.isLoading ? (
-              <div className="rounded-[28px] border border-neutral-200 bg-white px-4 py-10 text-sm text-neutral-600 shadow-sm">
+              <div className="rounded-[28px] border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-4 py-10 text-sm text-on-surface-variant shadow-sm">
                 Carregando sugestões...
               </div>
             ) : suggestionsQuery.isError ? (
-              <div className="rounded-[28px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-sm">
+              <div className="rounded-[28px] border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-800 dark:text-rose-200 shadow-sm">
                 {suggestionsQuery.error instanceof Error
                   ? suggestionsQuery.error.message
                   : 'Falha ao carregar sugestões.'}
               </div>
             ) : visibleSuggestions.length === 0 ? (
-              <div className="rounded-[28px] border border-dashed border-neutral-300 bg-white px-4 py-10 text-center text-sm text-neutral-600 shadow-sm">
+              <div className="rounded-[28px] border border-dashed border-neutral-300 bg-surface-container-lowest px-4 py-10 text-center text-sm text-on-surface-variant shadow-sm">
                 Nenhuma sugestão encontrada com os filtros atuais.
               </div>
             ) : (

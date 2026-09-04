@@ -75,11 +75,11 @@ function criticalityDotToneClasses(tone: SplitterOperationalScore['tone']): {
 } {
   switch (tone) {
     case 'critical':
-      return { filled: 'bg-rose-500 shadow-sm', muted: 'bg-rose-100' }
+      return { filled: 'bg-rose-500 shadow-sm', muted: 'bg-rose-100 dark:bg-rose-950/50' }
     case 'attention':
-      return { filled: 'bg-amber-500 shadow-sm', muted: 'bg-amber-100' }
+      return { filled: 'bg-amber-500 shadow-sm', muted: 'bg-amber-100 dark:bg-amber-950/50' }
     default:
-      return { filled: 'bg-emerald-500 shadow-sm', muted: 'bg-emerald-100' }
+      return { filled: 'bg-emerald-500 shadow-sm', muted: 'bg-emerald-100 dark:bg-emerald-950/50' }
   }
 }
 
@@ -158,9 +158,9 @@ function occupiedCountFromCells(cells: Array<{ kind: PortCellKind }>): number {
 }
 
 function OccupancyPercentToneClass(usagePercent: number): string {
-  if (usagePercent >= 95) return 'text-rose-600'
-  if (usagePercent >= 70) return 'text-amber-600'
-  return 'text-emerald-600'
+  if (usagePercent >= 95) return 'text-rose-600 dark:text-rose-300'
+  if (usagePercent >= 70) return 'text-amber-600 dark:text-amber-300'
+  return 'text-emerald-600 dark:text-emerald-300'
 }
 
 function useAnimatedNumber(target: number, durationMs: number = 700): number {
@@ -295,10 +295,10 @@ export function SplitterDetailSummary({
     onuSignalSummary?.avg == null
       ? 'text-on-surface-variant/60'
       : onuSignalSummary.avg <= RX_POWER_CRITICAL_DBM
-        ? 'text-rose-600'
+        ? 'text-rose-600 dark:text-rose-300'
         : onuSignalSummary.avg <= RX_POWER_DEGRADED_DBM
-          ? 'text-amber-600'
-          : 'text-emerald-600'
+          ? 'text-amber-600 dark:text-amber-300'
+          : 'text-emerald-600 dark:text-emerald-300'
 
   const { slot, port } = parseSlotAndPortFromTitle(splitter.title || splitter.code)
   const integrationRef = splitter.integrationCode || splitter.code || '-'
@@ -317,7 +317,7 @@ export function SplitterDetailSummary({
 
   return (
     <section
-      className="relative overflow-hidden rounded-2xl border border-outline-variant bg-white p-4 pt-5 shadow-sm animate-in fade-in zoom-in-[0.99] duration-500 md:p-5 md:pt-6"
+      className="relative overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 pt-5 shadow-sm animate-in fade-in zoom-in-[0.99] duration-500 md:p-5 md:pt-6"
       aria-labelledby="splitter-detail-heading"
     >
       <div className="absolute inset-x-0 top-0 h-1 bg-primary motion-safe:animate-pulse [animation-duration:2.4s]" />
@@ -332,7 +332,7 @@ export function SplitterDetailSummary({
               active={splitter.active}
               labels={{ active: 'Sinal ativo', inactive: 'Equipamento inativo' }}
             />
-            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
               ID: {integrationRef}
             </span>
           </div>
@@ -349,7 +349,7 @@ export function SplitterDetailSummary({
                     splitterLabel: splitter.title || splitter.code,
                   },
                 }}
-                className="inline-flex items-center rounded-md border border-amber-200/80 bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-900 transition hover:bg-amber-100"
+                className="inline-flex items-center rounded-md border border-amber-200/80 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200 transition hover:bg-amber-100 dark:hover:bg-amber-950/50"
               >
                 Abrir massiva
               </Link>
@@ -361,7 +361,7 @@ export function SplitterDetailSummary({
               className={cn(
                 'inline-flex items-center rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition',
                 isRefreshing
-                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                  ? 'cursor-not-allowed border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-on-surface-variant/60'
                   : 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/15',
               )}
             >
@@ -380,16 +380,16 @@ export function SplitterDetailSummary({
               <Link
                 to={`/splitters/${encodeURIComponent(mapReliefInsight.streetReliefNeighbor.code)}`}
                 state={location.state}
-                className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 bg-emerald-50/95 px-2 py-0.5 text-xs font-medium text-emerald-950 no-underline transition hover:bg-emerald-100/95 hover:underline"
+                className="inline-flex max-w-[min(100%,28rem)] min-w-0 items-center gap-1.5 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-950 dark:text-emerald-100 no-underline transition hover:bg-emerald-100/95 dark:hover:bg-emerald-950/50 hover:underline"
                 title="Splitter sugerido para alívio de rede (porta livre na regra do mapa)"
               >
-                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90">
+                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200">
                   Apoio
                 </span>
                 <span className="truncate font-semibold">
                   {mapReliefInsight.streetReliefNeighbor.title}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-emerald-900/80">
+                <span className="shrink-0 font-mono text-[10px] text-emerald-900/80 dark:text-emerald-200">
                   {mapReliefInsight.streetReliefNeighbor.code}
                 </span>
               </Link>
@@ -413,8 +413,8 @@ export function SplitterDetailSummary({
           <div className="grid grid-cols-2 gap-2 md:min-w-[260px]">
           <div
             className={cn(
-              'rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow',
-              criticalityPulse && 'scale-[1.02] ring-1 ring-amber-200',
+              'rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow',
+              criticalityPulse && 'scale-[1.02] ring-1 ring-amber-200 dark:ring-amber-800/50',
             )}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
@@ -436,7 +436,7 @@ export function SplitterDetailSummary({
               ))}
             </div>
           </div>
-          <div className="rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-2.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
               Massivas
             </p>
@@ -452,7 +452,7 @@ export function SplitterDetailSummary({
                 {animatedMassivas}
               </p>
               {hasOpenMassiva ? (
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 text-rose-600 ring-1 ring-rose-200 motion-safe:animate-pulse">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800/50 motion-safe:animate-pulse">
                   <BellRing size={13} strokeWidth={2.2} />
                 </span>
               ) : (
@@ -472,7 +472,7 @@ export function SplitterDetailSummary({
             </p>
             {hasOpenMassiva ? (
               <p
-                className="mt-1.5 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-semibold leading-snug text-rose-700 ring-1 ring-inset ring-rose-100"
+                className="mt-1.5 rounded-md bg-rose-50 dark:bg-rose-950/40 px-2 py-1 text-[11px] font-semibold leading-snug text-rose-700 dark:text-rose-200 ring-1 ring-inset ring-rose-100"
                 aria-live="polite"
               >
                 {massivaStats.openTickets === 1
@@ -486,7 +486,7 @@ export function SplitterDetailSummary({
             ) : null}
           </div>
           {/* Card Sinal ONU — span completo, abaixo de Criticidade+Massivas */}
-          <div className="col-span-2 rounded-xl border border-outline-variant bg-white px-3 py-2.5 shadow-sm">
+          <div className="col-span-2 rounded-xl border border-outline-variant bg-surface-container-lowest px-3 py-2.5 shadow-sm">
             <div className="flex items-center gap-1.5">
               <Wifi size={11} strokeWidth={2} className="text-on-surface-variant/60" />
               <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
@@ -506,14 +506,14 @@ export function SplitterDetailSummary({
                       : '— dBm'}
                   </p>
                   <div className="flex flex-col items-end gap-0.5 text-[10px] font-semibold tabular-nums">
-                    <span className="text-emerald-700">{onuSignalSummary.online} online</span>
-                    <span className="text-amber-700">{onuSignalSummary.degraded} atenuados</span>
-                    <span className="text-rose-700">{onuSignalSummary.offline} offline</span>
+                    <span className="text-emerald-700 dark:text-emerald-200">{onuSignalSummary.online} online</span>
+                    <span className="text-amber-700 dark:text-amber-200">{onuSignalSummary.degraded} atenuados</span>
+                    <span className="text-rose-700 dark:text-rose-200">{onuSignalSummary.offline} offline</span>
                   </div>
                 </div>
                 {splitterProjectedRxPower != null && onuSignalSummary.avg !== null ? (() => {
                   const delta = Math.round((splitterProjectedRxPower - onuSignalSummary.avg) * 10) / 10
-                  const deltaColor = delta > 3 ? 'text-rose-600' : delta > 1 ? 'text-amber-600' : 'text-emerald-600'
+                  const deltaColor = delta > 3 ? 'text-rose-600 dark:text-rose-300' : delta > 1 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'
                   return (
                     <div className="mt-2 flex items-center justify-between gap-2 border-t border-outline-variant/30 pt-2">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/55">
@@ -560,7 +560,7 @@ export function SplitterDetailSummary({
               {animatedUsagePercent}%
             </p>
           </div>
-          <div className="h-2 rounded-full bg-slate-200">
+          <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10">
             <div
               className={cn(
                 'h-2 rounded-full transition-all duration-700',

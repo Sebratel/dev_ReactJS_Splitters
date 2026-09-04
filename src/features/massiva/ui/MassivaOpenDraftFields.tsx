@@ -27,6 +27,8 @@ type DescriptionByApItem = {
 type MassivaOpenDraftFieldsProps = {
   disabled: boolean
   descriptionByAp?: DescriptionByApItem[]
+  /** Sites derivados/validados a partir dos OLTs da rota (Backbone). Vários = escolher. */
+  siteCandidates?: string[]
 }
 
 function DraftSection({
@@ -46,19 +48,19 @@ function DraftSection({
     <section
       className={cn(
         'rounded-xl border p-3 sm:p-3.5',
-        variant === 'accent' && 'border-violet-200/60 bg-violet-50/35',
-        variant === 'muted' && 'border-neutral-200/70 bg-neutral-50/50',
-        variant === 'neutral' && 'border-neutral-200/70 bg-white/80',
+        variant === 'accent' && 'border-violet-200/60 dark:border-violet-800/50 bg-violet-50/35 dark:bg-violet-950/40',
+        variant === 'muted' && 'border-neutral-200/70 dark:border-white/10 bg-surface-container-low/50',
+        variant === 'neutral' && 'border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest/80',
       )}
     >
-      <div className="flex items-start gap-2.5 border-b border-neutral-200/60 pb-2">
+      <div className="flex items-start gap-2.5 border-b border-neutral-200/60 dark:border-white/10 pb-2">
         {icon ? (
           <span
             className={cn(
               'mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-lg ring-1',
               variant === 'accent'
-                ? 'bg-violet-100/70 text-violet-600 ring-violet-200/70'
-                : 'bg-white text-neutral-500 ring-neutral-200/80',
+                ? 'bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-violet-200/70 dark:ring-violet-800/50'
+                : 'bg-surface-container-lowest text-on-surface-variant ring-neutral-200/80 dark:ring-white/10',
             )}
             aria-hidden
           >
@@ -66,11 +68,11 @@ function DraftSection({
           </span>
         ) : null}
         <div className="min-w-0">
-          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-700">
+          <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-on-surface-variant">
             {title}
           </h4>
           {hint ? (
-            <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">{hint}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-on-surface-variant">{hint}</p>
           ) : null}
         </div>
       </div>
@@ -89,7 +91,7 @@ function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500"
+      className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant"
     >
       {children}
     </label>
@@ -97,7 +99,7 @@ function FieldLabel({
 }
 
 const inputClassName =
-  'w-full rounded-lg border border-neutral-200/90 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition placeholder:text-neutral-400 hover:border-neutral-300 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:opacity-60'
+  'w-full rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface shadow-sm transition placeholder:text-on-surface-variant/60 hover:border-neutral-300 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/15 disabled:cursor-not-allowed disabled:bg-surface-container-low disabled:opacity-60'
 
 /**
  * Formulário de assignment (paridade com massiva_screen): tipo fixo, prazos, relato,
@@ -106,6 +108,7 @@ const inputClassName =
 export function MassivaOpenDraftFields({
   disabled,
   descriptionByAp = [],
+  siteCandidates = [],
 }: MassivaOpenDraftFieldsProps) {
   const enableDescriptionAutoSync = useMassivaOpenDraftStore((s) => s.enableDescriptionAutoSync)
 
@@ -144,22 +147,22 @@ export function MassivaOpenDraftFields({
     <div className="mt-2">
       <div
         className={cn(
-          'space-y-3 rounded-2xl border border-neutral-200/80 bg-gradient-to-b from-neutral-50/80 to-white p-3 shadow-sm sm:p-4',
+          'space-y-3 rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-gradient-to-b from-neutral-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-3 shadow-sm sm:p-4',
           'ring-1 ring-black/[0.03]',
         )}
       >
-        <header className="flex items-start gap-3 border-b border-neutral-200/70 pb-3">
+        <header className="flex items-start gap-3 border-b border-neutral-200/70 dark:border-white/10 pb-3">
           <span
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100/70 text-violet-600 ring-1 ring-violet-200/70"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-violet-100/70 dark:bg-violet-950/50 text-violet-600 dark:text-violet-300 ring-1 ring-violet-200/70 dark:ring-violet-800/50"
             aria-hidden
           >
             <ClipboardList className="size-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-sm font-bold tracking-tight text-neutral-900">
+            <h3 className="text-sm font-bold tracking-tight text-on-surface">
               Dados para abertura do protocolo
             </h3>
-            <p className="mt-0.5 text-[11px] leading-snug text-neutral-600">
+            <p className="mt-0.5 text-[11px] leading-snug text-on-surface-variant">
               Preencha para gerar a descrição e liberar o envio.
             </p>
           </div>
@@ -243,13 +246,13 @@ export function MassivaOpenDraftFields({
                     id="massiva-solicitation-type"
                     type="text"
                     readOnly
-                    className={cn(inputClassName, 'cursor-not-allowed bg-neutral-50/90 pr-9')}
+                    className={cn(inputClassName, 'cursor-not-allowed bg-surface-container-low/90 pr-9')}
                     value={MASSIVA_SOLICITATION_TYPE_LABEL}
                     disabled={disabled}
                     aria-readonly="true"
                   />
                   <Lock
-                    className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400"
+                    className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant/60"
                     aria-hidden
                   />
                 </div>
@@ -287,15 +290,15 @@ export function MassivaOpenDraftFields({
             </div>
           </DraftSection>
 
-          <div className="rounded-xl border border-neutral-200/70 bg-white p-2.5 sm:p-3">
+          <div className="rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest p-2.5 sm:p-3">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <label
                 htmlFor="massiva-initial-report"
-                className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500"
+                className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant"
               >
                 Relato inicial
               </label>
-              <span className="text-[10px] font-medium text-neutral-400">Opcional</span>
+              <span className="text-[10px] font-medium text-on-surface-variant/60">Opcional</span>
             </div>
             <textarea
               id="massiva-initial-report"
@@ -309,8 +312,8 @@ export function MassivaOpenDraftFields({
           </div>
 
           {/* Quem identificou o evento — seletor segmentado */}
-          <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 bg-white px-3 py-2.5', disabled && 'opacity-60')}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+          <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
               Quem identificou o evento
             </p>
             <div
@@ -337,8 +340,8 @@ export function MassivaOpenDraftFields({
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-1',
                     'disabled:cursor-not-allowed',
                     eventIdentifiedBy === value
-                      ? 'border-amber-300/80 bg-amber-50 text-amber-900 shadow-sm ring-1 ring-amber-200/70'
-                      : 'border-neutral-200/80 bg-white text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-700',
+                      ? 'border-amber-300/80 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm ring-1 ring-amber-200/70 dark:ring-amber-800/50'
+                      : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-neutral-300 hover:bg-surface-container-low hover:text-on-surface-variant',
                   )}
                 >
                   {label}
@@ -348,12 +351,12 @@ export function MassivaOpenDraftFields({
           </div>
 
           {/* Protocolo de infraestrutura (opcional) */}
-          <div className={cn('space-y-2 rounded-xl border border-neutral-200/70 bg-white px-3 py-2.5', disabled && 'opacity-60')}>
+          <div className={cn('space-y-2 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                 Protocolo de infraestrutura
               </p>
-              <span className="text-[10px] font-medium text-neutral-400">Opcional</span>
+              <span className="text-[10px] font-medium text-on-surface-variant/60">Opcional</span>
             </div>
             <div className="relative">
               <select
@@ -362,7 +365,7 @@ export function MassivaOpenDraftFields({
                   setInfraProtocolType(e.target.value as typeof infraProtocolType)
                 }
                 disabled={disabled}
-                className="w-full cursor-pointer appearance-none rounded-lg border border-neutral-200/80 bg-white py-2 pl-3 pr-8 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed"
+                className="w-full cursor-pointer appearance-none rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest py-2 pl-3 pr-8 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed"
               >
                 <option value="none">Não abrir protocolo de infra</option>
                 {MASSIVA_INFRA_PROTOCOL_OPTIONS.map((opt) => (
@@ -372,7 +375,7 @@ export function MassivaOpenDraftFields({
                 ))}
               </select>
               <ChevronDown
-                className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400"
+                className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant/60"
                 aria-hidden
               />
             </div>
@@ -381,20 +384,24 @@ export function MassivaOpenDraftFields({
               <div>
                 <label
                   htmlFor="infra-signal"
-                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant"
                 >
                   Sinal aferido (dBm)
                 </label>
-                <input
+                <textarea
                   id="infra-signal"
-                  type="text"
-                  inputMode="decimal"
                   value={infraSignalDbm}
                   onChange={(e) => setInfraSignalDbm(e.target.value)}
                   disabled={disabled}
+                  rows={Math.min(Math.max(infraSignalDbm.split('\n').length, 1), 8)}
                   placeholder="Ex.: -24.0"
-                  className="w-full rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full resize-y rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 font-mono text-xs leading-relaxed text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
+                {infraSignalDbm.includes('\n') ? (
+                  <p className="mt-1 text-[10px] text-on-surface-variant/70">
+                    Sinal médio por CTO (preenchido automaticamente) — editável.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -402,7 +409,7 @@ export function MassivaOpenDraftFields({
               <div>
                 <label
                   htmlFor="infra-avaria"
-                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-neutral-500"
+                  className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant"
                 >
                   Tipo de avaria
                 </label>
@@ -413,28 +420,56 @@ export function MassivaOpenDraftFields({
                   onChange={(e) => setInfraAvaria(e.target.value)}
                   disabled={disabled}
                   placeholder="Descreva a avaria (ex.: parte interna da CTO quebrada)"
-                  className="w-full resize-y rounded-lg border border-neutral-200/80 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full resize-y rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
             ) : null}
 
             {infraManualField === 'site' ? (
-              <InfraSiteSelect
-                value={infraSiteCode}
-                onChange={setInfraSiteCode}
-                disabled={disabled}
-              />
+              <>
+                <InfraSiteSelect
+                  value={infraSiteCode}
+                  onChange={setInfraSiteCode}
+                  disabled={disabled}
+                />
+                {siteCandidates.length > 1 ? (
+                  <div className="mt-1.5">
+                    <p className="text-[10px] text-on-surface-variant/80">
+                      A massiva envolve mais de um site — escolha qual abrir o backbone:
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {siteCandidates.map((site) => (
+                        <button
+                          key={site}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setInfraSiteCode(site)}
+                          className={cn(
+                            'inline-flex items-center rounded-lg border px-2.5 py-1 font-mono text-xs font-semibold transition',
+                            infraSiteCode === site
+                              ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100'
+                              : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
+                            'disabled:opacity-50',
+                          )}
+                        >
+                          {site}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
 
             {infraProtocolType !== 'none' ? (
-              <p className="text-[10px] leading-snug text-neutral-500">
+              <p className="text-[10px] leading-snug text-on-surface-variant">
                 Abre 1 protocolo de infraestrutura vinculado à massiva, agregando todos os APs no
                 descritivo.
               </p>
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-2.5 sm:p-3">
+          <div className="rounded-xl border border-violet-200/70 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/40 p-2.5 sm:p-3">
             <button
               type="button"
               disabled={disabled}
@@ -450,16 +485,16 @@ export function MassivaOpenDraftFields({
               <Wand2 className="size-4 shrink-0 opacity-95" aria-hidden />
               Gerar descrição automática
             </button>
-            <p className="mt-1.5 text-[10px] leading-snug text-neutral-600">
+            <p className="mt-1.5 text-[10px] leading-snug text-on-surface-variant">
               Atualiza o modelo com a rota e os campos acima. Edição manual pausa o auto-sync até
               clicar de novo.
             </p>
           </div>
 
-          <section className="rounded-xl border border-neutral-200/80 bg-white p-2.5 shadow-sm sm:p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 pb-1.5">
-              <FileText className="size-3.5 text-neutral-400" aria-hidden />
-              <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+          <section className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-2.5 shadow-sm sm:p-3">
+            <div className="mb-1.5 flex items-center gap-1.5 border-b border-neutral-100 dark:border-white/5 pb-1.5">
+              <FileText className="size-3.5 text-on-surface-variant/60" aria-hidden />
+              <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">
                 Descrição técnica
               </h4>
             </div>
@@ -468,28 +503,28 @@ export function MassivaOpenDraftFields({
                 {descriptionByAp.map((item) => (
                   <details
                     key={item.apCode}
-                    className="group overflow-hidden rounded-md border border-neutral-200/90 bg-neutral-50/30 open:bg-white"
+                    className="group overflow-hidden rounded-md border border-neutral-200/90 dark:border-white/10 bg-surface-container-low/30 open:bg-surface-container-lowest"
                   >
-                    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-left text-xs font-semibold text-neutral-800 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-left text-xs font-semibold text-on-surface [&::-webkit-details-marker]:hidden">
                       <ChevronDown
-                        className="size-3.5 shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
+                        className="size-3.5 shrink-0 text-on-surface-variant/60 transition-transform group-open:rotate-180"
                         aria-hidden
                       />
                       <span className="min-w-0 flex-1 truncate">
                         {item.apTitle}{' '}
-                        <span className="font-mono font-normal text-neutral-500">
+                        <span className="font-mono font-normal text-on-surface-variant">
                           ({item.apCode})
                         </span>
                       </span>
                     </summary>
-                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 bg-white px-2 py-2 text-[11px] leading-relaxed text-neutral-800">
+                    <pre className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-neutral-100 dark:border-white/5 bg-surface-container-lowest px-2 py-2 text-[11px] leading-relaxed text-on-surface">
                       {item.description}
                     </pre>
                   </details>
                 ))}
               </div>
             ) : (
-              <p className="py-1.5 text-center text-[11px] text-neutral-500">
+              <p className="py-1.5 text-center text-[11px] text-on-surface-variant">
                 A descrição por ponto de acesso aparece aqui quando houver rotas prontas.
               </p>
             )}

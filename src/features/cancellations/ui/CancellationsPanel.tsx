@@ -64,8 +64,8 @@ const CATEGORY_DOT: Record<string, string> = {
   financeiro: 'bg-slate-400',
   pre_instalacao: 'bg-sky-400',
   mudanca: 'bg-violet-400',
-  operacional: 'bg-neutral-300',
-  outros: 'bg-neutral-200',
+  operacional: 'bg-neutral-300 dark:bg-white/15',
+  outros: 'bg-neutral-200 dark:bg-white/10',
 }
 
 function pct(part: number, whole: number): string {
@@ -266,50 +266,50 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
   return (
     <div className="space-y-4">
       {/* Narrativa + período + tendência */}
-      <div className="rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-50 to-white p-4">
+      <div className="rounded-2xl border border-rose-200/70 dark:border-rose-800/50 bg-gradient-to-br from-rose-50 dark:from-rose-950/20 to-white dark:to-surface-container-lowest p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-rose-100 text-rose-600 ring-1 ring-rose-200/70">
+            <span className="mt-0.5 inline-flex size-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200/70 dark:ring-rose-800/50">
               <TrendingDown className="size-5" aria-hidden />
             </span>
             <div>
-              <p className="text-sm font-bold tracking-tight text-neutral-900">
+              <p className="text-sm font-bold tracking-tight text-on-surface">
                 Cancelamentos por área
               </p>
-              <p className="mt-0.5 max-w-2xl text-sm leading-snug text-neutral-600">
+              <p className="mt-0.5 max-w-2xl text-sm leading-snug text-on-surface-variant">
                 {data.total.toLocaleString('pt-BR')} cancelamentos no período · churn de{' '}
-                <span className="font-semibold text-rose-700">rede/qualidade</span>:{' '}
-                <span className="font-bold text-rose-700">{totalRede.toLocaleString('pt-BR')}</span>{' '}
+                <span className="font-semibold text-rose-700 dark:text-rose-200">rede/qualidade</span>:{' '}
+                <span className="font-bold text-rose-700 dark:text-rose-200">{totalRede.toLocaleString('pt-BR')}</span>{' '}
                 ({redeShare}) — insatisfação + concorrência, o churn que a rede influencia.
               </p>
               {/* Tendência */}
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/70 px-2.5 py-1 text-xs ring-1 ring-rose-200/60">
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-surface-container-lowest/70 px-2.5 py-1 text-xs ring-1 ring-rose-200/60 dark:ring-rose-800/50">
                 {trend.deltaPct > 0 ? (
-                  <ArrowUpRight className="size-3.5 text-rose-600" aria-hidden />
+                  <ArrowUpRight className="size-3.5 text-rose-600 dark:text-rose-300" aria-hidden />
                 ) : trend.deltaPct < 0 ? (
-                  <ArrowDownRight className="size-3.5 text-emerald-600" aria-hidden />
+                  <ArrowDownRight className="size-3.5 text-emerald-600 dark:text-emerald-300" aria-hidden />
                 ) : (
-                  <Minus className="size-3.5 text-neutral-400" aria-hidden />
+                  <Minus className="size-3.5 text-on-surface-variant/60" aria-hidden />
                 )}
-                <span className="font-semibold text-neutral-700">
+                <span className="font-semibold text-on-surface-variant">
                   Churn de rede {trend.deltaPct > 0 ? '+' : ''}
                   {trend.deltaPct}%
                 </span>
-                <span className="text-neutral-500">
+                <span className="text-on-surface-variant">
                   nos últimos {trend.windowDays}d ({trend.redeRecent}) vs. {trend.windowDays}d
                   anteriores ({trend.redePrevious})
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-neutral-200/90 bg-white p-1 shadow-sm">
+          <div className="flex items-center gap-1 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-1 shadow-sm">
             {(['3m', '6m', '12m'] as PeriodPreset[]).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPreset(p)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                  preset === p ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                  preset === p ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-surface-container-low'
                 }`}
               >
                 {p}
@@ -320,11 +320,11 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
       </div>
 
       {/* Conclusões para o planejamento — decisões objetivas, em ordem de prioridade */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-on-surface-variant">
           <Lightbulb className="size-4 text-amber-500" aria-hidden />
           Conclusões para o planejamento
-          <span className="ml-1 font-medium normal-case tracking-normal text-neutral-400">
+          <span className="ml-1 font-medium normal-case tracking-normal text-on-surface-variant/60">
             · o que fazer, em ordem · últimos {periodLabel}
           </span>
         </p>
@@ -333,8 +333,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         <div
           className={`flex items-start gap-3 rounded-xl border p-3 ${
             topPriority.tone === 'bad'
-              ? 'border-rose-300 bg-rose-50/70 ring-1 ring-rose-200'
-              : 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-200'
+              ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800/50'
+              : 'border-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-800/50'
           }`}
         >
           <span
@@ -345,10 +345,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             1
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
               Prioridade de campo
             </p>
-            <p className="mt-0.5 text-sm font-medium leading-snug text-neutral-800">
+            <p className="mt-0.5 text-sm font-medium leading-snug text-on-surface">
               {topPriority.text}
             </p>
           </div>
@@ -366,7 +366,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                 ) : trend.deltaPct <= -15 ? (
                   <ArrowDownRight className="size-4 text-emerald-500" aria-hidden />
                 ) : (
-                  <Minus className="size-4 text-neutral-400" aria-hidden />
+                  <Minus className="size-4 text-on-surface-variant/60" aria-hidden />
                 ),
               text: trendStoryFull,
             },
@@ -375,8 +375,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
           ] as Array<{ icon: React.ReactNode; text: string | null }>)
             .filter((c): c is { icon: React.ReactNode; text: string } => Boolean(c.text))
             .map((c, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-sm leading-snug text-neutral-700">
-                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-bold text-neutral-500">
+              <li key={i} className="flex items-start gap-2.5 text-sm leading-snug text-on-surface-variant">
+                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-white/5 text-[10px] font-bold text-on-surface-variant">
                   {i + 2}
                 </span>
                 <span className="mt-0.5 shrink-0">{c.icon}</span>
@@ -387,8 +387,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
       </div>
 
       {/* Condomínio × Rua — distinção central */}
-      <p className="pt-1 text-sm font-bold text-neutral-800">
-        Condomínio ou rua? <span className="font-normal text-neutral-500">Onde o churn de rede pesa mais</span>
+      <p className="pt-1 text-sm font-bold text-on-surface">
+        Condomínio ou rua? <span className="font-normal text-on-surface-variant">Onde o churn de rede pesa mais</span>
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <TipoLocalCard
@@ -410,20 +410,20 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         />
       </div>
       {rateVerdict ? (
-        <p className="flex items-start gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs leading-snug text-amber-900">
+        <p className="flex items-start gap-1.5 rounded-xl border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 text-xs leading-snug text-amber-900 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" aria-hidden />
           {rateVerdict}
         </p>
       ) : activeBaseQuery.isError ? (
-        <p className="px-1 text-[11px] text-neutral-400">
+        <p className="px-1 text-[11px] text-on-surface-variant/60">
           Taxa normalizada indisponível (base ativa não pôde ser carregada).
         </p>
       ) : null}
 
       {/* Categorias + submotivos de rede */}
-      <p className="pt-1 text-sm font-bold text-neutral-800">
+      <p className="pt-1 text-sm font-bold text-on-surface">
         Por que os clientes cancelam?{' '}
-        <span className="font-normal text-neutral-500">Motivos agrupados — rede/qualidade em destaque</span>
+        <span className="font-normal text-on-surface-variant">Motivos agrupados — rede/qualidade em destaque</span>
       </p>
       <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
@@ -434,19 +434,19 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
               <div
                 key={cat}
                 className={`rounded-xl border px-3 py-2.5 ${
-                  isRede ? 'border-rose-300 bg-rose-50/70 ring-1 ring-rose-200' : 'border-neutral-200/80 bg-white'
+                  isRede ? 'border-rose-300 bg-rose-50/70 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-800/50' : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
                   <span className={`size-2 rounded-full ${CATEGORY_DOT[cat]}`} aria-hidden />
-                  <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
                     {CANCELLATION_CATEGORY_LABELS[cat]}
                   </p>
                 </div>
-                <p className={`mt-1 text-xl font-bold tabular-nums ${isRede ? 'text-rose-700' : 'text-neutral-900'}`}>
+                <p className={`mt-1 text-xl font-bold tabular-nums ${isRede ? 'text-rose-700 dark:text-rose-200' : 'text-on-surface'}`}>
                   {value.toLocaleString('pt-BR')}
                 </p>
-                <p className="text-[10px] text-neutral-400">{pct(value, data.total)}</p>
+                <p className="text-[10px] text-on-surface-variant/60">{pct(value, data.total)}</p>
               </div>
             )
           })}
@@ -454,14 +454,14 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
         {/* Submotivos de rede */}
         {totalRede > 0 ? (
-          <div className="rounded-xl border border-rose-200/70 bg-white p-3 lg:w-56">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+          <div className="rounded-xl border border-rose-200/70 dark:border-rose-800/50 bg-surface-container-lowest p-3 lg:w-56">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
               Dentro de rede/qualidade
             </p>
             <SubmotiveBar label="Insatisfação (qualidade)" value={sub.insatisfacao} total={totalRede} color="bg-rose-500" />
             <SubmotiveBar label="Foi p/ concorrência (preço)" value={sub.concorrencia} total={totalRede} color="bg-fuchsia-500" />
             {sub.outros > 0 ? (
-              <SubmotiveBar label="Outros" value={sub.outros} total={totalRede} color="bg-neutral-300" />
+              <SubmotiveBar label="Outros" value={sub.outros} total={totalRede} color="bg-neutral-300 dark:bg-white/15" />
             ) : null}
           </div>
         ) : null}
@@ -469,30 +469,30 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Concentração (Pareto) */}
       {conc.redeTotal > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-neutral-200/80 bg-white px-4 py-3 text-sm">
-          <span className="inline-flex items-center gap-2 font-semibold text-neutral-800">
-            <Router className="size-4 text-neutral-400" aria-hidden />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-4 py-3 text-sm">
+          <span className="inline-flex items-center gap-2 font-semibold text-on-surface">
+            <Router className="size-4 text-on-surface-variant/60" aria-hidden />
             Concentração do churn de rede
           </span>
-          <span className="text-neutral-600">
-            <span className="font-bold text-neutral-900">{conc.areasFor80pct}</span> área(s)
+          <span className="text-on-surface-variant">
+            <span className="font-bold text-on-surface">{conc.areasFor80pct}</span> área(s)
             concentram 80% do churn de rede
           </span>
-          <span className="text-neutral-600">
-            Top 5 = <span className="font-bold text-rose-700">{conc.top5Share}%</span> do total
+          <span className="text-on-surface-variant">
+            Top 5 = <span className="font-bold text-rose-700 dark:text-rose-200">{conc.top5Share}%</span> do total
           </span>
-          <span className="text-[11px] text-neutral-400">de {conc.totalAreas} áreas com churn de rede</span>
+          <span className="text-[11px] text-on-surface-variant/60">de {conc.totalAreas} áreas com churn de rede</span>
         </div>
       ) : null}
 
       {/* Tendência mensal */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm">
-        <p className="mb-2 text-xs font-semibold text-neutral-800">
-          Tendência mensal — <span className="text-rose-600">rede</span> vs. demais motivos
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
+        <p className="mb-2 text-xs font-semibold text-on-surface">
+          Tendência mensal — <span className="text-rose-600 dark:text-rose-300">rede</span> vs. demais motivos
         </p>
         <div className="h-52">
           {chartData.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-sm text-neutral-500">
+            <p className="flex h-full items-center justify-center text-sm text-on-surface-variant">
               Sem dados no período.
             </p>
           ) : (
@@ -517,34 +517,34 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
       </div>
 
       {/* Áreas em risco: massiva → churn */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
             <Zap className="size-4 text-amber-500" aria-hidden />
             Áreas em risco — churn de rede após massiva ({WINDOW_DAYS}d)
           </p>
           {impact ? (
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-[11px] text-on-surface-variant/60">
               {impact.eventsCount.toLocaleString('pt-BR')} eventos analisados
             </span>
           ) : null}
         </div>
         <div className="max-h-[22rem] overflow-auto">
           {impactQuery.isPending ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">Correlacionando massivas…</p>
+            <p className="px-4 py-8 text-center text-sm text-on-surface-variant">Correlacionando massivas…</p>
           ) : impactQuery.isError || impact?.massivaAvailable === false ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">
+            <p className="px-4 py-8 text-center text-sm text-on-surface-variant">
               Histórico de massivas indisponível — verifique a integração de massivas (MySQL).
               O restante do módulo não depende disso.
             </p>
           ) : impactRows.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">
+            <p className="px-4 py-8 text-center text-sm text-on-surface-variant">
               Nenhuma massiva foi seguida de churn de rede na janela — bom sinal. 🎉
             </p>
           ) : (
             <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="sticky top-0 z-[1] bg-white">
-                <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+              <thead className="sticky top-0 z-[1] bg-surface-container-lowest">
+                <tr className="border-b border-neutral-200/90 dark:border-white/10 text-[11px] uppercase tracking-wide text-on-surface-variant">
                   <th className="px-4 py-2.5">Splitter / condomínio</th>
                   <th className="px-3 py-2.5">Tipo</th>
                   <th className="px-3 py-2.5">Última massiva</th>
@@ -552,10 +552,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                   <th className="px-3 py-2.5 text-center">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
                 {impactRows.map((row) => (
-                  <tr key={row.splitterTitle} className="hover:bg-neutral-50/70">
-                    <td className="px-4 py-2 font-medium text-neutral-900">
+                  <tr key={row.splitterTitle} className="hover:bg-surface-container-low/70">
+                    <td className="px-4 py-2 font-medium text-on-surface">
                       {row.nomeCondominio ? (
                         <span className="inline-flex items-center gap-1.5">
                           <Building2 className="size-3.5 text-rose-400" aria-hidden />
@@ -565,14 +565,14 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                         row.splitterTitle
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs text-neutral-500">
+                    <td className="px-3 py-2 text-xs text-on-surface-variant">
                       {row.tipoLocal === 'CONDOMÍNIO' ? 'Condomínio' : 'Rua'}
                     </td>
-                    <td className="px-3 py-2 text-xs text-neutral-500">{fmtDate(row.eventAt)}</td>
-                    <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
+                    <td className="px-3 py-2 text-xs text-on-surface-variant">{fmtDate(row.eventAt)}</td>
+                    <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700 dark:text-rose-200">
                       {row.redeCount.toLocaleString('pt-BR')}
                     </td>
-                    <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
+                    <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                       {row.totalCount.toLocaleString('pt-BR')}
                     </td>
                   </tr>
@@ -585,10 +585,10 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
 
       {/* Explorador da rede — filtro/drill OLT→Slot→PON→splitter + heatmap + correlações */}
       {riskRanking && riskRanking.length > 0 ? (
-        <div className="space-y-3 rounded-2xl border border-indigo-200/60 bg-indigo-50/30 p-3">
-          <p className="px-1 text-sm font-bold text-neutral-800">
+        <div className="space-y-3 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/50 bg-indigo-50/30 dark:bg-indigo-950/40 p-3">
+          <p className="px-1 text-sm font-bold text-on-surface">
             Explorador da rede{' '}
-            <span className="font-normal text-neutral-500">
+            <span className="font-normal text-on-surface-variant">
               — filtre por OLT, Slot, PON, splitter ou motivo de cancelamento
             </span>
           </p>
@@ -604,15 +604,15 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
       ) : null}
 
       {/* Ranking por área */}
-      <div className="rounded-2xl border border-neutral-200/80 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
-          <p className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <Router className="size-4 text-neutral-500" aria-hidden />
+      <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 dark:border-white/5 px-4 py-3">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface">
+            <Router className="size-4 text-on-surface-variant" aria-hidden />
             Áreas com mais churn de rede
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
             {dimension === 'splitter' ? (
-              <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
+              <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-0.5">
                 {([
                   { id: 'all', label: 'Todos' },
                   { id: 'CONDOMÍNIO', label: 'Condo' },
@@ -623,7 +623,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                     type="button"
                     onClick={() => setTipoFilter(opt.id)}
                     className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                      tipoFilter === opt.id ? 'bg-rose-600 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                      tipoFilter === opt.id ? 'bg-rose-600 text-white' : 'text-on-surface-variant hover:bg-surface-container-low'
                     }`}
                   >
                     {opt.label}
@@ -631,7 +631,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                 ))}
               </div>
             ) : null}
-            <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-white p-0.5">
+            <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-0.5">
               {([
                 { id: 'accessPoint', label: 'Ponto de acesso' },
                 { id: 'condominio', label: 'Condomínio' },
@@ -643,7 +643,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                   type="button"
                   onClick={() => setDimension(opt.id)}
                   className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
-                    dimension === opt.id ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'
+                    dimension === opt.id ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-surface-container-low'
                   }`}
                 >
                   {opt.label}
@@ -652,7 +652,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
             </div>
           </div>
         </div>
-        <div className="border-b border-neutral-100 px-4 py-3">
+        <div className="border-b border-neutral-100 dark:border-white/5 px-4 py-3">
           <CancellationMotiveFilter
             selected={categoryFilter}
             onChange={setCategoryFilter}
@@ -661,8 +661,8 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         </div>
         <div className="max-h-[28rem] overflow-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="sticky top-0 z-[1] bg-white">
-              <tr className="border-b border-neutral-200/90 text-[11px] uppercase tracking-wide text-neutral-500">
+            <thead className="sticky top-0 z-[1] bg-surface-container-lowest">
+              <tr className="border-b border-neutral-200/90 dark:border-white/10 text-[11px] uppercase tracking-wide text-on-surface-variant">
                 <th className="px-4 py-2.5">{dimension === 'condominio' ? 'Condomínio' : 'Área'}</th>
                 {dimension === 'splitter' ? <th className="px-3 py-2.5">Slot/PON</th> : null}
                 <th className="px-3 py-2.5 text-center">Rede</th>
@@ -670,7 +670,7 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                 <th className="px-3 py-2.5 text-center">% rede</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {rankingRows
                 .slice(0, 50)
                 .sort((a, b) =>
@@ -679,27 +679,27 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
                     : b.total - a.total || b.rede - a.rede,
                 )
                 .map((row) => (
-                <tr key={row.key} className="hover:bg-neutral-50/70">
-                  <td className="px-4 py-2 font-medium text-neutral-900">{row.key}</td>
+                <tr key={row.key} className="hover:bg-surface-container-low/70">
+                  <td className="px-4 py-2 font-medium text-on-surface">{row.key}</td>
                   {dimension === 'splitter' ? (
-                    <td className="px-3 py-2 font-mono text-[12px] text-neutral-600">
+                    <td className="px-3 py-2 font-mono text-[12px] text-on-surface-variant">
                       {row.slot != null && row.pon != null ? `${row.slot} / ${row.pon}` : '—'}
                     </td>
                   ) : null}
-                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700">
+                  <td className="px-3 py-2 text-center font-bold tabular-nums text-rose-700 dark:text-rose-200">
                     {row.rede > 0 ? row.rede.toLocaleString('pt-BR') : '—'}
                   </td>
-                  <td className="px-3 py-2 text-center tabular-nums text-neutral-700">
+                  <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                     {row.total.toLocaleString('pt-BR')}
                   </td>
-                  <td className="px-3 py-2 text-center tabular-nums text-neutral-500">
+                  <td className="px-3 py-2 text-center tabular-nums text-on-surface-variant">
                     {row.rede > 0 ? pct(row.rede, row.total) : '—'}
                   </td>
                 </tr>
               ))}
               {rankingRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-on-surface-variant">
                     Sem cancelamentos no período/recorte.
                   </td>
                 </tr>
@@ -709,13 +709,13 @@ export function CancellationsPanel({ riskRanking }: CancellationsPanelProps = {}
         </div>
       </div>
 
-      <p className="flex items-start gap-1.5 px-1 text-[11px] leading-relaxed text-neutral-500">
+      <p className="flex items-start gap-1.5 px-1 text-[11px] leading-relaxed text-on-surface-variant">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" aria-hidden />
         <span>
-          <span className="font-semibold text-neutral-600">"Rede/Qualidade"</span> = insatisfação com
+          <span className="font-semibold text-on-surface-variant">"Rede/Qualidade"</span> = insatisfação com
           o serviço + migração para a concorrência — o único churn que a rede/manutenção influencia, e
           por isso o foco do planejamento. Motivos como financeiro, mudança de endereço e pré-instalação{' '}
-          <span className="font-semibold text-neutral-600">não são acionáveis pela rede</span> e servem
+          <span className="font-semibold text-on-surface-variant">não são acionáveis pela rede</span> e servem
           só de contexto. A taxa por 100 ativos normaliza o tamanho da base, permitindo comparar áreas
           diferentes de forma justa.
         </span>
@@ -744,35 +744,35 @@ function TipoLocalCard({
   return (
     <div
       className={`rounded-2xl border p-4 ${
-        highlight ? 'border-rose-300 bg-rose-50/60' : 'border-neutral-200/80 bg-white'
+        highlight ? 'border-rose-300 bg-rose-50/60 dark:bg-rose-950/40' : 'border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest'
       }`}
     >
       <div className="flex items-center gap-2">
         <span
           className={`inline-flex size-8 items-center justify-center rounded-lg ${
-            highlight ? 'bg-rose-100 text-rose-600' : 'bg-neutral-100 text-neutral-500'
+            highlight ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-300' : 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant'
           }`}
         >
           {icon}
         </span>
-        <p className="text-sm font-semibold text-neutral-800">{label}</p>
+        <p className="text-sm font-semibold text-on-surface">{label}</p>
       </div>
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
-          <p className="text-2xl font-bold tabular-nums text-rose-700">
+          <p className="text-2xl font-bold tabular-nums text-rose-700 dark:text-rose-200">
             {rede.toLocaleString('pt-BR')}
           </p>
-          <p className="text-[11px] text-neutral-500">
+          <p className="text-[11px] text-on-surface-variant">
             cancelam. de rede · {pct(rede, total)} do churn desta base
           </p>
         </div>
         <div className="text-right">
-          <p className="text-lg font-bold tabular-nums text-neutral-900">{fmtRate(rate)}</p>
-          <p className="text-[10px] text-neutral-400">por 100 ativos</p>
+          <p className="text-lg font-bold tabular-nums text-on-surface">{fmtRate(rate)}</p>
+          <p className="text-[10px] text-on-surface-variant/60">por 100 ativos</p>
         </div>
       </div>
       {activeBase != null && activeBase > 0 ? (
-        <p className="mt-1 text-[10px] text-neutral-400">
+        <p className="mt-1 text-[10px] text-on-surface-variant/60">
           base ativa: {activeBase.toLocaleString('pt-BR')} clientes
         </p>
       ) : null}
@@ -795,12 +795,12 @@ function SubmotiveBar({
   return (
     <div className="mb-2 last:mb-0">
       <div className="flex items-center justify-between text-[11px]">
-        <span className="text-neutral-600">{label}</span>
-        <span className="font-semibold tabular-nums text-neutral-800">
+        <span className="text-on-surface-variant">{label}</span>
+        <span className="font-semibold tabular-nums text-on-surface">
           {value.toLocaleString('pt-BR')} ({width}%)
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div className={`h-full ${color}`} style={{ width: `${width}%` }} />
       </div>
     </div>

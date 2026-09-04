@@ -3,11 +3,11 @@ import type { SplitterOperationalScore } from '@/features/splitters/model/splitt
 export function scoreToneClassName(tone: SplitterOperationalScore['tone']): string {
   switch (tone) {
     case 'critical':
-      return 'border-rose-200 bg-rose-50 text-rose-700'
+      return 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200'
     case 'attention':
-      return 'border-amber-200 bg-amber-50 text-amber-700'
+      return 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-200'
     default:
-      return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      return 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200'
   }
 }
 

@@ -36,13 +36,13 @@ function StatusBanner(props: {
 }) {
   const styles = {
     neutral:
-      'border-neutral-200 bg-neutral-50/90 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-100',
+      'border-neutral-200 dark:border-white/10 bg-surface-container-low/90 text-on-surface dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-100',
     amber:
-      'border-amber-200 bg-amber-50/90 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
-    red: 'border-red-200 bg-red-50/90 text-red-950 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-100',
+      'border-amber-200 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
+    red: 'border-red-200 dark:border-red-800/50 bg-red-50/90 dark:bg-red-950/40 text-red-950 dark:text-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-100',
     green:
-      'border-emerald-200 bg-emerald-50/90 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100',
-    blue: 'border-sky-200 bg-sky-50/90 text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100',
+      'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-100',
+    blue: 'border-sky-200 dark:border-sky-800/50 bg-sky-50/90 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 dark:border-sky-900/50 dark:bg-sky-950/25 dark:text-sky-100',
   }[props.variant]
 
   return (
@@ -106,7 +106,7 @@ export function MassivaOpenReadinessPanel({
       {readiness.status === 'no-permission' ? (
         <StatusBanner variant="red" title="Sem permissão para abrir massiva">
           <p className="text-xs opacity-90">
-            Paridade <code className="rounded bg-red-100/80 px-1 dark:bg-red-900/40">canOpenMassiva</code>{' '}
+            Paridade <code className="rounded bg-red-100/80 dark:bg-red-950/50 px-1 dark:bg-red-900/40">canOpenMassiva</code>{' '}
             no Flutter. O operador não pode disparar abertura.
           </p>
         </StatusBanner>
@@ -135,9 +135,9 @@ export function MassivaOpenReadinessPanel({
       {readiness.status === 'missing-gateway-config' ? (
         <StatusBanner variant="amber" title="Configuração de abertura ausente">
           <p className="text-xs opacity-90">
-            Defina <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/40">VITE_MASSIVA_OPEN_PATH</code>{' '}
+            Defina <code className="rounded bg-amber-100/80 dark:bg-amber-950/50 px-1 dark:bg-amber-900/40">VITE_MASSIVA_OPEN_PATH</code>{' '}
             no ambiente (path do POST no BFF, paridade{' '}
-            <code className="rounded bg-amber-100/80 px-1 dark:bg-amber-900/40">MASSIVA_API_GATEWAY_ENDPOINT</code>{' '}
+            <code className="rounded bg-amber-100/80 dark:bg-amber-950/50 px-1 dark:bg-amber-900/40">MASSIVA_API_GATEWAY_ENDPOINT</code>{' '}
             no Flutter).
           </p>
         </StatusBanner>

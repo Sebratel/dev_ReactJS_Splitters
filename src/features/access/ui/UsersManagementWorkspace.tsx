@@ -122,19 +122,19 @@ function SortHeaderButton({
       type="button"
       onClick={() => onSort(column)}
       className={cn(
-        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left font-bold tracking-wider transition hover:bg-neutral-200/60 hover:text-neutral-800',
+        '-mx-1 inline-flex max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left font-bold tracking-wider transition hover:bg-neutral-200/60 dark:hover:bg-white/10 hover:text-on-surface',
         className,
       )}
     >
       <span className="min-w-0">{label}</span>
       {active ? (
         dir === 'asc' ? (
-          <ArrowUp className="size-3.5 shrink-0 text-amber-700" aria-hidden />
+          <ArrowUp className="size-3.5 shrink-0 text-amber-700 dark:text-amber-200" aria-hidden />
         ) : (
-          <ArrowDown className="size-3.5 shrink-0 text-amber-700" aria-hidden />
+          <ArrowDown className="size-3.5 shrink-0 text-amber-700 dark:text-amber-200" aria-hidden />
         )
       ) : (
-        <ChevronsUpDown className="size-3.5 shrink-0 text-neutral-400 opacity-70" aria-hidden />
+        <ChevronsUpDown className="size-3.5 shrink-0 text-on-surface-variant/60 opacity-70" aria-hidden />
       )}
     </button>
   )
@@ -148,7 +148,7 @@ function LoginDot({ recency }: { recency: ReturnType<typeof loginRecency> }) {
         ? 'bg-amber-500'
         : recency === 'antigo'
           ? 'bg-rose-500'
-          : 'bg-neutral-300'
+          : 'bg-neutral-300 dark:bg-white/15'
   return <span className={cn('inline-block size-2 shrink-0 rounded-full', cls)} aria-hidden />
 }
 
@@ -284,10 +284,10 @@ function StatCard({
   const animated = useAnimatedNumber(value, { enabled: !loading })
   const bg =
     tint === 'emerald'
-      ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/70'
+      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-200/70 dark:ring-emerald-800/50'
       : tint === 'violet'
-        ? 'bg-violet-50 text-violet-900 ring-1 ring-violet-200/70'
-        : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200/70'
+        ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-900 dark:text-violet-200 ring-1 ring-violet-200/70 dark:ring-violet-800/50'
+        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 ring-1 ring-amber-200/70 dark:ring-amber-800/50'
 
   const sparkStroke =
     tint === 'emerald'
@@ -297,21 +297,21 @@ function StatCard({
         : 'stroke-amber-400/90'
 
   const trendTone = trendLabel?.includes('da base')
-    ? 'bg-neutral-100 text-neutral-700 ring-neutral-200/80'
+    ? 'bg-neutral-100 dark:bg-white/5 text-on-surface-variant ring-neutral-200/80 dark:ring-white/10'
     : trendLabel?.trim().startsWith('-')
-      ? 'bg-rose-50 text-rose-700 ring-rose-200/70'
-      : 'bg-emerald-50 text-emerald-700 ring-emerald-200/70'
+      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-200 ring-rose-200/70 dark:ring-rose-800/50'
+      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200 ring-emerald-200/70 dark:ring-emerald-800/50'
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-sm transition will-change-transform motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm transition will-change-transform motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md">
       <div className="pointer-events-none absolute inset-0 opacity-0 transition group-hover:opacity-100">
-        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/80 via-white to-white" />
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/80 dark:from-white/5 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest" />
       </div>
 
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-1">
-            <p className="text-[11px] font-extrabold uppercase tracking-wide text-neutral-500">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-on-surface-variant">
               {label}
             </p>
             <div className="flex min-h-[20px] items-center">
@@ -337,18 +337,18 @@ function StatCard({
 
           <div className="mt-2 flex items-baseline gap-2">
             {loading ? (
-              <div className="h-9 w-24 animate-pulse rounded-lg bg-neutral-100" />
+              <div className="h-9 w-24 animate-pulse rounded-lg bg-neutral-100 dark:bg-white/5" />
             ) : (
-              <p className="text-[34px] font-black leading-none tracking-tight text-neutral-900">
+              <p className="text-[34px] font-black leading-none tracking-tight text-on-surface">
                 {NUMBER_FMT.format(animated)}
               </p>
             )}
           </div>
 
           {sublabel ? (
-            <p className="mt-1 text-xs font-semibold text-neutral-600">{sublabel}</p>
+            <p className="mt-1 text-xs font-semibold text-on-surface-variant">{sublabel}</p>
           ) : (
-            <p className="mt-1 text-xs text-neutral-400">&nbsp;</p>
+            <p className="mt-1 text-xs text-on-surface-variant/60">&nbsp;</p>
           )}
         </div>
 
@@ -363,7 +363,7 @@ function StatCard({
             {icon}
           </div>
 
-          <div className="rounded-lg bg-neutral-50/60 px-2 py-1 ring-1 ring-neutral-200/60">
+          <div className="rounded-lg bg-surface-container-low/60 px-2 py-1 ring-1 ring-neutral-200/60 dark:ring-white/10">
             {!loading && spark && spark.length >= 2 ? (
               <Sparkline values={spark} strokeClassName={sparkStroke} />
             ) : (
@@ -443,16 +443,16 @@ function placeMenuNearAnchor(
 
 function UsersTableSkeleton() {
   return (
-    <div className="divide-y divide-neutral-100">
+    <div className="divide-y divide-neutral-100 dark:divide-white/8">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-4">
-          <div className="size-10 rounded-full bg-neutral-200" />
+          <div className="size-10 rounded-full bg-neutral-200 dark:bg-white/10" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-4 w-40 rounded bg-neutral-200" />
-            <div className="h-3 w-56 rounded bg-neutral-100" />
+            <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-white/10" />
+            <div className="h-3 w-56 rounded bg-neutral-100 dark:bg-white/5" />
           </div>
-          <div className="hidden h-8 w-24 rounded-lg bg-neutral-100 md:block" />
-          <div className="hidden h-8 w-20 rounded-lg bg-neutral-100 lg:block" />
+          <div className="hidden h-8 w-24 rounded-lg bg-neutral-100 dark:bg-white/5 md:block" />
+          <div className="hidden h-8 w-20 rounded-lg bg-neutral-100 dark:bg-white/5 lg:block" />
         </div>
       ))}
     </div>
@@ -813,7 +813,7 @@ export function UsersManagementWorkspace({
     <div className="space-y-4 pb-20">
       {toast ? (
         <div
-          className="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-2 text-sm text-amber-950 shadow-sm"
+          className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-sm text-amber-950 dark:text-amber-100 shadow-sm"
           role="status"
         >
           {toast}
@@ -874,11 +874,11 @@ export function UsersManagementWorkspace({
       ) : null}
 
       {/* Toolbar */}
-      <div className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0 flex-1 max-w-xl">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant/60"
               aria-hidden
             />
             <input
@@ -886,30 +886,30 @@ export function UsersManagementWorkspace({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome ou e-mail…"
-              className="w-full rounded-xl border border-neutral-200 bg-neutral-50/50 py-2.5 pl-10 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-low/50 py-2.5 pl-10 pr-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-amber-400 focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-amber-500/20"
               autoComplete="off"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-600">
+            <label className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-xs font-semibold text-on-surface-variant">
               <SlidersHorizontal className="size-3.5" aria-hidden />
               Status
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                className="bg-transparent text-xs font-bold text-neutral-900 outline-none"
+                className="bg-transparent text-xs font-bold text-on-surface outline-none"
               >
                 <option value="all">Todos</option>
                 <option value="active">Ativos</option>
                 <option value="inactive">Inativos</option>
               </select>
             </label>
-            <label className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-600">
+            <label className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-xs font-semibold text-on-surface-variant">
               Papel
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-                className="max-w-[10rem] bg-transparent text-xs font-bold text-neutral-900 outline-none sm:max-w-none"
+                className="max-w-[10rem] bg-transparent text-xs font-bold text-on-surface outline-none sm:max-w-none"
               >
                 <option value="all">Todos</option>
                 {SPLITTERS_PRESET_ROLE_IDS.map((id) => (
@@ -933,26 +933,26 @@ export function UsersManagementWorkspace({
         </div>
 
         {/* Pagination */}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-on-surface-variant">
           <span className="font-semibold">{paginationLabel}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-surface-container-lowest px-2.5 py-1.5 font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10 hover:bg-surface-container-low disabled:opacity-50"
             >
               <ChevronLeft className="size-4" aria-hidden />
               Anterior
             </button>
-            <span className="min-w-[5.5rem] text-center font-bold text-neutral-800">
+            <span className="min-w-[5.5rem] text-center font-bold text-on-surface">
               {page} / {totalPages}
             </span>
             <button
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-surface-container-lowest px-2.5 py-1.5 font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10 hover:bg-surface-container-low disabled:opacity-50"
             >
               Próxima
               <ChevronRight className="size-4" aria-hidden />
@@ -961,15 +961,15 @@ export function UsersManagementWorkspace({
         </div>
 
         {selected.size > 0 ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5">
-            <span className="text-xs font-bold text-neutral-800">
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2.5">
+            <span className="text-xs font-bold text-on-surface">
               {selected.size} selecionado{selected.size === 1 ? '' : 's'}
             </span>
             <button
               type="button"
               disabled={pending}
               onClick={() => bulkSetActive(true)}
-              className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded-lg bg-surface-container-lowest px-2.5 py-1.5 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10 hover:bg-surface-container-low disabled:opacity-50"
             >
               Ativar
             </button>
@@ -977,17 +977,17 @@ export function UsersManagementWorkspace({
               type="button"
               disabled={pending}
               onClick={() => bulkSetActive(false)}
-              className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200/80 hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded-lg bg-surface-container-lowest px-2.5 py-1.5 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10 hover:bg-surface-container-low disabled:opacity-50"
             >
               Desativar
             </button>
-            <span className="text-neutral-300">|</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Aplicar papel</span>
+            <span className="text-on-surface-variant/60">|</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">Aplicar papel</span>
             <button
               type="button"
               disabled={pending}
               onClick={() => bulkApplyRole('leitura')}
-              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-lowest/80"
             >
               Leitura
             </button>
@@ -995,7 +995,7 @@ export function UsersManagementWorkspace({
               type="button"
               disabled={pending}
               onClick={() => bulkApplyRole('operador')}
-              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-lowest/80"
             >
               {SPLITTERS_ROLE_LABEL.operador}
             </button>
@@ -1003,7 +1003,7 @@ export function UsersManagementWorkspace({
               type="button"
               disabled={pending}
               onClick={() => bulkApplyRole('operador_massivas')}
-              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-lowest/80"
             >
               Operador (massivas)
             </button>
@@ -1011,14 +1011,14 @@ export function UsersManagementWorkspace({
               type="button"
               disabled={pending}
               onClick={() => bulkApplyRole('admin')}
-              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-white/80"
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-lowest/80"
             >
               Admin
             </button>
             <button
               type="button"
               onClick={clearSelection}
-              className="ml-auto text-xs font-semibold text-neutral-600 underline"
+              className="ml-auto text-xs font-semibold text-on-surface-variant underline"
             >
               Limpar seleção
             </button>
@@ -1032,16 +1032,16 @@ export function UsersManagementWorkspace({
           Array.from({ length: 5 }).map((_, i) => (
             <div
               key={`m-sk-${i}`}
-              className="animate-pulse rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm"
+              className="animate-pulse rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm"
             >
               <div className="flex items-center gap-3">
-                <div className="size-11 shrink-0 rounded-full bg-neutral-200" />
+                <div className="size-11 shrink-0 rounded-full bg-neutral-200 dark:bg-white/10" />
                 <div className="min-w-0 flex-1 space-y-2">
-                  <div className="h-4 w-40 rounded bg-neutral-200" />
-                  <div className="h-3 w-full max-w-xs rounded bg-neutral-100" />
+                  <div className="h-4 w-40 rounded bg-neutral-200 dark:bg-white/10" />
+                  <div className="h-3 w-full max-w-xs rounded bg-neutral-100 dark:bg-white/5" />
                 </div>
               </div>
-              <div className="mt-4 h-10 w-full rounded-xl bg-neutral-100" />
+              <div className="mt-4 h-10 w-full rounded-xl bg-neutral-100 dark:bg-white/5" />
             </div>
           ))
         ) : (
@@ -1052,20 +1052,20 @@ export function UsersManagementWorkspace({
             return (
               <article
                 key={`m-${u.uid}`}
-                className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-sm"
+                className="rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-4 shadow-sm"
               >
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
-                    className="mt-1.5 size-[18px] shrink-0 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+                    className="mt-1.5 size-[18px] shrink-0 rounded border-neutral-300 text-amber-600 dark:text-amber-300 focus:ring-amber-500"
                     checked={selected.has(u.uid)}
                     onChange={() => toggleSelect(u.uid)}
                     aria-label={`Selecionar ${u.email}`}
                   />
                   <SplittersUserAvatar user={u} size="md" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-neutral-900">{u.displayName || '—'}</p>
-                    <p className="break-all text-xs text-neutral-500">{u.email}</p>
+                    <p className="font-semibold text-on-surface">{u.displayName || '—'}</p>
+                    <p className="break-all text-xs text-on-surface-variant">{u.email}</p>
                   </div>
                   <button
                     type="button"
@@ -1080,14 +1080,14 @@ export function UsersManagementWorkspace({
                         anchor: e.currentTarget.getBoundingClientRect(),
                       })
                     }}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-xl text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-xl text-on-surface-variant hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                     aria-label={`Mais ações: ${u.email}`}
                   >
                     <MoreHorizontal className="size-5" />
                   </button>
                 </div>
 
-                <label className="mt-4 block text-[10px] font-bold uppercase tracking-wide text-neutral-500">
+                <label className="mt-4 block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
                   Papel
                   <select
                     value={role}
@@ -1104,7 +1104,7 @@ export function UsersManagementWorkspace({
                         isActive: u.isActive,
                       })
                     }}
-                    className="mt-1 w-full min-h-[44px] rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-semibold text-neutral-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60"
+                    className="mt-1 w-full min-h-[44px] rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm font-semibold text-on-surface focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60"
                   >
                     {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                       <option key={id} value={id}>
@@ -1119,13 +1119,13 @@ export function UsersManagementWorkspace({
                     className={cn(
                       'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide',
                       u.isActive
-                        ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80'
-                        : 'bg-neutral-200 text-neutral-600 ring-1 ring-neutral-300/80',
+                        ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800/50'
+                        : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                     )}
                   >
                     {u.isActive ? 'Ativo' : 'Inativo'}
                   </span>
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-600">
+                  <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
                     <LoginDot recency={rec} />
                     <span>
                       {u.lastLoginAt ? formatBrazilDateDisplay(u.lastLoginAt) : 'Sem login'}
@@ -1138,22 +1138,22 @@ export function UsersManagementWorkspace({
           })
         )}
         {!isInitialLoading && sortedRows.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/80 px-4 py-10 text-center text-sm text-neutral-500">
+          <p className="rounded-2xl border border-dashed border-neutral-200 dark:border-white/10 bg-surface-container-low/80 px-4 py-10 text-center text-sm text-on-surface-variant">
             Nenhum usuário corresponde aos filtros atuais.
           </p>
         ) : null}
       </div>
 
       {/* Tabela — desktop / tablet */}
-      <div className="hidden rounded-2xl border border-neutral-200/90 bg-white shadow-sm md:block">
+      <div className="hidden rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest shadow-sm md:block">
         <div className="overflow-x-auto pb-8">
           <table className="w-full min-w-[720px] text-left">
             <thead>
-              <tr className="border-b border-neutral-100 bg-neutral-50/90 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+              <tr className="border-b border-neutral-100 dark:border-white/5 bg-surface-container-low/90 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <th className="w-10 px-3 py-3">
                   <input
                     type="checkbox"
-                    className="size-4 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+                    className="size-4 rounded border-neutral-300 text-amber-600 dark:text-amber-300 focus:ring-amber-500"
                     checked={
                       pagedRows.length > 0 && pagedRows.every((u) => selected.has(u.uid))
                     }
@@ -1200,7 +1200,7 @@ export function UsersManagementWorkspace({
                 <th className="w-12 px-2 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100">
+            <tbody className="divide-y divide-neutral-100 dark:divide-white/8">
               {isInitialLoading ? (
                 <tr>
                   <td colSpan={6} className="p-0">
@@ -1213,11 +1213,11 @@ export function UsersManagementWorkspace({
                 const rec = loginRecency(u.lastLoginAt)
                 const isSelf = u.uid === currentUid
                 return (
-                  <tr key={u.uid} className="hover:bg-neutral-50/80">
+                  <tr key={u.uid} className="hover:bg-surface-container-low/80">
                     <td className="px-3 py-3 align-middle">
                       <input
                         type="checkbox"
-                        className="size-4 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+                        className="size-4 rounded border-neutral-300 text-amber-600 dark:text-amber-300 focus:ring-amber-500"
                         checked={selected.has(u.uid)}
                         onChange={() => toggleSelect(u.uid)}
                         aria-label={`Selecionar ${u.email}`}
@@ -1227,14 +1227,14 @@ export function UsersManagementWorkspace({
                       <div className="flex items-center gap-3">
                         <SplittersUserAvatar user={u} size="sm" />
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-neutral-900">{u.displayName || '—'}</p>
-                          <p className="truncate text-xs text-neutral-500">{u.email}</p>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-900/80 md:hidden">
+                          <p className="truncate font-semibold text-on-surface">{u.displayName || '—'}</p>
+                          <p className="truncate text-xs text-on-surface-variant">{u.email}</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-amber-900/80 dark:text-amber-200 md:hidden">
                             {SPLITTERS_ROLE_LABEL[role]}
                           </p>
                           <div className="mt-1 flex items-center gap-1.5 md:hidden">
                             <LoginDot recency={rec} />
-                            <span className="text-[10px] text-neutral-500">
+                            <span className="text-[10px] text-on-surface-variant">
                               {u.lastLoginAt ? formatBrazilDateDisplay(u.lastLoginAt) : 'Nunca'}
                             </span>
                           </div>
@@ -1244,11 +1244,11 @@ export function UsersManagementWorkspace({
                     <td className="hidden px-3 py-3 align-middle md:table-cell">
                       <div className="flex items-center gap-2">
                         <LoginDot recency={rec} />
-                        <span className="text-sm text-neutral-700">
+                        <span className="text-sm text-on-surface-variant">
                           {u.lastLoginAt ? formatBrazilDateTimeShortDisplay(u.lastLoginAt) : '—'}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[10px] text-neutral-400">
+                      <p className="mt-0.5 text-[10px] text-on-surface-variant/60">
                         {rec === 'recente'
                           ? 'Ativo recentemente'
                           : rec === 'medio'
@@ -1275,7 +1275,7 @@ export function UsersManagementWorkspace({
                             isActive: u.isActive,
                           })
                         }}
-                        className="max-w-[11rem] rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="max-w-[11rem] rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2 py-1.5 text-xs font-semibold text-on-surface focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {([...SPLITTERS_PRESET_ROLE_IDS, 'personalizado'] as const).map((id) => (
                           <option key={id} value={id}>
@@ -1290,14 +1290,14 @@ export function UsersManagementWorkspace({
                           className={cn(
                             'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
                             u.isActive
-                              ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80'
-                              : 'bg-neutral-200 text-neutral-600 ring-1 ring-neutral-300/80',
+                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-200/80 dark:ring-emerald-800/50'
+                              : 'bg-neutral-200 dark:bg-white/10 text-on-surface-variant ring-1 ring-neutral-300/80',
                           )}
                         >
                           {u.isActive ? 'Ativo' : 'Inativo'}
                         </span>
                         {u.permissions.isAdmin ? (
-                          <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 ring-1 ring-violet-200/80">
+                          <span className="inline-flex rounded-full bg-violet-100 dark:bg-violet-950/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:text-violet-200 ring-1 ring-violet-200/80 dark:ring-violet-800/50">
                             Admin
                           </span>
                         ) : null}
@@ -1317,7 +1317,7 @@ export function UsersManagementWorkspace({
                             anchor: e.currentTarget.getBoundingClientRect(),
                           })
                         }}
-                        className="rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-900"
+                        className="rounded-lg p-2 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface"
                         aria-label={`Mais ações: ${u.email}`}
                         aria-expanded={actionMenu?.user.uid === u.uid}
                       >
@@ -1331,7 +1331,7 @@ export function UsersManagementWorkspace({
           </table>
         </div>
         {sortedRows.length === 0 && !isInitialLoading ? (
-          <p className="px-4 py-12 text-center text-sm text-neutral-500">
+          <p className="px-4 py-12 text-center text-sm text-on-surface-variant">
             Nenhum usuário corresponde aos filtros atuais.
           </p>
         ) : null}
@@ -1351,7 +1351,7 @@ export function UsersManagementWorkspace({
               <div
                 ref={actionMenuPanelRef}
                 role="menu"
-                className="pointer-events-auto fixed z-[9999] max-h-[min(22rem,calc(100dvh-16px))] w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-2xl outline-none ring-1 ring-black/5"
+                className="pointer-events-auto fixed z-[9999] max-h-[min(22rem,calc(100dvh-16px))] w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest py-1 shadow-2xl outline-none ring-1 ring-black/5"
                 style={
                   actionMenu.placed
                     ? { top: actionMenu.placed.top, left: actionMenu.placed.left, visibility: 'visible' }
@@ -1365,7 +1365,7 @@ export function UsersManagementWorkspace({
               >
                 <button
                   type="button"
-                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
+                  className="flex w-full px-3 py-2 text-left text-sm text-on-surface hover:bg-surface-container-low"
                   onClick={() => openEdit(actionMenu.user)}
                 >
                   Editar permissões…
@@ -1373,7 +1373,7 @@ export function UsersManagementWorkspace({
                 <button
                   type="button"
                   disabled={pending || actionMenu.user.uid === currentUid}
-                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
+                  className="flex w-full px-3 py-2 text-left text-sm text-on-surface hover:bg-surface-container-low disabled:opacity-50"
                   onClick={() => {
                     const u = actionMenu.user
                     onSaveUser({
@@ -1388,7 +1388,7 @@ export function UsersManagementWorkspace({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50"
+                  className="flex w-full px-3 py-2 text-left text-sm text-on-surface hover:bg-surface-container-low"
                   onClick={() => {
                     setActionMenu(null)
                     setToast(
@@ -1429,19 +1429,19 @@ export function UsersManagementWorkspace({
             aria-label="Fechar"
             onClick={() => setInviteOpen(false)}
           />
-          <div className="relative max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl">
+          <div className="relative max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest p-6 shadow-2xl">
             <div className="flex items-start gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-900">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200">
                 <Plus className="size-6" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">Adicionar usuário</h2>
-                <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                <h2 className="text-lg font-semibold text-on-surface">Adicionar usuário</h2>
+                <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
                   Novos perfis são criados automaticamente no <strong>primeiro login</strong> com a conta corporativa
                   (Google). Garanta que o e-mail esteja na lista de domínios ou e-mails permitidos em{' '}
-                  <code className="rounded bg-neutral-100 px-1 text-xs">env</code>.
+                  <code className="rounded bg-neutral-100 dark:bg-white/5 px-1 text-xs">env</code>.
                 </p>
-                <p className="mt-2 text-sm text-neutral-600">
+                <p className="mt-2 text-sm text-on-surface-variant">
                   Depois do primeiro acesso, o usuário aparece nesta lista e você pode ajustar papel e permissões.
                 </p>
               </div>

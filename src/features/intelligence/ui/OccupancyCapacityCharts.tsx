@@ -63,19 +63,19 @@ export function OccupancyCapacityCharts({
 
   if (trends.length === 0) {
     return (
-      <p className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-8 text-center text-sm text-slate-500">
+      <p className="mt-4 rounded-xl border border-dashed border-slate-200 dark:border-white/10 bg-surface-container-low/80 px-3 py-8 text-center text-sm text-on-surface-variant">
         Sem splitters com tendência neste período para montar pressão e variação.
       </p>
     )
   }
 
   return (
-    <div className="mt-5 space-y-5 border-t border-slate-200/80 pt-5">
+    <div className="mt-5 space-y-5 border-t border-slate-200/80 dark:border-white/10 pt-5">
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
           Pressão na rede — média, atenção e críticos
         </h3>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-600">
+        <p className="mt-0.5 text-[11px] leading-relaxed text-on-surface-variant">
           Área e linhas usam a mesma estimação temporal do gráfico acima. Vermelho = já no limite; âmbar claro = faixa
           de atenção (70–94%) — a “onda” antes da saturação. Não repete os cards folga/atenção/crítico do topo (só
           snapshot de hoje).
@@ -141,11 +141,11 @@ export function OccupancyCapacityCharts({
       </div>
 
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-on-surface-variant">
           Variação de ocupação ({deltaReferenceLabel})
         </h3>
         <PercentagePointsCallout periodLabel={deltaReferenceLabel} className="mt-2" />
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+        <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
           Quantos equipamentos estão em cada faixa de mudança de uso (<span className="font-semibold">pp</span>) no
           período — rede parada (centro) vs subindo ou caindo (pontas). Complementa o selo “Estável” da lista ao lado.
         </p>

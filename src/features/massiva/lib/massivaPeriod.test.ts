@@ -9,6 +9,25 @@ import {
 const NOW = new Date('2026-06-15T10:00:00')
 
 describe('resolveMassivaPeriod', () => {
+  it('custom usa o intervalo De/Até informado', () => {
+    const r = resolveMassivaPeriod('custom', null, NOW, { start: '2026-06-01', end: '2026-06-05' })
+    expect(r.start.getDate()).toBe(1)
+    expect(r.end.getDate()).toBe(5)
+    expect(r.spanDays).toBe(5)
+    expect(r.label).toBe('01/jun – 05/jun')
+  })
+
+  it('custom inverte datas trocadas e não projeta além de hoje', () => {
+    const r = resolveMassivaPeriod('custom', null, NOW, { start: '2026-06-30', end: '2026-06-10' })
+    expect(r.start.getDate()).toBe(10)
+    expect(r.end.getDate()).toBe(15) // limitado a hoje (15/06)
+  })
+
+  it('custom inválido cai em 30d', () => {
+    const r = resolveMassivaPeriod('custom', null, NOW, { start: '', end: '' })
+    expect(r.spanDays).toBe(30)
+  })
+
   it('30d usa bucket diário e janela de 30 dias', () => {
     const r = resolveMassivaPeriod('30d', null, NOW)
     expect(r.bucket).toBe('day')

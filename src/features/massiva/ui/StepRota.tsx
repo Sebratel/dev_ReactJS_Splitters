@@ -30,36 +30,36 @@ type StepRotaProps = {
 }
 
 const fieldClass =
-  'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20'
+  'w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm text-on-surface shadow-sm transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/20'
 
 const SLOT_PORT_SECTION_TONES = [
   {
-    shell: 'border-sky-200/90 bg-sky-50/40',
-    header: 'border-sky-200/80 bg-sky-100/90',
+    shell: 'border-sky-200/90 dark:border-sky-800/50 bg-sky-50/40 dark:bg-sky-950/40',
+    header: 'border-sky-200/80 dark:border-sky-800/50 bg-sky-100/90 dark:bg-sky-950/50',
     accent: 'border-l-sky-500',
-    title: 'text-sky-950',
-    action: 'text-sky-800 hover:bg-sky-200/50',
+    title: 'text-sky-950 dark:text-sky-100',
+    action: 'text-sky-800 dark:text-sky-200 hover:bg-sky-200/50 dark:hover:bg-sky-950/60',
   },
   {
-    shell: 'border-violet-200/90 bg-violet-50/35',
-    header: 'border-violet-200/80 bg-violet-100/90',
+    shell: 'border-violet-200/90 dark:border-violet-800/50 bg-violet-50/35 dark:bg-violet-950/40',
+    header: 'border-violet-200/80 dark:border-violet-800/50 bg-violet-100/90 dark:bg-violet-950/50',
     accent: 'border-l-violet-500',
-    title: 'text-violet-950',
-    action: 'text-violet-800 hover:bg-violet-200/50',
+    title: 'text-violet-950 dark:text-violet-100',
+    action: 'text-violet-800 dark:text-violet-200 hover:bg-violet-200/50 dark:hover:bg-violet-950/60',
   },
   {
-    shell: 'border-amber-200/90 bg-amber-50/35',
-    header: 'border-amber-200/80 bg-amber-100/90',
+    shell: 'border-amber-200/90 dark:border-amber-800/50 bg-amber-50/35 dark:bg-amber-950/40',
+    header: 'border-amber-200/80 dark:border-amber-800/50 bg-amber-100/90 dark:bg-amber-950/50',
     accent: 'border-l-amber-500',
-    title: 'text-amber-950',
-    action: 'text-amber-900 hover:bg-amber-200/50',
+    title: 'text-amber-950 dark:text-amber-100',
+    action: 'text-amber-900 dark:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-950/60',
   },
   {
-    shell: 'border-emerald-200/90 bg-emerald-50/35',
-    header: 'border-emerald-200/80 bg-emerald-100/90',
+    shell: 'border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/35 dark:bg-emerald-950/40',
+    header: 'border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-100/90 dark:bg-emerald-950/50',
     accent: 'border-l-emerald-500',
-    title: 'text-emerald-950',
-    action: 'text-emerald-800 hover:bg-emerald-200/50',
+    title: 'text-emerald-950 dark:text-emerald-100',
+    action: 'text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200/50 dark:hover:bg-emerald-950/60',
   },
 ] as const
 
@@ -270,8 +270,8 @@ export function StepRota({
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-neutral-900">Rota</h3>
-          <p className="mt-1 text-sm text-neutral-600">
+          <h3 className="text-base font-semibold text-on-surface">Rota</h3>
+          <p className="mt-1 text-sm text-on-surface-variant">
             Defina AP, slot e PON. Na seleção múltipla, escolha as PONs de cada slot separadamente.
           </p>
         </div>
@@ -286,7 +286,7 @@ export function StepRota({
           <button
             type="button"
             onClick={onClearRoute}
-            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+            className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low"
           >
             Limpar
           </button>
@@ -322,14 +322,14 @@ export function StepRota({
           return (
             <section
               key={`rota-${index}`}
-              className="rounded-lg bg-white/80 px-4 py-4 shadow-[0_1px_4px_rgba(15,23,42,0.05)] ring-1 ring-neutral-200/70"
+              className="rounded-lg bg-surface-container-lowest/80 px-4 py-4 shadow-[0_1px_4px_rgba(15,23,42,0.05)] ring-1 ring-neutral-200/70 dark:ring-white/10"
             >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-on-surface-variant">
                     Rota {index + 1}
                   </p>
-                  <p className="mt-1 text-xs text-neutral-600">
+                  <p className="mt-1 text-xs text-on-surface-variant">
                     {connection.apId.trim() !== ''
                       ? `${apDisplayLabel(connection.apId)} (${connection.apId})`
                       : 'Rota ainda sem AP definido'}
@@ -339,7 +339,7 @@ export function StepRota({
                   type="button"
                   onClick={() => onRemoveConnection(index)}
                   disabled={connections.length <= 1}
-                  className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Remover
                 </button>
@@ -347,7 +347,7 @@ export function StepRota({
 
               <div className="grid gap-3 lg:grid-cols-2">
                 <label className="text-sm">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                     Ponto de acesso
                   </span>
                   <select
@@ -375,26 +375,26 @@ export function StepRota({
                     ))}
                   </select>
                   {isRoutesCatalogError ? (
-                    <p className="mt-1.5 text-xs text-red-600">
+                    <p className="mt-1.5 text-xs text-red-600 dark:text-red-300">
                       Não foi possível carregar o catálogo de rotas do BFF.{' '}
                       <button
                         type="button"
                         onClick={onRefetchRoutesCatalog}
-                        className="font-semibold underline decoration-red-500/60 underline-offset-2 hover:text-red-800"
+                        className="font-semibold underline decoration-red-500/60 underline-offset-2 hover:text-red-800 dark:hover:text-red-200"
                       >
                         Tentar de novo
                       </button>
                     </p>
                   ) : null}
                   {!isRoutesCatalogPending && !isRoutesCatalogError && apOptions.length === 0 ? (
-                    <p className="mt-1.5 text-xs text-amber-800">
+                    <p className="mt-1.5 text-xs text-amber-800 dark:text-amber-200">
                       Nenhum ponto de acesso no catálogo (base vazia ou filtro do servidor).
                     </p>
                   ) : null}
                 </label>
 
                 <div className="text-sm">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                     Seleção múltipla (slot e PON)
                   </span>
                   <div className="space-y-2">
@@ -415,14 +415,14 @@ export function StepRota({
                             ? pairsSummary.display
                             : 'Selecionar pares...'}
                       </span>
-                      <span className="text-xs text-neutral-500">Abrir</span>
+                      <span className="text-xs text-on-surface-variant">Abrir</span>
                     </button>
                     <button
                       type="button"
                       className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                         hasAllPairsSelected
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-100'
-                          : 'border-neutral-200 bg-white text-neutral-700 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800'
+                          ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/50'
+                          : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:text-sky-800 dark:hover:text-sky-200'
                       }`}
                       disabled={connection.apId.trim() === '' || routeOptions.length === 0}
                       onClick={() =>
@@ -457,29 +457,29 @@ export function StepRota({
           aria-modal="true"
           aria-label={`Selecionar múltiplos slots e PONs da rota ${openDropdownRouteIndex + 1}`}
         >
-          <div className="w-full max-w-2xl rounded-xl border border-neutral-200 bg-white p-4 shadow-xl">
+          <div className="w-full max-w-2xl rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest p-4 shadow-xl">
             <div className="mb-3">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-on-surface-variant">
                 Rota {openDropdownRouteIndex + 1}
               </p>
-              <h4 className="mt-1 text-base font-semibold text-neutral-900">
+              <h4 className="mt-1 text-base font-semibold text-on-surface">
                 Dropdown multi-seleção
               </h4>
-              <p className="mt-1 text-sm text-neutral-600">
+              <p className="mt-1 text-sm text-on-surface-variant">
                 Marque os slots desejados e, em seguida, escolha as PONs de cada slot.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={selectAllOpenedRoutePairs}
-                  className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900 transition hover:border-sky-300 hover:bg-sky-100"
+                  className="rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1.5 text-xs font-semibold text-sky-900 dark:text-sky-200 transition hover:border-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
                 >
                   Selecionar tudo
                 </button>
                 <button
                   type="button"
                   onClick={clearOpenedRouteSelection}
-                  className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+                  className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low"
                 >
                   Limpar seleção
                 </button>
@@ -487,9 +487,9 @@ export function StepRota({
             </div>
 
             <div className="grid min-h-[18rem] gap-3 sm:grid-cols-[minmax(0,11rem)_1fr]">
-              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50/60">
-                <div className="border-b border-neutral-200/80 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Slots</p>
+              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-low/60">
+                <div className="border-b border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Slots</p>
                 </div>
                 <div className="max-h-80 flex-1 space-y-0.5 overflow-y-auto p-2">
                   {slotOptions.length > 0 ? (
@@ -500,8 +500,8 @@ export function StepRota({
                           key={slot}
                           className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${
                             checked
-                              ? 'bg-sky-50 text-sky-950 ring-1 ring-sky-200/80'
-                              : 'bg-white hover:bg-neutral-50'
+                              ? 'bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 ring-1 ring-sky-200/80 dark:ring-sky-800/50'
+                              : 'bg-surface-container-lowest hover:bg-surface-container-low'
                           }`}
                         >
                           <input
@@ -514,14 +514,14 @@ export function StepRota({
                       )
                     })
                   ) : (
-                    <p className="px-2 py-3 text-sm text-neutral-500">Nenhum slot disponível.</p>
+                    <p className="px-2 py-3 text-sm text-on-surface-variant">Nenhum slot disponível.</p>
                   )}
                 </div>
               </div>
 
-              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50/60">
-                <div className="flex items-center justify-between gap-2 border-b border-neutral-200/80 bg-white px-3 py-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              <div className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-low/60">
+                <div className="flex items-center justify-between gap-2 border-b border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                     PONs por slot
                   </p>
                   {selectedSlotValues.length > 0 ? (
@@ -534,7 +534,7 @@ export function StepRota({
                           selectAllPortsForSelectedSlots()
                         }
                       }}
-                      className="shrink-0 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-900 transition hover:border-sky-300 hover:bg-sky-100"
+                      className="shrink-0 rounded-md border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-900 dark:text-sky-200 transition hover:border-sky-300 hover:bg-sky-100 dark:hover:bg-sky-950/50"
                     >
                       {allPortsSelectedForSelectedSlots
                         ? 'Limpar PONs'
@@ -577,14 +577,14 @@ export function StepRota({
                               ) : null}
                             </div>
                             {ports.length > 0 ? (
-                              <div className="grid grid-cols-2 gap-1.5 bg-white/70 p-2.5 sm:grid-cols-3">
+                              <div className="grid grid-cols-2 gap-1.5 bg-surface-container-lowest/70 p-2.5 sm:grid-cols-3">
                                 {ports.map((port) => (
                                   <label
                                     key={`${slot}-${port}`}
                                     className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition ${
                                       selectedPortsForSlot[port] === true
-                                        ? 'border-sky-300 bg-sky-50 text-sky-950 shadow-sm'
-                                        : 'border-neutral-200/70 bg-white hover:border-neutral-300 hover:bg-neutral-50'
+                                        ? 'border-sky-300 bg-sky-50 dark:bg-sky-950/40 text-sky-950 dark:text-sky-100 shadow-sm'
+                                        : 'border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest hover:border-neutral-300 hover:bg-surface-container-low'
                                     }`}
                                   >
                                     <input
@@ -599,7 +599,7 @@ export function StepRota({
                                 ))}
                               </div>
                             ) : (
-                              <p className="bg-white/70 px-3 py-2 text-xs text-neutral-500">
+                              <p className="bg-surface-container-lowest/70 px-3 py-2 text-xs text-on-surface-variant">
                                 Sem PONs neste slot.
                               </p>
                             )}
@@ -609,8 +609,8 @@ export function StepRota({
                     </div>
                   ) : (
                     <div className="flex h-full min-h-[10rem] flex-col items-center justify-center px-4 text-center">
-                      <p className="text-sm font-medium text-neutral-700">Nenhum slot selecionado</p>
-                      <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                      <p className="text-sm font-medium text-on-surface-variant">Nenhum slot selecionado</p>
+                      <p className="mt-1 max-w-xs text-xs text-on-surface-variant">
                         Marque um ou mais slots à esquerda para escolher as PONs de cada um.
                       </p>
                     </div>
@@ -618,7 +618,7 @@ export function StepRota({
                 </div>
               </div>
             </div>
-            <p className="mt-3 text-xs text-neutral-600">
+            <p className="mt-3 text-xs text-on-surface-variant">
               {selectedPairsCount > 0
                 ? `${selectedPairsCount} combinação(ões) válida(s) selecionada(s).`
                 : selectedSlotValues.length > 0
@@ -630,7 +630,7 @@ export function StepRota({
               <button
                 type="button"
                 onClick={closeDropdown}
-                className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+                className="rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low"
               >
                 Cancelar
               </button>

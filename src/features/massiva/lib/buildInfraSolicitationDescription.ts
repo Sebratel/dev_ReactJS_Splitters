@@ -76,9 +76,13 @@ export function buildInfraSolicitationDescription(input: BuildInfraDescriptionIn
   }
 
   // Tipos de CTO (cto_lo, cto_sinal_alto, cto_avariada)
+  const signalTrimmed = input.signalDbm?.trim()
+  const isMultiCtoSignal = signalTrimmed != null && signalTrimmed.includes('\n')
+  // Valor único (1 CTO ou digitado) vai inline em cada linha de CTO; multi-CTO vira bloco.
   const signalExtra =
-    type === 'cto_sinal_alto' && input.signalDbm?.trim()
-      ? `📶 ${input.signalDbm.trim()} dBm`
+    type === 'cto_sinal_alto' && signalTrimmed && !isMultiCtoSignal
+      ? // Não duplica a unidade quando o valor já traz "dBm".
+        `📶 ${signalTrimmed}${/dbm/i.test(signalTrimmed) ? '' : ' dBm'}`
       : undefined
 
   routes.forEach((route, index) => {
@@ -91,6 +95,15 @@ export function buildInfraSolicitationDescription(input: BuildInfraDescriptionIn
       lines.push(`   🔨 Avaria: ${input.avaria.trim()}`)
     }
   })
+
+  if (type === 'cto_sinal_alto' && isMultiCtoSignal && signalTrimmed) {
+    lines.push(SEP_MINOR)
+    lines.push('📶 Sinal aferido por CTO:')
+    for (const line of signalTrimmed.split('\n')) {
+      const t = line.trim()
+      if (t !== '') lines.push(`   • ${t}`)
+    }
+  }
 
   lines.push(SEP_MINOR)
   lines.push(`📊 Total: ${routes.length} CTO(s) · ${totalAffected} clientes afetados`)

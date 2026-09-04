@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Dark mode via classe `.dark` no <html> (ativada em src/shared/lib/theme.ts).
+   Os utilitários (bg-surface, text-on-surface…) já referenciam as CSS vars do
+   @theme, então basta redefini-las sob `.dark` (bloco no fim deste arquivo). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Ken Burns — zoom/pan lento na imagem de fundo do login (spec Sebratel). */
 @keyframes ken-burns {
   0% {
@@ -177,6 +182,27 @@
   --animate-login-mesh-pulse: login-mesh-pulse 10s ease-in-out infinite;
   --animate-login-hero-crawl: login-hero-crawl 14s ease-in-out infinite;
   --animate-login-hero-shimmer: login-hero-shimmer 22s ease-in-out infinite;
+}
+
+/* Tema escuro — redefine só os tokens do @theme. Âmbar continua a marca;
+   superfícies preto-quente (viés amarronzado), texto off-white quente.
+   Fonte: design system Sebratel (skill padroes-frontend → "Tema escuro"). */
+.dark {
+  --color-primary: #ffb000;
+  --color-primary-container: #ffc107;
+  --color-secondary: #ff9e2c;
+  --color-tertiary: #d4694f;
+
+  /* Superfícies em cinza-quente (não preto). Passos de elevação visíveis:
+     página < container < cards, para os cartões destacarem do fundo. */
+  --color-surface: #1b1814;              /* fundo da página (mais escuro = cards saltam) */
+  --color-surface-container-low: #2b2620; /* containers/empty/hover */
+  --color-surface-container-lowest: #38322b; /* cards/painéis (mais claro) */
+
+  --color-on-surface: #f5f1e9;           /* texto principal (off-white quente) */
+  --color-on-surface-variant: #c3bbad;   /* texto secundário — mais claro p/ legibilidade */
+  --color-outline-variant: rgba(255, 255, 255, 0.14); /* bordas mais visíveis */
+  --color-inverse-surface: #f5f1e9;
 }
 
 @layer base {

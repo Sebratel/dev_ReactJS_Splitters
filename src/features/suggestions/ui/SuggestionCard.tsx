@@ -50,32 +50,32 @@ function statusMeta(status: PlatformSuggestionStatus): {
     case 'planned':
       return {
         label: 'Aprovada',
-        className: 'border-sky-200 bg-sky-50 text-sky-800',
-        accentClassName: 'from-sky-100/90 via-white to-white',
+        className: 'border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200',
+        accentClassName: 'from-sky-100/90 dark:from-sky-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'in_progress':
       return {
         label: 'Em desenvolvimento',
-        className: 'border-violet-200 bg-violet-50 text-violet-800',
-        accentClassName: 'from-violet-100/90 via-white to-white',
+        className: 'border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200',
+        accentClassName: 'from-violet-100/90 dark:from-violet-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'done':
       return {
         label: 'Concluída',
-        className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-        accentClassName: 'from-emerald-100/90 via-white to-white',
+        className: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200',
+        accentClassName: 'from-emerald-100/90 dark:from-emerald-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     case 'rejected':
       return {
         label: 'Não será implementada',
-        className: 'border-rose-200 bg-rose-50 text-rose-800',
-        accentClassName: 'from-rose-100/90 via-white to-white',
+        className: 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200',
+        accentClassName: 'from-rose-100/90 dark:from-rose-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
     default:
       return {
         label: 'Em análise',
-        className: 'border-amber-200 bg-amber-50 text-amber-900',
-        accentClassName: 'from-amber-100/90 via-white to-white',
+        className: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200',
+        accentClassName: 'from-amber-100/90 dark:from-amber-950/25 via-white dark:via-surface-container-lowest to-white dark:to-surface-container-lowest',
       }
   }
 }
@@ -113,7 +113,7 @@ export function SuggestionCard({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       whileHover={reduceMotion ? undefined : { y: -2 }}
       className={cn(
-        'overflow-hidden rounded-[28px] border border-amber-200/60 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 transition sm:p-5',
+        'overflow-hidden rounded-[28px] border border-amber-200/60 dark:border-amber-800/50 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 transition sm:p-5',
         meta.accentClassName,
       )}
     >
@@ -128,26 +128,26 @@ export function SuggestionCard({
             >
               {meta.label}
             </span>
-            <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-neutral-600">
+            <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/80 px-2.5 py-1 text-[11px] font-medium text-on-surface-variant">
               {suggestion.sector}
             </span>
             {suggestion.category ? (
-              <span className="inline-flex items-center rounded-full border border-neutral-200 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-neutral-600">
+              <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/80 px-2.5 py-1 text-[11px] font-medium text-on-surface-variant">
                 {suggestion.category}
               </span>
             ) : null}
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold tracking-tight text-neutral-950">
+            <h2 className="text-xl font-semibold tracking-tight text-on-surface">
               {suggestion.title}
             </h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
               {suggestion.description}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 text-xs text-neutral-500">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
             <SuggestionUserAvatar
               user={{
                 uid: suggestion.authorUid,
@@ -159,7 +159,7 @@ export function SuggestionCard({
             />
             <span>
               Enviado por{' '}
-              <span className="font-semibold text-neutral-700">
+              <span className="font-semibold text-on-surface-variant">
                 {suggestion.authorName || suggestion.authorEmail}
               </span>{' '}
               em {formatSuggestionTimestamp(suggestion.createdAt)}
@@ -177,13 +177,13 @@ export function SuggestionCard({
                 />
               ))}
               {suggestion.likesCount > 0 ? (
-                <span className="ml-2 text-xs text-neutral-600">
+                <span className="ml-2 text-xs text-on-surface-variant">
                   {suggestion.likesCount === 1
                     ? '1 pessoa apoiou'
                     : `${suggestion.likesCount} pessoas apoiaram`}
                 </span>
               ) : (
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-on-surface-variant">
                   {readOnly ? 'Nenhum apoio registrado' : 'Seja a primeira pessoa a apoiar'}
                 </span>
               )}
@@ -192,7 +192,7 @@ export function SuggestionCard({
             <button
               type="button"
               onClick={() => setCommentsOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white/85 px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:border-amber-300 hover:bg-amber-50"
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-lowest/85 px-3 py-1.5 text-xs font-medium text-on-surface-variant transition hover:border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
             >
               <MessageCircle className="size-3.5" aria-hidden />
               {suggestion.commentsCount}{' '}
@@ -208,19 +208,19 @@ export function SuggestionCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 rounded-3xl border border-neutral-200/80 bg-white/85 p-2.5 shadow-sm lg:w-[15rem]">
-          <div className="rounded-2xl bg-neutral-50 px-3 py-2 text-center">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+        <div className="flex shrink-0 flex-col gap-2 rounded-3xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest/85 p-2.5 shadow-sm lg:w-[15rem]">
+          <div className="rounded-2xl bg-surface-container-low px-3 py-2 text-center">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-on-surface-variant">
               Score
             </p>
             <p
               className={cn(
                 'text-2xl font-semibold',
                 suggestion.score > 0
-                  ? 'text-emerald-700'
+                  ? 'text-emerald-700 dark:text-emerald-200'
                   : suggestion.score < 0
-                    ? 'text-rose-700'
-                    : 'text-neutral-800',
+                    ? 'text-rose-700 dark:text-rose-200'
+                    : 'text-on-surface',
               )}
             >
               {suggestion.score > 0 ? `+${suggestion.score}` : suggestion.score}
@@ -229,7 +229,7 @@ export function SuggestionCard({
 
           {isAdmin && !readOnly ? (
             <label className="space-y-1">
-              <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+              <span className="px-1 text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                 Status
               </span>
               <select
@@ -238,7 +238,7 @@ export function SuggestionCard({
                 onChange={(event) =>
                   onStatusChange(suggestion.id, event.target.value as PlatformSuggestionStatus)
                 }
-                className="min-h-[42px] w-full rounded-2xl border border-neutral-200 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 disabled:cursor-not-allowed disabled:opacity-70"
+                className="min-h-[42px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -260,8 +260,8 @@ export function SuggestionCard({
             className={cn(
               'inline-flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
               suggestion.viewerVote === 'like'
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                : 'border-neutral-200 bg-white text-neutral-700 hover:border-emerald-200 hover:bg-emerald-50/60',
+                ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200'
+                : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-emerald-200 dark:hover:border-emerald-800/50 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/40',
             )}
           >
             <span className="inline-flex items-center gap-2">
@@ -284,8 +284,8 @@ export function SuggestionCard({
             className={cn(
               'inline-flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60',
               suggestion.viewerVote === 'dislike'
-                ? 'border-rose-300 bg-rose-50 text-rose-800'
-                : 'border-neutral-200 bg-white text-neutral-700 hover:border-rose-200 hover:bg-rose-50/60',
+                ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
+                : 'border-neutral-200 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant hover:border-rose-200 dark:hover:border-rose-800/50 hover:bg-rose-50/60 dark:hover:bg-rose-950/40',
             )}
           >
             <span className="inline-flex items-center gap-2">
@@ -300,12 +300,12 @@ export function SuggestionCard({
           </button>
           </>
           ) : (
-            <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-center text-xs text-neutral-600">
+            <div className="space-y-2 rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-low px-3 py-2 text-center text-xs text-on-surface-variant">
               <p>
-                <span className="font-semibold text-emerald-700">{suggestion.likesCount}</span> apoios
+                <span className="font-semibold text-emerald-700 dark:text-emerald-200">{suggestion.likesCount}</span> apoios
               </p>
               <p>
-                <span className="font-semibold text-rose-700">{suggestion.dislikesCount}</span> não apoios
+                <span className="font-semibold text-rose-700 dark:text-rose-200">{suggestion.dislikesCount}</span> não apoios
               </p>
             </div>
           )}
@@ -325,7 +325,7 @@ export function SuggestionCard({
             <div className="space-y-3">
               <div className="space-y-2">
                 {suggestion.comments.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-neutral-300 bg-white/80 px-4 py-3 text-sm text-neutral-500">
+                  <div className="rounded-2xl border border-dashed border-neutral-300 bg-surface-container-lowest/80 px-4 py-3 text-sm text-on-surface-variant">
                     {readOnly
                       ? 'Ainda não há comentários nesta sugestão.'
                       : 'Ainda não há comentários. Seja a primeira pessoa a interagir.'}
@@ -336,20 +336,20 @@ export function SuggestionCard({
                       key={comment.id}
                       initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="rounded-2xl border border-neutral-200/80 bg-white/90 px-4 py-3 shadow-sm"
+                      className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest/90 px-4 py-3 shadow-sm"
                     >
                       <div className="flex items-start gap-3">
                         <SuggestionUserAvatar user={comment.author} size="xs" />
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-semibold text-neutral-800">
+                            <span className="text-sm font-semibold text-on-surface">
                               {comment.author.name || comment.author.email}
                             </span>
-                            <span className="text-xs text-neutral-400">
+                            <span className="text-xs text-on-surface-variant/60">
                               {formatSuggestionTimestamp(comment.createdAt)}
                             </span>
                           </div>
-                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-neutral-600">
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
                             {comment.message}
                           </p>
                         </div>
@@ -380,10 +380,10 @@ export function SuggestionCard({
                   rows={3}
                   maxLength={4000}
                   placeholder="Compartilhe contexto, complemente a ideia ou diga como isso impacta seu setor."
-                  className="min-h-[110px] w-full rounded-2xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70"
+                  className="min-h-[110px] w-full rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-3 text-sm text-on-surface outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200/70 dark:focus:ring-amber-800/50"
                 />
                 {commentError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-sm text-rose-800 dark:text-rose-200">
                     {commentError}
                   </div>
                 ) : null}
@@ -391,7 +391,7 @@ export function SuggestionCard({
                   <button
                     type="submit"
                     disabled={commentBusy}
-                    className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-neutral-950 shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="inline-flex min-h-[42px] items-center gap-2 rounded-2xl bg-amber-400 px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {commentBusy ? (
                       <Loader2 className="size-4 animate-spin" aria-hidden />

@@ -2000,6 +2000,234 @@ app.post('/api/massiva/history/verify-affected-clients', async (req, res) => {
   }
 });
 
+// Lista por cliente do sinal dos afetados de uma massiva encerrada (sob demanda).
+// Cruza a lista de afetados (MySQL, por pppoe) com o monitoramento de ONU (onuPool)
+// e com o ERP (pool) para trazer nome + telefone. "Subiu" = bucket 'online'; os
+// demais (offline/degraded/unknown) contam como "não subiram". Só leitura — não
+// dispara nada. É a base do modal de validação + (futuro) disparo de HSM.
+app.post('/api/massiva/history/affected-clients-signal', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({ success: false, message: 'Histórico local de massivas não configurado no MySQL.' });
+    }
+
+    const protocol = req.body?.protocol ?? null;
+    const assignmentId = req.body?.assignmentId ?? null;
+
+    const { pppoeList } = await massivaHistoryStore.getAffectedClientsPppoeList({ protocol, assignmentId });
+    if (pppoeList.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Nenhum cliente afetado registrado localmente para esta massiva. Só funciona para massivas abertas depois desta funcionalidade entrar no ar.',
+      });
+    }
+
+    // Sinal atual por pppoe (banco de ONU).
+    const onuByPppoe = new Map();
+    if (onuPool) {
+      const sql = `
+        SELECT pppoe_username AS pppoe, bucket, rx_power
+        FROM (
+          SELECT DISTINCT ON (gc.pppoe_username)
+            gc.pppoe_username,
+            ${ONU_BUCKET_CASE} AS bucket,
+            os.rx_power
+          FROM gpon_clients gc
+          LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+          WHERE gc.pppoe_username = ANY($1::text[])
+          ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+        ) sub
+      `;
+      const onuResult = await onuPool.query(sql, [pppoeList]);
+      for (const row of onuResult.rows) {
+        onuByPppoe.set(row.pppoe, {
+          bucket: row.bucket ?? 'unknown',
+          rxPower: row.rx_power == null ? null : Number(row.rx_power),
+        });
+      }
+    }
+
+    // Nome + telefone por pppoe (ERP espelhado).
+    const erpByPppoe = new Map();
+    try {
+      const erpSql = `
+        SELECT auth_contract.user AS pppoe,
+               client.name AS name,
+               client.cell_phone_1 AS phone,
+               contract.contract_number AS contract
+        FROM authentication_contracts auth_contract
+        JOIN contracts contract ON contract.id = auth_contract.contract_id
+        JOIN people client ON client.id = contract.client_id
+        WHERE auth_contract.user = ANY($1::text[])
+      `;
+      const erpResult = await pool.query(erpSql, [pppoeList]);
+      for (const row of erpResult.rows) {
+        const key = (row.pppoe ?? '').trim();
+        if (key && !erpByPppoe.has(key)) {
+          erpByPppoe.set(key, {
+            name: (row.name ?? '').trim(),
+            phone: (row.phone ?? '').trim(),
+            contract: row.contract == null ? null : String(row.contract).trim(),
+          });
+        }
+      }
+    } catch (erpErr) {
+      logger.warn('[massiva-affected-signal] Falha ao buscar nome/telefone no ERP:', { error: erpErr.message });
+    }
+
+    const clients = pppoeList.map((pppoe) => {
+      const onu = onuByPppoe.get(pppoe) ?? { bucket: 'unknown', rxPower: null };
+      const erp = erpByPppoe.get(pppoe) ?? { name: null, phone: null, contract: null };
+      return {
+        pppoe,
+        name: erp.name || null,
+        phone: erp.phone || null,
+        contract: erp.contract,
+        bucket: onu.bucket, // 'online' | 'degraded' | 'offline' | 'unknown'
+        rxPower: onu.rxPower,
+        recovered: onu.bucket === 'online',
+      };
+    });
+
+    const notRecovered = clients.filter((c) => !c.recovered);
+
+    res.json({
+      success: true,
+      data: {
+        total: clients.length,
+        recovered: clients.length - notRecovered.length,
+        notRecoveredCount: notRecovered.length,
+        notRecovered,
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao listar sinal dos clientes afetados de massiva:', error);
+    const statusCode = Number(error?.statusCode ?? 500);
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({ success: false, message: 'Erro interno ao listar sinal dos clientes afetados.', error: error.message });
+  }
+});
+
+// Progresso de recuperação de sinal por massiva (BATCH, leve): recebe a lista de
+// protocolos abertos e devolve { total, recovered } de cada — sem buscar nome/telefone
+// no ERP. Uma única consulta ao banco de ONU para todos os pppoe. Para o painel ao vivo.
+app.post('/api/massiva/history/affected-signal-progress', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({ success: false, message: 'Histórico local de massivas não configurado no MySQL.' });
+    }
+
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (items.length === 0) return res.json({ success: true, data: {} });
+
+    const totals = new Map(); // protocol -> total de pppoe afetados
+    const pppoeToProtocols = new Map(); // pppoe -> Set(protocol)
+    for (const it of items.slice(0, 80)) {
+      const protocol = it?.protocol ?? null;
+      const assignmentId = it?.assignmentId ?? null;
+      if (protocol == null) continue;
+      const proto = Number(protocol);
+      if (!Number.isFinite(proto) || proto <= 0) continue;
+      const { pppoeList } = await massivaHistoryStore.getAffectedClientsPppoeList({ protocol, assignmentId });
+      totals.set(proto, pppoeList.length);
+      for (const p of pppoeList) {
+        const key = String(p);
+        if (!pppoeToProtocols.has(key)) pppoeToProtocols.set(key, new Set());
+        pppoeToProtocols.get(key).add(proto);
+      }
+    }
+
+    // Uma consulta só ao banco de ONU: quais pppoe estão 'online' (recuperados).
+    const onlinePppoe = new Set();
+    const allPppoes = [...pppoeToProtocols.keys()];
+    if (onuPool && allPppoes.length > 0) {
+      const sql = `
+        SELECT pppoe, bucket FROM (
+          SELECT DISTINCT ON (gc.pppoe_username)
+            gc.pppoe_username AS pppoe,
+            ${ONU_BUCKET_CASE} AS bucket
+          FROM gpon_clients gc
+          LEFT JOIN onu_statuses os ON os.gpon_client_id = gc.id
+          WHERE gc.pppoe_username = ANY($1::text[])
+          ORDER BY gc.pppoe_username, os.updated_at DESC NULLS LAST
+        ) sub
+      `;
+      const result = await onuPool.query(sql, [allPppoes]);
+      for (const row of result.rows) {
+        if ((row.bucket ?? '') === 'online') onlinePppoe.add(row.pppoe);
+      }
+    }
+
+    const recovered = new Map();
+    for (const [pppoe, protocols] of pppoeToProtocols) {
+      if (!onlinePppoe.has(pppoe)) continue;
+      for (const proto of protocols) recovered.set(proto, (recovered.get(proto) ?? 0) + 1);
+    }
+
+    const data = {};
+    for (const [proto, total] of totals) {
+      data[proto] = { total, recovered: recovered.get(proto) ?? 0 };
+    }
+    res.json({ success: true, data, checkedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Erro no progresso de sinal por massiva:', error);
+    const statusCode = Number(error?.statusCode ?? 500);
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({ success: false, message: 'Erro interno ao calcular progresso de sinal.', error: error.message });
+  }
+});
+
+// Disparo manual de HSM (WhatsApp via Matrix/N8N) para os clientes de uma massiva
+// encerrada que NÃO subiram. Recebe a lista já filtrada pelo operador no modal e
+// repassa ao webhook do N8N. Fire-and-wait: responde só depois do webhook aceitar.
+// Exige permissão de massiva: dispara mensagem real a clientes (ação sensível).
+app.post('/api/massivas/hsm', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    const protocol = req.body?.protocol ?? null;
+    const rawClients = Array.isArray(req.body?.clients) ? req.body.clients : [];
+
+    // Normaliza e mantém apenas quem tem telefone (o HSM não vai sem número).
+    const clientes = rawClients
+      .map((c) => ({
+        nome: typeof c?.name === 'string' ? c.name.trim() : '',
+        telefone: typeof c?.phone === 'string' ? c.phone.trim() : '',
+        contrato: c?.contract == null ? '' : String(c.contract).trim(),
+        pppoe: typeof c?.pppoe === 'string' ? c.pppoe.trim() : '',
+      }))
+      .filter((c) => c.telefone !== '');
+
+    if (clientes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum cliente com telefone válido para disparar o HSM.',
+      });
+    }
+
+    const result = await notifyMassivaHsmWebhook({ protocolo: protocol, clientes });
+    if (!result.sent) {
+      return res.status(503).json({
+        success: false,
+        message: 'Automação de HSM não configurada no servidor (N8N_MASSIVA_HSM_WEBHOOK_URL).',
+        reason: result.reason,
+      });
+    }
+
+    res.json({ success: true, dispatched: clientes.length });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    logger.error('[massiva-hsm] Erro ao disparar HSM:', { error: error.message });
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: 'Erro ao disparar HSM para os clientes da massiva.',
+      error: error.message,
+    });
+  }
+});
+
 // Painel de parede: massivas encerradas já verificadas (sob demanda) e que ainda têm
 // clientes sem sinal. Só lê resultado já persistido — não dispara verificação nova.
 app.get('/api/massiva/history/affected-verifications', async (req, res) => {
@@ -3243,6 +3471,42 @@ async function notifyReliefWebhook(relievedSplitters) {
   }
 
   logger.info(`[network-relief-webhook] Notificação enviada com sucesso (${relievedSplitters.length} splitters).`);
+}
+
+/**
+ * Dispara o HSM pós-massiva (WhatsApp via Matrix) para os clientes que não subiram.
+ * Chamada sob demanda (botão no modal de validação de sinal).
+ * O N8N normaliza telefone/nome, envia o HSM 238, grava log (sucesso/erro) e
+ * encerra o atendimento após 24h de inatividade.
+ * Configurar via env N8N_MASSIVA_HSM_WEBHOOK_URL.
+ */
+async function notifyMassivaHsmWebhook({ protocolo, clientes }) {
+  const webhookUrl = (process.env.N8N_MASSIVA_HSM_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') {
+    logger.debug('[massiva-hsm-webhook] N8N_MASSIVA_HSM_WEBHOOK_URL não configurada — disparo ignorado.');
+    return { sent: false, reason: 'webhook_not_configured' };
+  }
+
+  const payload = {
+    event: 'massiva_post_close_hsm',
+    timestamp: new Date().toISOString(),
+    protocolo: protocolo == null ? '' : String(protocolo),
+    clientes,
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+  }
+
+  logger.info(`[massiva-hsm-webhook] Disparo enviado (${clientes.length} clientes, protocolo ${protocolo}).`);
+  return { sent: true };
 }
 
 /**

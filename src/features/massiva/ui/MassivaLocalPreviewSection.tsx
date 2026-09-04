@@ -35,15 +35,15 @@ export function MassivaLocalPreviewSection() {
 
   return (
     <div className="space-y-5" aria-labelledby="massiva-local-preview-heading">
-      <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200/80 bg-gradient-to-b from-white to-neutral-50/40 px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between sm:py-3.5">
+      <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest to-neutral-50/40 dark:to-white/5 px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between sm:py-3.5">
         <div className="min-w-0 space-y-0.5">
           <h2
             id="massiva-local-preview-heading"
-            className="text-sm font-semibold tracking-tight text-neutral-900"
+            className="text-sm font-semibold tracking-tight text-on-surface"
           >
             Preview e protocolo
           </h2>
-          <p className="text-[11px] leading-relaxed text-neutral-500">
+          <p className="text-[11px] leading-relaxed text-on-surface-variant">
             Alterne entre a rota e o formulário — menos rolagem, mais foco.
           </p>
         </div>
@@ -55,8 +55,8 @@ export function MassivaLocalPreviewSection() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/45',
               workspace === 'rota'
-                ? 'bg-white text-amber-950 shadow-sm ring-1 ring-amber-200/80'
-                : 'text-neutral-600 hover:bg-white/70 hover:text-neutral-900',
+                ? 'bg-surface-container-lowest text-amber-950 dark:text-amber-100 shadow-sm ring-1 ring-amber-200/80 dark:ring-amber-800/50'
+                : 'text-on-surface-variant hover:bg-surface-container-lowest/70 hover:text-on-surface',
             )}
             onClick={() => setWorkspace('rota')}
           >
@@ -70,8 +70,8 @@ export function MassivaLocalPreviewSection() {
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45',
               workspace === 'abertura'
-                ? 'bg-white text-violet-950 shadow-sm ring-1 ring-violet-200/80'
-                : 'text-neutral-600 hover:bg-white/70 hover:text-neutral-900',
+                ? 'bg-surface-container-lowest text-violet-950 dark:text-violet-100 shadow-sm ring-1 ring-violet-200/80 dark:ring-violet-800/50'
+                : 'text-on-surface-variant hover:bg-surface-container-lowest/70 hover:text-on-surface',
             )}
             onClick={() => setWorkspace('abertura')}
           >
@@ -87,7 +87,7 @@ export function MassivaLocalPreviewSection() {
           role="tabpanel"
           aria-label="Seleção de rota e preview"
         >
-          <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.03]">
+          <div className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.03]">
             <MassivaLocalPreviewControls
               connections={selection.connections}
               apDisplayLabel={apDisplayLabel}
@@ -107,10 +107,10 @@ export function MassivaLocalPreviewSection() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-200/50 bg-gradient-to-b from-white to-emerald-50/25 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-emerald-100/40">
-              <div className="flex items-center gap-2 border-b border-emerald-100/80 bg-emerald-50/40 px-4 py-2.5">
+            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-200/50 dark:border-emerald-800/50 bg-gradient-to-b from-white dark:from-surface-container-lowest to-emerald-50/25 dark:to-emerald-950/20 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-emerald-100/40">
+              <div className="flex items-center gap-2 border-b border-emerald-100/80 bg-emerald-50/40 dark:bg-emerald-950/40 px-4 py-2.5">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-900/90">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-900/90 dark:text-emerald-200">
                   Afetados (preview)
                 </p>
               </div>
@@ -122,10 +122,10 @@ export function MassivaLocalPreviewSection() {
                 />
               </div>
             </div>
-            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-200/55 bg-gradient-to-b from-white via-violet-50/20 to-violet-50/35 shadow-[0_4px_20px_-6px_rgba(109,40,217,0.12)] ring-1 ring-violet-200/30">
-              <div className="flex items-center gap-2 border-b border-violet-100/90 bg-violet-50/50 px-4 py-2.5">
+            <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-200/55 dark:border-violet-800/50 bg-gradient-to-b from-white dark:from-surface-container-lowest via-violet-50/20 dark:via-violet-950/20 to-violet-50/35 dark:to-violet-950/20 shadow-[0_4px_20px_-6px_rgba(109,40,217,0.12)] ring-1 ring-violet-200/30 dark:ring-violet-800/50">
+              <div className="flex items-center gap-2 border-b border-violet-100/90 bg-violet-50/50 dark:bg-violet-950/40 px-4 py-2.5">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,0.22)]" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-900/90">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-900/90 dark:text-violet-200">
                   Resumo da rota
                 </p>
               </div>
@@ -138,11 +138,11 @@ export function MassivaLocalPreviewSection() {
             </div>
           </div>
 
-          <p className="text-center text-[11px] text-neutral-500">
+          <p className="text-center text-[11px] text-on-surface-variant">
             Pronto?{' '}
             <button
               type="button"
-              className="font-semibold text-violet-700 underline decoration-violet-300/70 underline-offset-[3px] transition hover:text-violet-900"
+              className="font-semibold text-violet-700 dark:text-violet-200 underline decoration-violet-300/70 underline-offset-[3px] transition hover:text-violet-900 dark:hover:text-violet-200"
               onClick={() => setWorkspace('abertura')}
             >
               Ir para formulário e abertura
@@ -151,7 +151,7 @@ export function MassivaLocalPreviewSection() {
         </div>
       ) : (
         <div
-          className="rounded-2xl border border-violet-200/40 bg-gradient-to-b from-violet-50/30 to-neutral-50/40 p-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-violet-100/50"
+          className="rounded-2xl border border-violet-200/40 dark:border-violet-800/50 bg-gradient-to-b from-violet-50/30 dark:from-violet-950/20 to-neutral-50/40 dark:to-white/5 p-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-violet-100/50"
           role="tabpanel"
           aria-label="Formulário e envio"
         >

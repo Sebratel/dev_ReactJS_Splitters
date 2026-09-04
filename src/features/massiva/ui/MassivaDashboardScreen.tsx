@@ -38,6 +38,7 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  toDateValue,
   toMonthValue,
   type MassivaBucketGranularity,
   type MassivaPeriodPreset,
@@ -141,46 +142,46 @@ const COLOR_MAP: Record<
   { border: string; bg: string; label: string; value: string; sub: string }
 > = {
   neutral: {
-    border: 'border-neutral-200/80',
-    bg: 'bg-neutral-50/60',
-    label: 'text-neutral-600',
-    value: 'text-neutral-900',
-    sub: 'text-neutral-500/70',
+    border: 'border-neutral-200/80 dark:border-white/10',
+    bg: 'bg-surface-container-low/60',
+    label: 'text-on-surface-variant',
+    value: 'text-on-surface',
+    sub: 'text-on-surface-variant/70',
   },
   amber: {
-    border: 'border-amber-200/80',
-    bg: 'bg-amber-50/60',
-    label: 'text-amber-800/90',
-    value: 'text-amber-900',
-    sub: 'text-amber-700/70',
+    border: 'border-amber-200/80 dark:border-amber-800/50',
+    bg: 'bg-amber-50/60 dark:bg-amber-950/40',
+    label: 'text-amber-800/90 dark:text-amber-200',
+    value: 'text-amber-900 dark:text-amber-200',
+    sub: 'text-amber-700/70 dark:text-amber-200',
   },
   rose: {
-    border: 'border-rose-200/80',
-    bg: 'bg-rose-50/60',
-    label: 'text-rose-700',
-    value: 'text-rose-800',
-    sub: 'text-rose-700/70',
+    border: 'border-rose-200/80 dark:border-rose-800/50',
+    bg: 'bg-rose-50/60 dark:bg-rose-950/40',
+    label: 'text-rose-700 dark:text-rose-200',
+    value: 'text-rose-800 dark:text-rose-200',
+    sub: 'text-rose-700/70 dark:text-rose-200',
   },
   emerald: {
-    border: 'border-emerald-200/80',
-    bg: 'bg-emerald-50/60',
-    label: 'text-emerald-700',
-    value: 'text-emerald-800',
-    sub: 'text-emerald-700/70',
+    border: 'border-emerald-200/80 dark:border-emerald-800/50',
+    bg: 'bg-emerald-50/60 dark:bg-emerald-950/40',
+    label: 'text-emerald-700 dark:text-emerald-200',
+    value: 'text-emerald-800 dark:text-emerald-200',
+    sub: 'text-emerald-700/70 dark:text-emerald-200',
   },
   sky: {
-    border: 'border-sky-200/80',
-    bg: 'bg-sky-50/60',
-    label: 'text-sky-700',
-    value: 'text-sky-800',
-    sub: 'text-sky-700/70',
+    border: 'border-sky-200/80 dark:border-sky-800/50',
+    bg: 'bg-sky-50/60 dark:bg-sky-950/40',
+    label: 'text-sky-700 dark:text-sky-200',
+    value: 'text-sky-800 dark:text-sky-200',
+    sub: 'text-sky-700/70 dark:text-sky-200',
   },
   violet: {
-    border: 'border-violet-200/80',
-    bg: 'bg-violet-50/60',
-    label: 'text-violet-700',
-    value: 'text-violet-800',
-    sub: 'text-violet-700/70',
+    border: 'border-violet-200/80 dark:border-violet-800/50',
+    bg: 'bg-violet-50/60 dark:bg-violet-950/40',
+    label: 'text-violet-700 dark:text-violet-200',
+    value: 'text-violet-800 dark:text-violet-200',
+    sub: 'text-violet-700/70 dark:text-violet-200',
   },
 }
 
@@ -195,7 +196,7 @@ function KpiCard({ label, value, sub, color, delta, deltaPositiveGood = true }: 
       <span
         className={cn(
           'ml-1 text-[10px] font-semibold',
-          isGood ? 'text-emerald-600' : 'text-rose-500',
+          isGood ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-500',
         )}
       >
         {arrow} {delta.pct}%
@@ -225,15 +226,15 @@ function HBar({ label, count, max, total, color = '#fbbf24' }: HBarProps) {
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-xs text-neutral-700" title={label}>
+        <span className="min-w-0 truncate text-xs text-on-surface-variant" title={label}>
           {label}
         </span>
-        <span className="shrink-0 text-xs font-semibold tabular-nums text-neutral-800">
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-on-surface">
           {count}
-          <span className="ml-1 font-normal text-neutral-400">({pctOfTotal}%)</span>
+          <span className="ml-1 font-normal text-on-surface-variant/60">({pctOfTotal}%)</span>
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -254,6 +255,7 @@ const PERIOD_PRESETS: Array<{ value: MassivaPeriodPreset; label: string }> = [
   { value: '6m', label: '6 meses' },
   { value: '12m', label: '12 meses' },
   { value: 'month', label: 'Mês' },
+  { value: 'custom', label: 'Personalizado' },
 ]
 
 const STATUS_OPTIONS: Array<{ value: MassivaStatusFilter; label: string }> = [
@@ -286,8 +288,8 @@ const IDENTIFIED_BY_COLOR: Record<string, string> = {
 const DAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 const CARD_SECTION_CLS =
-  'rounded-xl bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70'
-const SECTION_HEADER_CLS = 'border-b border-neutral-200/80 px-4 py-3 sm:px-5'
+  'rounded-xl bg-surface-container-lowest shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70 dark:ring-white/10'
+const SECTION_HEADER_CLS = 'border-b border-neutral-200/80 dark:border-white/10 px-4 py-3 sm:px-5'
 
 // ---------------------------------------------------------------------------
 // Componente principal
@@ -296,6 +298,9 @@ const SECTION_HEADER_CLS = 'border-b border-neutral-200/80 px-4 py-3 sm:px-5'
 export function MassivaDashboardScreen() {
   const [periodPreset, setPeriodPreset] = useState<MassivaPeriodPreset>('30d')
   const [selectedMonth, setSelectedMonth] = useState(() => toMonthValue(new Date()))
+  const [customStart, setCustomStart] = useState(() => toDateValue(new Date(Date.now() - 6 * 86_400_000)))
+  const [customEnd, setCustomEnd] = useState(() => toDateValue(new Date()))
+  const todayValue = useMemo(() => toDateValue(new Date()), [])
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
   const [chartMetric, setChartMetric] = useState<ChartMetric>('afetados')
   const [statusFilter, setStatusFilter] = useState<MassivaStatusFilter>('all')
@@ -307,8 +312,14 @@ export function MassivaDashboardScreen() {
   const queryClient = useQueryClient()
 
   const range = useMemo(
-    () => resolveMassivaPeriod(periodPreset, periodPreset === 'month' ? selectedMonth : null),
-    [periodPreset, selectedMonth],
+    () =>
+      resolveMassivaPeriod(
+        periodPreset,
+        periodPreset === 'month' ? selectedMonth : null,
+        undefined,
+        periodPreset === 'custom' ? { start: customStart, end: customEnd } : null,
+      ),
+    [periodPreset, selectedMonth, customStart, customEnd],
   )
   const historyListStart = range.fetchStart
   const historyListLimit = massivaHistoryLimitForRange(range)
@@ -430,8 +441,7 @@ export function MassivaDashboardScreen() {
       protocol: r.protocol ?? 0, assignmentId: null, apCode: r.accessPointCode, splitterCode: '',
       affectedClients: r.affectedClients, openedAt: r.openedAt, title: r.title, description: '',
       createdBy: r.operatorEmail, responsible: '', mttdMinutes: r.mttdMinutes, mttrMinutes: r.mttrMinutes,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    })) as any)
+    })) as unknown as Parameters<typeof summarizeMassivaSla>[0])
     return { total, encerradas, abertas, totalAfetados, sla }
   }, [filteredRows])
 
@@ -486,8 +496,7 @@ export function MassivaDashboardScreen() {
           affectedClients: r.affectedClients, openedAt: r.openedAt, status: r.status,
           closedAt: r.closedAt, expectedCloseAt: r.expectedCloseAt, title: r.title, description: '',
           createdBy: r.operatorEmail, responsible: '', mttdMinutes: r.mttdMinutes, mttrMinutes: r.mttrMinutes,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        })) as any,
+        })) as unknown as Parameters<typeof rankMassivaAccessPoints>[0],
         8,
       ),
     [filteredRows],
@@ -700,15 +709,45 @@ export function MassivaDashboardScreen() {
     <div className="space-y-5">
 
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-neutral-200/80 bg-white p-3 shadow-sm sm:p-4">
+      <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-3 shadow-sm sm:p-4">
         {/* Linha 1: período + meta */}
         <div className="flex flex-wrap items-center gap-2">
-          {periodPreset === 'month' ? (
-            <div className="flex items-center gap-1 rounded-lg bg-neutral-100 p-0.5">
+          {periodPreset === 'custom' ? (
+            <div className="flex items-center gap-1.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-1">
               <button
                 type="button"
                 onClick={() => setPeriodPreset('30d')}
-                className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-neutral-500 transition hover:bg-white hover:text-neutral-800"
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-on-surface-variant transition hover:bg-surface-container-lowest hover:text-on-surface"
+                aria-label="Voltar aos períodos rápidos"
+                title="Voltar aos períodos"
+              >
+                <ChevronLeft className="size-4" aria-hidden />
+              </button>
+              <input
+                type="date"
+                value={customStart}
+                max={customEnd || todayValue}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="rounded-md bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10 focus:ring-amber-400 focus:outline-none"
+                aria-label="Data inicial"
+              />
+              <span className="text-xs text-on-surface-variant/60">→</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart}
+                max={todayValue}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="rounded-md bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10 focus:ring-amber-400 focus:outline-none"
+                aria-label="Data final"
+              />
+            </div>
+          ) : periodPreset === 'month' ? (
+            <div className="flex items-center gap-1 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
+              <button
+                type="button"
+                onClick={() => setPeriodPreset('30d')}
+                className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-on-surface-variant transition hover:bg-surface-container-lowest hover:text-on-surface"
                 aria-label="Voltar aos períodos rápidos"
                 title="Voltar aos períodos"
               >
@@ -717,7 +756,7 @@ export function MassivaDashboardScreen() {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-w-0 flex-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-neutral-800 shadow-sm ring-1 ring-neutral-200 focus:ring-amber-400 focus:outline-none"
+                className="min-w-0 flex-1 rounded-md bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10 focus:ring-amber-400 focus:outline-none"
                 aria-label="Selecionar mês"
               >
                 {monthOptions.map((m) => (
@@ -726,7 +765,7 @@ export function MassivaDashboardScreen() {
               </select>
             </div>
           ) : (
-            <div className="flex gap-0.5 rounded-lg bg-neutral-100 p-0.5">
+            <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
               {PERIOD_PRESETS.map(({ value, label }) => (
                 <button
                   key={value}
@@ -735,8 +774,8 @@ export function MassivaDashboardScreen() {
                   className={cn(
                     'rounded-md px-3 py-1 text-xs font-medium transition-colors',
                     periodPreset === value
-                      ? 'bg-white text-amber-700 shadow-sm'
-                      : 'text-neutral-500 hover:text-neutral-800',
+                      ? 'bg-surface-container-lowest text-amber-700 dark:text-amber-200 shadow-sm'
+                      : 'text-on-surface-variant hover:text-on-surface',
                   )}
                 >
                   {label}
@@ -746,9 +785,9 @@ export function MassivaDashboardScreen() {
           )}
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="hidden text-[11px] text-neutral-400 sm:inline">{range.label}</span>
+            <span className="hidden text-[11px] text-on-surface-variant/60 sm:inline">{range.label}</span>
             {!isLoading && (
-              <span className="text-[11px] tabular-nums text-neutral-400">
+              <span className="text-[11px] tabular-nums text-on-surface-variant/60">
                 {filteredRows.length !== rowsInPeriod.length
                   ? `${filteredRows.length.toLocaleString('pt-BR')}/${rowsInPeriod.length.toLocaleString('pt-BR')}`
                   : `${rowsInPeriod.length.toLocaleString('pt-BR')} registros`}
@@ -758,7 +797,7 @@ export function MassivaDashboardScreen() {
               type="button"
               onClick={refreshDashboard}
               disabled={historyQuery.isFetching || mttdMttrKpisQuery.isFetching}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant/60 transition-colors hover:bg-neutral-100 dark:hover:bg-white/5 hover:text-on-surface-variant disabled:opacity-50"
               title="Atualizar dados"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', (historyQuery.isFetching || mttdMttrKpisQuery.isFetching) && 'animate-spin')} />
@@ -767,8 +806,8 @@ export function MassivaDashboardScreen() {
         </div>
 
         {/* Divisor + Filtros */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-2.5">
-          <div className="flex gap-0.5 rounded-lg bg-neutral-100 p-0.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-neutral-100 dark:border-white/5 pt-2.5">
+          <div className="flex gap-0.5 rounded-lg bg-neutral-100 dark:bg-white/5 p-0.5">
             {STATUS_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
@@ -783,8 +822,8 @@ export function MassivaDashboardScreen() {
                         ? 'bg-emerald-600 text-white shadow-sm'
                         : value === 'cancelada'
                           ? 'bg-neutral-500 text-white shadow-sm'
-                          : 'bg-white text-neutral-800 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-700',
+                          : 'bg-surface-container-lowest text-on-surface shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface-variant',
                 )}
               >
                 {label}
@@ -798,8 +837,8 @@ export function MassivaDashboardScreen() {
               className={cn(
                 'h-7 rounded-lg border px-2 py-0 text-[11px] font-medium outline-none transition-colors',
                 operadorFilter !== ''
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:border-neutral-300',
+                  ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
+                  : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant hover:border-neutral-300',
               )}
             >
               <option value="">Operador: todos</option>
@@ -815,8 +854,8 @@ export function MassivaDashboardScreen() {
               className={cn(
                 'h-7 max-w-[200px] rounded-lg border px-2 py-0 text-[11px] font-medium outline-none transition-colors',
                 apFilter !== ''
-                  ? 'border-amber-300 bg-amber-50 text-amber-800'
-                  : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:border-neutral-300',
+                  ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200'
+                  : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface-variant hover:border-neutral-300',
               )}
             >
               <option value="">OLT / AP: todos</option>
@@ -829,7 +868,7 @@ export function MassivaDashboardScreen() {
             <button
               type="button"
               onClick={clearFilters}
-              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-600 transition-colors hover:bg-rose-100"
+              className="flex items-center gap-1 rounded-lg border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-2 py-1 text-[11px] font-medium text-rose-600 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/50"
             >
               <X className="h-3 w-3" />
               Limpar ({activeFilterCount})
@@ -843,23 +882,23 @@ export function MassivaDashboardScreen() {
         <div className={CARD_SECTION_CLS}>
           <div className={cn(SECTION_HEADER_CLS, 'flex flex-wrap items-center justify-between gap-2')}>
             <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Em aberto agora</p>
-                <h2 className="mt-0.5 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Em aberto agora</p>
+                <h2 className="mt-0.5 text-sm font-semibold text-on-surface">
                   {openMassivas.length} massiva{openMassivas.length !== 1 ? 's' : ''} ativa{openMassivas.length !== 1 ? 's' : ''}
                 </h2>
               </div>
               {slaRisk.overdue.length > 0 && (
-                <span className="ml-2 flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold text-rose-700">
+                <span className="ml-2 flex items-center gap-1 rounded-full bg-rose-100 dark:bg-rose-950/50 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-200">
                   <ShieldAlert className="h-3 w-3" />
                   {slaRisk.overdue.length} vencida{slaRisk.overdue.length !== 1 ? 's' : ''}
                 </span>
               )}
               {slaRisk.atRisk.length > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
+                <span className="flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-200">
                   <Clock className="h-3 w-3" />
                   {slaRisk.atRisk.length} em risco
                 </span>
@@ -869,7 +908,7 @@ export function MassivaDashboardScreen() {
               <button
                 type="button"
                 onClick={() => setOpenListExpanded((v) => !v)}
-                className="text-[11px] font-medium text-neutral-500 hover:text-neutral-800"
+                className="text-[11px] font-medium text-on-surface-variant hover:text-on-surface"
               >
                 {openListExpanded ? 'Ver menos' : `Ver todas (${openMassivas.length})`}
               </button>
@@ -879,13 +918,13 @@ export function MassivaDashboardScreen() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-xs">
               <thead>
-                <tr className="border-b border-neutral-100 text-left">
-                  <th className="px-4 py-2 font-semibold text-neutral-500 sm:px-5">Protocolo</th>
-                  <th className="px-2 py-2 font-semibold text-neutral-500">OLT / AP</th>
-                  <th className="px-2 py-2 font-semibold text-neutral-500">Operador</th>
-                  <th className="px-2 py-2 font-semibold text-neutral-500">Aberta há</th>
-                  <th className="px-2 py-2 text-right font-semibold text-neutral-500">Afetados</th>
-                  <th className="px-4 py-2 text-right font-semibold text-neutral-500 sm:px-5">SLA</th>
+                <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
+                  <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Protocolo</th>
+                  <th className="px-2 py-2 font-semibold text-on-surface-variant">OLT / AP</th>
+                  <th className="px-2 py-2 font-semibold text-on-surface-variant">Operador</th>
+                  <th className="px-2 py-2 font-semibold text-on-surface-variant">Aberta há</th>
+                  <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">Afetados</th>
+                  <th className="px-4 py-2 text-right font-semibold text-on-surface-variant sm:px-5">SLA</th>
                 </tr>
               </thead>
               <tbody>
@@ -900,40 +939,40 @@ export function MassivaDashboardScreen() {
                     <tr
                       key={row.id}
                       className={cn(
-                        'border-b border-neutral-50 transition-colors hover:bg-neutral-50/60',
-                        isOverdue && 'bg-rose-50/40',
+                        'border-b border-neutral-50 transition-colors hover:bg-surface-container-low/60',
+                        isOverdue && 'bg-rose-50/40 dark:bg-rose-950/40',
                       )}
                     >
-                      <td className="px-4 py-2.5 font-mono font-semibold text-neutral-800 sm:px-5">
+                      <td className="px-4 py-2.5 font-mono font-semibold text-on-surface sm:px-5">
                         {row.protocol ?? '—'}
                       </td>
-                      <td className="max-w-[160px] truncate px-2 py-2.5 text-neutral-700">
+                      <td className="max-w-[160px] truncate px-2 py-2.5 text-on-surface-variant">
                         {apCodeToTitle.get(row.accessPointCode) ?? row.accessPointCode}
                       </td>
-                      <td className="px-2 py-2.5 text-neutral-600">
+                      <td className="px-2 py-2.5 text-on-surface-variant">
                         {displayOperador(row.operatorEmail)}
                       </td>
-                      <td className="px-2 py-2.5 tabular-nums text-neutral-600">
+                      <td className="px-2 py-2.5 tabular-nums text-on-surface-variant">
                         {row.openedAt ? formatTimeAgo(row.openedAt) : '—'}
                       </td>
-                      <td className="px-2 py-2.5 text-right tabular-nums font-semibold text-neutral-800">
+                      <td className="px-2 py-2.5 text-right tabular-nums font-semibold text-on-surface">
                         {row.affectedClients.toLocaleString('pt-BR')}
                       </td>
                       <td className="px-4 py-2.5 text-right sm:px-5">
                         {isOverdue ? (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 dark:bg-rose-950/50 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-200">
                             <ShieldAlert className="h-2.5 w-2.5" /> Vencida
                           </span>
                         ) : isAtRisk ? (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-200">
                             <Clock className="h-2.5 w-2.5" /> Em risco
                           </span>
                         ) : row.expectedCloseAt ? (
-                          <span className="text-[11px] text-neutral-400">
+                          <span className="text-[11px] text-on-surface-variant/60">
                             até {row.expectedCloseAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-neutral-300">—</span>
+                          <span className="text-[11px] text-on-surface-variant/60">—</span>
                         )}
                       </td>
                     </tr>
@@ -947,11 +986,11 @@ export function MassivaDashboardScreen() {
 
       {/* ── Alertas ─────────────────────────────────────────────────────── */}
       {mttrTrendAlert != null && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3">
+          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
           <div>
-            <p className="text-sm font-semibold text-amber-800">MTTR crescente nos últimos 3 meses</p>
-            <p className="mt-0.5 text-xs text-amber-700">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">MTTR crescente nos últimos 3 meses</p>
+            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-200">
               {mttrTrendAlert.months.map((m) => `${formatMonthShort(m.month)}: ${formatMinutes(m.mttrMinutes)}`).join(' → ')}
               {' '}— considere investigar as causas raiz.
             </p>
@@ -959,7 +998,7 @@ export function MassivaDashboardScreen() {
         </div>
       )}
       {isError && (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-200">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           Erro ao carregar histórico de massivas. Tente atualizar.
         </div>
@@ -1032,7 +1071,7 @@ export function MassivaDashboardScreen() {
       </div>
 
       {/* ── Seletor de abas ───────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-xl border border-neutral-200 bg-neutral-50 p-1">
+      <div className="flex gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-surface-container-low p-1">
         {DASHBOARD_TABS.map(({ value, label }) => (
           <button
             key={value}
@@ -1041,8 +1080,8 @@ export function MassivaDashboardScreen() {
             className={cn(
               'flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition-colors',
               dashboardTab === value
-                ? 'bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200'
-                : 'text-neutral-500 hover:text-neutral-800',
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm ring-1 ring-neutral-200 dark:ring-white/10'
+                : 'text-on-surface-variant hover:text-on-surface',
             )}
           >
             {label}
@@ -1058,7 +1097,7 @@ export function MassivaDashboardScreen() {
           {/* Resumo textual */}
           {autoSummary != null && (
             <div className={cn(CARD_SECTION_CLS, 'px-4 py-3 sm:px-5')}>
-              <p className="text-sm leading-relaxed text-neutral-700">{autoSummary}</p>
+              <p className="text-sm leading-relaxed text-on-surface-variant">{autoSummary}</p>
             </div>
           )}
 
@@ -1066,13 +1105,13 @@ export function MassivaDashboardScreen() {
           <div className={CARD_SECTION_CLS}>
             <div className={cn(SECTION_HEADER_CLS, 'flex flex-wrap items-center justify-between gap-2')}>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Série temporal</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Série temporal</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">
                   Total por {chartBucketLabel} — {range.label}
-                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
                 </h2>
               </div>
-              <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 bg-neutral-50 p-0.5">
+              <div className="flex items-center gap-1 rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-low p-0.5">
                 {(['afetados', 'protocolos'] as ChartMetric[]).map((metric) => (
                   <button
                     key={metric}
@@ -1080,7 +1119,7 @@ export function MassivaDashboardScreen() {
                     onClick={() => setChartMetric(metric)}
                     className={cn(
                       'rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition',
-                      chartMetric === metric ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100',
+                      chartMetric === metric ? 'bg-neutral-900 text-white' : 'text-on-surface-variant hover:bg-neutral-100 dark:hover:bg-white/5',
                     )}
                   >
                     {metric}
@@ -1090,9 +1129,9 @@ export function MassivaDashboardScreen() {
             </div>
             <div className="px-4 py-4 sm:px-5">
               {isLoading ? (
-                <div className="flex h-48 items-center justify-center text-sm text-neutral-400">Carregando…</div>
+                <div className="flex h-48 items-center justify-center text-sm text-on-surface-variant/60">Carregando…</div>
               ) : chartSeries.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-sm text-neutral-400">Sem dados no período.</div>
+                <div className="flex h-48 items-center justify-center text-sm text-on-surface-variant/60">Sem dados no período.</div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={chartSeries} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
@@ -1119,15 +1158,15 @@ export function MassivaDashboardScreen() {
           <div className="grid gap-5 xl:grid-cols-[minmax(0,3fr)_minmax(280px,2fr)]">
             <div className={CARD_SECTION_CLS}>
               <div className={SECTION_HEADER_CLS}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Tendência mensal</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">MTTD e MTTR — últimos {MTTD_MTTR_MONTHS} meses</h2>
-                <p className="mt-0.5 text-[11px] text-neutral-500">MTTD: início do evento → identificação · MTTR: identificação → encerramento</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Tendência mensal</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">MTTD e MTTR — últimos {MTTD_MTTR_MONTHS} meses</h2>
+                <p className="mt-0.5 text-[11px] text-on-surface-variant">MTTD: início do evento → identificação · MTTR: identificação → encerramento</p>
               </div>
               <div className="px-4 py-4 sm:px-5">
                 {mttdMttrKpisQuery.isPending ? (
-                  <div className="flex h-48 items-center justify-center text-sm text-neutral-400">Carregando…</div>
+                  <div className="flex h-48 items-center justify-center text-sm text-on-surface-variant/60">Carregando…</div>
                 ) : trendChartData.length === 0 ? (
-                  <div className="flex h-48 items-center justify-center text-sm text-neutral-400">Sem dados disponíveis.</div>
+                  <div className="flex h-48 items-center justify-center text-sm text-on-surface-variant/60">Sem dados disponíveis.</div>
                 ) : (
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={trendChartData} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
@@ -1160,17 +1199,17 @@ export function MassivaDashboardScreen() {
 
             <div className={CARD_SECTION_CLS}>
               <div className={SECTION_HEADER_CLS}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Top OLTs / APs</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Top OLTs / APs</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">
                   Maior recorrência
-                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
                 </h2>
               </div>
               <div className="space-y-3 px-4 py-4 sm:px-5">
                 {isLoading ? (
-                  <p className="text-sm text-neutral-400">Carregando…</p>
+                  <p className="text-sm text-on-surface-variant/60">Carregando…</p>
                 ) : apRanking.length === 0 ? (
-                  <p className="text-sm text-neutral-400">Sem dados no período.</p>
+                  <p className="text-sm text-on-surface-variant/60">Sem dados no período.</p>
                 ) : (
                   apRanking.map((ap) => (
                     <HBar key={ap.apCode} label={apCodeToTitle.get(ap.apCode) ?? ap.apCode} count={ap.protocols} max={apRanking[0]?.protocols ?? 1} total={kpis.total} />
@@ -1221,15 +1260,15 @@ export function MassivaDashboardScreen() {
           {!isLoading && filteredRows.length > 0 && (
             <div className={CARD_SECTION_CLS}>
               <div className={SECTION_HEADER_CLS}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Padrão de ocorrências</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Padrão de ocorrências</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">
                   Concentração por dia da semana e hora
-                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
                 </h2>
-                <p className="mt-0.5 text-[11px] text-neutral-500">
+                <p className="mt-0.5 text-[11px] text-on-surface-variant">
                   Cor mais escura = mais ocorrências abertas naquele horário
                   {heatmapPeak != null && (
-                    <span className="ml-2 font-semibold text-amber-700">
+                    <span className="ml-2 font-semibold text-amber-700 dark:text-amber-200">
                       · Pico: {heatmapPeak.day} {String(heatmapPeak.hour).padStart(2, '0')}h ({heatmapPeak.count} abertura{heatmapPeak.count !== 1 ? 's' : ''})
                     </span>
                   )}
@@ -1241,7 +1280,7 @@ export function MassivaDashboardScreen() {
                   <div className="mb-1 flex">
                     <div className="w-10 shrink-0" />
                     {Array.from({ length: 24 }, (_, h) => (
-                      <div key={h} className="flex-1 text-center text-[9px] text-neutral-400">
+                      <div key={h} className="flex-1 text-center text-[9px] text-on-surface-variant/60">
                         {h % 3 === 0 ? `${String(h).padStart(2, '0')}h` : ''}
                       </div>
                     ))}
@@ -1249,7 +1288,7 @@ export function MassivaDashboardScreen() {
                   {/* Linhas por dia */}
                   {DAYS_SHORT.map((day, dayIdx) => (
                     <div key={day} className="mb-0.5 flex items-center">
-                      <div className="w-10 shrink-0 text-[10px] font-medium text-neutral-500">{day}</div>
+                      <div className="w-10 shrink-0 text-[10px] font-medium text-on-surface-variant">{day}</div>
                       {Array.from({ length: 24 }, (_, h) => {
                         const count = heatmapData.grid[dayIdx]?.[h] ?? 0
                         const ratio = count / heatmapData.max
@@ -1265,7 +1304,7 @@ export function MassivaDashboardScreen() {
                               style={{ backgroundColor: `rgba(245, 158, 11, ${opacity})` }}
                             />
                             {count > 0 && ratio > 0.5 && (
-                              <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-amber-900">
+                              <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-amber-900 dark:text-amber-200">
                                 {count}
                               </span>
                             )}
@@ -1276,11 +1315,11 @@ export function MassivaDashboardScreen() {
                   ))}
                   {/* Legenda */}
                   <div className="mt-3 flex items-center gap-2">
-                    <span className="text-[10px] text-neutral-400">Menos</span>
+                    <span className="text-[10px] text-on-surface-variant/60">Menos</span>
                     {[0.08, 0.25, 0.45, 0.65, 0.85].map((op) => (
                       <div key={op} className="h-3 w-5 rounded-sm" style={{ backgroundColor: `rgba(245,158,11,${op})` }} />
                     ))}
-                    <span className="text-[10px] text-neutral-400">Mais</span>
+                    <span className="text-[10px] text-on-surface-variant/60">Mais</span>
                   </div>
                 </div>
               </div>
@@ -1291,21 +1330,21 @@ export function MassivaDashboardScreen() {
           {!isLoading && operadorRanking.length > 0 && (
             <div className={CARD_SECTION_CLS}>
               <div className={SECTION_HEADER_CLS}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Desempenho por operador</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Desempenho por operador</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">
                   Volume e tempo de resolução
-                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
                 </h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-xs">
                   <thead>
-                    <tr className="border-b border-neutral-100 text-left">
-                      <th className="px-4 py-2 font-semibold text-neutral-500 sm:px-5">Operador</th>
-                      <th className="px-2 py-2 text-right font-semibold text-neutral-500">Protocolos</th>
-                      <th className="px-2 py-2 text-right font-semibold text-neutral-500">MTTD médio</th>
-                      <th className="px-2 py-2 text-right font-semibold text-neutral-500">MTTR médio</th>
-                      <th className="px-4 py-2 text-right font-semibold text-neutral-500 sm:px-5">SLA %</th>
+                    <tr className="border-b border-neutral-100 dark:border-white/5 text-left">
+                      <th className="px-4 py-2 font-semibold text-on-surface-variant sm:px-5">Operador</th>
+                      <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">Protocolos</th>
+                      <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">MTTD médio</th>
+                      <th className="px-2 py-2 text-right font-semibold text-on-surface-variant">MTTR médio</th>
+                      <th className="px-4 py-2 text-right font-semibold text-on-surface-variant sm:px-5">SLA %</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1313,32 +1352,32 @@ export function MassivaDashboardScreen() {
                       const maxCount = operadorRanking[0]?.count ?? 1
                       const barPct = Math.round((op.count / maxCount) * 100)
                       return (
-                        <tr key={op.email} className="border-b border-neutral-50 hover:bg-neutral-50/60">
+                        <tr key={op.email} className="border-b border-neutral-50 hover:bg-surface-container-low/60">
                           <td className="px-4 py-2.5 sm:px-5">
                             <div className="flex items-center gap-2">
-                              <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-neutral-400">{idx + 1}</span>
+                              <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-on-surface-variant/60">{idx + 1}</span>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-neutral-800">{displayOperador(op.email)}</p>
-                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
+                                <p className="truncate font-semibold text-on-surface">{displayOperador(op.email)}</p>
+                                <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-white/5">
                                   <div className="h-full rounded-full bg-sky-400 transition-all" style={{ width: `${barPct}%` }} />
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-2 py-2.5 text-right tabular-nums font-semibold text-neutral-800">
+                          <td className="px-2 py-2.5 text-right tabular-nums font-semibold text-on-surface">
                             {op.count}
                           </td>
-                          <td className="px-2 py-2.5 text-right tabular-nums text-violet-600">
+                          <td className="px-2 py-2.5 text-right tabular-nums text-violet-600 dark:text-violet-300">
                             {formatMinutes(op.avgMttd)}
                           </td>
-                          <td className="px-2 py-2.5 text-right tabular-nums text-neutral-600">
+                          <td className="px-2 py-2.5 text-right tabular-nums text-on-surface-variant">
                             {formatMinutes(op.avgMttr)}
                           </td>
                           <td className="px-4 py-2.5 text-right sm:px-5">
                             {op.slaPct === null ? (
-                              <span className="text-neutral-300">—</span>
+                              <span className="text-on-surface-variant/60">—</span>
                             ) : (
-                              <span className={cn('font-semibold tabular-nums', op.slaPct >= 80 ? 'text-emerald-600' : op.slaPct >= 60 ? 'text-amber-600' : 'text-rose-600')}>
+                              <span className={cn('font-semibold tabular-nums', op.slaPct >= 80 ? 'text-emerald-600 dark:text-emerald-300' : op.slaPct >= 60 ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300')}>
                                 {op.slaPct}%
                               </span>
                             )}
@@ -1356,23 +1395,23 @@ export function MassivaDashboardScreen() {
           {(classifDistribution != null || isLoading) && (
             <div className={CARD_SECTION_CLS}>
               <div className={SECTION_HEADER_CLS}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Classificação</p>
-                <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Classificação</p>
+                <h2 className="mt-1 text-sm font-semibold text-on-surface">
                   Distribuição por tipo, impacto, área e tecnologia
-                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                  {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
                 </h2>
               </div>
               {isLoading ? (
-                <div className="px-4 py-4 text-sm text-neutral-400">Carregando…</div>
+                <div className="px-4 py-4 text-sm text-on-surface-variant/60">Carregando…</div>
               ) : classifDistribution == null ? (
-                <div className="px-4 py-4 text-sm text-neutral-400">Nenhum dado de classificação preenchido no período.</div>
+                <div className="px-4 py-4 text-sm text-on-surface-variant/60">Nenhum dado de classificação preenchido no período.</div>
               ) : (
                 <div className="grid gap-6 px-4 py-4 sm:grid-cols-2 sm:px-5">
                   {classifDistribution.filledTipo > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-semibold text-neutral-600">
+                      <p className="mb-3 text-xs font-semibold text-on-surface-variant">
                         Tipo de incidente
-                        <span className="ml-1.5 font-normal text-neutral-400">({classifDistribution.filledTipo}/{classifDistribution.total})</span>
+                        <span className="ml-1.5 font-normal text-on-surface-variant/60">({classifDistribution.filledTipo}/{classifDistribution.total})</span>
                       </p>
                       <div className="space-y-2.5">
                         {classifDistribution.tipo.map(([name, count]) => (
@@ -1383,9 +1422,9 @@ export function MassivaDashboardScreen() {
                   )}
                   {classifDistribution.filledImpacto > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-semibold text-neutral-600">
+                      <p className="mb-3 text-xs font-semibold text-on-surface-variant">
                         Impacto
-                        <span className="ml-1.5 font-normal text-neutral-400">({classifDistribution.filledImpacto}/{classifDistribution.total})</span>
+                        <span className="ml-1.5 font-normal text-on-surface-variant/60">({classifDistribution.filledImpacto}/{classifDistribution.total})</span>
                       </p>
                       <div className="space-y-2.5">
                         {classifDistribution.impacto.map(([name, count]) => (
@@ -1396,9 +1435,9 @@ export function MassivaDashboardScreen() {
                   )}
                   {classifDistribution.filledArea > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-semibold text-neutral-600">
+                      <p className="mb-3 text-xs font-semibold text-on-surface-variant">
                         Área
-                        <span className="ml-1.5 font-normal text-neutral-400">({classifDistribution.filledArea}/{classifDistribution.total})</span>
+                        <span className="ml-1.5 font-normal text-on-surface-variant/60">({classifDistribution.filledArea}/{classifDistribution.total})</span>
                       </p>
                       <div className="space-y-2.5">
                         {classifDistribution.area.map(([name, count]) => (
@@ -1409,9 +1448,9 @@ export function MassivaDashboardScreen() {
                   )}
                   {classifDistribution.filledTecnologia > 0 && (
                     <div>
-                      <p className="mb-3 text-xs font-semibold text-neutral-600">
+                      <p className="mb-3 text-xs font-semibold text-on-surface-variant">
                         Tecnologia
-                        <span className="ml-1.5 font-normal text-neutral-400">({classifDistribution.filledTecnologia}/{classifDistribution.total})</span>
+                        <span className="ml-1.5 font-normal text-on-surface-variant/60">({classifDistribution.filledTecnologia}/{classifDistribution.total})</span>
                       </p>
                       <div className="space-y-2.5">
                         {classifDistribution.tecnologia.map(([name, count]) => (
@@ -1435,21 +1474,21 @@ export function MassivaDashboardScreen() {
           {/* Origem do evento (identified_by) */}
           <div className={CARD_SECTION_CLS}>
             <div className={SECTION_HEADER_CLS}>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Origem da identificação</p>
-              <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Origem da identificação</p>
+              <h2 className="mt-1 text-sm font-semibold text-on-surface">
                 Quem identificou o evento
-                {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
               </h2>
-              <p className="mt-0.5 text-[11px] text-neutral-500">
+              <p className="mt-0.5 text-[11px] text-on-surface-variant">
                 Proporção de detecção automática (Zabbix/INT6) vs manual (Técnico)
               </p>
             </div>
             <div className="px-4 py-4 sm:px-5">
               {isLoading ? (
-                <div className="flex h-24 items-center justify-center text-sm text-neutral-400">Carregando…</div>
+                <div className="flex h-24 items-center justify-center text-sm text-on-surface-variant/60">Carregando…</div>
               ) : identifiedByDistribution == null ? (
-                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 bg-neutral-50/60 px-3 py-3 text-sm text-neutral-500">
-                  <Radio className="h-4 w-4 shrink-0 text-neutral-400" />
+                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 dark:border-white/10 bg-surface-container-low/60 px-3 py-3 text-sm text-on-surface-variant">
+                  <Radio className="h-4 w-4 shrink-0 text-on-surface-variant/60" />
                   Nenhuma massiva com origem registrada no período. O campo "Quem identificou" é preenchido na abertura.
                 </div>
               ) : (
@@ -1475,14 +1514,14 @@ export function MassivaDashboardScreen() {
                     {identifiedByDistribution.entries.map(([key, count]) => (
                       <div key={key} className="flex items-center gap-2">
                         <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: IDENTIFIED_BY_COLOR[key] ?? '#94a3b8' }} />
-                        <span className="text-xs font-semibold text-neutral-800">{IDENTIFIED_BY_LABEL[key] ?? key}</span>
-                        <span className="text-xs tabular-nums text-neutral-500">
+                        <span className="text-xs font-semibold text-on-surface">{IDENTIFIED_BY_LABEL[key] ?? key}</span>
+                        <span className="text-xs tabular-nums text-on-surface-variant">
                           {count} ({Math.round((count / identifiedByDistribution.total) * 100)}%)
                         </span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-neutral-400">
+                  <p className="text-[10px] text-on-surface-variant/60">
                     {identifiedByDistribution.filled} de {filteredRows.length} massivas com origem registrada
                   </p>
                 </div>
@@ -1493,18 +1532,18 @@ export function MassivaDashboardScreen() {
           {/* Protocolo de infraestrutura */}
           <div className={CARD_SECTION_CLS}>
             <div className={SECTION_HEADER_CLS}>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Protocolo de infraestrutura</p>
-              <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Protocolo de infraestrutura</p>
+              <h2 className="mt-1 text-sm font-semibold text-on-surface">
                 Vinculação de protocolo de infra à massiva
-                {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600">(filtrado)</span>}
+                {activeFilterCount > 0 && <span className="ml-1.5 text-[11px] font-normal text-amber-600 dark:text-amber-300">(filtrado)</span>}
               </h2>
             </div>
             <div className="px-4 py-4 sm:px-5">
               {isLoading ? (
-                <div className="flex h-24 items-center justify-center text-sm text-neutral-400">Carregando…</div>
+                <div className="flex h-24 items-center justify-center text-sm text-on-surface-variant/60">Carregando…</div>
               ) : infraProtocolStats == null ? (
-                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 bg-neutral-50/60 px-3 py-3 text-sm text-neutral-500">
-                  <Wrench className="h-4 w-4 shrink-0 text-neutral-400" />
+                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 dark:border-white/10 bg-surface-container-low/60 px-3 py-3 text-sm text-on-surface-variant">
+                  <Wrench className="h-4 w-4 shrink-0 text-on-surface-variant/60" />
                   Sem dados no período.
                 </div>
               ) : (
@@ -1519,7 +1558,7 @@ export function MassivaDashboardScreen() {
                       {infraProtocolStats.pct > 10 ? `${infraProtocolStats.pct}%` : ''}
                     </div>
                     <div
-                      className="flex items-center justify-center bg-neutral-200 text-[9px] font-bold text-neutral-600 transition-all"
+                      className="flex items-center justify-center bg-neutral-200 dark:bg-white/10 text-[9px] font-bold text-on-surface-variant transition-all"
                       style={{ width: `${100 - infraProtocolStats.pct}%` }}
                       title={`Sem infra: ${infraProtocolStats.withoutInfra}`}
                     >
@@ -1529,13 +1568,13 @@ export function MassivaDashboardScreen() {
                   <div className="flex flex-wrap gap-4">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-sm bg-sky-400" />
-                      <span className="text-xs font-semibold text-neutral-800">Com infra vinculado</span>
-                      <span className="text-xs tabular-nums text-neutral-500">{infraProtocolStats.withInfra}</span>
+                      <span className="text-xs font-semibold text-on-surface">Com infra vinculado</span>
+                      <span className="text-xs tabular-nums text-on-surface-variant">{infraProtocolStats.withInfra}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-sm bg-neutral-200" />
-                      <span className="text-xs font-semibold text-neutral-800">Sem infra</span>
-                      <span className="text-xs tabular-nums text-neutral-500">{infraProtocolStats.withoutInfra}</span>
+                      <div className="h-3 w-3 rounded-sm bg-neutral-200 dark:bg-white/10" />
+                      <span className="text-xs font-semibold text-on-surface">Sem infra</span>
+                      <span className="text-xs tabular-nums text-on-surface-variant">{infraProtocolStats.withoutInfra}</span>
                     </div>
                   </div>
                 </div>
@@ -1546,22 +1585,22 @@ export function MassivaDashboardScreen() {
           {/* Verificação pós-encerramento */}
           <div className={CARD_SECTION_CLS}>
             <div className={SECTION_HEADER_CLS}>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">Verificação pós-encerramento</p>
-              <h2 className="mt-1 text-sm font-semibold text-neutral-900">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Verificação pós-encerramento</p>
+              <h2 className="mt-1 text-sm font-semibold text-on-surface">
                 {affectedVerif != null
                   ? `Qualidade de restauração — ${affectedVerif.count} encerramento${affectedVerif.count !== 1 ? 's' : ''} verificado${affectedVerif.count !== 1 ? 's' : ''}`
                   : 'Qualidade de restauração'}
               </h2>
-              <p className="mt-0.5 text-[11px] text-neutral-500">
+              <p className="mt-0.5 text-[11px] text-on-surface-variant">
                 Clientes verificados após encerramento da massiva
               </p>
             </div>
             <div className="px-4 py-4 sm:px-5">
               {isLoading ? (
-                <div className="flex h-24 items-center justify-center text-sm text-neutral-400">Carregando…</div>
+                <div className="flex h-24 items-center justify-center text-sm text-on-surface-variant/60">Carregando…</div>
               ) : affectedVerif == null ? (
-                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 bg-neutral-50/60 px-3 py-3 text-sm text-neutral-500">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-neutral-400" />
+                <div className="flex items-center gap-2 rounded-lg border border-neutral-200/70 dark:border-white/10 bg-surface-container-low/60 px-3 py-3 text-sm text-on-surface-variant">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-on-surface-variant/60" />
                   Nenhuma verificação pós-encerramento realizada no período.
                 </div>
               ) : (
@@ -1599,55 +1638,55 @@ export function MassivaDashboardScreen() {
                               : ''}
                           </div>
                         </div>
-                        <div className="mt-1 text-[10px] text-neutral-400 text-right">
+                        <div className="mt-1 text-[10px] text-on-surface-variant/60 text-right">
                           {affectedVerif.totalChecked.toLocaleString('pt-BR')} clientes verificados
                         </div>
                       </>
                     ) : (
-                      <p className="text-sm text-neutral-400">Sem clientes verificados no período.</p>
+                      <p className="text-sm text-on-surface-variant/60">Sem clientes verificados no período.</p>
                     )}
                   </div>
 
                   {/* Cards de resultado */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1 text-emerald-600">
+                    <div className="rounded-lg border border-emerald-200/80 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/40 px-3 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-emerald-600 dark:text-emerald-300">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span className="text-[10px] font-semibold uppercase tracking-wide">Recuperados</span>
                       </div>
-                      <p className="mt-1 text-xl font-bold tabular-nums text-emerald-800">
+                      <p className="mt-1 text-xl font-bold tabular-nums text-emerald-800 dark:text-emerald-200">
                         {affectedVerif.recovered.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-emerald-600/70">
+                        <p className="mt-0.5 text-[10px] text-emerald-600/70 dark:text-emerald-300">
                           {Math.round((affectedVerif.recovered / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}
                     </div>
-                    <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1 text-amber-600">
+                    <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-amber-600 dark:text-amber-300">
                         <Wifi className="h-3.5 w-3.5" />
                         <span className="text-[10px] font-semibold uppercase tracking-wide">Degradados</span>
                       </div>
-                      <p className="mt-1 text-xl font-bold tabular-nums text-amber-800">
+                      <p className="mt-1 text-xl font-bold tabular-nums text-amber-800 dark:text-amber-200">
                         {affectedVerif.stillDegraded.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-amber-600/70">
+                        <p className="mt-0.5 text-[10px] text-amber-600/70 dark:text-amber-300">
                           {Math.round((affectedVerif.stillDegraded / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}
                     </div>
-                    <div className="rounded-lg border border-rose-200/80 bg-rose-50/60 px-3 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1 text-rose-600">
+                    <div className="rounded-lg border border-rose-200/80 dark:border-rose-800/50 bg-rose-50/60 dark:bg-rose-950/40 px-3 py-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-rose-600 dark:text-rose-300">
                         <WifiOff className="h-3.5 w-3.5" />
                         <span className="text-[10px] font-semibold uppercase tracking-wide">Sem sinal</span>
                       </div>
-                      <p className="mt-1 text-xl font-bold tabular-nums text-rose-800">
+                      <p className="mt-1 text-xl font-bold tabular-nums text-rose-800 dark:text-rose-200">
                         {affectedVerif.stillOffline.toLocaleString('pt-BR')}
                       </p>
                       {affectedVerif.totalChecked > 0 && (
-                        <p className="mt-0.5 text-[10px] text-rose-600/70">
+                        <p className="mt-0.5 text-[10px] text-rose-600/70 dark:text-rose-300">
                           {Math.round((affectedVerif.stillOffline / affectedVerif.totalChecked) * 100)}% do total
                         </p>
                       )}
