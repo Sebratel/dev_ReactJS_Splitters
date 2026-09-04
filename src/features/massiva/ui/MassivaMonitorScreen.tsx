@@ -5,6 +5,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Gauge,
+  Maximize,
+  Minimize,
   Radio,
   Timer,
   Users,
@@ -418,6 +420,21 @@ export function MassivaMonitorScreen() {
     return () => window.clearInterval(id)
   }, [])
 
+  // Tela cheia (parede/kiosk): entra/sai via Fullscreen API do documento inteiro.
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement != null)
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement == null) {
+      void document.documentElement.requestFullscreen?.().catch(() => {})
+    } else {
+      void document.exitFullscreen?.().catch(() => {})
+    }
+  }
+
   const { view } = useMassivaTickets({ refetchIntervalMs: TICKETS_REFETCH_MS })
   const bffTickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
 
@@ -666,6 +683,16 @@ export function MassivaMonitorScreen() {
           <span className="font-mono text-sm text-[#5a6685]">
             {now.toLocaleTimeString('pt-BR')}
           </span>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#253150] bg-[#121a2b] px-2.5 py-1.5 text-[11px] font-semibold text-[#8593b8] transition hover:border-[#34415f] hover:text-[#eaf0fa]"
+            title={isFullscreen ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
+            aria-label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+            <span className="hidden sm:inline">{isFullscreen ? 'Sair' : 'Tela cheia'}</span>
+          </button>
         </div>
       </div>
 
