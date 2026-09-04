@@ -84,6 +84,11 @@ export function useMassivaAlerts(active: boolean): void {
             pushToast({ kind: 'near', protocol: t.protocol, title: 'Massiva perto de vencer' })
           }
         }
+      } else {
+        // Voltou a ter folga (previsão empurrada) → rearma para bipar de novo
+        // caso reentre no risco. No fluxo natural do tempo isto nunca acontece.
+        st.near.delete(t.protocol)
+        st.expired.delete(t.protocol)
       }
     }
 
