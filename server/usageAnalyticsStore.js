@@ -5,7 +5,7 @@ import { mysqlNaiveDateTimeToIso } from './mysqlBrazilDateTime.js';
  * Analytics de uso da plataforma ("radar de uso" / Google Analytics interno).
  * Registra, por acesso, QUEM (uid/email/nome) abriu O QUE (módulo/rota) e QUANDO,
  * mais duração aproximada na tela anterior e o id de sessão do navegador.
- * Grava no MySQL do Hub Apps (mesmo banco gravável das sugestões e do histórico de massiva).
+ * Grava no MySQL do app Splitters (DB_Massives), junto do histórico de massiva e snapshots.
  */
 
 const EVENTS_TABLE = 'usage_events';
@@ -50,22 +50,21 @@ function normalizeNonNegativeInt(value) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-/** MySQL do Hub Apps — mesmo banco gravável usado por sugestões e histórico de massiva. */
+/**
+ * MySQL do app Splitters (DB_Massives) — mesmo banco/config do massivaHistoryStore.
+ * É o banco "do próprio app" (massiva_history, splitter_snapshots, isa_prompt_settings);
+ * a telemetria de uso mora junto, não no Hub compartilhado.
+ */
 function getMysqlConfig() {
-  const database = toCleanString(process.env.HUB_APPS_MYSQL_DATABASE);
+  const database = toCleanString(process.env.MASSIVA_MYSQL_DATABASE);
   if (database === '') {
     return { host: '', port: 3306, user: '', password: '', database: '' };
   }
   return {
-    host: toCleanString(process.env.HUB_APPS_MYSQL_HOST) || toCleanString(process.env.MASSIVA_MYSQL_HOST),
-    port:
-      normalizePositiveInt(process.env.HUB_APPS_MYSQL_PORT) ??
-      normalizePositiveInt(process.env.MASSIVA_MYSQL_PORT) ??
-      3306,
-    user: toCleanString(process.env.HUB_APPS_MYSQL_USER) || toCleanString(process.env.MASSIVA_MYSQL_USER),
-    password: String(
-      process.env.HUB_APPS_MYSQL_PASSWORD || process.env.MASSIVA_MYSQL_PASSWORD || '',
-    ),
+    host: toCleanString(process.env.MASSIVA_MYSQL_HOST),
+    port: normalizePositiveInt(process.env.MASSIVA_MYSQL_PORT) ?? 3306,
+    user: toCleanString(process.env.MASSIVA_MYSQL_USER),
+    password: String(process.env.MASSIVA_MYSQL_PASSWORD || ''),
     database,
   };
 }
@@ -149,7 +148,7 @@ async function ensureUsageTable() {
 function assertConfigured() {
   if (!isUsageAnalyticsConfigured()) {
     throw buildError(
-      'Analytics indisponível: configure HUB_APPS_MYSQL_DATABASE (Hub Apps é o banco gravável).',
+      'Analytics indisponível: configure MASSIVA_MYSQL_DATABASE (banco do app Splitters).',
       503,
     );
   }
@@ -158,7 +157,7 @@ function assertConfigured() {
 function assertTableAvailableError(error) {
   if (!isMissingTableError(error)) throw error;
   throw buildError(
-    `Estrutura de analytics incompleta no Hub Apps (DB_Hub_Apps). Crie a tabela ${EVENTS_TABLE}, ou habilite USAGE_ANALYTICS_MYSQL_AUTO_CREATE_TABLE=true temporariamente.`,
+    `Estrutura de analytics incompleta no banco do app (DB_Massives). Crie a tabela ${EVENTS_TABLE}, ou habilite USAGE_ANALYTICS_MYSQL_AUTO_CREATE_TABLE=true temporariamente.`,
     503,
   );
 }
