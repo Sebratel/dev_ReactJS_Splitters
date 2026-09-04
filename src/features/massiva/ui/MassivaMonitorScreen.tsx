@@ -442,10 +442,6 @@ export function MassivaMonitorScreen() {
     }
   }
 
-  // Popups de alerta (nova / perto de vencer / vencida) também no painel de parede.
-  // Toast sempre visível aqui; o som segue o toggle e o áudio liberado.
-  useMassivaAlerts(true, { toast: true })
-
   const { view } = useMassivaTickets({ refetchIntervalMs: TICKETS_REFETCH_MS })
   const bffTickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
 
@@ -486,6 +482,11 @@ export function MassivaMonitorScreen() {
         return aTime - bTime
       })
   }, [bffTickets, openLocalQuery.data, openPeriodStart])
+
+  // Popups + som de alerta (nova / perto de vencer / vencida) no painel de parede.
+  // Fonte = `openTickets` (query de 8s) → o alerta dispara no MESMO instante em que
+  // o card aparece na tela. Toast sempre visível; som segue o toggle/áudio liberado.
+  useMassivaAlerts(true, { toast: true, source: openTickets })
 
   const todayStart = useMemo(() => startOfTodayLocal(), [])
   const historyQuery = useQuery({

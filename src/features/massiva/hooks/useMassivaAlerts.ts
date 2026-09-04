@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useHomeDashboardMassivaOpen } from '@/features/massiva/hooks/useHomeDashboardMassivaOpen'
 import { useMassivaAlertsStore } from '@/features/massiva/store/massivaAlertsStore'
 import { playMassivaAlert } from '@/features/massiva/lib/massivaAlertSound'
+import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 /**
  * Observa as massivas abertas e dispara alertas (som + toast) quando:
@@ -10,12 +11,18 @@ import { playMassivaAlert } from '@/features/massiva/lib/massivaAlertSound'
  */
 export function useMassivaAlerts(
   active: boolean,
-  options?: { sound?: boolean; toast?: boolean },
+  options?: { sound?: boolean; toast?: boolean; source?: MassivaTicket[] },
 ): void {
   const enabled = useMassivaAlertsStore((s) => s.enabled)
   const nearMinutes = useMassivaAlertsStore((s) => s.nearMinutes)
   const pushToast = useMassivaAlertsStore((s) => s.pushToast)
-  const { openMassivas } = useHomeDashboardMassivaOpen()
+  // Quando o chamador passa uma `source` (ex.: o painel de parede já busca as
+  // massivas abertas a cada 8s), o alerta observa EXATAMENTE esses dados — bipa
+  // no mesmo instante em que o card aparece. Aí o hook interno (mais lento, 15s)
+  // fica desligado para não duplicar busca.
+  const source = options?.source
+  const internal = useHomeDashboardMassivaOpen({ enabled: source == null })
+  const openMassivas = source ?? internal.openMassivas
   // Som segue o toggle; toast pode ser forçado (ex.: painel de parede sempre mostra).
   const playSound = options?.sound ?? enabled
   const showToast = options?.toast ?? enabled
