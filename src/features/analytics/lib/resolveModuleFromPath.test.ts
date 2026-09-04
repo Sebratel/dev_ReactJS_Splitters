@@ -10,6 +10,7 @@ describe('resolveModuleFromPath', () => {
     expect(resolveModuleFromPath('/sugestoes')).toBe('sugestoes')
     expect(resolveModuleFromPath('/usuarios')).toBe('usuarios')
     expect(resolveModuleFromPath('/isa-config')).toBe('isa-config')
+    expect(resolveModuleFromPath('/radar-uso')).toBe('radar-uso')
   })
 
   it('distingue detalhe de listagem por prefixo', () => {

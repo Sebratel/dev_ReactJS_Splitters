@@ -25,6 +25,7 @@ const KNOWN_MODULES = new Set([
   'sugestoes',
   'usuarios',
   'isa-config',
+  'radar-uso',
   'outros',
 ]);
 

@@ -12,6 +12,7 @@ export type UsageModuleKey =
   | 'sugestoes'
   | 'usuarios'
   | 'isa-config'
+  | 'radar-uso'
   | 'outros'
 
 /** Rótulos amigáveis (pt-BR) para exibição no radar — alinhados à Sidebar. */
@@ -28,6 +29,7 @@ export const USAGE_MODULE_LABEL: Record<UsageModuleKey, string> = {
   sugestoes: 'Sugestões',
   usuarios: 'Usuários',
   'isa-config': 'Config. ISA',
+  'radar-uso': 'Radar de uso',
   outros: 'Outros',
 }
 
@@ -47,5 +49,6 @@ export function resolveModuleFromPath(pathname: string): UsageModuleKey {
   if (path.startsWith('/sugestoes')) return 'sugestoes'
   if (path.startsWith('/usuarios')) return 'usuarios'
   if (path.startsWith('/isa-config')) return 'isa-config'
+  if (path.startsWith('/radar-uso')) return 'radar-uso'
   return 'outros'
 }
