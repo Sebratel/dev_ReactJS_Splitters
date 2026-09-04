@@ -52,7 +52,7 @@ import { env } from '@/shared/config/env'
 import { EmptyState } from '@/shared/ui/states/EmptyState'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
-import { ChevronDown, ChevronLeft, Download, RefreshCw } from 'lucide-react'
+import { ChevronLeft, Download, RefreshCw } from 'lucide-react'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { MassivaTicketCard } from '@/features/massiva/ui/MassivaTicketCard'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
@@ -328,7 +328,6 @@ export function MassivaTicketsSection({
     selectedMonth,
     customStart,
     customEnd,
-    chartMetric,
     impactRange,
     recordTypeFilter,
     catalogFilter,
@@ -544,16 +543,6 @@ const { data: recentOpenTickets = [] } = useQuery({
       return true
     })
   }, [tickets, scope, catalogFilter, recentProtocolSet])
-
-  const ticketsInPeriod = useMemo(() => {
-    const s = periodStart.getTime()
-    const e = periodEnd.getTime()
-    return tickets.filter((ticket) => {
-      const t = ticket.openedAt?.getTime()
-      return t != null && t >= s && t <= e
-    })
-  }, [tickets, periodStart, periodEnd])
-
 
   const scopedTicketsInWindow = useMemo(() => {
     const s = periodStart.getTime()
@@ -1463,12 +1452,12 @@ const { data: recentOpenTickets = [] } = useQuery({
                     protocol: selectedMaintenanceTicket.protocol,
                     assignmentId: selectedMaintenanceTicket.assignmentId,
                     updatedBy: closedByLabel,
-                    tipoIncidente: maintenanceClassif.tipoIncidente || null,
-                    impacto: maintenanceClassif.impacto || null,
-                    area: maintenanceClassif.area || null,
-                    tecnologia: maintenanceClassif.tecnologia || null,
-                    classificacao: maintenanceClassif.classificacao || null,
-                    cnl: maintenanceClassif.cnl || null,
+                    tipoIncidente: maintenanceClassif.tipoIncidente,
+                    impacto: maintenanceClassif.impacto,
+                    area: maintenanceClassif.area,
+                    tecnologia: maintenanceClassif.tecnologia,
+                    classificacao: maintenanceClassif.classificacao,
+                    cnl: maintenanceClassif.cnl,
                   })
                 }}
               >

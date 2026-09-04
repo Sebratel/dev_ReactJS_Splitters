@@ -193,6 +193,8 @@ export function StepAbertura({
       ? {
           personId: 0,
           operatorEmail: '',
+          operatorName: '',
+          eventIdentifiedBy: 'tecnico' as const,
           basis: openingPreparation.basis,
           plan: openingPreparation.plan,
           assignmentDescription,
