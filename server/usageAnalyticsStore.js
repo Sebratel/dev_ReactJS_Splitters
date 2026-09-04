@@ -270,7 +270,8 @@ export async function summarizeUsage(input = {}) {
       `SELECT module,
               COUNT(*) AS events,
               COUNT(DISTINCT user_email) AS users,
-              COALESCE(AVG(NULLIF(duration_ms, 0)), 0) AS avg_duration_ms
+              COALESCE(AVG(NULLIF(duration_ms, 0)), 0) AS avg_duration_ms,
+              COALESCE(SUM(duration_ms), 0) AS total_duration_ms
        FROM ${EVENTS_TABLE} ${where} AND event_type = 'pageview'
        GROUP BY module
        ORDER BY events DESC`,
@@ -349,6 +350,7 @@ export async function summarizeUsage(input = {}) {
         events: Number(r.events ?? 0),
         users: Number(r.users ?? 0),
         avgDurationMs: Math.round(Number(r.avg_duration_ms ?? 0)),
+        totalDurationMs: Math.round(Number(r.total_duration_ms ?? 0)),
       })),
       byUser: (Array.isArray(userRows) ? userRows : []).map((r) => ({
         email: toCleanString(r.user_email).toLowerCase(),

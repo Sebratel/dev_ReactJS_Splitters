@@ -46,6 +46,16 @@ function formatDuration(ms: number): string {
   return sec > 0 ? `${min}min ${sec}s` : `${min}min`
 }
 
+function formatDurationLong(ms: number): string {
+  if (!ms || ms <= 0) return '—'
+  const totalMin = Math.round(ms / 60000)
+  if (totalMin < 1) return `${Math.round(ms / 1000)}s`
+  if (totalMin < 60) return `${totalMin}min`
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return m > 0 ? `${h}h ${m}min` : `${h}h`
+}
+
 function formatRelative(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -62,7 +72,9 @@ function formatRelative(iso: string | null): string {
 const ACTION_LABEL: Record<string, string> = {
   massiva_abrir: 'Abrir massiva',
   massiva_encerrar: 'Encerrar massiva',
+  massiva_cancelar: 'Cancelar massiva',
   massiva_hsm_enviar: 'Disparar HSM',
+  redistribuicao_exportar: 'Exportar redistribuição',
   splitters_buscar: 'Buscar splitter',
   cliente_abrir: 'Abrir cliente',
 }
@@ -185,6 +197,49 @@ function ModuleRanking({ summary }: { summary: UsageSummary }) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TimeByModule({ summary }: { summary: UsageSummary }) {
+  const data = useMemo(
+    () =>
+      [...summary.byModule]
+        .filter((m) => m.totalDurationMs > 0)
+        .sort((a, b) => b.totalDurationMs - a.totalDurationMs)
+        .slice(0, 8),
+    [summary.byModule],
+  )
+  const max = data.length > 0 ? data[0].totalDurationMs : 0
+  return (
+    <div className={cn(CARD, 'p-4')}>
+      <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-on-surface">
+        <Clock size={15} className="text-primary" /> Onde passam mais tempo
+      </p>
+      <p className="mb-3 text-xs text-on-surface-variant">Tempo total acumulado por módulo no período.</p>
+      {data.length === 0 ? (
+        <p className="py-6 text-center text-sm text-on-surface-variant">Sem tempo medido no período.</p>
+      ) : (
+        <div className="space-y-2.5">
+          {data.map((m) => (
+            <div key={m.module}>
+              <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
+                <span className="truncate font-semibold text-on-surface">{moduleLabel(m.module)}</span>
+                <span className="shrink-0 font-mono tabular-nums text-on-surface-variant">
+                  {formatDurationLong(m.totalDurationMs)}
+                  <span className="ml-1.5 text-on-surface-variant/50">({formatDuration(m.avgDurationMs)}/acesso)</span>
+                </span>
+              </div>
+              <span className="block h-2 overflow-hidden rounded-full bg-surface-container-low">
+                <span
+                  className="block h-full rounded-full bg-primary"
+                  style={{ width: `${max > 0 ? Math.max(3, (m.totalDurationMs / max) * 100) : 0}%` }}
+                />
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -453,10 +508,12 @@ export function UsageRadarScreen() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ModuleRanking summary={data} />
-            <div className="space-y-4">
-              <DailyTrend summary={data} />
-              <HourlyHeat summary={data} />
-            </div>
+            <TimeByModule summary={data} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DailyTrend summary={data} />
+            <HourlyHeat summary={data} />
           </div>
 
           <TopUsers summary={data} />

@@ -401,6 +401,7 @@ export function MassivaTicketsSection({
   const cancelMutation = useMutation({
     mutationFn: cancelMassivaTicket,
     onSuccess: async (result, variables) => {
+      trackUsageAction('massiva_cancelar', { module: 'massiva' })
       setCancellingProtocol(null)
       setCancelDescription('')
       setCancelLocalWarning(result?.localHistoryWarning ?? null)

@@ -45,6 +45,7 @@ import {
   exportAllPendingToPDF,
   exportAllPendingToCSV,
 } from '@/features/splitters/utils/exportCondoRedistribution'
+import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
@@ -644,6 +645,7 @@ export function CondoRedistributionScreen() {
                       type="button"
                       onClick={() => {
                         setExportMenuOpen(false)
+                        trackUsageAction('redistribuicao_exportar', { module: 'redistribuicao' })
                         if (activeTab === 'opportunities') exportAllOpportunitiesToCSV(data.opportunities)
                         else exportAllPendingToCSV(data.pendingFloorInfo)
                       }}
@@ -659,6 +661,7 @@ export function CondoRedistributionScreen() {
                       type="button"
                       onClick={() => {
                         setExportMenuOpen(false)
+                        trackUsageAction('redistribuicao_exportar', { module: 'redistribuicao' })
                         if (activeTab === 'opportunities') exportAllOpportunitiesToPDF(data.opportunities)
                         else exportAllPendingToPDF(data.pendingFloorInfo)
                       }}

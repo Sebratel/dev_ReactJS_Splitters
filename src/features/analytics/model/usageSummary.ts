@@ -3,6 +3,7 @@ export type UsageModuleStat = {
   events: number
   users: number
   avgDurationMs: number
+  totalDurationMs: number
 }
 
 export type UsageUserStat = {
