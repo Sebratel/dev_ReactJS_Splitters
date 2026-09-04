@@ -422,7 +422,7 @@ export function UsageRadarScreen() {
   }, [selectedUser, data])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
+    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-on-surface">
