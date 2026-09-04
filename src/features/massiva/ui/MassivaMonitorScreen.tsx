@@ -30,6 +30,8 @@ const TICKETS_REFETCH_MS = 30_000
 const HISTORY_REFETCH_MS = 60_000
 const ONU_REFETCH_MS = 30_000
 const CLOCK_TICK_MS = 1_000
+/** Histórico local (fonte de novas aberturas) — polling rápido: é uma query barata. */
+const LOCAL_OPEN_REFETCH_MS = 8_000
 const SLA_RISK_WINDOW_MIN = 60
 const INCIDENT_ROWS_LIMIT = 60
 /** Acima disto, a lista "no prazo" entra em auto-scroll (não cabe na tela da TV). */
@@ -455,8 +457,8 @@ export function MassivaMonitorScreen() {
     queryKey: massivaKeys.historyList('aberta', openPeriodStart.toISOString(), 'monitor-open', 500),
     queryFn: () =>
       fetchMassivaHistoryListFromLocalDb({ status: 'aberta', startDate: openPeriodStart, limit: 500 }),
-    staleTime: TICKETS_REFETCH_MS / 2,
-    refetchInterval: TICKETS_REFETCH_MS,
+    staleTime: LOCAL_OPEN_REFETCH_MS / 2,
+    refetchInterval: LOCAL_OPEN_REFETCH_MS,
   })
 
   const openTickets = useMemo(() => {
