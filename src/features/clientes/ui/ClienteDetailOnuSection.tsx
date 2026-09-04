@@ -127,6 +127,17 @@ export function ClienteDetailOnuSection({
   const statusFreshness = formatAgo(diagnostic?.statusSeenAgeSeconds ?? null)
   const offlineSince = formatAgo(diagnostic?.lastOffAgeSeconds ?? null)
 
+  // Leitura velha demais: o monitoramento parou de reportar essa ONU. O valor
+  // exibido é a última leitura conhecida e pode não refletir o estado atual.
+  const STALE_READING_SECONDS = 6 * 3600
+  const readingAgeSeconds =
+    diagnostic?.statusSeenAgeSeconds ??
+    (diagnostic?.statusUpdatedAt
+      ? Math.round((Date.now() - new Date(diagnostic.statusUpdatedAt).getTime()) / 1000)
+      : null)
+  const isStaleReading =
+    readingAgeSeconds != null && Number.isFinite(readingAgeSeconds) && readingAgeSeconds > STALE_READING_SECONDS
+
   const offlineReason: 'power_fail' | 'loss_signal' | null = (() => {
     if (status !== 'offline') return null
     const fields = [diagnostic?.oltOnuStatus, diagnostic?.calculatedStatus, diagnostic?.rxGood]
@@ -175,6 +186,25 @@ export function ClienteDetailOnuSection({
         </p>
       ) : (
         <>
+          {/* Leitura desatualizada: a ONU parou de reportar ao monitoramento. */}
+          {isStaleReading ? (
+            <div
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 text-amber-800 dark:text-amber-200"
+              role="alert"
+            >
+              <AlertTriangle size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Leitura desatualizada ({statusFreshness})</p>
+                <p className="mt-0.5 text-xs leading-relaxed">
+                  O monitoramento não recebe leitura desta ONU desde{' '}
+                  <span className="font-medium">{fmtDateTime(diagnostic.statusUpdatedAt)}</span>. Os
+                  valores abaixo são a última leitura conhecida e podem não refletir o estado atual —
+                  confira no AutoISP.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {/* Alerta de atenuação: sinal atual muito abaixo do projetado. */}
           {attenuation.level === 'critical' || attenuation.level === 'warning' ? (
             <div
