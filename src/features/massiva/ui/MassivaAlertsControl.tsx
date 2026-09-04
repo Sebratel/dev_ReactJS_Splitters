@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertOctagon, Clock, Megaphone, Volume2, VolumeX, X } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
@@ -33,10 +33,14 @@ const TOAST_META: Record<
 
 function ToastCard({ toast, onClose }: { toast: MassivaAlertToast; onClose: () => void }) {
   const meta = TOAST_META[toast.kind]
+  // Auto-fecha 9s após montar (uma vez por toast). Usa ref pra não reiniciar o
+  // timer a cada render do pai — no monitor o relógio re-renderiza a cada 1s.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   useEffect(() => {
-    const id = window.setTimeout(onClose, 9_000)
+    const id = window.setTimeout(() => onCloseRef.current(), 9_000)
     return () => window.clearTimeout(id)
-  }, [onClose])
+  }, [])
   return (
     <div
       className={cn(
