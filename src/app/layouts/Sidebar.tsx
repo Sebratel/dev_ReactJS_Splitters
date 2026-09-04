@@ -8,6 +8,7 @@ import {
   BarChart2,
   Bot,
   Lightbulb,
+  Radar,
   Users,
   X,
 } from 'lucide-react'
@@ -66,6 +67,7 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
       : []),
     ...(isAdmin
       ? [
+          { label: 'Radar de uso', icon: Radar, to: '/radar-uso' },
           { label: 'Usuários', icon: Users, to: '/usuarios' },
           { label: 'Config. ISA', icon: Bot, to: '/isa-config' },
         ]

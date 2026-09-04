@@ -68,6 +68,10 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
+import {
+  recordUsageEvents,
+  summarizeUsage,
+} from './usageAnalyticsStore.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -3909,6 +3913,62 @@ app.patch('/api/platform-suggestions/:suggestionId/status', async (req, res) => 
         error instanceof Error
           ? error.message
           : 'Falha ao atualizar o status da sugestao da plataforma.',
+    });
+  }
+});
+
+// ── Radar de uso (analytics interno) ──────────────────────────────────────────
+// Ingesta: qualquer usuário autenticado registra os próprios acessos (fire-and-forget
+// no cliente). O autor vem do token, nunca do corpo. Falha aqui não pode quebrar o app.
+app.post('/api/usage-events', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const result = await recordUsageEvents({
+      events: Array.isArray(req.body?.events) ? req.body.events : [],
+      actor: {
+        uid: actor.profile.uid,
+        email: actor.profile.email || actor.identity.email,
+        name:
+          actor.profile.displayName ||
+          actor.identity.name ||
+          actor.profile.email ||
+          actor.identity.email,
+      },
+    });
+    return res.status(202).json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao registrar evento de uso.',
+    });
+  }
+});
+
+// Leitura do radar: agregações por módulo/usuário/hora/dia. Restrito a administradores
+// (mostra nomes de pessoas). Aceita ?days=7|30 ou ?start=&end= (ISO) para o período.
+app.get('/api/usage-events/summary', async (req, res) => {
+  try {
+    await requireSplittersAdminAccess(
+      req,
+      'Somente administradores podem ver o radar de uso da plataforma.',
+    );
+    const days = Number.parseInt(String(req.query?.days ?? ''), 10);
+    const startParam = typeof req.query?.start === 'string' ? new Date(req.query.start) : null;
+    const endParam = typeof req.query?.end === 'string' ? new Date(req.query.end) : null;
+    let startDate = startParam && !Number.isNaN(startParam.getTime()) ? startParam : null;
+    const endDate = endParam && !Number.isNaN(endParam.getTime()) ? endParam : new Date();
+    if (!startDate) {
+      const d = Number.isFinite(days) && days > 0 && days <= 366 ? days : 7;
+      startDate = new Date(endDate.getTime() - d * 24 * 60 * 60 * 1000);
+    }
+    const summary = await summarizeUsage({ startDate, endDate });
+    return res.json({ success: true, data: summary });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar o radar de uso.',
     });
   }
 });

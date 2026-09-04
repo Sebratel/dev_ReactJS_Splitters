@@ -45,6 +45,9 @@ const PlatformSuggestionsPage = lazy(() =>
 const CondoRedistributionPage = lazy(() =>
   import('@/pages/CondoRedistributionPage').then((m) => ({ default: m.CondoRedistributionPage })),
 )
+const UsageRadarPage = lazy(() =>
+  import('@/pages/UsageRadarPage').then((m) => ({ default: m.UsageRadarPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -147,6 +150,17 @@ export const router = createBrowserRouter([
                 description="Somente administradores podem acessar a configuração da ISA."
               >
                 <Page><IsaSettingsPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'radar-uso',
+            element: (
+              <PermissionGuard
+                permission="isAdmin"
+                description="Somente administradores podem ver o radar de uso da plataforma."
+              >
+                <Page><UsageRadarPage /></Page>
               </PermissionGuard>
             ),
           },
