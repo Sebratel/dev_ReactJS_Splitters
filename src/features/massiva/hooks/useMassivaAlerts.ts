@@ -8,11 +8,17 @@ import { playMassivaAlert } from '@/features/massiva/lib/massivaAlertSound'
  * nova massiva aberta, perto de vencer (janela `nearMinutes`) e ao vencer o prazo.
  * Sempre rastreia o estado (evita alertar histórico ao ligar); só toca quando ligado.
  */
-export function useMassivaAlerts(active: boolean): void {
+export function useMassivaAlerts(
+  active: boolean,
+  options?: { sound?: boolean; toast?: boolean },
+): void {
   const enabled = useMassivaAlertsStore((s) => s.enabled)
   const nearMinutes = useMassivaAlertsStore((s) => s.nearMinutes)
   const pushToast = useMassivaAlertsStore((s) => s.pushToast)
   const { openMassivas } = useHomeDashboardMassivaOpen()
+  // Som segue o toggle; toast pode ser forçado (ex.: painel de parede sempre mostra).
+  const playSound = options?.sound ?? enabled
+  const showToast = options?.toast ?? enabled
 
   const stateRef = useRef({
     initialized: false,
@@ -57,10 +63,8 @@ export function useMassivaAlerts(active: boolean): void {
       const isNew = !st.known.has(t.protocol)
       if (isNew) {
         st.known.add(t.protocol)
-        if (enabled) {
-          playMassivaAlert('new')
-          pushToast({ kind: 'new', protocol: t.protocol, title: 'Nova massiva aberta' })
-        }
+        if (playSound) playMassivaAlert('new')
+        if (showToast) pushToast({ kind: 'new', protocol: t.protocol, title: 'Nova massiva aberta' })
       }
 
       const exp = t.expectedCloseAt?.getTime() ?? null
@@ -71,17 +75,17 @@ export function useMassivaAlerts(active: boolean): void {
           st.expired.add(t.protocol)
           st.near.add(t.protocol)
           // Não duplica com o "nova" no mesmo ciclo (previsão padrão é +4h).
-          if (enabled && !isNew) {
-            playMassivaAlert('expired')
-            pushToast({ kind: 'expired', protocol: t.protocol, title: 'Massiva venceu o prazo' })
+          if (!isNew) {
+            if (playSound) playMassivaAlert('expired')
+            if (showToast) pushToast({ kind: 'expired', protocol: t.protocol, title: 'Massiva venceu o prazo' })
           }
         }
       } else if (diff <= nearMs) {
         if (!st.near.has(t.protocol)) {
           st.near.add(t.protocol)
-          if (enabled && !isNew) {
-            playMassivaAlert('near')
-            pushToast({ kind: 'near', protocol: t.protocol, title: 'Massiva perto de vencer' })
+          if (!isNew) {
+            if (playSound) playMassivaAlert('near')
+            if (showToast) pushToast({ kind: 'near', protocol: t.protocol, title: 'Massiva perto de vencer' })
           }
         }
       } else {
@@ -97,5 +101,5 @@ export function useMassivaAlerts(active: boolean): void {
     for (const set of [st.known, st.near, st.expired]) {
       for (const p of [...set]) if (!openSet.has(p)) set.delete(p)
     }
-  }, [openMassivas, enabled, nearMinutes, active, tick, pushToast])
+  }, [openMassivas, playSound, showToast, nearMinutes, active, tick, pushToast])
 }

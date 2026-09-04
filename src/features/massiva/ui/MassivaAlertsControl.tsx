@@ -64,12 +64,25 @@ function ToastCard({ toast, onClose }: { toast: MassivaAlertToast; onClose: () =
   )
 }
 
+/** Só o stack de toasts de alerta (portal, canto inferior). Reutilizável. */
+export function MassivaAlertToasts() {
+  const toasts = useMassivaAlertsStore((s) => s.toasts)
+  const dismissToast = useMassivaAlertsStore((s) => s.dismissToast)
+  if (toasts.length === 0) return null
+  return createPortal(
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-3 sm:inset-x-auto sm:right-4 sm:items-end">
+      {toasts.map((t) => (
+        <ToastCard key={t.id} toast={t} onClose={() => dismissToast(t.id)} />
+      ))}
+    </div>,
+    document.body,
+  )
+}
+
 function MassivaAlertsActive() {
   useMassivaAlerts(true)
   const enabled = useMassivaAlertsStore((s) => s.enabled)
   const setEnabled = useMassivaAlertsStore((s) => s.setEnabled)
-  const toasts = useMassivaAlertsStore((s) => s.toasts)
-  const dismissToast = useMassivaAlertsStore((s) => s.dismissToast)
 
   return (
     <>
@@ -98,16 +111,7 @@ function MassivaAlertsActive() {
         {enabled ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}
       </button>
 
-      {toasts.length > 0
-        ? createPortal(
-            <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-3 sm:inset-x-auto sm:right-4 sm:items-end">
-              {toasts.map((t) => (
-                <ToastCard key={t.id} toast={t} onClose={() => dismissToast(t.id)} />
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
+      <MassivaAlertToasts />
     </>
   )
 }

@@ -19,6 +19,9 @@ import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetch
 import { fetchMassivaHistoryMttdMttrKpis } from '@/features/massiva/api/fetchMassivaHistoryMttdMttrKpis'
 import { fetchOnuNetworkSummary } from '@/features/onu/api/fetchOnuNetworkSummary'
 import { fetchMassivaSignalProgress } from '@/features/massiva/api/fetchMassivaSignalProgress'
+import { useMassivaAlerts } from '@/features/massiva/hooks/useMassivaAlerts'
+import { MassivaAlertToasts } from '@/features/massiva/ui/MassivaAlertsControl'
+import { primeMassivaAudio } from '@/features/massiva/lib/massivaAlertSound'
 import { buildDashboardMassivaTickets } from '@/features/massiva/lib/buildDashboardMassivaTickets'
 import { isMassivaOpenForGlobalDashboard } from '@/features/massiva/lib/massivaDashboardEligibility'
 import type { OnuOltBreakdown } from '@/features/onu/model/onuNetworkSummary'
@@ -430,12 +433,18 @@ export function MassivaMonitorScreen() {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
   const toggleFullscreen = () => {
+    // O clique também libera o áudio dos alertas (exigência do navegador).
+    void primeMassivaAudio()
     if (document.fullscreenElement == null) {
       void document.documentElement.requestFullscreen?.().catch(() => {})
     } else {
       void document.exitFullscreen?.().catch(() => {})
     }
   }
+
+  // Popups de alerta (nova / perto de vencer / vencida) também no painel de parede.
+  // Toast sempre visível aqui; o som segue o toggle e o áudio liberado.
+  useMassivaAlerts(true, { toast: true })
 
   const { view } = useMassivaTickets({ refetchIntervalMs: TICKETS_REFETCH_MS })
   const bffTickets: MassivaTicket[] = view.status === 'success' ? view.tickets : []
@@ -673,6 +682,7 @@ export function MassivaMonitorScreen() {
   return (
     <div className="min-h-dvh bg-[#0a0f1a] px-6 py-5 font-sans text-[#eaf0fa]">
       <style>{SLA_ANIM_CSS}</style>
+      <MassivaAlertToasts />
       <div className="mb-4 flex items-center justify-between">
         <p className="text-[13px] font-bold uppercase tracking-wide text-[#8593b8]">
           Painel operacional · massivas
