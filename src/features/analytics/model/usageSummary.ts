@@ -22,6 +22,7 @@ export type UsageUserModuleStat = {
 
 export type UsageHourStat = { hour: number; events: number }
 export type UsageDayStat = { day: string; events: number; users: number }
+export type UsageActionStat = { module: string; action: string; events: number; users: number }
 
 export type UsageSummary = {
   range: { start: string; end: string }
@@ -31,4 +32,5 @@ export type UsageSummary = {
   byUserModule: UsageUserModuleStat[]
   byHour: UsageHourStat[]
   byDay: UsageDayStat[]
+  byAction: UsageActionStat[]
 }

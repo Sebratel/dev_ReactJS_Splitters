@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
 import { cancelMassivaTicket } from '@/features/massiva/api/cancelMassivaTicket'
 import { updateMassivaClassification } from '@/features/massiva/api/updateMassivaClassification'
@@ -371,6 +372,7 @@ export function MassivaTicketsSection({
   const closeMutation = useMutation({
     mutationFn: closeMassivaTicket,
     onSuccess: async (result, variables) => {
+      trackUsageAction('massiva_encerrar', { module: 'massiva' })
       setClosingProtocol(null)
       setCloseDescription('')
       setCloseClassif({ ...MASSIVA_CLASSIFICATION_RESET })

@@ -1,5 +1,6 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
+import { getUsageContext } from '@/features/analytics/lib/usageContext'
 import type { UsageModuleKey } from '@/features/analytics/lib/resolveModuleFromPath'
 
 export type UsageEventInput = {
@@ -34,4 +35,24 @@ export function trackUsageEvents(events: UsageEventInput[], options?: { keepaliv
   } catch {
     /* silencioso */
   }
+}
+
+/**
+ * Registra uma AÇÃO do usuário (clique/uso de recurso) dentro do módulo atual.
+ * Ergonômico: pega módulo/rota/sessão do contexto corrente. Best-effort.
+ * Ex.: trackUsageAction('massiva_abrir'), trackUsageAction('splitters_exportar').
+ */
+export function trackUsageAction(action: string, options?: { module?: UsageModuleKey }): void {
+  const clean = (action || '').trim()
+  if (clean === '') return
+  const ctx = getUsageContext()
+  trackUsageEvents([
+    {
+      module: options?.module ?? ctx?.module ?? 'outros',
+      path: ctx?.path ?? '/',
+      eventType: 'action',
+      action: clean,
+      sessionId: ctx?.sessionId ?? null,
+    },
+  ])
 }

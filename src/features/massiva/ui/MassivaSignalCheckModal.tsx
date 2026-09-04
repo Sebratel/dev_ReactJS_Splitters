@@ -20,6 +20,7 @@ import {
   type MassivaAffectedSignalBucket,
 } from '@/features/massiva/api/fetchMassivaAffectedSignal'
 import { dispatchMassivaHsm } from '@/features/massiva/api/dispatchMassivaHsm'
+import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 
 type HsmStatus = 'sending' | 'sent' | 'error'
 
@@ -80,6 +81,7 @@ export function MassivaSignalCheckModal({ protocol, assignmentId, onClose }: Mas
         for (const c of targets) next[c.pppoe] = 'sent'
         return next
       })
+      trackUsageAction('massiva_hsm_enviar', { module: 'massiva' })
       setBanner({ kind: 'success', text: `HSM disparado para ${res.dispatched} cliente(s).` })
     } catch (err) {
       setHsmStatus((prev) => {

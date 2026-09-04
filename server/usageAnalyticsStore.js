@@ -307,6 +307,17 @@ export async function summarizeUsage(input = {}) {
       params,
     );
 
+    const [actionRows] = await pool.query(
+      `SELECT module, action,
+              COUNT(*) AS events,
+              COUNT(DISTINCT user_email) AS users
+       FROM ${EVENTS_TABLE} ${where} AND event_type = 'action' AND action IS NOT NULL
+       GROUP BY module, action
+       ORDER BY events DESC
+       LIMIT 50`,
+      params,
+    );
+
     return {
       range: { start: startSql, end: endSql },
       totals: {
@@ -339,6 +350,12 @@ export async function summarizeUsage(input = {}) {
       })),
       byDay: (Array.isArray(dayRows) ? dayRows : []).map((r) => ({
         day: typeof r.day === 'string' ? r.day : mysqlNaiveDateTimeToIso(r.day)?.slice(0, 10),
+        events: Number(r.events ?? 0),
+        users: Number(r.users ?? 0),
+      })),
+      byAction: (Array.isArray(actionRows) ? actionRows : []).map((r) => ({
+        module: toCleanString(r.module) || 'outros',
+        action: toCleanString(r.action),
         events: Number(r.events ?? 0),
         users: Number(r.users ?? 0),
       })),

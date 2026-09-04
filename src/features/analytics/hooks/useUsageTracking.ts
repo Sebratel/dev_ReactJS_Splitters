@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { resolveModuleFromPath } from '@/features/analytics/lib/resolveModuleFromPath'
+import { setUsageContext } from '@/features/analytics/lib/usageContext'
 import { trackUsageEvents } from '@/features/analytics/api/trackUsageEvent'
 
 /** Duração máxima creditada a uma página (evita inflar com aba ociosa). */
@@ -61,13 +62,16 @@ export function useUsageTracking(): void {
   useEffect(() => {
     const previousPath = currentRef.current?.path ?? null
     flushCurrent(false)
+    const nextModule = resolveModuleFromPath(pathname)
     currentRef.current = {
       path: pathname,
-      module: resolveModuleFromPath(pathname),
+      module: nextModule,
       enteredAt: Date.now(),
       referrer: previousPath,
       flushed: false,
     }
+    // Expõe o contexto atual para trackUsageAction() disparar de qualquer handler.
+    setUsageContext({ module: nextModule, path: pathname, sessionId: sessionIdRef.current })
   }, [pathname])
 
   // Fechar/ocultar a aba: garante o envio do último acesso.

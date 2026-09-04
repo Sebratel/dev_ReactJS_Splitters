@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Activity, Clock, Radar, RefreshCw, Users } from 'lucide-react'
+import { Activity, Clock, MousePointerClick, Radar, RefreshCw, Users } from 'lucide-react'
 import { useUsageAnalytics } from '@/features/analytics/hooks/useUsageAnalytics'
 import {
   USAGE_MODULE_LABEL,
@@ -55,6 +55,22 @@ function formatRelative(iso: string | null): string {
   const h = Math.floor(diffMin / 60)
   if (h < 24) return `há ${h}h`
   return `há ${Math.floor(h / 24)}d`
+}
+
+/** Rótulos amigáveis das ações instrumentadas; desconhecidas caem no humanizador. */
+const ACTION_LABEL: Record<string, string> = {
+  massiva_abrir: 'Abrir massiva',
+  massiva_encerrar: 'Encerrar massiva',
+  massiva_hsm_enviar: 'Disparar HSM',
+  splitters_buscar: 'Buscar splitter',
+  cliente_abrir: 'Abrir cliente',
+}
+
+function actionLabel(action: string): string {
+  const known = ACTION_LABEL[action]
+  if (known) return known
+  const humanized = action.replace(/[_-]+/g, ' ').trim()
+  return humanized.charAt(0).toUpperCase() + humanized.slice(1)
 }
 
 function firstName(name: string, email: string): string {
@@ -262,6 +278,45 @@ function TopUsers({ summary }: { summary: UsageSummary }) {
   )
 }
 
+function ActionsPanel({ summary }: { summary: UsageSummary }) {
+  return (
+    <div className={cn(CARD, 'overflow-hidden')}>
+      <p className="flex items-center gap-1.5 border-b border-neutral-200/70 p-4 text-sm font-bold text-on-surface dark:border-white/10">
+        <MousePointerClick size={15} className="text-primary" /> Ações mais usadas
+      </p>
+      {summary.byAction.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-on-surface-variant">
+          Ainda sem ações registradas no período. Conforme os recursos instrumentados forem usados,
+          eles aparecem aqui (ex.: abrir massiva, buscar splitter).
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
+                <th className="px-4 py-2">Ação</th>
+                <th className="px-4 py-2">Módulo</th>
+                <th className="px-4 py-2 text-right">Vezes</th>
+                <th className="px-4 py-2 text-right">Usuários</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.byAction.map((a) => (
+                <tr key={`${a.module}:${a.action}`} className="border-t border-neutral-200/60 dark:border-white/5">
+                  <td className="px-4 py-2.5 font-semibold text-on-surface">{actionLabel(a.action)}</td>
+                  <td className="px-4 py-2.5 text-on-surface-variant">{moduleLabel(a.module)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface">{a.events.toLocaleString('pt-BR')}</td>
+                  <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface-variant">{a.users}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function UsageRadarScreen() {
   const [days, setDays] = useState<number>(7)
   const { data, isLoading, isError, error, refetch, isFetching } = useUsageAnalytics(days)
@@ -335,6 +390,7 @@ export function UsageRadarScreen() {
           </div>
 
           <TopUsers summary={data} />
+          <ActionsPanel summary={data} />
         </>
       ) : null}
     </div>
