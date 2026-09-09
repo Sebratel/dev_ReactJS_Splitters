@@ -73,7 +73,7 @@ export function UsersManagementPage() {
       />
 
       {usersQuery.isError ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        <div className="rounded-xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
           Falha ao carregar usuários:{' '}
           {usersQuery.error instanceof Error ? usersQuery.error.message : 'erro inesperado'}
         </div>

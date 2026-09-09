@@ -68,13 +68,13 @@ export function SplitterClientesSection({
       />
 
       {geogridState.type === 'error' ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm">
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 shadow-sm">
           As reservas do GeoGrid não puderam ser carregadas agora. Os cards seguem aparecendo,
           mas sem o destaque de reserva até a próxima tentativa.
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5">
+      <section className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/[0.08] text-primary">
@@ -97,7 +97,7 @@ export function SplitterClientesSection({
             type="button"
             onClick={() => setComparisonRequested(true)}
             disabled={!canValidate || comparisonState.type === 'loading'}
-            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-white/15"
           >
             {buttonLabel}
           </button>

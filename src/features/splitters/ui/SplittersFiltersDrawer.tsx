@@ -136,7 +136,7 @@ export function SplittersFiltersDrawer({
         className="absolute inset-0 bg-surface/40 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
       />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-outline-variant bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-outline-variant bg-surface-container-lowest shadow-2xl animate-in slide-in-from-right duration-300">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-outline-variant/40 px-5 py-5">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -450,7 +450,7 @@ export function SplittersFiltersDrawer({
                     onChange={(e) =>
                       setMaintenanceWindowDays(Number(e.target.value) as 7 | 30 | 90)
                     }
-                    className="rounded-lg border border-outline-variant/50 bg-white px-2 py-1 text-xs font-semibold text-on-surface"
+                    className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-1 text-xs font-semibold text-on-surface"
                   >
                     <option value={7}>7 dias</option>
                     <option value={30}>30 dias</option>
@@ -568,7 +568,7 @@ export function SplittersFiltersDrawer({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-outline-variant/40 bg-white px-5 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-outline-variant/40 bg-surface-container-lowest px-5 py-4">
           <button
             type="button"
             onClick={() => clearAll()}

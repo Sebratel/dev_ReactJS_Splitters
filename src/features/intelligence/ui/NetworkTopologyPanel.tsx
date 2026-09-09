@@ -45,13 +45,13 @@ const BAND_LABEL: Record<TopologyRiskBand, string> = {
 function bandBadgeClass(band: TopologyRiskBand): string {
   switch (band) {
     case 'critico':
-      return 'bg-rose-100 text-rose-800'
+      return 'bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-200'
     case 'alto':
-      return 'bg-amber-100 text-amber-900'
+      return 'bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200'
     case 'moderado':
-      return 'bg-sky-100 text-sky-800'
+      return 'bg-sky-100 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200'
     default:
-      return 'bg-emerald-100 text-emerald-800'
+      return 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200'
   }
 }
 
@@ -70,9 +70,9 @@ function formatDelta(value: number): string {
 
 /** Faixas de RX alinhadas ao ONU_BUCKET_CASE do BFF (−25 atenuado · −28 crítico). */
 function rxTextClass(rx: number): string {
-  if (rx <= -28) return 'text-rose-700'
-  if (rx <= -25) return 'text-amber-700'
-  return 'text-emerald-700'
+  if (rx <= -28) return 'text-rose-700 dark:text-rose-200'
+  if (rx <= -25) return 'text-amber-700 dark:text-amber-200'
+  return 'text-emerald-700 dark:text-emerald-200'
 }
 
 function formatRx(rx: number | null): string {
@@ -94,7 +94,7 @@ function SignalHealthBar({
   if (total <= 0) return null
   const pct = (n: number) => `${(n / total) * 100}%`
   return (
-    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
       {online > 0 ? <div className="h-full bg-emerald-500" style={{ width: pct(online) }} /> : null}
       {degraded > 0 ? <div className="h-full bg-amber-500" style={{ width: pct(degraded) }} /> : null}
       {offline > 0 ? <div className="h-full bg-rose-500" style={{ width: pct(offline) }} /> : null}
@@ -113,57 +113,57 @@ function NodeMetrics({
   return (
     <>
       <div className="mt-3">
-        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+        <div className="flex items-center justify-between text-[11px] font-semibold text-on-surface-variant">
           <span>Ocupação (média · máx)</span>
-          <span className="tabular-nums text-slate-900">
+          <span className="tabular-nums text-on-surface">
             {metrics.avgUsagePercent.toFixed(1)}% · {metrics.maxUsagePercent.toFixed(1)}%
           </span>
         </div>
-        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
           <div
             className={cn('h-full rounded-full transition-all', usageBarClass(metrics.maxUsagePercent))}
             style={{ width: `${Math.min(100, Math.max(2, metrics.maxUsagePercent))}%` }}
           />
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-700">
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-on-surface-variant">
         <span className="inline-flex items-center gap-1">
-          <Cpu className="size-3.5 text-slate-400" aria-hidden />
+          <Cpu className="size-3.5 text-on-surface-variant/60" aria-hidden />
           {metrics.splitters} splitters
         </span>
         <span className="inline-flex items-center gap-1">
           <AlertTriangle
-            className={cn('size-3.5', metrics.criticalSplitters > 0 ? 'text-rose-500' : 'text-slate-300')}
+            className={cn('size-3.5', metrics.criticalSplitters > 0 ? 'text-rose-500' : 'text-on-surface-variant/60')}
             aria-hidden
           />
           {metrics.criticalSplitters} críticos
         </span>
         <span className="inline-flex items-center gap-1">
-          <TrendingUp className="size-3.5 text-slate-400" aria-hidden />
+          <TrendingUp className="size-3.5 text-on-surface-variant/60" aria-hidden />
           {deltaReferenceLabel} {formatDelta(metrics.avgDeltaReference)}
         </span>
         <span className="inline-flex items-center gap-1">
           <Activity
-            className={cn('size-3.5', metrics.openTickets > 0 ? 'text-amber-500' : 'text-slate-300')}
+            className={cn('size-3.5', metrics.openTickets > 0 ? 'text-amber-500' : 'text-on-surface-variant/60')}
             aria-hidden
           />
           {metrics.openTickets} massivas abertas
         </span>
         {metrics.affectedClientsTotal > 0 ? (
-          <span className="col-span-2 inline-flex items-center gap-1 text-slate-600">
-            <Users className="size-3.5 text-slate-400" aria-hidden />
+          <span className="col-span-2 inline-flex items-center gap-1 text-on-surface-variant">
+            <Users className="size-3.5 text-on-surface-variant/60" aria-hidden />
             {metrics.affectedClientsTotal} clientes impactados no período
           </span>
         ) : null}
       </div>
       {metrics.monitoredOnus > 0 ? (
-        <div className="mt-3 border-t border-slate-100 pt-2.5">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+        <div className="mt-3 border-t border-slate-100 dark:border-white/5 pt-2.5">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-on-surface-variant">
             <span className="inline-flex items-center gap-1">
-              <Radio className="size-3.5 text-slate-400" aria-hidden />
+              <Radio className="size-3.5 text-on-surface-variant/60" aria-hidden />
               RX médio
             </span>
-            <span className={cn('tabular-nums', metrics.avgRxPower != null ? rxTextClass(metrics.avgRxPower) : 'text-slate-400')}>
+            <span className={cn('tabular-nums', metrics.avgRxPower != null ? rxTextClass(metrics.avgRxPower) : 'text-on-surface-variant/60')}>
               {formatRx(metrics.avgRxPower)}
             </span>
           </div>
@@ -174,14 +174,14 @@ function NodeMetrics({
               offline={metrics.offlineOnus}
             />
           </div>
-          <div className="mt-1 flex items-center justify-between text-[10px] font-medium text-slate-500">
+          <div className="mt-1 flex items-center justify-between text-[10px] font-medium text-on-surface-variant">
             <span>{metrics.monitoredOnus} ONUs monitoradas</span>
             <span>
-              <span className="text-emerald-600">{metrics.onlineOnus}</span>
+              <span className="text-emerald-600 dark:text-emerald-300">{metrics.onlineOnus}</span>
               {' · '}
-              <span className="text-amber-600">{metrics.degradedOnus}</span>
+              <span className="text-amber-600 dark:text-amber-300">{metrics.degradedOnus}</span>
               {' · '}
-              <span className="text-rose-600">{metrics.offlineOnus}</span>
+              <span className="text-rose-600 dark:text-rose-300">{metrics.offlineOnus}</span>
             </span>
           </div>
         </div>
@@ -209,19 +209,19 @@ function NodeCard({ icon: Icon, title, subtitle, metrics, deltaReferenceLabel, o
       onClick={onClick}
       disabled={!interactive}
       className={cn(
-        'group flex flex-col rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition',
+        'group flex flex-col rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-lowest p-4 text-left shadow-sm transition',
         interactive ? 'hover:border-primary/40 hover:shadow-md' : 'cursor-default',
-        metrics.worstRiskBand === 'critico' ? 'ring-1 ring-rose-200' : null,
+        metrics.worstRiskBand === 'critico' ? 'ring-1 ring-rose-200 dark:ring-rose-800/50' : null,
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 group-hover:bg-primary/10 group-hover:text-primary">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-on-surface-variant group-hover:bg-primary/10 group-hover:text-primary">
             <Icon className="size-4.5" aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-900">{title}</p>
-            {subtitle ? <p className="truncate text-[10px] font-medium text-slate-500">{subtitle}</p> : null}
+            <p className="truncate text-sm font-black text-on-surface">{title}</p>
+            {subtitle ? <p className="truncate text-[10px] font-medium text-on-surface-variant">{subtitle}</p> : null}
           </div>
         </div>
         <span
@@ -245,7 +245,7 @@ function NodeCard({ icon: Icon, title, subtitle, metrics, deltaReferenceLabel, o
 
 function Crumb({ label, onClick, active }: { label: string; onClick?: () => void; active?: boolean }) {
   if (active || !onClick) {
-    return <span className="font-black text-slate-900">{label}</span>
+    return <span className="font-black text-on-surface">{label}</span>
   }
   return (
     <button
@@ -338,12 +338,12 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
   return (
     <div className="space-y-4">
       {/* Breadcrumb + narrativa */}
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
+      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-gradient-to-br from-slate-50 dark:from-white/5 to-white dark:to-surface-container-lowest p-4">
         <nav className="flex flex-wrap items-center gap-1.5 text-xs">
           <Crumb label="Todas as OLTs" onClick={goRoot} active={!selectedOlt} />
           {selectedOlt ? (
             <>
-              <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+              <ChevronRight className="size-3.5 text-on-surface-variant/60" aria-hidden />
               <Crumb
                 label={oltDisplayLabel(selectedOlt.accessPointTitle)}
                 onClick={() => goOlt(selectedOlt.accessPointCode)}
@@ -353,24 +353,24 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
           ) : null}
           {selectedSlot ? (
             <>
-              <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+              <ChevronRight className="size-3.5 text-on-surface-variant/60" aria-hidden />
               <Crumb label={slotLabel(selectedSlot)} onClick={() => goSlot(selectedSlot.slot)} active={!selectedPon} />
             </>
           ) : null}
           {selectedPon ? (
             <>
-              <ChevronRight className="size-3.5 text-slate-400" aria-hidden />
+              <ChevronRight className="size-3.5 text-on-surface-variant/60" aria-hidden />
               <Crumb label={ponLabel(selectedPon)} active />
             </>
           ) : null}
         </nav>
-        <p className="mt-2 text-sm font-medium text-slate-700">{narrative}</p>
+        <p className="mt-2 text-sm font-medium text-on-surface-variant">{narrative}</p>
       </div>
 
       {/* Nível 0 — OLTs */}
       {!selectedOlt ? (
         topology.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+          <p className="rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-low/80 py-10 text-center text-sm text-on-surface-variant">
             Sem dados de topologia no recorte filtrado.
           </p>
         ) : (
@@ -453,13 +453,13 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
             <Link
               key={row.splitterCode}
               to={`/splitters/${encodeURIComponent(row.splitterCode)}`}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-primary/40 hover:shadow-md"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-surface-container-lowest p-3.5 shadow-sm transition hover:border-primary/40 hover:shadow-md"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-900">
+                <p className="truncate text-sm font-bold text-on-surface">
                   {row.splitterTitle || row.splitterCode}
                 </p>
-                <p className="font-mono text-[10px] text-slate-500">{row.splitterCode}</p>
+                <p className="font-mono text-[10px] text-on-surface-variant">{row.splitterCode}</p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 {(() => {
@@ -470,27 +470,27 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
                       <p
                         className={cn(
                           'inline-flex items-center gap-1 text-xs font-bold tabular-nums',
-                          sig.avgRxPower != null ? rxTextClass(sig.avgRxPower) : 'text-slate-400',
+                          sig.avgRxPower != null ? rxTextClass(sig.avgRxPower) : 'text-on-surface-variant/60',
                         )}
                       >
                         <Radio className="size-3.5" aria-hidden />
                         {formatRx(sig.avgRxPower)}
                       </p>
-                      <p className="text-[10px] font-medium text-slate-500">
-                        <span className="text-emerald-600">{sig.online}</span>
+                      <p className="text-[10px] font-medium text-on-surface-variant">
+                        <span className="text-emerald-600 dark:text-emerald-300">{sig.online}</span>
                         {' · '}
-                        <span className="text-amber-600">{sig.degraded}</span>
+                        <span className="text-amber-600 dark:text-amber-300">{sig.degraded}</span>
                         {' · '}
-                        <span className="text-rose-600">{sig.offline}</span>
+                        <span className="text-rose-600 dark:text-rose-300">{sig.offline}</span>
                       </p>
                     </div>
                   )
                 })()}
                 <div className="text-right">
-                  <p className="text-sm font-black tabular-nums text-slate-900">
+                  <p className="text-sm font-black tabular-nums text-on-surface">
                     {row.currentUsagePercent.toFixed(1)}%
                   </p>
-                  <p className="text-[10px] font-medium text-slate-500">
+                  <p className="text-[10px] font-medium text-on-surface-variant">
                     {deltaReferenceLabel} {formatDelta(row.selectedDelta)}
                   </p>
                 </div>
@@ -502,7 +502,7 @@ export function NetworkTopologyPanel({ topology, deltaReferenceLabel }: NetworkT
                 >
                   {BAND_LABEL[row.riskBand]}
                 </span>
-                <ChevronRight className="size-4 text-slate-300" aria-hidden />
+                <ChevronRight className="size-4 text-on-surface-variant/60" aria-hidden />
               </div>
             </Link>
           ))}

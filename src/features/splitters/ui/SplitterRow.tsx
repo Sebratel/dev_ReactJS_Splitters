@@ -17,7 +17,7 @@ export function SplitterRow({ splitter }: SplitterRowProps) {
       <Link
         to={to}
         state={{ splittersListHref: `${location.pathname}${location.search}` }}
-        className="flex items-center justify-between rounded-3xl bg-surface-container-lowest p-6 transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-primary/5"
+        className="flex items-center justify-between rounded-3xl bg-surface-container-lowest p-6 transition-all duration-300 hover:scale-[1.01] hover:shadow-2xl hover:shadow-primary/5 dark:ring-1 dark:ring-white/10"
       >
         <div className="flex items-center gap-5">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-container-low text-on-surface-variant transition-colors group-hover:bg-primary/10 group-hover:text-primary">

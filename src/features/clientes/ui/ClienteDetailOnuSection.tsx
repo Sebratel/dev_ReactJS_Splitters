@@ -90,8 +90,8 @@ function Metric({
 }
 
 const TEMP_VALUE_CLASS: Record<ReturnType<typeof deriveTempLevel>, string> = {
-  hot: 'text-orange-600',
-  warm: 'text-amber-600',
+  hot: 'text-orange-600 dark:text-orange-300',
+  warm: 'text-amber-600 dark:text-amber-300',
   ok: 'text-on-surface',
   unknown: 'text-on-surface',
 }
@@ -127,6 +127,17 @@ export function ClienteDetailOnuSection({
   const statusFreshness = formatAgo(diagnostic?.statusSeenAgeSeconds ?? null)
   const offlineSince = formatAgo(diagnostic?.lastOffAgeSeconds ?? null)
 
+  // Leitura velha demais: o monitoramento parou de reportar essa ONU. O valor
+  // exibido é a última leitura conhecida e pode não refletir o estado atual.
+  const STALE_READING_SECONDS = 6 * 3600
+  const readingAgeSeconds =
+    diagnostic?.statusSeenAgeSeconds ??
+    (diagnostic?.statusUpdatedAt
+      ? Math.round((Date.now() - new Date(diagnostic.statusUpdatedAt).getTime()) / 1000)
+      : null)
+  const isStaleReading =
+    readingAgeSeconds != null && Number.isFinite(readingAgeSeconds) && readingAgeSeconds > STALE_READING_SECONDS
+
   const offlineReason: 'power_fail' | 'loss_signal' | null = (() => {
     if (status !== 'offline') return null
     const fields = [diagnostic?.oltOnuStatus, diagnostic?.calculatedStatus, diagnostic?.rxGood]
@@ -138,7 +149,7 @@ export function ClienteDetailOnuSection({
 
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-onu-heading"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -175,14 +186,33 @@ export function ClienteDetailOnuSection({
         </p>
       ) : (
         <>
+          {/* Leitura desatualizada: a ONU parou de reportar ao monitoramento. */}
+          {isStaleReading ? (
+            <div
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 text-amber-800 dark:text-amber-200"
+              role="alert"
+            >
+              <AlertTriangle size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Leitura desatualizada ({statusFreshness})</p>
+                <p className="mt-0.5 text-xs leading-relaxed">
+                  O monitoramento não recebe leitura desta ONU desde{' '}
+                  <span className="font-medium">{fmtDateTime(diagnostic.statusUpdatedAt)}</span>. Os
+                  valores abaixo são a última leitura conhecida e podem não refletir o estado atual —
+                  confira no AutoISP.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {/* Alerta de atenuação: sinal atual muito abaixo do projetado. */}
           {attenuation.level === 'critical' || attenuation.level === 'warning' ? (
             <div
               className={cn(
                 'mt-4 flex items-start gap-2.5 rounded-xl border p-3',
                 attenuation.level === 'critical'
-                  ? 'border-rose-300 bg-rose-50 text-rose-800'
-                  : 'border-amber-300 bg-amber-50 text-amber-800',
+                  ? 'border-rose-300 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
+                  : 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
               )}
               role="alert"
             >
@@ -207,8 +237,8 @@ export function ClienteDetailOnuSection({
               className={cn(
                 'mt-4 flex items-start gap-2.5 rounded-xl border p-3',
                 tempLevel === 'hot'
-                  ? 'border-orange-300 bg-orange-50 text-orange-800'
-                  : 'border-amber-300 bg-amber-50 text-amber-800',
+                  ? 'border-orange-300 bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200'
+                  : 'border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
               )}
               role="alert"
             >
@@ -231,7 +261,7 @@ export function ClienteDetailOnuSection({
           {/* Motivo do offline: power_fail ou loss_signal reportado pela OLT. */}
           {offlineReason === 'power_fail' ? (
             <div
-              className="mt-4 flex items-start gap-2.5 rounded-xl border border-orange-300 bg-orange-50 p-3 text-orange-800"
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-orange-300 bg-orange-50 dark:bg-orange-950/40 p-3 text-orange-800 dark:text-orange-200"
               role="alert"
             >
               <Zap size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
@@ -244,7 +274,7 @@ export function ClienteDetailOnuSection({
             </div>
           ) : offlineReason === 'loss_signal' ? (
             <div
-              className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-300 bg-rose-50 p-3 text-rose-800"
+              className="mt-4 flex items-start gap-2.5 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 p-3 text-rose-800 dark:text-rose-200"
               role="alert"
             >
               <WifiOff size={16} strokeWidth={2} className="mt-0.5 shrink-0" />
@@ -265,19 +295,19 @@ export function ClienteDetailOnuSection({
                 {noSignal ? 'Sem sinal' : fmtDbm(diagnostic.rxPower)}
               </span>
             </div>
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
               <div
                 className={cn('h-full rounded-full transition-all', BAR_COLOR[status])}
                 style={{ width: `${pct}%` }}
               />
             </div>
             {noSignal ? (
-              <p className="mt-1 text-[11px] font-medium text-rose-600">
+              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-300">
                 Sem sinal óptico (0.0 dBm / LOS) — ONU sem luz: possível queda, falta de energia
                 ou problema na fibra. O estado pode levar minutos para consolidar no monitoramento.
               </p>
             ) : diagnostic.rxPower !== null && diagnostic.rxPower <= RX_POWER_CRITICAL_DBM ? (
-              <p className="mt-1 text-[11px] font-medium text-rose-600">
+              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-300">
                 Sinal abaixo do limite recomendado — verificar atenuação na fibra/porta.
               </p>
             ) : null}
@@ -321,9 +351,9 @@ export function ClienteDetailOnuSection({
             className={cn(
               'mt-4 grid gap-3 rounded-xl border px-3 py-2.5 sm:grid-cols-3',
               attenuation.level === 'critical'
-                ? 'border-rose-200 bg-rose-50/50'
+                ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50/50 dark:bg-rose-950/40'
                 : attenuation.level === 'warning'
-                  ? 'border-amber-200 bg-amber-50/50'
+                  ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/40'
                   : 'border-outline-variant/60 bg-surface-container-low/30',
             )}
           >
@@ -339,7 +369,7 @@ export function ClienteDetailOnuSection({
                     : 'Sem projeção na GeoGrid'}
               </p>
               {projectedData?.ambiguous ? (
-                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-700">
+                <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-200">
                   <AlertTriangle size={11} strokeWidth={2} className="shrink-0" />
                   Múltiplos registros — confirmar manualmente
                 </p>
@@ -381,7 +411,7 @@ export function ClienteDetailOnuSection({
               </span>
             ) : null}
             {status === 'offline' && offlineSince ? (
-              <span className="text-rose-600">Offline desde {offlineSince}</span>
+              <span className="text-rose-600 dark:text-rose-300">Offline desde {offlineSince}</span>
             ) : null}
             <span>Métricas lidas em {fmtDateTime(diagnostic.statusUpdatedAt)}</span>
           </div>

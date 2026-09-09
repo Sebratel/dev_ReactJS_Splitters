@@ -51,9 +51,9 @@ function Field({
 }
 
 const STATUS_TONE: Record<string, string> = {
-  ativo: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  suspenso: 'border-amber-200 bg-amber-50 text-amber-800',
-  bloqueado: 'border-rose-200 bg-rose-50 text-rose-800',
+  ativo: 'border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200',
+  suspenso: 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
+  bloqueado: 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200',
 }
 
 function statusToneClass(status: string | null): string {
@@ -116,7 +116,7 @@ export function ClienteDetailPatrimoniesSection({
 
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-detail-patrimonies-heading"
     >
       <div className="flex items-start gap-3">

@@ -48,8 +48,8 @@ export function SessionGate({ children }: SessionGateProps) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold text-slate-900">Sessao necessaria</h1>
-          <p className="max-w-md text-sm text-slate-600">
+          <h1 className="text-xl font-semibold text-on-surface">Sessao necessaria</h1>
+          <p className="max-w-md text-sm text-on-surface-variant">
             Entre com sua conta Google para reutilizar o token do usuario nas chamadas do Hub e nas
             APIs de massiva.
           </p>
@@ -57,7 +57,7 @@ export function SessionGate({ children }: SessionGateProps) {
         <GoogleSignInButton />
         <a
           href={env.hubOrigin}
-          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+          className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-on-surface-variant transition hover:border-slate-400 hover:text-on-surface"
         >
           {t('session.login_button')}
         </a>
@@ -66,7 +66,7 @@ export function SessionGate({ children }: SessionGateProps) {
   }
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-sm text-neutral-500">
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-sm text-on-surface-variant">
       <div className="h-2 w-2 animate-bounce rounded-full bg-violet-500" />
       {t('session.redirecting')}
     </div>

@@ -51,7 +51,7 @@ export function IsaSettingsPage() {
         description="Edite os blocos do prompt base da ISA sem novo deploy. A próxima requisição já usa a configuração salva."
         primaryAction={{ to: '/', label: 'Voltar ao painel' }}
         trailing={
-          <span className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-white/80 px-3 py-2 text-xs font-bold uppercase tracking-wide text-violet-900 shadow-sm">
+          <span className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 dark:border-violet-800/50 bg-surface-container-lowest/80 px-3 py-2 text-xs font-bold uppercase tracking-wide text-violet-900 dark:text-violet-200 shadow-sm">
             <Shield className="size-4" aria-hidden />
             Admin only
           </span>
@@ -59,11 +59,11 @@ export function IsaSettingsPage() {
       />
 
       {configQuery.isLoading ? (
-        <div className="rounded-2xl border border-neutral-200/90 bg-white p-6 text-sm text-neutral-600 shadow-sm">
+        <div className="rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest p-6 text-sm text-on-surface-variant shadow-sm">
           Carregando configuração da ISA...
         </div>
       ) : configQuery.isError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 shadow-sm">
+        <div className="rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-800 dark:text-rose-200 shadow-sm">
           {configQuery.error instanceof Error
             ? configQuery.error.message
             : 'Falha ao carregar a configuração da ISA.'}

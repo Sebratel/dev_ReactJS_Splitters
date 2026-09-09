@@ -31,7 +31,7 @@ function OidcCallbackPageInner() {
   if (auth.error) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-surface px-6 text-center">
-        <div className="max-w-md space-y-2 rounded-2xl border border-outline-variant/40 bg-white p-8 shadow-lg">
+        <div className="max-w-md space-y-2 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-8 shadow-lg">
           <h2 className="text-lg font-semibold text-on-surface">Erro no retorno do login</h2>
           <p className="text-sm text-on-surface-variant">{auth.error.message}</p>
           <button

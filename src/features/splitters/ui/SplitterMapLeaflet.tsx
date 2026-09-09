@@ -460,19 +460,19 @@ export function SplitterMapLeaflet({
             >
               <Popup {...MAP_CARD_POPUP}>
                 <div className="min-w-0 max-w-full text-sm leading-snug">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
                     {corporate ? 'Cliente corporativo' : 'Cliente'}
                   </p>
-                  <p className="mt-0.5 text-base font-semibold leading-snug text-neutral-900">{title}</p>
+                  <p className="mt-0.5 text-base font-semibold leading-snug text-on-surface">{title}</p>
                   {cl.user.trim() !== '' && cl.name.trim() !== '' && cl.user.trim() !== cl.name.trim() ? (
-                    <p className="mt-1 font-mono text-xs text-neutral-600">Usuário: {cl.user.trim()}</p>
+                    <p className="mt-1 font-mono text-xs text-on-surface-variant">Usuário: {cl.user.trim()}</p>
                   ) : null}
-                  <p className="mt-1 font-mono text-xs text-neutral-500">Autenticação nº {cl.authenticationId}</p>
+                  <p className="mt-1 font-mono text-xs text-on-surface-variant">Autenticação nº {cl.authenticationId}</p>
                   <Link
                     className={
                       corporate
-                        ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 underline'
-                        : 'mt-2 inline-flex text-sm font-semibold text-amber-800 underline'
+                        ? 'mt-2 inline-flex text-sm font-semibold text-violet-800 dark:text-violet-200 underline'
+                        : 'mt-2 inline-flex text-sm font-semibold text-amber-800 dark:text-amber-200 underline'
                     }
                     to={`/clientes/${cl.authenticationId}`}
                     state={location.state}
@@ -488,12 +488,12 @@ export function SplitterMapLeaflet({
         <Marker position={oltPos} icon={oltMarkerIcon} zIndexOffset={Z_OLT}>
           <Popup {...MAP_CARD_POPUP}>
             <div className="min-w-0 max-w-full text-sm leading-snug">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-800/90">OLT</p>
-              <p className="mt-0.5 font-semibold text-neutral-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-800/90 dark:text-blue-200">OLT</p>
+              <p className="mt-0.5 font-semibold text-on-surface">
                 {oltPoint.title.trim() || oltPoint.code.trim() || 'OLT'}
               </p>
               {oltPoint.code.trim() !== '' && oltPoint.title.trim() !== oltPoint.code.trim() ? (
-                <p className="font-mono text-neutral-500">{oltPoint.code}</p>
+                <p className="font-mono text-on-surface-variant">{oltPoint.code}</p>
               ) : null}
             </div>
           </Popup>
@@ -505,12 +505,12 @@ export function SplitterMapLeaflet({
           <Marker key={`neighbor-${code}:${n.lat}:${n.lng}`} position={[n.lat, n.lng]} icon={icon} zIndexOffset={Z_NEIGHBOR}>
             <Popup {...MAP_CARD_POPUP}>
               <div className="min-w-0 max-w-full text-sm leading-snug">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800/90 dark:text-emerald-200">
                   Splitter vizinho
                 </p>
-                <p className="mt-1 font-semibold leading-snug text-neutral-900">{n.title.trim() || n.code}</p>
+                <p className="mt-1 font-semibold leading-snug text-on-surface">{n.title.trim() || n.code}</p>
                 <Link
-                  className="mt-2 inline-flex items-center text-sm font-semibold text-emerald-700 underline"
+                  className="mt-2 inline-flex items-center text-sm font-semibold text-emerald-700 dark:text-emerald-200 underline"
                   to={`/splitters/${encodeURIComponent(n.code)}`}
                   state={location.state}
                 >
@@ -521,16 +521,16 @@ export function SplitterMapLeaflet({
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: BAND_COLOR[n.occupancyBand] }}
                   />
-                  <span className="text-xs font-semibold text-neutral-700">{BAND_LABEL[n.occupancyBand]}</span>
+                  <span className="text-xs font-semibold text-on-surface-variant">{BAND_LABEL[n.occupancyBand]}</span>
                 </div>
-                <p className="mt-2 text-xs text-neutral-600">
+                <p className="mt-2 text-xs text-on-surface-variant">
                   {n.busyCount} porta(s) ocupada(s) de {n.outPorts}
                 </p>
-                <p className="mt-1 text-xs text-neutral-600">
-                  Rua: <span className="font-semibold text-neutral-800">{n.street?.trim() || 'Não informada'}</span>
+                <p className="mt-1 text-xs text-on-surface-variant">
+                  Rua: <span className="font-semibold text-on-surface">{n.street?.trim() || 'Não informada'}</span>
                 </p>
                 {n.straightMeters !== undefined ? (
-                  <p className="mt-1 text-[11px] text-neutral-600">
+                  <p className="mt-1 text-[11px] text-on-surface-variant">
                     Linha reta: ~{n.straightMeters.toLocaleString('pt-BR')} m
                     {routingUnavailable || n.routeMeters == null
                       ? ' · rota pedestre indisponível'
@@ -545,38 +545,38 @@ export function SplitterMapLeaflet({
       <Marker position={c} icon={currentMarkerIcon} zIndexOffset={Z_CURRENT}>
         <Popup {...MAP_CARD_POPUP}>
           <div className="min-w-0 max-w-full text-sm leading-snug">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/90">Splitter atual</p>
-            <p className="mt-1 font-semibold leading-snug text-neutral-900">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-800/90 dark:text-rose-200">Splitter atual</p>
+            <p className="mt-1 font-semibold leading-snug text-on-surface">
               {currentSplitterTitle.trim() || currentSplitterCode.trim() || 'Equipamento atual'}
             </p>
             {currentSplitterCode.trim() !== '' && currentSplitterTitle.trim() !== currentSplitterCode.trim() ? (
-              <p className="mt-0.5 font-mono text-xs text-neutral-500">{currentSplitterCode}</p>
+              <p className="mt-0.5 font-mono text-xs text-on-surface-variant">{currentSplitterCode}</p>
             ) : null}
-            <p className="mt-2 text-xs text-neutral-600">
-              Rua: <span className="font-semibold text-neutral-800">{streetLineForCurrentMarker}</span>
+            <p className="mt-2 text-xs text-on-surface-variant">
+              Rua: <span className="font-semibold text-on-surface">{streetLineForCurrentMarker}</span>
             </p>
             {originStreetRaw != null &&
             String(originStreetRaw).trim() !== '' &&
             String(originStreetRaw).trim() !== streetLineForCurrentMarker ? (
-              <p className="mt-1 text-[11px] text-neutral-500">
+              <p className="mt-1 text-[11px] text-on-surface-variant">
                 Via (geocodificação):{' '}
-                <span className="font-medium text-neutral-700">{String(originStreetRaw).trim()}</span>
+                <span className="font-medium text-on-surface-variant">{String(originStreetRaw).trim()}</span>
               </p>
             ) : null}
             {isCondominium === true ? (
-              <p className="mt-2 text-[11px] font-medium text-neutral-700">Classificação: condomínio (título)</p>
+              <p className="mt-2 text-[11px] font-medium text-on-surface-variant">Classificação: condomínio (título)</p>
             ) : null}
             {condominiumReliefAvailable === true ? (
-              <p className="mt-1 text-[11px] text-emerald-800">
+              <p className="mt-1 text-[11px] text-emerald-800 dark:text-emerald-200">
                 Há porta livre em outro splitter do mesmo condomínio (alívio interna).
               </p>
             ) : null}
             {routingUnavailable === true ? (
-              <p className="mt-2 text-[11px] text-amber-800">Rota pedestre (vizinhos) indisponível neste momento.</p>
+              <p className="mt-2 text-[11px] text-amber-800 dark:text-amber-200">Rota pedestre (vizinhos) indisponível neste momento.</p>
             ) : null}
             {currentSplitterCode.trim() !== '' ? (
               <Link
-                className="mt-3 inline-flex text-sm font-semibold text-rose-700 underline"
+                className="mt-3 inline-flex text-sm font-semibold text-rose-700 dark:text-rose-200 underline"
                 to={`/splitters/${encodeURIComponent(currentSplitterCode.trim())}`}
                 state={location.state}
               >

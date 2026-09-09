@@ -26,8 +26,8 @@ export function MassivaLayout() {
       />
 
       {/* Navegação por abas */}
-      <div className="mt-5 flex items-center gap-2 border-b border-neutral-200/80 px-1">
-        <div className="flex gap-1 rounded-lg bg-neutral-100/80 p-1">
+      <div className="mt-5 flex items-center gap-2 border-b border-neutral-200/80 dark:border-white/10 px-1">
+        <div className="flex gap-1 rounded-lg bg-neutral-100/80 dark:bg-white/5 p-1">
           {TAB_ITEMS.map((tab) => (
             <NavLink
               key={tab.to}
@@ -37,8 +37,8 @@ export function MassivaLayout() {
                 cn(
                   'group flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80'
-                    : 'text-neutral-500 hover:bg-white/50 hover:text-neutral-700',
+                    ? 'bg-surface-container-lowest text-on-surface shadow-sm ring-1 ring-neutral-200/80 dark:ring-white/10'
+                    : 'text-on-surface-variant hover:bg-surface-container-lowest/50 hover:text-on-surface-variant',
                 )
               }
             >
@@ -48,7 +48,7 @@ export function MassivaLayout() {
                     size={15}
                     className={cn(
                       'shrink-0 transition-colors',
-                      isActive ? 'text-amber-500' : 'text-neutral-400 group-hover:text-neutral-500',
+                      isActive ? 'text-amber-500' : 'text-on-surface-variant/60 group-hover:text-on-surface-variant',
                     )}
                   />
                   <span>{tab.label}</span>
@@ -82,9 +82,9 @@ export function MassivaLayout() {
             }
           }}
           className={cn(
-            'ml-auto flex items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-3 py-2',
-            'text-xs font-medium text-neutral-500 shadow-sm transition-all duration-200',
-            'hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700',
+            'ml-auto flex items-center gap-1.5 rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-3 py-2',
+            'text-xs font-medium text-on-surface-variant shadow-sm transition-all duration-200',
+            'hover:border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-700 dark:hover:text-amber-200',
           )}
         >
           <MonitorPlay size={15} />

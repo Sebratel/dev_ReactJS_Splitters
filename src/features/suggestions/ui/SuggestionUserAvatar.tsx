@@ -35,7 +35,7 @@ export function SuggestionUserAvatar({
     return (
       <div
         className={cn(
-          'flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-200/90 to-amber-400/50 font-bold text-amber-950 ring-2 ring-white',
+          'flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-200/90 dark:from-amber-900/30 to-amber-400/50 font-bold text-amber-950 dark:text-amber-100 ring-2 ring-white',
           shellClass[size],
           className,
         )}

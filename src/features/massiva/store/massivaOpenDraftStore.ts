@@ -39,6 +39,27 @@ type MassivaOpenDraftState = {
   /** Código do Site (authenticationSiteCode) — campo manual do tipo Backbone. */
   infraSiteCode: string
 
+  /**
+   * true quando as datas do evento (início/identificação) já foram auto-preenchidas
+   * com a hora atual neste fluxo de abertura. Evita sobrescrever um ajuste manual ao
+   * reentrar no passo. Não é persistido — cada fluxo começa rearmado.
+   */
+  eventDatesAutofilledForFlow: boolean
+
+  /**
+   * Assinatura (códigos das CTOs) do último auto-preenchimento do "Sinal aferido".
+   * Enquanto igual, não refaz (preserva ajuste manual); quando os splitters mudam
+   * ou o tipo é trocado, a assinatura muda e o valor é reavaliado. Não é persistido.
+   */
+  infraSignalAutofillKey: string
+
+  /**
+   * Assinatura da seleção (AP/slot/porta/splitters) para a qual os campos da abertura
+   * (relato, quem identificou, protocolo de infra) valem. Quando a seleção muda, esses
+   * campos são resetados para o padrão. Persistido para não resetar num reload.
+   */
+  openFieldsSelectionKey: string
+
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
   setAssignmentForecastDate: (value: string) => void
@@ -55,6 +76,20 @@ type MassivaOpenDraftState = {
   setInfraAvaria: (value: string) => void
   setInfraSiteCode: (value: string) => void
   enableDescriptionAutoSync: () => void
+  /** Preenche início/identificação com a hora atual — só na 1ª vez do fluxo. */
+  autofillEventDatesToNowOnce: () => void
+  /** Rearma o auto-preenchimento (ex.: ao reiniciar o fluxo na Rota). */
+  resetEventDatesAutofill: () => void
+  /**
+   * Reseta relato/quem identificou/infra para o padrão quando a assinatura da seleção
+   * (`key`) muda. No-op quando `key` é igual à última (preserva ir-e-voltar sem mudança).
+   */
+  resetOpenFieldsForSelection: (key: string) => void
+  /**
+   * Preenche o "Sinal aferido (dBm)" do CTO Sinal Alto quando a assinatura das CTOs
+   * (`key`) difere da última — refaz ao trocar splitters/tipo, preserva ajuste manual.
+   */
+  autofillInfraSignal: (value: string, key: string) => void
   reset: () => void
 }
 
@@ -71,20 +106,35 @@ function formatTimeInputValue(date: Date): string {
   return `${hour}:${minute}`
 }
 
-function buildInitialDraft() {
+/** Datas de início/identificação do evento com a data e hora atuais. */
+function nowEventDates() {
   const now = new Date()
   const today = formatDateInputValue(now)
   const currentTime = formatTimeInputValue(now)
-
   return {
-    assignmentDescription: '',
-    descriptionAutoSync: true,
-    assignmentForecastDate: '',
-    assignmentForecastTime: '',
     eventStartDate: today,
     eventStartTime: currentTime,
     eventIdentifiedDate: today,
     eventIdentifiedTime: currentTime,
+  }
+}
+
+/** Padrão da previsão de finalização: agora + N horas (editável pelo operador). */
+const MASSIVA_DEFAULT_FORECAST_HOURS = 4
+function defaultForecastDates() {
+  const t = new Date(Date.now() + MASSIVA_DEFAULT_FORECAST_HOURS * 60 * 60 * 1000)
+  return {
+    assignmentForecastDate: formatDateInputValue(t),
+    assignmentForecastTime: formatTimeInputValue(t),
+  }
+}
+
+function buildInitialDraft() {
+  return {
+    assignmentDescription: '',
+    descriptionAutoSync: true,
+    ...defaultForecastDates(),
+    ...nowEventDates(),
     initialReport: '',
     eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
     affectedUsersQuantityAutoIspOverride: null,
@@ -92,6 +142,9 @@ function buildInitialDraft() {
     infraSignalDbm: '',
     infraAvaria: '',
     infraSiteCode: '',
+    eventDatesAutofilledForFlow: false,
+    infraSignalAutofillKey: '',
+    openFieldsSelectionKey: '',
   }
 }
 
@@ -100,8 +153,8 @@ const initial = buildInitialDraft()
 const createInitialState = () => ({
   assignmentDescription: '',
   descriptionAutoSync: true,
-  assignmentForecastDate: '',
-  assignmentForecastTime: '',
+  assignmentForecastDate: initial.assignmentForecastDate,
+  assignmentForecastTime: initial.assignmentForecastTime,
   eventStartDate: initial.eventStartDate,
   eventStartTime: initial.eventStartTime,
   eventIdentifiedDate: initial.eventIdentifiedDate,
@@ -113,6 +166,9 @@ const createInitialState = () => ({
   infraSignalDbm: '',
   infraAvaria: '',
   infraSiteCode: '',
+  eventDatesAutofilledForFlow: false,
+  infraSignalAutofillKey: '',
+  openFieldsSelectionKey: '',
 })
 
 export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
@@ -136,11 +192,44 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setEventIdentifiedBy: (eventIdentifiedBy) => set({ eventIdentifiedBy }),
       setAffectedUsersQuantityAutoIspOverride: (affectedUsersQuantityAutoIspOverride) =>
         set({ affectedUsersQuantityAutoIspOverride }),
-      setInfraProtocolType: (infraProtocolType) => set({ infraProtocolType }),
+      setInfraProtocolType: (infraProtocolType) =>
+        set({ infraProtocolType, infraSignalAutofillKey: '' }),
       setInfraSignalDbm: (infraSignalDbm) => set({ infraSignalDbm }),
       setInfraAvaria: (infraAvaria) => set({ infraAvaria }),
       setInfraSiteCode: (infraSiteCode) => set({ infraSiteCode }),
       enableDescriptionAutoSync: () => set({ descriptionAutoSync: true }),
+      autofillEventDatesToNowOnce: () =>
+        set((state) =>
+          state.eventDatesAutofilledForFlow
+            ? {}
+            : {
+                ...nowEventDates(),
+                ...defaultForecastDates(),
+                eventDatesAutofilledForFlow: true,
+              },
+        ),
+      resetEventDatesAutofill: () => set({ eventDatesAutofilledForFlow: false }),
+      resetOpenFieldsForSelection: (key) =>
+        set((state) =>
+          state.openFieldsSelectionKey === key
+            ? {}
+            : {
+                initialReport: '',
+                eventIdentifiedBy: 'tecnico' as MassivaEventIdentifiedBy,
+                infraProtocolType: 'none' as MassivaInfraProtocolSelection,
+                infraSignalDbm: '',
+                infraAvaria: '',
+                infraSiteCode: '',
+                infraSignalAutofillKey: '',
+                openFieldsSelectionKey: key,
+              },
+        ),
+      autofillInfraSignal: (value, key) =>
+        set((state) =>
+          value.trim() === '' || state.infraSignalAutofillKey === key
+            ? {}
+            : { infraSignalDbm: value, infraSignalAutofillKey: key },
+        ),
       reset: () => set(buildInitialDraft()),
     }),
     {
@@ -162,6 +251,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
         infraSignalDbm: state.infraSignalDbm,
         infraAvaria: state.infraAvaria,
         infraSiteCode: state.infraSiteCode,
+        openFieldsSelectionKey: state.openFieldsSelectionKey,
       }),
     },
   ),

@@ -39,33 +39,33 @@ function TrendStatusRow({
   const selectedDelta = selectedDeltaForTrend(row, trendDeltaReference)
 
   return (
-    <li className="flex items-center justify-between gap-2 rounded-xl bg-slate-50/80 px-2.5 py-2">
+    <li className="flex items-center justify-between gap-2 rounded-xl bg-surface-container-low/80 px-2.5 py-2">
       <div className="min-w-0 flex-1">
         {row.splitterTitle.trim() !== '' ? (
           <>
             <Link
               to={`/splitters/${encodeURIComponent(row.splitterCode)}`}
-              className="block truncate text-xs font-bold text-amber-900 hover:underline"
+              className="block truncate text-xs font-bold text-amber-900 dark:text-amber-200 hover:underline"
               title={row.splitterTitle.trim()}
             >
               {row.splitterTitle.trim()}
             </Link>
-            <p className="font-mono text-[10px] font-semibold text-slate-500">{row.splitterCode}</p>
+            <p className="font-mono text-[10px] font-semibold text-on-surface-variant">{row.splitterCode}</p>
           </>
         ) : (
           <Link
             to={`/splitters/${encodeURIComponent(row.splitterCode)}`}
-            className="text-xs font-bold text-amber-900 hover:underline"
+            className="text-xs font-bold text-amber-900 dark:text-amber-200 hover:underline"
           >
             {row.splitterCode}
           </Link>
         )}
         <p
-          className="text-[11px] text-slate-500"
+          className="text-[11px] text-on-surface-variant"
           title={deltaPpLineTitle(row.currentUsagePercent, selectedDelta, deltaReferenceLabel)}
         >
           Uso {row.currentUsagePercent.toFixed(1)}% · {deltaReferenceLabel}:{' '}
-          <span className="cursor-help border-b border-dotted border-slate-400 font-semibold text-slate-700">
+          <span className="cursor-help border-b border-dotted border-slate-400 font-semibold text-on-surface-variant">
             {formatDeltaPp(selectedDelta)}
           </span>
         </p>
@@ -101,10 +101,10 @@ function SectionBlock({
 }) {
   return (
     <section>
-      <h3 className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{title}</h3>
-      <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{hint}</p>
+      <h3 className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{title}</h3>
+      <p className="mt-0.5 text-[10px] leading-snug text-on-surface-variant">{hint}</p>
       {rows.length === 0 ? (
-        <p className="mt-2 rounded-lg border border-dashed border-slate-200 bg-white/60 px-2.5 py-2 text-[11px] text-slate-500">
+        <p className="mt-2 rounded-lg border border-dashed border-slate-200 dark:border-white/10 bg-surface-container-lowest/60 px-2.5 py-2 text-[11px] text-on-surface-variant">
           {emptyText}
         </p>
       ) : (
@@ -144,8 +144,8 @@ export function TrendStatusCapacityPanel({
   return (
     <div className="space-y-4">
       <PercentagePointsCallout periodLabel={deltaReferenceLabel} />
-      <p className="rounded-xl border border-slate-200/80 bg-slate-50/90 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600">
-        <span className="font-semibold text-slate-800">Resumo do recorte:</span>{' '}
+      <p className="rounded-xl border border-slate-200/80 dark:border-white/10 bg-surface-container-low/90 px-2.5 py-2 text-[11px] leading-relaxed text-on-surface-variant">
+        <span className="font-semibold text-on-surface">Resumo do recorte:</span>{' '}
         {labelCounts['Quase saturando']} quase saturando · {labelCounts['Em crescimento']} em crescimento ·{' '}
         {labelCounts['Em queda']} em queda · {labelCounts.Estavel} estáveis ({groups.totalWithTrend} com tendência).
         Foco em <span className="font-semibold">capacidade</span> — não repete massivas nem o ranking composto.
@@ -175,7 +175,7 @@ export function TrendStatusCapacityPanel({
         <button
           type="button"
           onClick={() => setStableOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-left text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+          className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/80 dark:border-white/10 bg-surface-container-lowest/80 px-3 py-2 text-left text-[11px] font-semibold text-on-surface-variant hover:bg-surface-container-low"
         >
           <span>
             Rede calma em capacidade — {outsideHighlightsCount.toLocaleString('pt-BR')} equipamentos fora dos destaques
@@ -184,7 +184,7 @@ export function TrendStatusCapacityPanel({
           <ChevronDown size={16} className={cn('shrink-0 transition', stableOpen ? 'rotate-180' : '')} />
         </button>
         {stableOpen ? (
-          <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+          <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
             Para visão agregada use a pizza de tendências (acima no painel). Para priorização completa use o{' '}
             <span className="font-semibold">ranking de risco</span> e o mapa.
           </p>

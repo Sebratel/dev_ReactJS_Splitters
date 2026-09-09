@@ -28,7 +28,7 @@ export function GoogleSignInButton() {
       >
         Entrar com Google
       </button>
-      {error ? <p className="text-center text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-center text-xs text-red-600 dark:text-red-300">{error}</p> : null}
     </div>
   )
 }

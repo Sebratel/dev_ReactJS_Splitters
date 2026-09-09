@@ -49,7 +49,7 @@ export function SplitterCard({
     <div className="group h-auto animate-in fade-in zoom-in-95 duration-500">
       <article
         className={cn(
-          'flex h-auto flex-col rounded-2xl border border-outline-variant bg-white p-4 shadow-sm',
+          'flex h-auto flex-col rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm',
           'transition-all duration-300 ease-out',
           'hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg hover:shadow-on-surface/[0.06]',
         )}
@@ -104,12 +104,12 @@ export function SplitterCard({
               className={cn(
                 'inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
                 onuSignal.avgRxPower === null
-                  ? 'border-slate-200 bg-slate-50 text-slate-500'
+                  ? 'border-slate-200 dark:border-white/15 bg-surface-container-low dark:bg-white/5 text-on-surface-variant'
                   : onuSignal.avgRxPower <= RX_POWER_CRITICAL_DBM
-                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                    ? 'border-rose-200 dark:border-rose-600/60 bg-rose-50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-100'
                     : onuSignal.avgRxPower <= RX_POWER_DEGRADED_DBM
-                      ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                      ? 'border-amber-200 dark:border-amber-600/60 bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-100'
+                      : 'border-emerald-200 dark:border-emerald-600/60 bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-100',
               )}
               title={`${onuSignal.online} online · ${onuSignal.degraded} atenuados · ${onuSignal.offline} offline`}
             >
@@ -117,7 +117,7 @@ export function SplitterCard({
               {onuSignal.avgRxPower !== null ? `${onuSignal.avgRxPower.toFixed(1)} dBm` : '— dBm'}
               {onuSignal.projectedRxPower != null && onuSignal.avgRxPower !== null ? (() => {
                 const delta = Math.round((onuSignal.projectedRxPower - onuSignal.avgRxPower) * 10) / 10
-                const deltaClass = delta > 3 ? 'text-rose-600' : delta > 1 ? 'text-amber-600' : 'text-emerald-600'
+                const deltaClass = delta > 3 ? 'text-rose-600 dark:text-rose-300' : delta > 1 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'
                 return (
                   <span className={cn('font-semibold', deltaClass)} title={`Projetado: ${onuSignal.projectedRxPower.toFixed(1)} dBm · Atenuação extra: ${delta.toFixed(1)} dB`}>
                     △{delta.toFixed(1)}
@@ -125,7 +125,7 @@ export function SplitterCard({
                 )
               })() : null}
               <span className="ml-0.5 flex items-center gap-0.5 font-semibold">
-                <span className="text-emerald-600">{onuSignal.online}↑</span>
+                <span className="text-emerald-600 dark:text-emerald-300">{onuSignal.online}↑</span>
                 {onuSignal.degraded > 0 ? <span className="text-amber-500">{onuSignal.degraded}⚠</span> : null}
                 {onuSignal.offline > 0 ? <span className="text-rose-500">{onuSignal.offline}↓</span> : null}
               </span>
@@ -133,7 +133,7 @@ export function SplitterCard({
           </div>
         ) : (
           <div className="mt-2">
-            <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-surface-container-low px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60">
               <WifiOff size={11} strokeWidth={2} />
               {/* Sem cliente: 0 portas ocupadas → não há ONU nem como medir/projetar.
                   Com cliente mas sem ONU monitorada, segue "Sem sinal". */}
@@ -174,7 +174,7 @@ export function SplitterCard({
                 className={cn(
                   'inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider',
                   massivaStats.openTickets > 0
-                    ? 'border-rose-200 bg-rose-50 text-rose-800'
+                    ? 'border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200'
                     : 'border-outline-variant bg-surface-container-low/70 text-on-surface-variant/70',
                 )}
                 title={
@@ -233,7 +233,7 @@ export function SplitterCard({
                 <p
                   className={cn(
                     'mt-0.5 font-semibold',
-                    maintenanceStats.openMaintenances > 0 ? 'text-rose-700' : 'text-on-surface',
+                    maintenanceStats.openMaintenances > 0 ? 'text-rose-700 dark:text-rose-200' : 'text-on-surface',
                   )}
                 >
                   {maintenanceStats.openMaintenances.toLocaleString('pt-BR')}
@@ -275,7 +275,7 @@ export function SplitterCard({
                     splitterLabel: splitter.title || splitter.code,
                   },
                 }}
-                className="inline-flex w-full min-w-0 items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 min-[400px]:w-auto min-[400px]:py-2"
+                className="inline-flex w-full min-w-0 items-center justify-center rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/70 dark:bg-amber-950/40 px-3 py-2.5 text-xs font-semibold text-amber-900 dark:text-amber-200 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/50 min-[400px]:w-auto min-[400px]:py-2"
                 title="Abrir massiva com este splitter pré-selecionado"
               >
                 Abrir massiva
@@ -287,7 +287,7 @@ export function SplitterCard({
               className={cn(
                 'inline-flex w-full min-w-0 items-center justify-center gap-1.5 rounded-xl border border-outline-variant bg-surface-container-low/80 px-3 py-2.5',
                 'text-xs font-semibold text-on-surface transition-colors duration-300 min-[400px]:w-auto min-[400px]:py-2',
-                'group-hover:border-primary/30 group-hover:bg-primary group-hover:text-on-surface',
+                'group-hover:border-primary/30 group-hover:bg-primary group-hover:text-neutral-900',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
               )}
             >

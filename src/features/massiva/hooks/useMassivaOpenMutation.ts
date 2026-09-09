@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 import { openMassivaFromContext } from '@/features/massiva/api/openMassivaFromContext'
 import { massivaTicketsFromOpenSuccess } from '@/features/massiva/lib/massivaTicketsFromOpenSuccess'
 import {
@@ -33,6 +34,7 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     mutationFn: (context) => openMassivaFromContext(context),
     onSuccess: (data, context) => {
       resetDraft()
+      trackUsageAction('massiva_abrir', { module: 'massiva' })
       const fresh = massivaTicketsFromOpenSuccess(data, context)
       if (fresh.length > 0) {
         appendRecentOpenTicketsToStorage(fresh)

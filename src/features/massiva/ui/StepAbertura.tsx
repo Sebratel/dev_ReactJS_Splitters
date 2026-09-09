@@ -1,8 +1,12 @@
-﻿import { useMemo } from 'react'
+﻿import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Eraser } from 'lucide-react'
 import { GoogleSignInButton } from '@/features/session/ui/GoogleSignInButton'
 import { buildMassivaAssignmentDescriptionForRequest } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { fetchMassivaConnectionsFromLocalDbByRoutes } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
+import { fetchOnuSummaryBySplitter } from '@/features/onu/api/fetchOnuSummaryBySplitter'
+import { searchAuthenticationSites } from '@/features/massiva/api/searchAuthenticationSites'
+import { extractSiteTokenFromApTitle } from '@/features/massiva/lib/extractSiteTokenFromApTitle'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import type {
   MassivaOpenFinalContext,
@@ -33,10 +37,10 @@ function Notice({
 }) {
   const toneClass =
     tone === 'warning'
-      ? 'border-amber-200 bg-amber-50 text-amber-950'
+      ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100'
       : tone === 'error'
-        ? 'border-red-200 bg-red-50 text-red-950'
-        : 'border-neutral-200 bg-neutral-50 text-neutral-900'
+        ? 'border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 text-red-950 dark:text-red-100'
+        : 'border-neutral-200 dark:border-white/10 bg-surface-container-low text-on-surface'
 
   return (
     <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
@@ -55,6 +59,8 @@ export function StepAbertura({
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
   const eventIdentifiedBy = useMassivaOpenDraftStore((s) => s.eventIdentifiedBy)
+  const resetDraft = useMassivaOpenDraftStore((s) => s.reset)
+  const resetOpenFieldsForSelection = useMassivaOpenDraftStore((s) => s.resetOpenFieldsForSelection)
 
   // Preview por AP usa amostra de 50 do batch-summary; na abertura buscamos a lista
   // completa por rota para a contagem de afetados bater com a validação.
@@ -79,6 +85,105 @@ export function StepAbertura({
     staleTime: 60_000,
   })
   const fullConnections = fullConnectionsQuery.data ?? []
+
+  // Assinatura da seleção (AP/slot/porta/splitters). Quando muda de fato, reseta os
+  // campos da abertura (relato, quem identificou, protocolo de infra) para o padrão —
+  // preservando um ir-e-voltar sem mudança. Datas/previsão têm lógica própria.
+  const selectionKey = useMemo(() => {
+    const routes = preparedBasis?.topology.routes ?? []
+    return routes
+      .map((r) => `${r.apCode}#${r.slot}#${r.port}#${[...r.effectiveSplitterCodes].sort().join(',')}`)
+      .sort()
+      .join('|')
+  }, [preparedBasis])
+  useEffect(() => {
+    if (selectionKey !== '') resetOpenFieldsForSelection(selectionKey)
+  }, [selectionKey, resetOpenFieldsForSelection])
+
+  // "CTO Sinal Alto": auto-preenche o Sinal aferido (dBm) com o avgRxPower do splitter
+  // (mesmo dado do card "SINAL ONU — MÉDIA DO SPLITTER"). Por CTO quando há mais de uma.
+  const infraProtocolType = useMassivaOpenDraftStore((s) => s.infraProtocolType)
+  const autofillInfraSignal = useMassivaOpenDraftStore((s) => s.autofillInfraSignal)
+  const splitterSignalQuery = useQuery({
+    queryKey: ['onu', 'summary-by-splitter'],
+    queryFn: fetchOnuSummaryBySplitter,
+    staleTime: 60_000,
+    enabled: infraProtocolType === 'cto_sinal_alto',
+  })
+  const ctosDaRota = useMemo(() => {
+    const byCode = new Map<string, string>()
+    for (const route of preparedBasis?.topology.routes ?? []) {
+      for (const s of route.effectiveSplitterDisplay ?? []) {
+        const code = String(s.code ?? '').trim()
+        if (code && !byCode.has(code)) byCode.set(code, String(s.label ?? code).trim() || code)
+      }
+    }
+    return [...byCode.entries()].map(([code, label]) => ({ code, label }))
+  }, [preparedBasis])
+  const infraSignalAutofillValue = useMemo(() => {
+    if (infraProtocolType !== 'cto_sinal_alto') return ''
+    const summary = splitterSignalQuery.data
+    if (!summary || ctosDaRota.length === 0) return ''
+    const comSinal = ctosDaRota
+      .map((cto) => ({ ...cto, avg: summary.get(cto.code)?.avgRxPower ?? null }))
+      .filter((c): c is { code: string; label: string; avg: number } => c.avg != null)
+    if (comSinal.length === 0) return ''
+    // 1 CTO: número puro (a descrição acrescenta " dBm"). Várias: 1 CTO por linha.
+    return comSinal.length === 1
+      ? comSinal[0].avg.toFixed(1)
+      : comSinal.map((c) => `${c.label}: ${c.avg.toFixed(1)} dBm`).join('\n')
+  }, [infraProtocolType, splitterSignalQuery.data, ctosDaRota])
+  // Assinatura das CTOs selecionadas: muda quando o operador troca de splitters,
+  // rearmando o auto-preenchimento (sem isso, ficaria o sinal das CTOs anteriores).
+  const ctoCodesKey = useMemo(
+    () => ctosDaRota.map((c) => c.code).sort().join('|'),
+    [ctosDaRota],
+  )
+  useEffect(() => {
+    if (infraProtocolType === 'cto_sinal_alto' && infraSignalAutofillValue !== '') {
+      autofillInfraSignal(infraSignalAutofillValue, ctoCodesKey)
+    }
+  }, [infraProtocolType, infraSignalAutofillValue, ctoCodesKey, autofillInfraSignal])
+
+  // "Rompimento de Backbone": deriva o Site do título do OLT/AP e valida no catálogo.
+  // 1 site validado → auto-preenche (editável); vários → lista candidatos pro operador.
+  const infraSiteCode = useMassivaOpenDraftStore((s) => s.infraSiteCode)
+  const setInfraSiteCode = useMassivaOpenDraftStore((s) => s.setInfraSiteCode)
+  const siteTokens = useMemo(() => {
+    const set = new Set<string>()
+    for (const route of preparedBasis?.topology.routes ?? []) {
+      const token = extractSiteTokenFromApTitle(route.apDisplayTitle)
+      if (token) set.add(token)
+    }
+    return [...set]
+  }, [preparedBasis])
+  const siteCandidatesQuery = useQuery({
+    queryKey: ['massiva', 'infra-site-candidates', [...siteTokens].sort().join('|')],
+    queryFn: async ({ signal }) => {
+      const found = new Set<string>()
+      for (const token of siteTokens) {
+        const results = await searchAuthenticationSites(token, signal)
+        const exact = results.find((s) => s.title.toUpperCase() === token.toUpperCase())
+        if (exact) found.add(exact.title)
+      }
+      return [...found]
+    },
+    enabled: infraProtocolType === 'backbone' && siteTokens.length > 0,
+    staleTime: 60_000,
+  })
+  const siteCandidates = useMemo(
+    () => siteCandidatesQuery.data ?? [],
+    [siteCandidatesQuery.data],
+  )
+  useEffect(() => {
+    if (
+      infraProtocolType === 'backbone' &&
+      siteCandidates.length === 1 &&
+      infraSiteCode.trim() === ''
+    ) {
+      setInfraSiteCode(siteCandidates[0])
+    }
+  }, [infraProtocolType, siteCandidates, infraSiteCode, setInfraSiteCode])
 
   const requestsByAp = readiness.status === 'ready-to-open'
     ? readiness.context.plan.requests
@@ -130,11 +235,27 @@ export function StepAbertura({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h3 className="text-base font-semibold text-neutral-900">Abertura</h3>
-        <p className="mt-1 text-sm text-neutral-600">
-          Complete dados operacionais, gere a descrição técnica e revise bloqueios antes do envio.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-on-surface">Abertura</h3>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Complete dados operacionais, gere a descrição técnica e revise bloqueios antes do envio.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Limpar os dados da abertura? (datas voltam para agora, protocolo de infra, sinal, quem identificou e relato são resetados)')) {
+              resetDraft()
+            }
+          }}
+          disabled={!draftFormEnabled}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition hover:bg-surface-container-low disabled:opacity-50"
+          title="Limpar os campos da abertura e recomeçar"
+        >
+          <Eraser className="size-3.5" />
+          <span className="hidden sm:inline">Limpar dados</span>
+        </button>
       </div>
 
       {readiness.status === 'blocked-preparation' ? (
@@ -200,7 +321,7 @@ export function StepAbertura({
       ) : null}
 
       {readiness.status === 'missing-assignment' ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-amber-950 dark:text-amber-100">
           <p className="text-sm font-semibold">Campos obrigatórios pendentes</p>
           <ul className="mt-2 space-y-1 text-sm">
             {readiness.issues.map((issue) => (
@@ -218,7 +339,7 @@ export function StepAbertura({
               description="A abertura está pronta para envio. Revise a descrição e use a ação principal fixa no rodapé."
             />
           ) : null}
-          <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sky-950">
+          <div className="rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-4 py-3 text-sky-950 dark:text-sky-100">
             <p className="text-sm font-semibold">
               Protocolos previstos: {requestsByAp.length} (1 por ponto de acesso)
             </p>
@@ -236,6 +357,7 @@ export function StepAbertura({
       <MassivaOpenDraftFields
         disabled={!draftFormEnabled}
         descriptionByAp={descriptionByAp}
+        siteCandidates={siteCandidates}
       />
     </div>
   )

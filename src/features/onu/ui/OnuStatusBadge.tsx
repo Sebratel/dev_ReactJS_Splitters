@@ -30,29 +30,29 @@ const STATUS_STYLES: Record<OnuSignalStatus, StatusStyle> = {
     border: 'border-emerald-300',
     leftBg: 'bg-emerald-500',
     leftText: 'text-white',
-    rightBg: 'bg-emerald-50',
-    rightText: 'text-emerald-800',
+    rightBg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    rightText: 'text-emerald-800 dark:text-emerald-200',
   },
   degraded: {
     border: 'border-amber-300',
     leftBg: 'bg-amber-500',
     leftText: 'text-white',
-    rightBg: 'bg-amber-50',
-    rightText: 'text-amber-800',
+    rightBg: 'bg-amber-50 dark:bg-amber-950/40',
+    rightText: 'text-amber-800 dark:text-amber-200',
   },
   offline: {
-    border: 'border-rose-200',
+    border: 'border-rose-200 dark:border-rose-800/50',
     leftBg: 'bg-rose-500',
     leftText: 'text-white',
-    rightBg: 'bg-rose-50',
-    rightText: 'text-rose-800',
+    rightBg: 'bg-rose-50 dark:bg-rose-950/40',
+    rightText: 'text-rose-800 dark:text-rose-200',
   },
   unknown: {
-    border: 'border-slate-200',
+    border: 'border-slate-200 dark:border-white/10',
     leftBg: 'bg-slate-400',
     leftText: 'text-white',
-    rightBg: 'bg-slate-50',
-    rightText: 'text-slate-500',
+    rightBg: 'bg-surface-container-low',
+    rightText: 'text-on-surface-variant',
   },
 }
 
@@ -70,7 +70,7 @@ export function OnuStatusBadge({
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400',
+          'inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-surface-container-low px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60',
           className,
         )}
         aria-label="Carregando status da ONU"

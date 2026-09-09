@@ -238,6 +238,30 @@ async function fetchSplittersProfileByEmail(email) {
 }
 
 export async function requireAuthenticatedSplittersUser(req) {
+  // Bypass SOMENTE para desenvolvimento local: quando o BFF local não consegue
+  // validar o token da sessão (falta GOOGLE_CLIENT_ID/Hub/Firebase Admin do ambiente
+  // de produção), permite autenticar por e-mail sem validar o token. Duplamente
+  // protegido: exige a env explícita E que NÃO seja produção. As permissões continuam
+  // vindo do Firestore (perfil real do usuário). Produção nunca define essa env.
+  const devBypassEmail = cleanEnvValue(process.env.DEV_AUTH_BYPASS_EMAIL);
+  if (devBypassEmail !== '' && process.env.NODE_ENV !== 'production') {
+    console.warn(
+      `[auth][DEV] BYPASS ATIVO — autenticando como "${devBypassEmail}" sem validar o token. ` +
+        'Isto NUNCA deve rodar em produção (remova DEV_AUTH_BYPASS_EMAIL).',
+    );
+    const profile = await fetchSplittersProfileByEmail(devBypassEmail);
+    if (!profile) {
+      throw buildError(
+        `DEV_AUTH_BYPASS_EMAIL="${devBypassEmail}" não encontrado no controle de acesso do Splitters.`,
+        403,
+      );
+    }
+    if (!profile.isActive) {
+      throw buildError('Usuario do DEV_AUTH_BYPASS_EMAIL esta inativo.', 403);
+    }
+    return { identity: { email: devBypassEmail }, profile };
+  }
+
   if (!isFirebaseAdminAccessConfigured()) {
     throw buildError(
       'Autenticacao do backend indisponivel: credenciais Firebase Admin ou fonte de identidade ausentes.',

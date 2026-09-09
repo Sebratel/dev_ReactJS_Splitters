@@ -17,7 +17,7 @@ export function ClienteDetailSolicitationsSection({
   if (view.status === 'disabled') {
     return (
       <section
-        className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+        className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
         aria-labelledby="cliente-solicitations-heading"
       >
         <div className="flex items-start gap-3">
@@ -42,7 +42,7 @@ export function ClienteDetailSolicitationsSection({
 
   return (
     <section
-      className="rounded-2xl border border-outline-variant bg-white p-4 shadow-sm md:p-5"
+      className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm md:p-5"
       aria-labelledby="cliente-solicitations-heading"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

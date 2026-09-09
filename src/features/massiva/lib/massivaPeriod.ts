@@ -5,8 +5,11 @@
  * comparação de tendência.
  */
 
-export type MassivaPeriodPreset = '7d' | '30d' | '90d' | '6m' | '12m' | 'month'
+export type MassivaPeriodPreset = '7d' | '30d' | '90d' | '6m' | '12m' | 'month' | 'custom'
 export type MassivaBucketGranularity = 'day' | 'week' | 'month'
+
+/** Intervalo personalizado (calendário De/Até), datas "YYYY-MM-DD". */
+export type MassivaCustomRange = { start: string; end: string }
 
 export type MassivaPeriodRange = {
   /** Início (inclusive) da janela exibida. */
@@ -70,6 +73,27 @@ export function toMonthValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** Valor "YYYY-MM-DD" (fuso local) para <input type="date">. */
+export function toDateValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/** Converte "YYYY-MM-DD" em Date local (00:00). `null` se inválido. */
+export function parseDateValue(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (m === null) return null
+  const y = Number.parseInt(m[1] ?? '', 10)
+  const mo = Number.parseInt(m[2] ?? '', 10)
+  const d = Number.parseInt(m[3] ?? '', 10)
+  if (!Number.isFinite(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  const date = new Date(y, mo - 1, d)
+  return date.getMonth() === mo - 1 && date.getDate() === d ? date : null
+}
+
+function formatShortDate(date: Date): string {
+  return `${String(date.getDate()).padStart(2, '0')}/${MONTHS_SHORT_PT[date.getMonth()]}`
+}
+
 /** Converte "YYYY-MM" em Date no primeiro dia do mês (00:00). `null` se inválido. */
 export function parseMonthValue(value: string): Date | null {
   const m = /^(\d{4})-(\d{2})$/.exec(value.trim())
@@ -110,7 +134,37 @@ export function resolveMassivaPeriod(
   preset: MassivaPeriodPreset,
   selectedMonth: string | null,
   now: Date = new Date(),
+  customRange: MassivaCustomRange | null = null,
 ): MassivaPeriodRange {
+  if (preset === 'custom') {
+    const parsedStart = parseDateValue(customRange?.start ?? '')
+    const parsedEnd = parseDateValue(customRange?.end ?? '')
+    // Intervalo inválido/incompleto → cai em 30d para nunca quebrar a tela.
+    if (parsedStart === null || parsedEnd === null) {
+      return resolveMassivaPeriod('30d', null, now)
+    }
+    const orderedStart = parsedStart.getTime() <= parsedEnd.getTime() ? parsedStart : parsedEnd
+    const orderedEnd = parsedStart.getTime() <= parsedEnd.getTime() ? parsedEnd : parsedStart
+    const start = startOfDay(orderedStart)
+    const rawEnd = endOfDay(orderedEnd)
+    // Não projeta além de hoje.
+    const end = rawEnd.getTime() > endOfDay(now).getTime() ? endOfDay(now) : rawEnd
+    const durationMs = Math.max(end.getTime() - start.getTime(), DAY_MS - 1)
+    const spanDays = Math.max(1, Math.round(durationMs / DAY_MS))
+    const previousEnd = new Date(start.getTime() - 1)
+    const previousStart = new Date(start.getTime() - durationMs)
+    return {
+      start,
+      end,
+      fetchStart: startOfDay(new Date(previousStart.getTime() - DAY_MS)),
+      bucket: bucketForSpanDays(spanDays),
+      previousStart,
+      previousEnd,
+      label: `${formatShortDate(start)} – ${formatShortDate(end)}`,
+      spanDays,
+    }
+  }
+
   if (preset === 'month') {
     const monthBase = parseMonthValue(selectedMonth ?? '') ?? startOfMonth(now)
     const start = startOfMonth(monthBase)

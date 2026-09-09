@@ -2,14 +2,14 @@ import { useMemo } from 'react'
 import { useOperationalMassivaTickets } from '@/features/massiva/hooks/useOperationalMassivaTickets'
 import type { MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
-export function useHomeDashboardMassivaOpen(): {
+export function useHomeDashboardMassivaOpen(options?: { enabled?: boolean }): {
   pending: boolean
   notConfigured: boolean
   openMassivas: MassivaTicket[]
   openCount: number
   affectedClientsTotal: number
 } {
-  const operational = useOperationalMassivaTickets({ enabled: true })
+  const operational = useOperationalMassivaTickets({ enabled: options?.enabled !== false })
 
   const affectedClientsTotal = useMemo(
     () =>

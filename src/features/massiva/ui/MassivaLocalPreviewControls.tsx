@@ -27,10 +27,10 @@ type MassivaLocalPreviewControlsProps = {
 }
 
 const selectClass =
-  'w-full min-w-0 max-w-full appearance-none rounded-xl border border-neutral-200/90 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/90 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:opacity-60'
+  'w-full min-w-0 max-w-full appearance-none rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition focus:border-amber-500/90 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-surface-container-low disabled:opacity-60'
 const inputClass =
-  'w-full min-w-0 max-w-full rounded-xl border border-neutral-200/90 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-neutral-400 focus:border-amber-500/90 focus:outline-none focus:ring-2 focus:ring-amber-500/20'
-const labelClass = 'text-[11px] font-semibold uppercase tracking-wide text-neutral-500'
+  'w-full min-w-0 max-w-full rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5 text-sm text-on-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition placeholder:text-on-surface-variant/60 focus:border-amber-500/90 focus:outline-none focus:ring-2 focus:ring-amber-500/20'
+const labelClass = 'text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant'
 const MAX_SPLITTER_SUGGESTIONS = 40
 
 export function MassivaLocalPreviewControls({
@@ -57,22 +57,22 @@ export function MassivaLocalPreviewControls({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Rotas selecionadas</p>
-          <p className="mt-0.5 text-xs text-neutral-600">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Rotas selecionadas</p>
+          <p className="mt-0.5 text-xs text-on-surface-variant">
             Você pode começar por AP/slot/PON ou pelo splitter. A seleção é bidirecional.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="h-10 rounded-xl border border-amber-200/90 bg-amber-50 px-3 text-xs font-semibold text-amber-900 shadow-sm transition hover:border-amber-300 hover:bg-amber-100"
+            className="h-10 rounded-xl border border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-3 text-xs font-semibold text-amber-900 dark:text-amber-200 shadow-sm transition hover:border-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/50"
             onClick={onAddConnection}
           >
             Adicionar rota
           </button>
           <button
             type="button"
-            className="h-10 rounded-xl border border-neutral-200/90 bg-white px-4 text-xs font-semibold text-neutral-700 shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
+            className="h-10 rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-4 text-xs font-semibold text-on-surface-variant shadow-sm transition hover:border-neutral-300 hover:bg-surface-container-low"
             onClick={onClearRoute}
           >
             Limpar rota
@@ -104,15 +104,15 @@ export function MassivaLocalPreviewControls({
           return (
             <section
               key={`route-${index}`}
-              className="rounded-2xl border border-neutral-200/80 bg-neutral-50/30 p-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.04)]"
+              className="rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-low/30 p-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.04)]"
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-700">
+                <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
                   Rota {index + 1}
                 </p>
                 <button
                   type="button"
-                  className="rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
+                  className="rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1.5 text-[11px] font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low disabled:opacity-50"
                   disabled={connections.length <= 1}
                   onClick={() => onRemoveConnection(index)}
                 >
@@ -184,7 +184,7 @@ export function MassivaLocalPreviewControls({
                   <span className={labelClass}>Splitters</span>
                   <button
                     type="button"
-                    className="rounded-lg border border-neutral-200/90 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50"
+                    className="rounded-lg border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant transition hover:border-neutral-300 hover:bg-surface-container-low"
                     onClick={() => onClearConnectionSplitters(index)}
                   >
                     Todos da rota
@@ -212,7 +212,7 @@ export function MassivaLocalPreviewControls({
                       <button
                         key={splitter.id}
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-amber-200/90 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-950"
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-200/90 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-medium text-amber-950 dark:text-amber-100"
                         onClick={() => onToggleConnectionSplitter(index, splitter)}
                         title="Remover splitter"
                       >
@@ -223,20 +223,20 @@ export function MassivaLocalPreviewControls({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-on-surface-variant">
                     Sem restrição de splitter nesta rota.
                   </p>
                 )}
 
                 {search.trim() !== '' ? (
-                  <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-neutral-200/80 bg-white p-2">
+                  <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest p-2">
                     {splitterSuggestions.map((splitter) => {
                       const alreadySelected = selectedIds.has(splitter.code)
                       return (
                         <button
                           key={splitter.code}
                           type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-55"
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-on-surface hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-55"
                           disabled={alreadySelected}
                           onClick={() =>
                             onToggleConnectionSplitter(index, {
@@ -245,10 +245,10 @@ export function MassivaLocalPreviewControls({
                             })
                           }
                         >
-                          <span className="font-mono text-[11px] text-neutral-600">{splitter.code}</span>
+                          <span className="font-mono text-[11px] text-on-surface-variant">{splitter.code}</span>
                           <span className="truncate">{splitter.label}</span>
                           {alreadySelected ? (
-                            <span className="ml-auto text-[10px] font-semibold text-amber-700">
+                            <span className="ml-auto text-[10px] font-semibold text-amber-700 dark:text-amber-200">
                               Selecionado
                             </span>
                           ) : null}
@@ -257,13 +257,13 @@ export function MassivaLocalPreviewControls({
                     })}
 
                     {splitterSuggestions.length === 0 ? (
-                      <p className="px-2 py-1 text-xs text-neutral-500">
+                      <p className="px-2 py-1 text-xs text-on-surface-variant">
                         Nenhum splitter encontrado para "{search}".
                       </p>
                     ) : null}
                   </div>
                 ) : (
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-on-surface-variant">
                     Digite ao menos 1 caractere para buscar splitters sem travar a tela.
                   </p>
                 )}
@@ -273,11 +273,11 @@ export function MassivaLocalPreviewControls({
         })}
       </div>
 
-      <details className="group rounded-xl border border-neutral-200/80 bg-neutral-50/50 text-xs text-neutral-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
-        <summary className="cursor-pointer select-none list-none px-3 py-2.5 font-medium text-neutral-700 marker:content-none [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-low/50 text-xs text-on-surface-variant shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+        <summary className="cursor-pointer select-none list-none px-3 py-2.5 font-medium text-on-surface-variant marker:content-none [&::-webkit-details-marker]:hidden">
           Dica: seleção múltipla
         </summary>
-        <p className="border-t border-neutral-200/50 px-3 py-2.5 leading-relaxed text-neutral-600">
+        <p className="border-t border-neutral-200/50 dark:border-white/10 px-3 py-2.5 leading-relaxed text-on-surface-variant">
           Cada bloco representa uma rota. Você pode começar pelos splitters e depois fechar AP,
           slot e PON, ou fazer o caminho inverso.
         </p>

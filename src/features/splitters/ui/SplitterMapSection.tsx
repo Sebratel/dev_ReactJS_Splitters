@@ -39,7 +39,7 @@ function LegendDot({
   label: string
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-white/90 px-2 py-1 text-[10px] font-medium text-on-surface shadow-sm">
+    <div className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-surface-container-lowest/90 px-2 py-1 text-[10px] font-medium text-on-surface shadow-sm">
       <span
         className="h-2.5 w-2.5 shrink-0 rounded-full"
         style={{ backgroundColor: color }}
@@ -303,14 +303,14 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
   return (
     <section
       className={cn(
-        'relative rounded-2xl border border-outline-variant bg-gradient-to-br from-white via-surface to-surface-container-low/40 shadow-sm',
+        'relative rounded-2xl border border-outline-variant bg-gradient-to-br from-white dark:from-surface-container-lowest via-surface to-surface-container-low/40 shadow-sm',
         mapExpandedOpen
           ? 'z-[1] min-h-[min(92dvh,900px)] overflow-visible'
           : 'overflow-hidden',
       )}
       aria-labelledby="splitter-map-heading"
     >
-      <div className="border-b border-outline-variant/50 bg-white/80 px-4 py-3 backdrop-blur-sm">
+      <div className="border-b border-outline-variant/50 bg-surface-container-lowest/80 px-4 py-3 backdrop-blur-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex items-start gap-2.5">
@@ -350,7 +350,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
           </div>
 
           <div className="grid gap-1.5 text-xs text-on-surface-variant/80">
-            <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-white px-2.5 py-2 shadow-sm">
+            <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-2.5 py-2 shadow-sm">
               <CircleDot size={14} className="mt-0.5 shrink-0 text-primary" strokeWidth={1.75} />
               <span className="leading-snug">
                 {neighborCount === 0
@@ -363,7 +363,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             olt.lat !== null &&
             olt.lng !== null &&
             oltCodeTrim.length > 0 ? (
-              <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-white px-2.5 py-2 shadow-sm">
+              <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-2.5 py-2 shadow-sm">
                 <RadioTower size={14} className="mt-0.5 shrink-0 text-secondary" strokeWidth={1.75} />
                 <span className="leading-snug">
                   A linha laranja mostra a ligação entre a OLT e o splitter atual.
@@ -372,9 +372,9 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             ) : null}
 
             {reliefFootPathPositions !== null ? (
-              <div className="flex items-start gap-2 rounded-lg border border-emerald-200/90 bg-emerald-50/90 px-2.5 py-2 shadow-sm">
-                <CircleDot size={14} className="mt-0.5 shrink-0 text-emerald-700" strokeWidth={1.75} />
-                <span className="leading-snug text-emerald-950">
+              <div className="flex items-start gap-2 rounded-lg border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/90 dark:bg-emerald-950/40 px-2.5 py-2 shadow-sm">
+                <CircleDot size={14} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-200" strokeWidth={1.75} />
+                <span className="leading-snug text-emerald-950 dark:text-emerald-100">
                   A linha verde liga este splitter a um vizinho com{' '}
                   <span className="font-semibold">porta livre</span> dentro da regra de planejamento (mesma rua até{' '}
                   {SPLITTER_ROUTE_RELIEF_MAX_METERS} m de rota pedestre, ou até 30 m entre ruas).
@@ -383,8 +383,8 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             ) : null}
 
             {clientOnMapCount > 0 ? (
-              <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-white px-2.5 py-2 shadow-sm">
-                <CircleDot size={14} className="mt-0.5 shrink-0 text-amber-700" strokeWidth={1.75} />
+              <div className="flex items-start gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-2.5 py-2 shadow-sm">
+                <CircleDot size={14} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-200" strokeWidth={1.75} />
                 <span className="leading-snug">
                   {clientOnMapCount} assinante(s) com coordenadas no mapa (campos na consulta SQL).
                 </span>
@@ -392,9 +392,9 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             ) : null}
 
             {routingUnavailable ? (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-200/90 bg-amber-50/90 px-2.5 py-2 shadow-sm">
-                <CircleDot size={14} className="mt-0.5 shrink-0 text-amber-700" strokeWidth={1.75} />
-                <span className="leading-snug text-amber-950">
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200/90 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-2.5 py-2 shadow-sm">
+                <CircleDot size={14} className="mt-0.5 shrink-0 text-amber-700 dark:text-amber-200" strokeWidth={1.75} />
+                <span className="leading-snug text-amber-950 dark:text-amber-100">
                   Roteamento pedestre temporariamente indisponível — apenas distância em linha reta neste mapa.
                 </span>
               </div>
@@ -404,11 +404,11 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {splitterFullOccupancy && currentIsCondominium && condominiumReliefAvailable ? (
           <div
-            className="mt-3 rounded-xl border border-emerald-200/90 bg-emerald-50/95 px-3 py-2.5 text-sm text-emerald-950 shadow-sm"
+            className="mt-3 rounded-xl border border-emerald-200/90 dark:border-emerald-800/50 bg-emerald-50/95 dark:bg-emerald-950/40 px-3 py-2.5 text-sm text-emerald-950 dark:text-emerald-100 shadow-sm"
             role="status"
           >
-            <p className="font-bold text-emerald-900">Condomínio — alívio por outro splitter</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-emerald-900/95">
+            <p className="font-bold text-emerald-900 dark:text-emerald-200">Condomínio — alívio por outro splitter</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-emerald-900/95 dark:text-emerald-200">
               Há outro splitter secundário com o mesmo trecho de título após{' '}
               <span className="font-semibold">RES.</span>, <span className="font-semibold">COND.</span> ou{' '}
               <span className="font-semibold">ED.</span> (mesmo condomínio/bloco no cadastro textual) e com{' '}
@@ -420,7 +420,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {splitterFullOccupancy && !currentIsCondominium && reliefGeoPendingForStreetRule ? (
           <div
-            className="mt-3 rounded-xl border border-slate-200/90 bg-slate-50/95 px-3 py-2 text-xs text-slate-700 shadow-sm"
+            className="mt-3 rounded-xl border border-slate-200/90 dark:border-white/10 bg-surface-container-low/95 px-3 py-2 text-xs text-on-surface-variant shadow-sm"
             role="status"
           >
             A confirmar nomes de via no mapa para o aviso de planejamento…
@@ -429,11 +429,11 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
 
         {showNetworkPlanningAlert ? (
           <div
-            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 to-amber-50 px-3 py-2.5 text-sm text-rose-950 shadow-sm ring-1 ring-rose-200/60"
+            className="mt-3 rounded-xl border border-rose-300/90 bg-gradient-to-r from-rose-50 dark:from-rose-950/20 to-amber-50 dark:to-amber-950/20 px-3 py-2.5 text-sm text-rose-950 dark:text-rose-100 shadow-sm ring-1 ring-rose-200/60 dark:ring-rose-800/50"
             role="alert"
           >
-            <p className="font-bold text-rose-900">Planejamento de rede — sem alívio disponível</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-rose-900/95">
+            <p className="font-bold text-rose-900 dark:text-rose-200">Planejamento de rede — sem alívio disponível</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-rose-900/95 dark:text-rose-200">
               {currentIsCondominium
                 ? 'Este splitter de condomínio está com todas as portas ocupadas e não há outro splitter secundário do mesmo condomínio/bloco com porta livre.'
                 : `Este splitter de rua está com todas as portas ocupadas e não há outro splitter de rua com porta livre a até ${SPLITTER_ROUTE_RELIEF_MAX_METERS} m de percurso pedestre nas ruas (OSRM).`}
@@ -448,13 +448,13 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
         ) : null}
 
         {oltCodeTrim.length > 0 && oltState.type === 'error' ? (
-          <p className="mt-3 rounded-xl border border-red-200/80 bg-red-50/90 px-3 py-2 text-sm text-red-900">
+          <p className="mt-3 rounded-xl border border-red-200/80 dark:border-red-800/50 bg-red-50/90 dark:bg-red-950/40 px-3 py-2 text-sm text-red-900 dark:text-red-200">
             Não foi possível carregar a listagem de OLTs; o mapa aparece sem linha até a consulta funcionar.
           </p>
         ) : null}
 
         {showOltMissing ? (
-          <p className="mt-3 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+          <p className="mt-3 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-amber-50/90 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
             O código OLT deste splitter não foi resolvido na listagem de OLTs; por isso o mapa segue sem linha e sem marcador da OLT.
           </p>
         ) : null}
@@ -470,7 +470,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
       </div>
 
       <div className="p-3 pt-2">
-        <div className="overflow-hidden rounded-xl border border-outline-variant bg-white shadow-[0_8px_24px_rgba(26,26,26,0.05)]">
+        <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-[0_8px_24px_rgba(26,26,26,0.05)]">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/50 bg-surface-container-low/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-on-surface-variant/60">
             <span>Vista do mapa</span>
             <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
@@ -490,7 +490,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
               <button
                 type="button"
                 onClick={() => setMapExpandedOpen(true)}
-                className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-on-surface shadow-sm transition hover:bg-surface-container-low"
+                className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-on-surface shadow-sm transition hover:bg-surface-container-low"
               >
                 <Maximize2 size={12} strokeWidth={2} aria-hidden />
                 Abrir mapa
@@ -546,7 +546,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
             role="dialog"
             aria-modal="true"
             aria-labelledby="splitter-map-expanded-title"
-            className="relative flex h-[min(88dvh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-outline-variant bg-white shadow-2xl"
+            className="relative flex h-[min(88dvh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-2xl"
           >
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-outline-variant bg-surface-container-low/35 px-3 py-2.5">
               <h3
@@ -560,7 +560,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
                   href={openStreetMapHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-white px-2 py-1.5 text-[11px] font-semibold text-primary underline-offset-2 hover:bg-surface-container-low hover:underline"
+                  className="inline-flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-[11px] font-semibold text-primary underline-offset-2 hover:bg-surface-container-low hover:underline"
                 >
                   <ExternalLink size={12} aria-hidden />
                   OpenStreetMap
@@ -579,7 +579,7 @@ export function SplitterMapSection({ splitter, onMapReliefInsightChange }: Split
                 <button
                   type="button"
                   onClick={() => setMapExpandedOpen(false)}
-                  className="flex size-9 items-center justify-center rounded-lg border border-outline-variant bg-white text-on-surface shadow-sm transition hover:bg-surface-container-low"
+                  className="flex size-9 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface shadow-sm transition hover:bg-surface-container-low"
                   aria-label="Fechar"
                 >
                   <X size={18} strokeWidth={2} aria-hidden />

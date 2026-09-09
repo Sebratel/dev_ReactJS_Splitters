@@ -191,7 +191,7 @@ export function ChurnHeatMap({ points, metric }: { points: ChurnHeatPoint[]; met
 
   if (withMetric.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50/70 py-8 text-center text-sm text-neutral-500">
+      <p className="rounded-xl border border-dashed border-neutral-200 dark:border-white/10 bg-surface-container-low/70 py-8 text-center text-sm text-on-surface-variant">
         Sem dados desta camada no recorte atual.
       </p>
     )
@@ -199,7 +199,7 @@ export function ChurnHeatMap({ points, metric }: { points: ChurnHeatPoint[]; met
 
   const mk = MARKER_COLOR[metric]
   return (
-    <div className="relative h-[min(460px,56vh)] w-full overflow-hidden rounded-xl border border-neutral-200/80 ring-1 ring-neutral-200/60">
+    <div className="relative h-[min(460px,56vh)] w-full overflow-hidden rounded-xl border border-neutral-200/80 dark:border-white/10 ring-1 ring-neutral-200/60 dark:ring-white/10">
       <MapContainer center={BR_FALLBACK_CENTER} zoom={11} className="z-0 h-full w-full [&_.leaflet-control-attribution]:text-[10px]" scrollWheelZoom>
         <TileLayer attribution={OSM_ATTR} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" opacity={0.92} />
         <HeatLayer key={heatKey} latlngs={latlngs} gradient={GRADIENTS[metric]} />

@@ -42,7 +42,11 @@ export function useOperationalMassivaTickets(options?: { enabled?: boolean }): {
         startDate: OPERATIONAL_HISTORY_START,
         limit: 5000,
       }),
-    staleTime: 60_000,
+    staleTime: 15_000,
+    // Alerta sonoro precisa ser pontual e funcionar com a aba em segundo plano:
+    // faz polling do histórico local (fonte imediata de novas aberturas) a cada 15s.
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
     enabled: userEnabled && massivaView.status !== 'not-configured',
   })
 

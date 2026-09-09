@@ -6,6 +6,10 @@ import App from '@/app/App'
 import { bootstrapSession } from '@/features/session/lib/bootstrapSession'
 import { preloadAccessRequestFabImage, preloadIsaHeroImage } from '@/shared/lib/accessRequestFabImage'
 import { initApmRum } from '@/shared/lib/apmRum'
+import { applyInitialTheme } from '@/shared/lib/theme'
+
+// Tema antes do render para não piscar (light/dark conforme preferência salva/SO).
+applyInitialTheme()
 
 /**
  * Mitiga erro de chunk desatualizado após deploy (hash mudou no servidor).
