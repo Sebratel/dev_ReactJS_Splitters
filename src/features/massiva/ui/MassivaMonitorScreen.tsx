@@ -792,19 +792,32 @@ export function MassivaMonitorScreen() {
                     </td>
                   </tr>
                 )}
+                {/* Poucas "no prazo": ficam na MESMA tabela — mesmo tamanho de linha das demais. */}
+                {okRows.length > 0 && !okScroll ? (
+                  <>
+                    <tr>
+                      <td colSpan={9} className="pt-3 pb-1 text-[9px] font-bold uppercase tracking-wide text-[#5a6685]">
+                        No prazo · {okRows.length}
+                      </td>
+                    </tr>
+                    {okRows.map(({ t, sla }) => (
+                      <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
+                    ))}
+                  </>
+                ) : null}
               </tbody>
             </table>
 
-            {okRows.length > 0 ? (
+            {/* Muitas "no prazo": tabela própria que rola sozinha (marquee) na TV. */}
+            {okRows.length > 0 && okScroll ? (
               <>
                 <div className="mt-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-[#5a6685]">
-                  No prazo · {okRows.length}
-                  {okScroll ? ' · rolando' : ''}
+                  No prazo · {okRows.length} · rolando
                 </div>
-                <div className={okScroll ? 'relative max-h-[300px] overflow-hidden' : ''}>
+                <div className="relative max-h-[300px] overflow-hidden">
                   <div
-                    className={okScroll ? 'slaa-marquee' : ''}
-                    style={okScroll ? { animationDuration: `${Math.max(14, okRows.length * 2.4)}s` } : undefined}
+                    className="slaa-marquee"
+                    style={{ animationDuration: `${Math.max(14, okRows.length * 2.4)}s` }}
                   >
                     <table className="w-full table-fixed text-[13px]">
                       <MonColgroup />
@@ -814,16 +827,14 @@ export function MassivaMonitorScreen() {
                         ))}
                       </tbody>
                     </table>
-                    {okScroll ? (
-                      <table className="w-full table-fixed text-[13px]" aria-hidden>
-                        <MonColgroup />
-                        <tbody>
-                          {okRows.map(({ t, sla }) => (
-                            <IncidentRow key={`dup-${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : null}
+                    <table className="w-full table-fixed text-[13px]" aria-hidden>
+                      <MonColgroup />
+                      <tbody>
+                        {okRows.map(({ t, sla }) => (
+                          <IncidentRow key={`dup-${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </>
