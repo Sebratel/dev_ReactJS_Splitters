@@ -174,7 +174,7 @@ function IncidentRow({
   const pct =
     progress && progress.total > 0 ? Math.round((progress.recovered / progress.total) * 100) : null
   return (
-    <tr className="border-t border-[#253150]/50 align-top">
+    <tr className="border-t border-[#253150]/50 align-middle">
       <td className="py-1 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
       <td className="py-1">
         {t.infraProtocol != null && t.infraProtocol > 0 ? (
@@ -186,31 +186,28 @@ function IncidentRow({
         )}
       </td>
       <td className="overflow-hidden py-1">
-        <div>
-          <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
-          <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
-          {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
-        </div>
-        {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-0.5 flex h-3 items-center gap-1 overflow-hidden">
+        {/* Uma linha só: tarja + título (reticências) + AP + chips inline. */}
+        <div className="flex items-center gap-1.5">
+          <span className={cn('inline-block h-4 w-1 shrink-0 rounded-sm', stripeClass[sla.severity])} />
+          <span className="min-w-0 truncate">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
+          {t.apCode ? <span className="shrink-0 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
           {tipo ? (
-            <span className="rounded-full bg-orange-500/15 px-1 py-0 font-mono text-[8px] font-bold text-orange-300">
+            <span className="shrink-0 rounded-full bg-orange-500/15 px-1 py-0 font-mono text-[8px] font-bold text-orange-300">
               {tipo}
             </span>
           ) : null}
           {showRecurrence ? (
-            <span className="rounded-full bg-rose-500/15 px-1 py-0 font-mono text-[8px] font-bold text-rose-300">
-              🔁 {recurrence}× hoje
+            <span className="shrink-0 rounded-full bg-rose-500/15 px-1 py-0 font-mono text-[8px] font-bold text-rose-300">
+              🔁 {recurrence}×
             </span>
           ) : null}
         </div>
       </td>
-      <td className="py-1">
-        <div>{t.affectedClients.toLocaleString('pt-BR')}</div>
-        {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-0.5 h-3 font-mono text-[8px] leading-3 text-[#5a6685]">
-          {res != null && corp != null ? `${res}R · ${corp}C` : ''}
-        </div>
+      <td
+        className="py-1"
+        title={res != null && corp != null ? `${res} residenciais · ${corp} corporativos` : undefined}
+      >
+        {t.affectedClients.toLocaleString('pt-BR')}
       </td>
       <td className="py-1">{formatDurationSince(t.openedAt, nowMs)}</td>
       <td className="overflow-hidden py-1 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
