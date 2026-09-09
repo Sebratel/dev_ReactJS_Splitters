@@ -790,19 +790,14 @@ export function MassivaMonitorScreen() {
                     </td>
                   </tr>
                 )}
-                {/* Poucas "no prazo": ficam na MESMA tabela — mesmo tamanho de linha das demais. */}
-                {okRows.length > 0 && !okScroll ? (
-                  <>
-                    <tr>
-                      <td colSpan={9} className="pt-3 pb-1 text-[9px] font-bold uppercase tracking-wide text-[#5a6685]">
-                        No prazo · {okRows.length}
-                      </td>
-                    </tr>
-                    {okRows.map(({ t, sla }) => (
+                {/* Poucas "no prazo": seguem na MESMA tabela, sem separador — todas as
+                    linhas ficam com a mesma altura. A tarja verde à esquerda já indica
+                    "no prazo"; a ordenação por prazo mantém as de risco no topo. */}
+                {okRows.length > 0 && !okScroll
+                  ? okRows.map(({ t, sla }) => (
                       <IncidentRow key={`${t.protocol}-${t.assignmentId ?? 'x'}`} t={t} sla={sla} nowMs={nowMs} tipo={tipoByProtocol.get(t.protocol) ?? null} recurrence={recurrenceByApCode.get((t.apCode ?? '').trim())} progress={signalProgress.get(t.protocol) ?? null} />
-                    ))}
-                  </>
-                ) : null}
+                    ))
+                  : null}
               </tbody>
             </table>
 
