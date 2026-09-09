@@ -175,8 +175,8 @@ function IncidentRow({
     progress && progress.total > 0 ? Math.round((progress.recovered / progress.total) * 100) : null
   return (
     <tr className="border-t border-[#253150]/50 align-top">
-      <td className="py-2 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
-      <td className="py-2">
+      <td className="py-1.5 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
+      <td className="py-1.5">
         {t.infraProtocol != null && t.infraProtocol > 0 ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[12px] font-bold text-violet-300">
             🔗 {t.infraProtocol}
@@ -185,14 +185,14 @@ function IncidentRow({
           <span className="font-mono text-[11px] text-[#3f4c6b]">—</span>
         )}
       </td>
-      <td className="overflow-hidden py-2">
+      <td className="overflow-hidden py-1.5">
         <div>
           <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
           <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
           {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
         </div>
         {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-1 flex h-4 items-center gap-1 overflow-hidden">
+        <div className="mt-0.5 flex h-4 items-center gap-1 overflow-hidden">
           {tipo ? (
             <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-300">
               {tipo}
@@ -205,17 +205,17 @@ function IncidentRow({
           ) : null}
         </div>
       </td>
-      <td className="py-2">
+      <td className="py-1.5">
         <div>{t.affectedClients.toLocaleString('pt-BR')}</div>
         {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-1 h-4 font-mono text-[9px] leading-4 text-[#5a6685]">
+        <div className="mt-0.5 h-4 font-mono text-[9px] leading-4 text-[#5a6685]">
           {res != null && corp != null ? `${res}R · ${corp}C` : ''}
         </div>
       </td>
-      <td className="py-2">{formatDurationSince(t.openedAt, nowMs)}</td>
-      <td className="overflow-hidden py-2 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
-      <td className="py-2 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
-      <td className="py-2">
+      <td className="py-1.5">{formatDurationSince(t.openedAt, nowMs)}</td>
+      <td className="overflow-hidden py-1.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
+      <td className="py-1.5 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
+      <td className="py-1.5">
         <span
           className={cn(
             'inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
@@ -229,7 +229,7 @@ function IncidentRow({
           {sla.label}
         </span>
       </td>
-      <td className="py-2">
+      <td className="py-1.5">
         {pct != null ? (
           <div className="flex items-center gap-1.5">
             <span className="h-[5px] w-14 overflow-hidden rounded-full bg-[#253150]">
