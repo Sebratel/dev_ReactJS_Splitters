@@ -804,10 +804,7 @@ export function MassivaMonitorScreen() {
             {/* Muitas "no prazo": tabela própria que rola sozinha (marquee) na TV. */}
             {okRows.length > 0 && okScroll ? (
               <>
-                <div className="mt-2 pb-1 text-[9px] font-bold uppercase tracking-wide text-[#5a6685]">
-                  No prazo · {okRows.length} · rolando
-                </div>
-                <div className="relative max-h-[300px] overflow-hidden">
+                <div className="relative mt-1 max-h-[300px] overflow-hidden">
                   <div
                     className="slaa-marquee"
                     style={{ animationDuration: `${Math.max(14, okRows.length * 2.4)}s` }}
