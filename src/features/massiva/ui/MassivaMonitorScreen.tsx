@@ -175,8 +175,8 @@ function IncidentRow({
     progress && progress.total > 0 ? Math.round((progress.recovered / progress.total) * 100) : null
   return (
     <tr className="border-t border-[#253150]/50 align-top">
-      <td className="py-1.5 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
-      <td className="py-1.5">
+      <td className="py-1 font-mono font-semibold">{t.protocol > 0 ? t.protocol : '—'}</td>
+      <td className="py-1">
         {t.infraProtocol != null && t.infraProtocol > 0 ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[12px] font-bold text-violet-300">
             🔗 {t.infraProtocol}
@@ -185,37 +185,37 @@ function IncidentRow({
           <span className="font-mono text-[11px] text-[#3f4c6b]">—</span>
         )}
       </td>
-      <td className="overflow-hidden py-1.5">
+      <td className="overflow-hidden py-1">
         <div>
           <span className={cn('mr-2 inline-block h-4 w-1 rounded-sm align-middle', stripeClass[sla.severity])} />
           <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
           {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
         </div>
         {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-0.5 flex h-4 items-center gap-1 overflow-hidden">
+        <div className="mt-0.5 flex h-3 items-center gap-1 overflow-hidden">
           {tipo ? (
-            <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-300">
+            <span className="rounded-full bg-orange-500/15 px-1 py-0 font-mono text-[8px] font-bold text-orange-300">
               {tipo}
             </span>
           ) : null}
           {showRecurrence ? (
-            <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-300">
+            <span className="rounded-full bg-rose-500/15 px-1 py-0 font-mono text-[8px] font-bold text-rose-300">
               🔁 {recurrence}× hoje
             </span>
           ) : null}
         </div>
       </td>
-      <td className="py-1.5">
+      <td className="py-1">
         <div>{t.affectedClients.toLocaleString('pt-BR')}</div>
         {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
-        <div className="mt-0.5 h-4 font-mono text-[9px] leading-4 text-[#5a6685]">
+        <div className="mt-0.5 h-3 font-mono text-[8px] leading-3 text-[#5a6685]">
           {res != null && corp != null ? `${res}R · ${corp}C` : ''}
         </div>
       </td>
-      <td className="py-1.5">{formatDurationSince(t.openedAt, nowMs)}</td>
-      <td className="overflow-hidden py-1.5 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
-      <td className="py-1.5 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
-      <td className="py-1.5">
+      <td className="py-1">{formatDurationSince(t.openedAt, nowMs)}</td>
+      <td className="overflow-hidden py-1 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
+      <td className="py-1 text-[12px]">{MASSIVA_IDENTIFIED_BY_LABEL[t.identifiedBy ?? ''] ?? '—'}</td>
+      <td className="py-1">
         <span
           className={cn(
             'inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[11.5px] font-bold',
@@ -229,7 +229,7 @@ function IncidentRow({
           {sla.label}
         </span>
       </td>
-      <td className="py-1.5">
+      <td className="py-1">
         {pct != null ? (
           <div className="flex items-center gap-1.5">
             <span className="h-[5px] w-14 overflow-hidden rounded-full bg-[#253150]">
@@ -697,7 +697,7 @@ export function MassivaMonitorScreen() {
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#253150] bg-[#121a2b] px-2.5 py-1.5 text-[11px] font-semibold text-[#8593b8] transition hover:border-[#34415f] hover:text-[#eaf0fa]"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#253150] bg-[#121a2b] px-2.5 py-1 text-[11px] font-semibold text-[#8593b8] transition hover:border-[#34415f] hover:text-[#eaf0fa]"
             title={isFullscreen ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
             aria-label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
           >
