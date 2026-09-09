@@ -191,28 +191,26 @@ function IncidentRow({
           <span className="align-middle">{t.title.trim() !== '' ? t.title : t.apCode || '—'}</span>
           {t.apCode ? <span className="ml-1.5 font-mono text-[11px] text-[#5a6685]">{t.apCode}</span> : null}
         </div>
-        {tipo || showRecurrence ? (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {tipo ? (
-              <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-300">
-                {tipo}
-              </span>
-            ) : null}
-            {showRecurrence ? (
-              <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-300">
-                🔁 {recurrence}× hoje
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
+        <div className="mt-1 flex h-4 items-center gap-1 overflow-hidden">
+          {tipo ? (
+            <span className="rounded-full bg-orange-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-orange-300">
+              {tipo}
+            </span>
+          ) : null}
+          {showRecurrence ? (
+            <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 font-mono text-[9px] font-bold text-rose-300">
+              🔁 {recurrence}× hoje
+            </span>
+          ) : null}
+        </div>
       </td>
       <td className="py-2">
         <div>{t.affectedClients.toLocaleString('pt-BR')}</div>
-        {res != null && corp != null ? (
-          <div className="font-mono text-[9px] text-[#5a6685]">
-            {res}R · {corp}C
-          </div>
-        ) : null}
+        {/* Segunda linha sempre presente (altura fixa) — mantém todas as linhas iguais. */}
+        <div className="mt-1 h-4 font-mono text-[9px] leading-4 text-[#5a6685]">
+          {res != null && corp != null ? `${res}R · ${corp}C` : ''}
+        </div>
       </td>
       <td className="py-2">{formatDurationSince(t.openedAt, nowMs)}</td>
       <td className="overflow-hidden py-2 font-mono text-[12px] text-[#8593b8]">{operatorDisplay}</td>
