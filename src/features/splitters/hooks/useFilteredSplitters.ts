@@ -24,6 +24,7 @@ export function useFilteredSplitters(
   const streetSelections = filters.streetSelections
   const citySelections = filters.citySelections
   const condominiumSelections = filters.condominiumSelections
+  const blockSelections = filters.blockSelections
   const localKindFilter = filters.localKindFilter
   const massivaOpenState = filters.massivaOpenState
   const corporateClientFilter = filters.corporateClientFilter
@@ -42,6 +43,7 @@ export function useFilteredSplitters(
       streetSelections,
       citySelections,
       condominiumSelections,
+      blockSelections,
       localKindFilter,
       massivaOpenState,
       corporateClientFilter,
@@ -65,6 +67,7 @@ export function useFilteredSplitters(
     streetSelections,
     citySelections,
     condominiumSelections,
+    blockSelections,
     localKindFilter,
     massivaOpenState,
     corporateClientFilter,

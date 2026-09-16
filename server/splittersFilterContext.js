@@ -69,6 +69,7 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
   const condominiumSelections = req.query.condominiums
     ? req.query.condominiums.split(',')
     : [];
+  const blockSelections = req.query.blocks ? req.query.blocks.split(',') : [];
   const withOpenMassivaRaw = String(req.query.withOpenMassiva || '').trim();
   const withMaintenanceRaw = String(req.query.withMaintenance || '').trim();
   const corporateClientsRaw = String(req.query.corporateClients || '')
@@ -158,6 +159,18 @@ export function buildSplittersFilterContext(req, splittersBaseQuery) {
   if (normalizedCondominiumSelections.length > 0) {
     whereClauses.push(`TRIM(base."NOME CONDOMÍNIO") = ANY($${currentParam})`);
     values.push(normalizedCondominiumSelections);
+    currentParam++;
+  }
+
+  // Bloco extraído do título do splitter (ex.: "BL A" → "A"); espelha extractBlockFromTitle.
+  const normalizedBlockSelections = blockSelections
+    .map((b) => String(b || '').trim().toUpperCase())
+    .filter((b) => b !== '');
+  if (normalizedBlockSelections.length > 0) {
+    whereClauses.push(
+      `UPPER((regexp_match(base."SPLT.SECUNDARIO", '\\yBL(?:OCO)?\\s+([A-Z0-9]+)', 'i'))[1]) = ANY($${currentParam})`,
+    );
+    values.push(normalizedBlockSelections);
     currentParam++;
   }
 

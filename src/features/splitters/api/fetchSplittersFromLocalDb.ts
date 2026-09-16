@@ -20,6 +20,8 @@ export type SplittersFetchParams = {
   streets?: string[]
   cities?: string[]
   condominiums?: string[]
+  /** Blocos selecionados (ex.: "A", "B") — extraídos do título no BFF. */
+  blocks?: string[]
   /** Tipo de local: 'CONDOMÍNIO' | 'UNIDADE' | null (sem filtro). */
   localKind?: 'CONDOMÍNIO' | 'UNIDADE' | null
   withOpenMassiva?: boolean
@@ -96,6 +98,7 @@ export async function fetchSplittersFromLocalDb({
   streets = [],
   cities = [],
   condominiums = [],
+  blocks = [],
   localKind = null,
   withOpenMassiva,
   openMassivaSplitterCodes = [],
@@ -122,6 +125,9 @@ export async function fetchSplittersFromLocalDb({
   if (cities.length > 0) queryParams.append('cities', cities.join(','))
   if (condominiums.length > 0) {
     queryParams.append('condominiums', condominiums.join(','))
+  }
+  if (blocks.length > 0) {
+    queryParams.append('blocks', blocks.join(','))
   }
   if (localKind === 'CONDOMÍNIO' || localKind === 'UNIDADE') {
     // ASCII (sem acento) — o servidor normaliza de qualquer forma.

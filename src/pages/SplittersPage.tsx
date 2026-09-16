@@ -103,6 +103,7 @@ export function SplittersPage() {
     toggleSplitterStatus,
     toggleCitySelection,
     toggleCondominiumSelection,
+    toggleBlockSelection,
     toggleStreetSelection,
     setLocalKindFilter,
     setMassivaOpenState,
@@ -178,6 +179,13 @@ export function SplittersPage() {
         key: `condo:${name}`,
         label: `Condomínio: ${name}`,
         onRemove: () => toggleCondominiumSelection(name),
+      })
+    }
+    for (const block of state.blockSelections) {
+      chips.push({
+        key: `block:${block}`,
+        label: `Bloco: ${block}`,
+        onRemove: () => toggleBlockSelection(block),
       })
     }
     for (const street of state.streetSelections) {
@@ -262,6 +270,7 @@ export function SplittersPage() {
     state.splitterStatuses,
     state.citySelections,
     state.condominiumSelections,
+    state.blockSelections,
     state.streetSelections,
     state.localKindFilter,
     state.massivaOpenState,
@@ -273,6 +282,7 @@ export function SplittersPage() {
     toggleSplitterStatus,
     toggleCitySelection,
     toggleCondominiumSelection,
+    toggleBlockSelection,
     toggleStreetSelection,
     setLocalKindFilter,
     setMassivaOpenState,
