@@ -34,6 +34,7 @@ export function SplittersFiltersDrawer({
     toggleSplitterStatus,
     toggleCitySelection,
     toggleCondominiumSelection,
+    toggleBlockSelection,
     toggleStreetSelection,
     setMassivaOpenState,
     setSignalLevelFilter,
@@ -55,6 +56,7 @@ export function SplittersFiltersDrawer({
   const [citySearch, setCitySearch] = useState('')
   const [streetSearch, setStreetSearch] = useState('')
   const [condominiumSearch, setCondominiumSearch] = useState('')
+  const [blockSearch, setBlockSearch] = useState('')
 
   const sortedOlts = useMemo(() => {
     if (!accessPoints?.length) return []
@@ -110,6 +112,13 @@ export function SplittersFiltersDrawer({
     if (q === '') return options
     return options.filter((n) => n.toLowerCase().includes(q))
   }, [condominiumSearch, filterOptionsQuery.data?.condominiums])
+
+  const filteredBlocks = useMemo(() => {
+    const options = filterOptionsQuery.data?.blocks ?? []
+    const q = blockSearch.trim().toLowerCase()
+    if (q === '') return options
+    return options.filter((b) => b.toLowerCase().includes(q))
+  }, [blockSearch, filterOptionsQuery.data?.blocks])
 
   const selectedOlts = useMemo(() => new Set(state.oltCodes), [state.oltCodes])
   const selectedPrimary = useMemo(
@@ -398,6 +407,39 @@ export function SplittersFiltersDrawer({
                           onChange={() => toggleCondominiumSelection(name)}
                         />
                         <span className="text-sm">{name}</span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <SectionTitle>Bloco</SectionTitle>
+              <input
+                type="search"
+                value={blockSearch}
+                onChange={(e) => setBlockSearch(e.target.value)}
+                placeholder="Buscar bloco…"
+                className="w-full rounded-xl border border-outline-variant bg-surface px-3 py-2 text-sm focus:border-primary/40 focus:outline-none"
+              />
+              <ul className="max-h-36 space-y-0.5 overflow-y-auto rounded-xl border border-outline-variant/50 bg-surface p-2">
+                {filteredBlocks.map((block) => {
+                  const checked = state.blockSelections.includes(block)
+                  return (
+                    <li key={block}>
+                      <label
+                        className={cn(
+                          'flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-container-low',
+                          checked && 'bg-primary/8',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleBlockSelection(block)}
+                        />
+                        <span className="text-sm">Bloco {block}</span>
                       </label>
                     </li>
                   )

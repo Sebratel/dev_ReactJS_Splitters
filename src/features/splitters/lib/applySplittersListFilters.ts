@@ -8,6 +8,7 @@ import type { SplittersListFilterState } from '@/features/splitters/model/splitt
 import type { SplitterStatus } from '@/features/splitters/model/splitterStatus'
 import { resolveSplitterStatus } from '@/features/splitters/model/splitterStatus'
 import { resolveOltSlotPortFromSplitterTitleAndCode } from '@/features/splitters/lib/parseOltPonFromSplitterLabels'
+import { extractBlockFromSplitterTitle } from '@/features/splitters/lib/extractBlockFromSplitterTitle'
 
 function buildRowContext(
   splitter: Splitter,
@@ -103,6 +104,17 @@ function matchesCondominium(
   return condominiumSelections.includes(name)
 }
 
+/** Bloco extraído do título (ex.: "BL A" → "A"). Sem bloco no título → não passa quando há filtro. */
+function matchesBlock(
+  splitter: Splitter,
+  blockSelections: readonly string[],
+): boolean {
+  if (blockSelections.length === 0) return true
+  const block = extractBlockFromSplitterTitle(splitter.title)
+  if (block === null) return false
+  return blockSelections.includes(block)
+}
+
 /** Prefixo canônico de condomínio no título (RES./COND./ED.) — paridade com condominiumClassifier.js. */
 const CONDOMINIUM_TITLE_PREFIX_REGEX = /\b(?:RES|COND|ED)\./i
 
@@ -189,6 +201,7 @@ export function applySplittersListFilters(
       : new Set<SplitterStatus>()
   const streetSelections = filters.streetSelections
   const condominiumSelections = filters.condominiumSelections
+  const blockSelections = filters.blockSelections
 
   const out: Splitter[] = []
   for (const splitter of splitters) {
@@ -206,6 +219,7 @@ export function applySplittersListFilters(
       continue
     }
     if (!matchesCondominium(splitter, condominiumSelections)) continue
+    if (!matchesBlock(splitter, blockSelections)) continue
     if (!matchesLocalKind(splitter, filters.localKindFilter)) continue
     if (!matchesResolvedOltPon(splitter, filters)) continue
     out.push(splitter)

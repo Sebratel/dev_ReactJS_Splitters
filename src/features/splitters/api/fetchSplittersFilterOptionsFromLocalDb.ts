@@ -5,6 +5,7 @@ export type SplittersFilterOptions = {
   streets: string[]
   cities: string[]
   condominiums: string[]
+  blocks: string[]
 }
 
 export async function fetchSplittersFilterOptionsFromLocalDb(): Promise<SplittersFilterOptions> {
@@ -33,5 +34,6 @@ export async function fetchSplittersFilterOptionsFromLocalDb(): Promise<Splitter
     streets: toStringArray((data as Record<string, unknown>).streets),
     cities: toStringArray((data as Record<string, unknown>).cities),
     condominiums: toStringArray((data as Record<string, unknown>).condominiums),
+    blocks: toStringArray((data as Record<string, unknown>).blocks),
   }
 }
