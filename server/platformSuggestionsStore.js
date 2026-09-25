@@ -1,5 +1,7 @@
 import mysql from 'mysql2/promise';
 import { mysqlNaiveDateTimeToIso } from './mysqlBrazilDateTime.js';
+import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
+import logger from './logger.js';
 
 const SUGGESTIONS_TABLE = 'platform_suggestions';
 const VOTES_TABLE = 'platform_suggestion_votes';
@@ -119,6 +121,7 @@ function getMysqlPool() {
     queueLimit: 0,
     charset: 'utf8mb4',
   });
+  instrumentMysqlPool(dataPool, 'mysql_platform_suggestions');
   return dataPool;
 }
 
@@ -342,6 +345,11 @@ async function fetchCommentsBySuggestionIds(connectionOrPool, suggestionIds) {
 }
 
 async function fetchSuggestionRowsByIds(connectionOrPool, suggestionIds, viewerUid = null) {
+  logger.debug('store_internal_call', {
+    store: 'platformSuggestionsStore',
+    fn: 'fetchSuggestionRowsByIds',
+    suggestionCount: Array.isArray(suggestionIds) ? suggestionIds.length : 0,
+  });
   const ids = Array.isArray(suggestionIds)
     ? suggestionIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
     : [];
@@ -399,6 +407,11 @@ async function fetchSuggestionById(connectionOrPool, suggestionId, viewerUid = n
 }
 
 async function ensureSuggestionExists(connection, suggestionId) {
+  logger.debug('store_internal_call', {
+    store: 'platformSuggestionsStore',
+    fn: 'ensureSuggestionExists',
+    suggestionId,
+  });
   const [rows] = await connection.query(
     `SELECT id FROM ${SUGGESTIONS_TABLE} WHERE id = ? AND app_id = ? LIMIT 1 FOR UPDATE`,
     [suggestionId, getPlatformSuggestionsAppId()],
@@ -525,6 +538,11 @@ export async function createPlatformSuggestion(input) {
 }
 
 async function recalcSuggestionVoteCounters(connection, suggestionId) {
+  logger.debug('store_internal_call', {
+    store: 'platformSuggestionsStore',
+    fn: 'recalcSuggestionVoteCounters',
+    suggestionId,
+  });
   const [rows] = await connection.query(
     `
       SELECT

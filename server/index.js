@@ -4,6 +4,7 @@ import cors from 'cors';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
 import {
@@ -108,23 +109,51 @@ const hubBaseUrl = (
 app.use(cors()); // Permite qualquer origem em desenvolvimento local
 app.use(express.json({ limit: '512kb' }));
 
+// Observabilidade aditiva: um id de correlação por requisição, gerado
+// sincronamente (antes de qualquer trabalho assíncrono) e logado como
+// 'http_request_start'. Ao final (res.on('finish')), loga 'http_request_finish'
+// com o mesmo id, path da rota (quando disponível), status e duração.
+// Puramente aditiva — não altera comportamento, resposta ou status code.
+// Usuário autenticado só fica disponível aqui se alguma rota já tiver
+// anexado req.user/req.splittersUser (hoje `requireAuthenticatedSplittersUser`
+// retorna o actor sem anexar a req, então userEmail normalmente virá
+// undefined — ver relatório).
 app.use((req, res, next) => {
-  const startAt = Date.now();
-  logger.info('http_request_start', {
+  const id = crypto.randomUUID();
+  const startedAt = Date.now();
+  req.observabilityRequestId = id;
+
+  logger.debug('http_request_start', {
+    id,
     method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
+    path: req.originalUrl,
+    timestamp: new Date(startedAt).toISOString(),
+    poolStats: getPostgresPoolStats(pool),
   });
 
   res.on('finish', () => {
-    logger.info('http_request_end', {
+    const durationMs = Date.now() - startedAt;
+    const status = res.statusCode;
+    const userEmail =
+      req.user?.email ||
+      req.splittersUser?.email ||
+      req.splittersUser?.profile?.email ||
+      req.actor?.profile?.email ||
+      undefined;
+    const meta = {
+      id,
       method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      durationMs: Date.now() - startAt,
-    });
+      path: req.route?.path || req.originalUrl,
+      status,
+      durationMs,
+      userEmail,
+    };
+    if (status >= 500) {
+      logger.error('http_request_finish', meta);
+    } else {
+      logger.info('http_request_finish', meta);
+    }
   });
-
   next();
 });
 
@@ -150,6 +179,8 @@ async function geogridProxyGetJson(relativePath) {
   }
 
   const rel = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+  const startedAt = Date.now();
+  logger.debug('geogrid_proxy_get_start', { path: rel });
   const response = await fetch(`${geogridBaseUrl}${rel}`, {
     method: 'GET',
     headers: {
@@ -160,9 +191,19 @@ async function geogridProxyGetJson(relativePath) {
 
   if (!response.ok) {
     const bodyText = await response.text();
+    logger.error('geogrid_proxy_get_error', {
+      path: rel,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
     throw new Error(`GeoGrid HTTP ${response.status}: ${bodyText}`);
   }
 
+  logger.debug('geogrid_proxy_get_finish', {
+    path: rel,
+    status: response.status,
+    durationMs: Date.now() - startedAt,
+  });
   return response.json();
 }
 
@@ -176,12 +217,20 @@ async function hubProxyGet(relativePath, authorizationHeader) {
     headers.Authorization = authorizationHeader;
   }
 
+  const startedAt = Date.now();
+  logger.debug('hub_proxy_get_start', { path: rel });
   const response = await fetch(`${hubBaseUrl}${rel}`, {
     method: 'GET',
     headers,
   });
 
   const text = await response.text();
+  logger.debug('hub_proxy_get_finish', {
+    path: rel,
+    status: response.status,
+    ok: response.ok,
+    durationMs: Date.now() - startedAt,
+  });
   return {
     ok: response.ok,
     status: response.status,
@@ -234,6 +283,107 @@ if (!onuPool) {
     '[onu] ONU_DB_HOST não definido — rotas /api/onu-diagnostics responderão 503 até configurar o banco de monitoramento.',
   );
 }
+
+// Observabilidade aditiva: snapshot barato e síncrono do pool `pg` usando os
+// getters públicos documentados (totalCount/idleCount/waitingCount). Nunca
+// lança — se o pool ainda não existir (ex.: onuPool ausente), retorna zeros.
+function getPostgresPoolStats(pgPool) {
+  if (!pgPool) return { total: 0, inUse: 0, idle: 0, waiting: 0 };
+  const total = pgPool.totalCount ?? 0;
+  const idle = pgPool.idleCount ?? 0;
+  const waiting = pgPool.waitingCount ?? 0;
+  return { total, inUse: Math.max(0, total - idle), idle, waiting };
+}
+
+// Trunca o SQL só para exibição no log (nunca loga parâmetros — podem conter
+// PPPoE/e-mail/etc.). Colapsa espaços para o evento ficar legível/filtrável.
+function previewSql(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+// Observabilidade aditiva: envolve `pgPool.query` (usado hoje em ~35 pontos
+// espalhados por este arquivo, em rotas e funções auxiliares) com log de
+// início/fim/erro, sem alterar assinatura, retorno ou comportamento — sempre
+// delega para o `query` original e relança qualquer erro. Cobre TODAS as
+// chamadas a `pool.query`/`onuPool.query` de uma vez, sem editar cada uma.
+//
+// 'query_start' é emitido de forma síncrona, antes do await interno, com o id
+// de correlação e o snapshot do pool no momento em que a query foi disparada
+// — então uma query que trava para sempre aparece no Kibana como um
+// 'query_start' sem 'query_finish'/'query_error' correspondente (mesmo id).
+function instrumentPgPool(pgPool, poolName) {
+  if (!pgPool || typeof pgPool.query !== 'function') return pgPool;
+  const originalQuery = pgPool.query.bind(pgPool);
+
+  pgPool.query = (...args) => {
+    const id = crypto.randomUUID();
+    const startedAt = Date.now();
+    const text = typeof args[0] === 'string' ? args[0] : args[0]?.text;
+
+    logger.debug('query_start', {
+      id,
+      pool: poolName,
+      sql: previewSql(text),
+      timestamp: new Date(startedAt).toISOString(),
+      poolStats: getPostgresPoolStats(pgPool),
+      paramCount: args[1]?.length ?? 0,
+    });
+
+    const result = originalQuery(...args);
+
+    // Só instrumenta o caminho Promise (todo o código deste arquivo usa
+    // `await pool.query(...)` sem callback) — se algum dia um callback for
+    // passado, `result` não é uma Promise e devolvemos como veio, sem logar
+    // duas vezes nem quebrar o callback.
+    if (!result || typeof result.then !== 'function') return result;
+
+    return result.then(
+      (value) => {
+        logger.debug('query_finish', {
+          id,
+          pool: poolName,
+          sql: previewSql(text),
+          durationMs: Date.now() - startedAt,
+          ok: true,
+          rowCount: value?.rowCount ?? undefined,
+          poolStats: getPostgresPoolStats(pgPool),
+        });
+        return value;
+      },
+      (error) => {
+        logger.error('query_error', {
+          id,
+          pool: poolName,
+          sql: previewSql(text),
+          durationMs: Date.now() - startedAt,
+          ok: false,
+          error: error instanceof Error ? { name: error.name, message: error.message } : error,
+        });
+        throw error;
+      },
+    );
+  };
+
+  return pgPool;
+}
+
+instrumentPgPool(pool, 'postgres_main');
+instrumentPgPool(onuPool, 'postgres_onu');
+
+// Log periódico (~7s) do estado dos pools de conexão (Postgres principal,
+// Postgres de monitoramento ONU quando configurado, e MySQL do histórico de
+// massivas). Puramente aditivo/observacional; unref() garante que o timer não
+// mantém o processo vivo nem atrapalha testes.
+const poolStatsIntervalHandle = setInterval(() => {
+  logger.info('pool_stats', { pool: 'postgres_main', ...getPostgresPoolStats(pool) });
+  if (onuPool) {
+    logger.info('pool_stats', { pool: 'postgres_onu', ...getPostgresPoolStats(onuPool) });
+  }
+  if (typeof massivaHistoryStore?.getMysqlPoolStats === 'function') {
+    logger.info('pool_stats', { pool: 'mysql_massiva', ...massivaHistoryStore.getMysqlPoolStats() });
+  }
+}, 7000);
+poolStatsIntervalHandle.unref?.();
 
 function isTransientPgError(error) {
   const code = String(error?.code ?? '').toUpperCase();
@@ -3476,7 +3626,9 @@ async function notifyReliefWebhook(relievedSplitters) {
   });
 
   if (!response.ok) {
-    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+    const bodyText = await response.text().catch(() => '(sem corpo)');
+    logger.error('[network-relief-webhook] Webhook respondeu com erro:', { status: response.status, body: bodyText });
+    throw new Error(`Webhook respondeu ${response.status}: ${bodyText}`);
   }
 
   logger.info(`[network-relief-webhook] Notificação enviada com sucesso (${relievedSplitters.length} splitters).`);
@@ -3511,7 +3663,9 @@ async function notifyMassivaHsmWebhook({ protocolo, clientes }) {
   });
 
   if (!response.ok) {
-    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+    const bodyText = await response.text().catch(() => '(sem corpo)');
+    logger.error('[massiva-hsm-webhook] Webhook respondeu com erro:', { status: response.status, body: bodyText });
+    throw new Error(`Webhook respondeu ${response.status}: ${bodyText}`);
   }
 
   logger.info(`[massiva-hsm-webhook] Disparo enviado (${clientes.length} clientes, protocolo ${protocolo}).`);
@@ -3575,7 +3729,9 @@ async function notifyCondoRedistributionWebhook(opportunities) {
   });
 
   if (!response.ok) {
-    throw new Error(`Webhook respondeu ${response.status}: ${await response.text().catch(() => '(sem corpo)')}`);
+    const bodyText = await response.text().catch(() => '(sem corpo)');
+    logger.error('[condo-redistribution-webhook] Webhook respondeu com erro:', { status: response.status, body: bodyText });
+    throw new Error(`Webhook respondeu ${response.status}: ${bodyText}`);
   }
 
   logger.info(`[condo-redistribution-webhook] Notificação enviada com sucesso (${opportunities.length} oportunidades em ${byCondominium.size} condomínio(s)).`);
@@ -3946,6 +4102,55 @@ app.post('/api/usage-events', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao registrar evento de uso.',
+    });
+  }
+});
+
+// Sanitiza o evento vindo do cliente antes de logar: só campos conhecidos, strings
+// truncadas e sem confiar em identidade enviada pelo corpo. Evita log-injection /
+// forja de campos (ex.: userEmail) por um cliente autenticado.
+const CLIENT_LOG_STRING_MAX = 500;
+function sanitizeClientLogEvent(event, extra) {
+  const s = (v) => (typeof v === 'string' ? v.slice(0, CLIENT_LOG_STRING_MAX) : undefined);
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  return {
+    level: event?.level === 'error' ? 'error' : 'info',
+    type: s(event?.type),
+    method: s(event?.method),
+    path: s(event?.path),
+    status: n(event?.status),
+    durationMs: n(event?.durationMs),
+    error: s(event?.error),
+    client: s(event?.client),
+    timestamp: s(event?.timestamp),
+    ...extra,
+  };
+}
+
+// Observabilidade do frontend: recebe eventos em lote (erros, métricas de API do
+// cliente etc.) e apenas os grava no log estruturado (stdout → Filebeat → Kibana).
+// Não persiste em banco. Mesma exigência de autenticação de /api/usage-events.
+app.post('/api/client-logs', async (req, res) => {
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    const rawEvents = Array.isArray(req.body?.events) ? req.body.events : [];
+    const events = rawEvents.slice(0, 50);
+    // E-mail vem do token (confiável), não do corpo do cliente.
+    const userEmail = actor?.profile?.email || actor?.identity?.email || undefined;
+    for (const event of events) {
+      const payload = sanitizeClientLogEvent(event, { ip: req.ip, userEmail });
+      if (payload.level === 'error') {
+        logger.error('client_event', payload);
+      } else {
+        logger.info('client_event', payload);
+      }
+    }
+    return res.status(202).json({ success: true, data: { received: events.length } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao registrar evento do cliente.',
     });
   }
 });

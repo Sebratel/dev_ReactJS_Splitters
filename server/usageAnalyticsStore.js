@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import { mysqlNaiveDateTimeToIso } from './mysqlBrazilDateTime.js';
+import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 
 /**
  * Analytics de uso da plataforma ("radar de uso" / Google Analytics interno).
@@ -106,6 +107,7 @@ function getMysqlPool() {
     queueLimit: 0,
     charset: 'utf8mb4',
   });
+  instrumentMysqlPool(dataPool, 'mysql_usage_analytics');
   return dataPool;
 }
 

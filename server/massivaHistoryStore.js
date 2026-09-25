@@ -1,9 +1,55 @@
 import mysql from 'mysql2/promise';
+import crypto from 'node:crypto';
 import {
   mysqlNaiveDateTimeToIso,
   parseMysqlNaiveDateTimeParts,
 } from './mysqlBrazilDateTime.js';
 import { splitterLabelsMatchOptionalPonFilter } from './splitterTitleOltDerivation.js';
+import logger from './logger.js';
+
+// Observabilidade aditiva: envolve cada função exportada da store com log de
+// duração/sucesso, sem alterar o valor retornado nem engolir erros (sempre
+// relança). Usada apenas na montagem do objeto retornado por
+// createMassivaHistoryStore, no fim deste arquivo.
+//
+// `getPoolStatsForLog` é opcional — quando fornecida, gera um id de
+// correlação (crypto.randomUUID) antes de qualquer await e emite um evento
+// 'store_call_start' com um snapshot do pool mysql2, seguido de
+// 'store_call_finish'/'store_call_error' com o mesmo id ao final.
+function withCallLogging(fnName, fn, getPoolStatsForLog) {
+  return async function wrapped(...args) {
+    const id = crypto.randomUUID();
+    const startedAt = Date.now();
+    logger.debug('store_call_start', {
+      id,
+      store: 'massivaHistoryStore',
+      fn: fnName,
+      timestamp: new Date(startedAt).toISOString(),
+      poolStats: typeof getPoolStatsForLog === 'function' ? getPoolStatsForLog() : undefined,
+    });
+    try {
+      const result = await fn(...args);
+      logger.debug('store_call_finish', {
+        id,
+        store: 'massivaHistoryStore',
+        fn: fnName,
+        durationMs: Date.now() - startedAt,
+        ok: true,
+      });
+      return result;
+    } catch (error) {
+      logger.error('store_call_error', {
+        id,
+        store: 'massivaHistoryStore',
+        fn: fnName,
+        durationMs: Date.now() - startedAt,
+        ok: false,
+        error: error instanceof Error ? { name: error.name, message: error.message } : error,
+      });
+      throw error;
+    }
+  };
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim();
@@ -83,6 +129,9 @@ export function createMassivaHistoryStore(config) {
   if (!configured) {
     return {
       configured: false,
+      getMysqlPoolStats() {
+        return { total: 0, inUse: 0, idle: 0, waiting: 0 };
+      },
       async ensureReady() {},
       async registerOpenBatch() {
         return { configured: false, insertedOrUpdated: 0 };
@@ -188,6 +237,26 @@ export function createMassivaHistoryStore(config) {
     queueLimit: 0,
     charset: 'utf8mb4',
   });
+
+  // mysql2@3.22.1: `dataPool` (promise wrapper) expõe o pool "core" em
+  // `dataPool.pool` (server/node_modules/mysql2/lib/promise/pool.js). Esse
+  // pool core (server/node_modules/mysql2/lib/base/pool.js) mantém
+  // `_allConnections`/`_freeConnections`/`_connectionQueue` como instâncias
+  // de `Queue` com getter `.length` — confirmado lendo o source instalado.
+  // Leitura puramente aditiva/defensiva: nunca lança, nunca faz I/O.
+  function getMysqlPoolStats() {
+    const corePool = dataPool?.pool;
+    const total = corePool?._allConnections?.length ?? 0;
+    const idle = corePool?._freeConnections?.length ?? 0;
+    const waiting = corePool?._connectionQueue?.length ?? 0;
+    return { total, inUse: Math.max(0, total - idle), idle, waiting };
+  }
+
+  const poolStatsIntervalHandle = setInterval(() => {
+    const stats = getMysqlPoolStats();
+    logger.info('pool_stats', { pool: 'mysql_massiva', ...stats });
+  }, 7000);
+  poolStatsIntervalHandle.unref?.();
 
   let readyPromise = null;
 
@@ -327,6 +396,12 @@ export function createMassivaHistoryStore(config) {
   }
 
   async function findExistingHistoryId(protocol, assignmentId) {
+    logger.debug('store_internal_call', {
+      store: 'massivaHistoryStore',
+      fn: 'findExistingHistoryId',
+      protocol,
+      assignmentId,
+    });
     if (assignmentId !== null) {
       const [rows] = await dataPool.query(
         'SELECT id FROM massiva_history WHERE assignment_id = ? LIMIT 1',
@@ -347,6 +422,12 @@ export function createMassivaHistoryStore(config) {
   }
 
   async function attachSplitters(historyId, splitterEntries) {
+    logger.debug('store_internal_call', {
+      store: 'massivaHistoryStore',
+      fn: 'attachSplitters',
+      historyId,
+      splitterCount: Array.isArray(splitterEntries) ? splitterEntries.length : 0,
+    });
     for (const entry of splitterEntries) {
       await dataPool.query(
         `
@@ -2296,11 +2377,13 @@ export function createMassivaHistoryStore(config) {
   }
 
   async function end() {
+    clearInterval(poolStatsIntervalHandle);
     await dataPool.end();
   }
 
-  return {
+  const storeApi = {
     configured: true,
+    getMysqlPoolStats,
     ensureReady,
     registerOpenBatch,
     registerClose,
@@ -2332,5 +2415,16 @@ export function createMassivaHistoryStore(config) {
     getMttdMttrMonthlyKpis,
     end,
   };
+
+  return Object.fromEntries(
+    Object.entries(storeApi).map(([key, value]) => {
+      if (typeof value !== 'function') return [key, value];
+      // getMysqlPoolStats é uma leitura síncrona e barata usada como snapshot
+      // dentro dos próprios logs de store_call_start — não faz sentido (nem é
+      // seguro, por reentrância no getPoolStatsForLog) envolvê-la também.
+      if (key === 'getMysqlPoolStats') return [key, value];
+      return [key, withCallLogging(key, value, getMysqlPoolStats)];
+    }),
+  );
 }
 
