@@ -1756,6 +1756,13 @@ async function requestGeminiAnswer({
     },
   };
 
+  const geminiCallStartedAt = Date.now();
+  logger.debug('gemini_call_start', {
+    model,
+    responseMode,
+    promptLength: body.contents?.[0]?.parts?.[0]?.text?.length ?? 0,
+  });
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -1784,6 +1791,14 @@ async function requestGeminiAnswer({
     error.statusCode = 502;
     throw error;
   }
+
+  logger.debug('gemini_call_finish', {
+    model,
+    responseMode,
+    finishReason,
+    rawTextLength: rawText.length,
+    durationMs: Date.now() - geminiCallStartedAt,
+  });
 
   return { rawText, finishReason };
 }

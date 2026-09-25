@@ -2,6 +2,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import logger from './logger.js';
 
 const FIRESTORE_USERS_COLLECTION = 'splitters_users';
 
@@ -142,18 +143,28 @@ export function extractBearerToken(req) {
 }
 
 async function verifyGoogleIdentityToken(idToken) {
+  logger.debug('google_identity_verify_start', { tokenLength: idToken?.length ?? 0 });
   const client = getOAuthClient();
-  const ticket = await client.verifyIdToken({
-    idToken,
-    audience: getGoogleClientId(),
-  });
+  let ticket;
+  try {
+    ticket = await client.verifyIdToken({
+      idToken,
+      audience: getGoogleClientId(),
+    });
+  } catch (error) {
+    logger.error('google_identity_verify_error', { error: { name: error?.name, message: error?.message } });
+    throw error;
+  }
 
   const payload = ticket.getPayload() ?? {};
   const email = normalizeEmail(payload.email);
 
   if (!email || payload.email_verified !== true) {
+    logger.error('google_identity_verify_unverified_email', { emailVerified: payload.email_verified === true });
     throw buildError('Nao foi possivel validar o e-mail do usuario administrador.', 403);
   }
+
+  logger.debug('google_identity_verify_finish', { email });
 
   return {
     googleSubject: toCleanString(payload.sub),
@@ -163,13 +174,31 @@ async function verifyGoogleIdentityToken(idToken) {
 }
 
 async function verifyFirebaseIdToken(idToken) {
+  logger.debug('firebase_token_verify_start', { tokenLength: idToken?.length ?? 0 });
   const auth = getFirebaseAdminAuthClient();
-  const decoded = await auth.verifyIdToken(idToken);
+  let decoded;
+  try {
+    decoded = await auth.verifyIdToken(idToken);
+  } catch (error) {
+    if (/audience|aud\)/i.test(String(error?.message || ''))) {
+      logger.error('firebase_token_aud_mismatch', {
+        error: { name: error?.name, message: error?.message },
+      });
+    } else {
+      logger.error('firebase_token_verify_error', {
+        error: { name: error?.name, message: error?.message },
+      });
+    }
+    throw error;
+  }
   const email = normalizeEmail(decoded.email);
 
   if (!email) {
+    logger.error('firebase_token_verify_no_email', { uid: decoded?.uid });
     throw buildError('Nao foi possivel validar o e-mail do usuario administrador.', 403);
   }
+
+  logger.debug('firebase_token_verify_finish', { email });
 
   return {
     googleSubject: toCleanString(decoded.uid),
@@ -181,6 +210,7 @@ async function verifyFirebaseIdToken(idToken) {
 async function resolveIdentityFromHubSession(authorizationHeader) {
   if (!hubBaseUrl) return null;
 
+  logger.debug('hub_session_lookup_start', { hubBaseUrl });
   const response = await fetch(`${hubBaseUrl}/auth/session`, {
     method: 'GET',
     headers: {
@@ -205,6 +235,8 @@ async function resolveIdentityFromHubSession(authorizationHeader) {
     return null;
   }
 
+  logger.debug('hub_session_lookup_finish', { email });
+
   return {
     googleSubject: '',
     email,
@@ -213,19 +245,31 @@ async function resolveIdentityFromHubSession(authorizationHeader) {
 }
 
 async function fetchSplittersProfileByEmail(email) {
+  logger.debug('firestore_profile_lookup_start', { collection: FIRESTORE_USERS_COLLECTION });
   const firestore = getFirebaseAdminFirestore();
-  const snapshot = await firestore
-    .collection(FIRESTORE_USERS_COLLECTION)
-    .where('email', '==', normalizeEmail(email))
-    .limit(1)
-    .get();
+  let snapshot;
+  try {
+    snapshot = await firestore
+      .collection(FIRESTORE_USERS_COLLECTION)
+      .where('email', '==', normalizeEmail(email))
+      .limit(1)
+      .get();
+  } catch (error) {
+    logger.error('firestore_profile_lookup_error', { error: { name: error?.name, message: error?.message } });
+    throw error;
+  }
 
-  if (snapshot.empty) return null;
+  if (snapshot.empty) {
+    logger.debug('firestore_profile_lookup_not_found', {});
+    return null;
+  }
 
   const doc = snapshot.docs[0];
   const data = doc.data() ?? {};
   const permissions =
     data.permissions && typeof data.permissions === 'object' ? data.permissions : {};
+
+  logger.debug('firestore_profile_lookup_finish', { uid: doc.id, isActive: data.isActive !== false });
 
   return {
     uid: doc.id,
