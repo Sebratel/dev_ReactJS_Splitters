@@ -27,7 +27,6 @@ export type ClientLogEvent = {
 
 const FLUSH_INTERVAL_MS = 10_000
 const MAX_BATCH_SIZE = 20
-const MAX_BUFFER_SIZE = 200
 
 let buffer: ClientLogEvent[] = []
 let flushTimer: ReturnType<typeof setInterval> | null = null
@@ -111,9 +110,6 @@ function pushEvent(event: ClientLogEvent): void {
   ensureFlushTimer()
   ensureUnloadHandler()
   buffer.push(event)
-  if (buffer.length > MAX_BUFFER_SIZE) {
-    buffer = buffer.slice(-MAX_BUFFER_SIZE)
-  }
   if (buffer.length >= MAX_BATCH_SIZE) {
     flush(false)
   }
