@@ -2,6 +2,7 @@ import { useSessionStore } from '@/features/session/store/sessionStore'
 import { env } from '@/shared/config/env'
 import { ApiError, NetworkError } from '@/shared/api/apiError'
 import { getOidcAccessToken } from '@/app/auth/oidcAccessToken'
+import { logApiCall } from '@/shared/lib/callLogger'
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
 
@@ -116,6 +117,7 @@ export function createHttpClient(config: HttpClientConfig) {
       : buildBodyAndHeaders(rawBody, headers)
 
     const url = joinUrl(config.baseUrl, path)
+    const startedAt = Date.now()
 
     try {
       const response = await fetch(url, {
@@ -123,6 +125,14 @@ export function createHttpClient(config: HttpClientConfig) {
         headers: mergedHeaders,
         body: isBodyless ? undefined : serializedBody,
         signal: controller.signal,
+      })
+
+      logApiCall({
+        method: methodUpper,
+        path,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        client: config.baseUrl,
       })
 
       const text = await response.text()
@@ -152,6 +162,16 @@ export function createHttpClient(config: HttpClientConfig) {
 
       return text as T
     } catch (e) {
+      if (!(e instanceof ApiError)) {
+        logApiCall({
+          method: methodUpper,
+          path,
+          durationMs: Date.now() - startedAt,
+          error: e instanceof Error ? e.message : String(e),
+          client: config.baseUrl,
+        })
+      }
+
       if (e instanceof ApiError) throw e
       if (e instanceof NetworkError) throw e
 
