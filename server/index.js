@@ -4101,17 +4101,40 @@ app.post('/api/usage-events', async (req, res) => {
   }
 });
 
+// Sanitiza o evento vindo do cliente antes de logar: só campos conhecidos, strings
+// truncadas e sem confiar em identidade enviada pelo corpo. Evita log-injection /
+// forja de campos (ex.: userEmail) por um cliente autenticado.
+const CLIENT_LOG_STRING_MAX = 500;
+function sanitizeClientLogEvent(event, extra) {
+  const s = (v) => (typeof v === 'string' ? v.slice(0, CLIENT_LOG_STRING_MAX) : undefined);
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  return {
+    level: event?.level === 'error' ? 'error' : 'info',
+    type: s(event?.type),
+    method: s(event?.method),
+    path: s(event?.path),
+    status: n(event?.status),
+    durationMs: n(event?.durationMs),
+    error: s(event?.error),
+    client: s(event?.client),
+    timestamp: s(event?.timestamp),
+    ...extra,
+  };
+}
+
 // Observabilidade do frontend: recebe eventos em lote (erros, métricas de API do
 // cliente etc.) e apenas os grava no log estruturado (stdout → Filebeat → Kibana).
 // Não persiste em banco. Mesma exigência de autenticação de /api/usage-events.
 app.post('/api/client-logs', async (req, res) => {
   try {
-    await requireAuthenticatedSplittersUser(req);
+    const actor = await requireAuthenticatedSplittersUser(req);
     const rawEvents = Array.isArray(req.body?.events) ? req.body.events : [];
     const events = rawEvents.slice(0, 50);
+    // E-mail vem do token (confiável), não do corpo do cliente.
+    const userEmail = actor?.profile?.email || actor?.identity?.email || undefined;
     for (const event of events) {
-      const payload = { ...event, ip: req.ip };
-      if (event && event.level === 'error') {
+      const payload = sanitizeClientLogEvent(event, { ip: req.ip, userEmail });
+      if (payload.level === 'error') {
         logger.error('client_event', payload);
       } else {
         logger.info('client_event', payload);
