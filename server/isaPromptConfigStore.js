@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 import {
   ISA_PROMPT_RESPONSE_FORMAT_NOTE,
   buildIsaPromptSectionsView,
@@ -64,6 +65,7 @@ function getMysqlPool() {
     queueLimit: 0,
     charset: 'utf8mb4',
   });
+  instrumentMysqlPool(dataPool, 'mysql_isa_prompt_config');
   return dataPool;
 }
 
