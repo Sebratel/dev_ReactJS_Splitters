@@ -8,6 +8,7 @@ import {
   loadCachedGeocodedAddress,
   saveCachedGeocodedAddress,
 } from '@/features/splitters/lib/splitterAddressCache'
+import { logApiCall } from '@/shared/lib/callLogger'
 
 const NOMINATIM_REVERSE = 'https://nominatim.openstreetmap.org/reverse'
 const FETCH_TIMEOUT_MS = 8000
@@ -34,6 +35,8 @@ function buildReverseUrl(lat: number, lng: number): string {
 async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   const controller = new AbortController()
   const id = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const startedAt = Date.now()
+  const client = new URL(url).origin
   try {
     const response = await fetch(url, {
       signal: controller.signal,
@@ -41,15 +44,36 @@ async function fetchJsonWithTimeout(url: string): Promise<unknown> {
         Accept: 'application/json',
       },
     })
+    logApiCall({
+      method: 'GET',
+      path: url,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      client,
+    })
     if (!response.ok) {
       throw new Error(`Geocoding falhou (HTTP ${response.status})`)
     }
     return await response.json()
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
+      logApiCall({
+        method: 'GET',
+        path: url,
+        durationMs: Date.now() - startedAt,
+        error: 'timeout',
+        client,
+      })
       throw new Error('Geocoding: tempo limite excedido')
     }
     if (e instanceof TypeError) {
+      logApiCall({
+        method: 'GET',
+        path: url,
+        durationMs: Date.now() - startedAt,
+        error: e.message,
+        client,
+      })
       throw new Error('Geocoding: falha de rede ou CORS')
     }
     throw e

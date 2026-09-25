@@ -1,4 +1,5 @@
 import { env } from '@/shared/config/env'
+import { logApiCall } from '@/shared/lib/callLogger'
 
 const GEOGRID_FETCH_TIMEOUT_MS = 10_000
 
@@ -40,6 +41,7 @@ export async function geogridGetJson(
     else signal.addEventListener('abort', onParentAbort, { once: true })
   }
 
+  const startedAt = Date.now()
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -49,11 +51,30 @@ export async function geogridGetJson(
       },
     })
 
+    logApiCall({
+      method: 'GET',
+      path: url,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      client: env.localBffUrl,
+    })
+
     if (!response.ok) {
       throw new Error(`GeoGrid HTTP ${response.status}`)
     }
 
     return (await response.json()) as unknown
+  } catch (e) {
+    if (!(e instanceof Error) || !e.message.startsWith('GeoGrid HTTP')) {
+      logApiCall({
+        method: 'GET',
+        path: url,
+        durationMs: Date.now() - startedAt,
+        error: e instanceof Error ? e.message : String(e),
+        client: env.localBffUrl,
+      })
+    }
+    throw e
   } finally {
     window.clearTimeout(timeoutId)
     if (signal) signal.removeEventListener('abort', onParentAbort)

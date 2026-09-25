@@ -1,5 +1,6 @@
 import { getOidcAccessToken } from '@/app/auth/oidcAccessToken'
 import { useSessionStore } from '@/features/session/store/sessionStore'
+import { logApiCall } from '@/shared/lib/callLogger'
 
 function readSessionToken(): string | null {
   const oidc = getOidcAccessToken()
@@ -38,12 +39,35 @@ export async function fetchWithSessionAuth(
     else externalSignal.addEventListener('abort', onExternalAbort, { once: true })
   }
 
+  const startedAt = Date.now()
+  const requestPath = typeof input === 'string' ? input : input instanceof URL ? input.pathname : String((input as Request).url ?? '')
+  const isClientLogsCall = requestPath.includes('/api/client-logs')
+
   try {
-    return await fetch(input, {
+    const response = await fetch(input, {
       ...init,
       headers,
       signal: controller.signal,
     })
+    if (!isClientLogsCall) {
+      logApiCall({
+        method: (init?.method ?? 'GET').toUpperCase(),
+        path: requestPath,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+      })
+    }
+    return response
+  } catch (error) {
+    if (!isClientLogsCall) {
+      logApiCall({
+        method: (init?.method ?? 'GET').toUpperCase(),
+        path: requestPath,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    throw error
   } finally {
     window.clearTimeout(timeoutId)
     if (externalSignal) {
