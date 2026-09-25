@@ -3,6 +3,8 @@
  * Política OSM: User-Agent identificável — defina REVERSE_GEOCODE_USER_AGENT em produção.
  */
 
+import logger from './logger.js';
+
 const NOMINATIM_REVERSE = 'https://nominatim.openstreetmap.org/reverse';
 
 /** @type {Map<string, { road: string | null; at: number }>} */
@@ -168,6 +170,9 @@ export async function fetchRoadFromReverseGeocode(lat, lng) {
     return { road, status: res.status };
   }
 
+  const startedAt = Date.now();
+  logger.debug('reverse_geocode_start', { usesPublicNominatim: usesPublicNominatim() });
+
   try {
     let res = await scheduleNominatimRequest(fetchOnce);
     if (res.status === 429 && usesPublicNominatim()) {
@@ -182,14 +187,20 @@ export async function fetchRoadFromReverseGeocode(lat, lng) {
     }
     if (!res.ok) {
       console.warn('[reverseGeocode] HTTP', res.status, url.slice(0, 120));
+      logger.error('reverse_geocode_error', { status: res.status, durationMs: Date.now() - startedAt });
       return null;
     }
     const { road } = await readRoadFromResponse(res);
     if (road) {
       cache.set(key, { road, at: now });
     }
+    logger.debug('reverse_geocode_finish', { found: Boolean(road), durationMs: Date.now() - startedAt });
     return road;
-  } catch {
+  } catch (error) {
+    logger.error('reverse_geocode_error', {
+      error: { name: error?.name, message: error?.message },
+      durationMs: Date.now() - startedAt,
+    });
     return null;
   }
 }

@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router-dom'
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react'
+import { logBoundaryError } from '@/shared/lib/callLogger'
 
 /**
  * Tela de erro de rota — substitui o "Unexpected Application Error" cru do React Router.
@@ -10,6 +12,13 @@ export function RouteErrorBoundary() {
   const error = useRouteError()
   // Sem objeto de erro = renderizado como catch-all (rota inexistente) → tratar como 404.
   const is404 = !error || (isRouteErrorResponse(error) && error.status === 404)
+
+  useEffect(() => {
+    if (!is404) {
+      logBoundaryError(error)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error, is404])
 
   const message = is404
     ? 'A página que você tentou acessar não existe ou foi movida.'

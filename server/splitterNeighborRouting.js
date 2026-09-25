@@ -5,6 +5,7 @@
 
 import { fetchRoadFromReverseGeocode, isReverseGeocodeDisabled } from './reverseGeocode.js';
 import { isCondominiumTitle } from './condominiumClassifier.js';
+import logger from './logger.js';
 
 function normalizeNumericSql(expression) {
   return `NULLIF(REPLACE(REGEXP_REPLACE(TRIM(${expression}::text), '[^0-9,.-]', '', 'g'), ',', '.'), '')::double precision`;
@@ -362,6 +363,9 @@ export async function fetchOsrmFootDistanceRowMeters(origin, destinations) {
   const timeoutMs = Number.parseInt(String(process.env.OSRM_TIMEOUT_MS ?? '8000'), 10);
   const t = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : 8000);
 
+  const startedAt = Date.now();
+  logger.debug('osrm_foot_distance_start', { destinationCount: destinations.length });
+
   try {
     const res = await fetch(url, {
       signal: controller.signal,
@@ -370,16 +374,26 @@ export async function fetchOsrmFootDistanceRowMeters(origin, destinations) {
     clearTimeout(t);
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
+      logger.error('osrm_foot_distance_error', {
+        status: res.status,
+        durationMs: Date.now() - startedAt,
+      });
       throw new Error(`OSRM HTTP ${res.status}: ${txt.slice(0, 200)}`);
     }
     const data = await res.json();
     if (data.code !== 'Ok') {
+      logger.error('osrm_foot_distance_error', { osrmCode: data.code, durationMs: Date.now() - startedAt });
       throw new Error(data.message || 'OSRM resposta não Ok');
     }
     const row = data.distances?.[0];
     if (!Array.isArray(row)) {
+      logger.error('osrm_foot_distance_error', { reason: 'missing_matrix', durationMs: Date.now() - startedAt });
       throw new Error('OSRM matriz de distâncias ausente');
     }
+    logger.debug('osrm_foot_distance_finish', {
+      destinationCount: destinations.length,
+      durationMs: Date.now() - startedAt,
+    });
     return row.map((d) =>
       d == null || !Number.isFinite(Number(d)) ? null : Math.round(Number(d)),
     );

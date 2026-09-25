@@ -1395,7 +1395,9 @@ app.get('/api/splitters/filter-options', async (_req, res) => {
       SELECT DISTINCT
         NULLIF(TRIM(base."RUA[SPLT.SECUNDARIO]"), '') AS "street",
         NULLIF(TRIM(base."CIDADE[SITE]"), '') AS "city",
-        NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS "condominium"
+        NULLIF(TRIM(base."NOME CONDOMÍNIO"), '') AS "condominium",
+        -- Bloco extraído do título do splitter (ex.: "BL A" → "A"); espelha extractBlockFromTitle.
+        NULLIF(UPPER((regexp_match(base."SPLT.SECUNDARIO", '\\yBL(?:OCO)?\\s+([A-Z0-9]+)', 'i'))[1]), '') AS "block"
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE base."ID[SPLT.SECUNDARIO]" IS NOT NULL
     `;
@@ -1404,11 +1406,13 @@ app.get('/api/splitters/filter-options', async (_req, res) => {
     const streets = new Set();
     const cities = new Set();
     const condominiums = new Set();
+    const blocks = new Set();
 
     for (const row of result.rows) {
       if (row.street) streets.add(String(row.street));
       if (row.city) cities.add(String(row.city));
       if (row.condominium) condominiums.add(String(row.condominium));
+      if (row.block) blocks.add(String(row.block));
     }
 
     const sortPtBr = (a, b) => String(a).localeCompare(String(b), 'pt-BR');
@@ -1418,6 +1422,7 @@ app.get('/api/splitters/filter-options', async (_req, res) => {
         streets: [...streets].sort(sortPtBr),
         cities: [...cities].sort(sortPtBr),
         condominiums: [...condominiums].sort(sortPtBr),
+        blocks: [...blocks].sort(sortPtBr),
       },
     });
   } catch (error) {

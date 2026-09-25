@@ -4,6 +4,8 @@
  * então usuário/senha nunca vão para o bundle do frontend.
  */
 
+import logger from './logger.js';
+
 const DEFAULT_EXPIRES_IN_SEC = 3600;
 
 function authEndpoint() {
@@ -66,14 +68,24 @@ let cachedToken = null;
 let tokenExpiresAtMs = 0;
 
 async function authenticate() {
-  const res = await fetch(authEndpoint(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json;charset=UTF-8', Accept: 'application/json' },
-    body: JSON.stringify({ username: autoIspUsername(), password: autoIspPassword() }),
-  });
+  const startedAt = Date.now();
+  logger.debug('autoisp_auth_start', { endpoint: authEndpoint() });
+
+  let res;
+  try {
+    res = await fetch(authEndpoint(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json;charset=UTF-8', Accept: 'application/json' },
+      body: JSON.stringify({ username: autoIspUsername(), password: autoIspPassword() }),
+    });
+  } catch (error) {
+    logger.error('autoisp_auth_error', { error: { name: error?.name, message: error?.message } });
+    throw error;
+  }
 
   const text = await res.text();
   if (!res.ok) {
+    logger.error('autoisp_auth_error', { status: res.status, durationMs: Date.now() - startedAt });
     throw new Error(`AutoISP auth HTTP ${res.status}`);
   }
 
@@ -86,6 +98,7 @@ async function authenticate() {
 
   const token = extractTokenFromAuthBody(data);
   if (!token) {
+    logger.error('autoisp_auth_error', { reason: 'no_token', durationMs: Date.now() - startedAt });
     throw new Error('AutoISP não retornou um token válido.');
   }
 
@@ -95,6 +108,7 @@ async function authenticate() {
   const usableSec = Math.max(30, expiresInSec - slackSec);
   cachedToken = token;
   tokenExpiresAtMs = Date.now() + usableSec * 1000;
+  logger.debug('autoisp_auth_finish', { expiresInSec: usableSec, durationMs: Date.now() - startedAt });
   return { token, expiresInSec: usableSec };
 }
 
