@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 import { openMassivaFromContext } from '@/features/massiva/api/openMassivaFromContext'
@@ -56,10 +57,22 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     },
   })
 
+  // Trava síncrona contra duplo/triplo clique: `mutation.isPending` é o valor do
+  // render (closure) e só vira `true` no próximo render — nesse intervalo, cliques
+  // rápidos disparariam `mutate` mais de uma vez (protocolos duplicados no Elleven).
+  // O ref é setado no instante do clique, antes de qualquer render, e liberado no
+  // `onSettled` (sucesso ou erro), permitindo um novo envio legítimo depois.
+  const submittingRef = useRef(false)
+
   const submitOpen = () => {
-    if (mutation.isPending) return
+    if (submittingRef.current || mutation.isPending) return
     if (readiness.status !== 'ready-to-open') return
-    mutation.mutate(readiness.context)
+    submittingRef.current = true
+    mutation.mutate(readiness.context, {
+      onSettled: () => {
+        submittingRef.current = false
+      },
+    })
   }
 
   const canSubmitOpen =
