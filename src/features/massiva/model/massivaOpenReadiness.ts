@@ -31,6 +31,12 @@ export type MassivaOpenFinalContext = {
   massivaAfetadosPath: string
   affectedUsersQuantityFlutterParity: number
   descriptionAutoSyncEnabled: boolean
+  /**
+   * Chave de idempotência da tentativa de abertura (estável entre retries, rotacionada
+   * a cada sucesso). Enviada como header `Idempotency-Key` nos POSTs de abertura, para o
+   * gateway deduplicar (retry após timeout / duplo clique não gera protocolo duplicado).
+   */
+  idempotencyKey?: string
 }
 
 export type MassivaOpenReadinessView =

@@ -27,6 +27,11 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
   const queryClient = useQueryClient()
   const resetDraft = useMassivaOpenDraftStore((s) => s.reset)
 
+  // Chave de idempotência da tentativa: gerada uma vez e REUSADA em retries (ex.:
+  // após timeout, quando o Elleven pode já ter criado), para o gateway deduplicar.
+  // Rotacionada (null) a cada sucesso — a próxima abertura ganha uma chave nova.
+  const attemptKeyRef = useRef<string | null>(null)
+
   const mutation = useMutation<
     MassivaOpenMutationSuccessPayload,
     unknown,
@@ -35,6 +40,7 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     mutationFn: (context) => openMassivaFromContext(context),
     onSuccess: (data, context) => {
       resetDraft()
+      attemptKeyRef.current = null // rotaciona a chave após sucesso
       trackUsageAction('massiva_abrir', { module: 'massiva' })
       const fresh = massivaTicketsFromOpenSuccess(data, context)
       if (fresh.length > 0) {
@@ -68,11 +74,20 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     if (submittingRef.current || mutation.isPending) return
     if (readiness.status !== 'ready-to-open') return
     submittingRef.current = true
-    mutation.mutate(readiness.context, {
-      onSettled: () => {
-        submittingRef.current = false
+    if (attemptKeyRef.current === null) {
+      attemptKeyRef.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+    }
+    mutation.mutate(
+      { ...readiness.context, idempotencyKey: attemptKeyRef.current },
+      {
+        onSettled: () => {
+          submittingRef.current = false
+        },
       },
-    })
+    )
   }
 
   const canSubmitOpen =

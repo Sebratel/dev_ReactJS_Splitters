@@ -14,6 +14,8 @@ type OpenInfraSolicitationInput = {
   assignmentDescription: string
   /** Prazo em ISO UTC (mesmo formato do POST de abertura da massiva). */
   assignmentFinalDateIso: string
+  /** Chave de idempotência (header) — deduplica o protocolo de infra em retries. */
+  idempotencyKey?: string
 }
 
 export type OpenInfraSolicitationResult = {
@@ -43,6 +45,9 @@ export async function openInfraSolicitation(
   const data = await bffClient.request<Record<string, unknown>>({
     path,
     method: 'POST',
+    headers: input.idempotencyKey
+      ? { 'Idempotency-Key': input.idempotencyKey }
+      : undefined,
     body: {
       infraType: input.infraType,
       personId: input.personId,

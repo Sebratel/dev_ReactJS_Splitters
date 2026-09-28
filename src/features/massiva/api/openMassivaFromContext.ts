@@ -253,6 +253,8 @@ async function openInfraProtocolIfSelected(
       assignmentTitle: `Infra - ${option.label}`,
       assignmentDescription: description,
       assignmentFinalDateIso: finalDateIso,
+      // Sufixo `:infra` — a infra é um protocolo à parte dos APs, mas estável entre retries.
+      idempotencyKey: context.idempotencyKey ? `${context.idempotencyKey}:infra` : undefined,
     })
 
     if (result.protocol == null) {
@@ -300,12 +302,18 @@ export async function openMassivaFromContext(
 
   for (const req of context.plan.requests) {
     const body = buildMassivaOpenRequestBody(context, req)
+    // Chave por AP: cada ponto de acesso é um protocolo distinto (não deduplicar entre si),
+    // mas estável entre retries da mesma tentativa (o gateway deduplica a repetição).
+    const openHeaders = context.idempotencyKey
+      ? { 'Idempotency-Key': `${context.idempotencyKey}:${req.authenticationAccessPointCode}` }
+      : undefined
 
     try {
       const data: unknown = await bffClient.request({
         path,
         method: 'POST',
         body,
+        headers: openHeaders,
         signal,
       })
       const parsed = parseMassivaOpenHttpResult(data, req.authenticationAccessPointCode)
