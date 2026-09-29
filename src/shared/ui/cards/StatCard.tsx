@@ -40,7 +40,7 @@ export function StatCard({
       className={cn(
         'group flex h-full min-w-0 flex-col justify-between rounded-2xl border transition-[box-shadow,transform,border-color] duration-300',
         surface === 'elevated'
-          ? 'border-white/50 dark:border-white/10 bg-surface-container-lowest/75 shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-stone-200/30 dark:ring-white/10 backdrop-blur-md motion-safe:hover:-translate-y-0.5 hover:border-amber-200/40 dark:hover:border-amber-800/50 hover:shadow-[0_12px_40px_-12px_rgba(15,23,42,0.15)]'
+          ? 'border-white/50 dark:border-transparent bg-surface-container-lowest/75 dark:bg-white/[0.03] shadow-[0_4px_24px_-6px_rgba(15,23,42,0.08)] ring-1 ring-stone-200/30 dark:ring-transparent backdrop-blur-md motion-safe:hover:-translate-y-0.5 hover:border-amber-200/40 dark:hover:border-amber-800/50 hover:shadow-[0_12px_40px_-12px_rgba(15,23,42,0.15)]'
           : 'border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08)]',
         compact
           ? 'min-h-[100px] p-3.5 sm:p-4'
