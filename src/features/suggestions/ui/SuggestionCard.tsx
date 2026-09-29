@@ -102,8 +102,15 @@ export function SuggestionCard({
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [descExpanded, setDescExpanded] = useState(false)
   const meta = statusMeta(suggestion.status)
   const visibleSupporters = suggestion.supporters.slice(0, 5)
+
+  // Padroniza a altura dos cards: descrições longas ficam recolhidas (line-clamp)
+  // até o usuário clicar em "Ver mais". Curtas não mostram o botão.
+  const description = suggestion.description ?? ''
+  const isLongDescription =
+    description.length > 240 || (description.match(/\n/g)?.length ?? 0) >= 3
 
   return (
     <motion.article
@@ -113,7 +120,7 @@ export function SuggestionCard({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       whileHover={reduceMotion ? undefined : { y: -2 }}
       className={cn(
-        'overflow-hidden rounded-[28px] border border-amber-200/60 dark:border-amber-800/50 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 dark:ring-amber-800/40 transition sm:p-5',
+        'overflow-hidden rounded-[28px] border border-amber-200/60 dark:border-white/10 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 dark:ring-white/10 transition sm:p-5',
         meta.accentClassName,
       )}
     >
@@ -142,9 +149,28 @@ export function SuggestionCard({
             <h2 className="text-xl font-semibold tracking-tight text-on-surface">
               {suggestion.title}
             </h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant">
+            <p
+              className={cn(
+                'whitespace-pre-wrap text-sm leading-relaxed text-on-surface-variant',
+                !descExpanded && isLongDescription ? 'line-clamp-4' : '',
+              )}
+            >
               {suggestion.description}
             </p>
+            {isLongDescription ? (
+              <button
+                type="button"
+                onClick={() => setDescExpanded((prev) => !prev)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 transition hover:underline"
+                aria-expanded={descExpanded}
+              >
+                {descExpanded ? 'Ver menos' : 'Ver mais'}
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', descExpanded ? 'rotate-180' : '')}
+                  aria-hidden
+                />
+              </button>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
@@ -320,7 +346,7 @@ export function SuggestionCard({
             animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
             exit={reduceMotion ? undefined : { opacity: 0, height: 0, marginTop: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="overflow-hidden border-t border-amber-100/90 pt-4"
+            className="overflow-hidden border-t border-amber-100/90 dark:border-white/10 pt-4"
           >
             <div className="space-y-3">
               <div className="space-y-2">
