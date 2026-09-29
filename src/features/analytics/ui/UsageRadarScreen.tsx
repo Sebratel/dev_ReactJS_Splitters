@@ -11,7 +11,18 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { Activity, Clock, Download, MousePointerClick, Radar, RefreshCw, Users } from 'lucide-react'
+import {
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Download,
+  MousePointerClick,
+  Radar,
+  RefreshCw,
+  Search,
+  Users,
+} from 'lucide-react'
 import { useUsageAnalytics } from '@/features/analytics/hooks/useUsageAnalytics'
 import {
   USAGE_MODULE_LABEL,
@@ -257,12 +268,19 @@ function TimeByModule({ summary }: { summary: UsageSummary }) {
   )
 }
 
+/** 'yyyy-mm-dd' → 'dd/mm' (pt-BR). Vazio/curto retorna como veio. */
+function formatDayDDMM(day: string): string {
+  if (!day || day.length < 10) return day || ''
+  const [, m, d] = day.split('-')
+  return d && m ? `${d}/${m}` : day
+}
+
 function DailyTrend({ summary }: { summary: UsageSummary }) {
   const data = useMemo(
     () =>
       summary.byDay.map((d) => ({
         ...d,
-        label: d.day ? d.day.slice(5) : '',
+        label: formatDayDDMM(d.day),
       })),
     [summary.byDay],
   )
@@ -318,7 +336,12 @@ function HourlyHeat({ summary }: { summary: UsageSummary }) {
   )
 }
 
+const USERS_PAGE_SIZE = 10
+
 function TopUsers({ summary }: { summary: UsageSummary }) {
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+
   const topModuleByUser = useMemo(() => {
     const best = new Map<string, { module: string; events: number }>()
     for (const r of summary.byUserModule) {
@@ -328,52 +351,125 @@ function TopUsers({ summary }: { summary: UsageSummary }) {
     return best
   }, [summary.byUserModule])
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q === '') return summary.byUser
+    return summary.byUser.filter(
+      (u) => u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q),
+    )
+  }, [summary.byUser, search])
+
+  // Mantém a página válida quando o filtro/dado encolhe.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / USERS_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage)
+  }, [page, safePage])
+
+  const pageRows = filtered.slice(safePage * USERS_PAGE_SIZE, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
+  const firstShown = filtered.length === 0 ? 0 : safePage * USERS_PAGE_SIZE + 1
+  const lastShown = Math.min(filtered.length, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
+
   return (
     <div className={cn(CARD, 'overflow-hidden')}>
-      <p className="border-b border-neutral-200/70 p-4 text-sm font-bold text-on-surface dark:border-white/10">
-        Quem mais usa a plataforma
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 p-4 dark:border-white/10">
+        <p className="text-sm font-bold text-on-surface">
+          Quem mais usa a plataforma
+          <span className="ml-2 text-xs font-normal text-on-surface-variant">
+            {filtered.length.toLocaleString('pt-BR')}
+            {search.trim() !== '' ? ` de ${summary.byUser.length.toLocaleString('pt-BR')}` : ''} usuários
+          </span>
+        </p>
+        <div className="relative">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(0)
+            }}
+            placeholder="Buscar por nome ou e-mail…"
+            className="h-8 w-56 rounded-lg bg-surface-container-low pl-8 pr-2.5 text-xs text-on-surface ring-1 ring-neutral-200/70 focus:outline-none focus:ring-primary dark:ring-white/10"
+            aria-label="Buscar usuário"
+          />
+        </div>
+      </div>
       {summary.byUser.length === 0 ? (
         <p className="py-8 text-center text-sm text-on-surface-variant">Sem acessos no período.</p>
+      ) : filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-on-surface-variant">Nenhum usuário corresponde à busca.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-                <th className="px-4 py-2">Usuário</th>
-                <th className="px-4 py-2 text-right">Acessos</th>
-                <th className="px-4 py-2 text-right">Módulos</th>
-                <th className="px-4 py-2">Mais usa</th>
-                <th className="px-4 py-2 text-right">Último acesso</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.byUser.map((u) => {
-                const top = topModuleByUser.get(u.email)
-                return (
-                  <tr key={u.email} className="border-t border-neutral-200/60 dark:border-white/5">
-                    <td className="px-4 py-2.5">
-                      <span className="font-semibold text-on-surface">{firstName(u.name, u.email)}</span>
-                      <span className="ml-1.5 font-mono text-[11px] text-on-surface-variant/60">{u.email}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface">{u.events.toLocaleString('pt-BR')}</td>
-                    <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface-variant">{u.modulesUsed}</td>
-                    <td className="px-4 py-2.5">
-                      {top ? (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                          {moduleLabel(top.module)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-xs text-on-surface-variant">{formatRelative(u.lastSeen)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
+                  <th className="px-4 py-2">Usuário</th>
+                  <th className="px-4 py-2 text-right">Acessos</th>
+                  <th className="px-4 py-2 text-right">Módulos</th>
+                  <th className="px-4 py-2">Mais usa</th>
+                  <th className="px-4 py-2 text-right">Último acesso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((u) => {
+                  const top = topModuleByUser.get(u.email)
+                  return (
+                    <tr key={u.email} className="border-t border-neutral-200/60 dark:border-white/5">
+                      <td className="px-4 py-2.5">
+                        <span className="font-semibold text-on-surface">{firstName(u.name, u.email)}</span>
+                        <span className="ml-1.5 font-mono text-[11px] text-on-surface-variant/60">{u.email}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface">{u.events.toLocaleString('pt-BR')}</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-on-surface-variant">{u.modulesUsed}</td>
+                      <td className="px-4 py-2.5">
+                        {top ? (
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                            {moduleLabel(top.module)}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-xs text-on-surface-variant">{formatRelative(u.lastSeen)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {pageCount > 1 ? (
+            <div className="flex items-center justify-between gap-2 border-t border-neutral-200/60 px-4 py-2.5 dark:border-white/5">
+              <span className="text-xs text-on-surface-variant">
+                {firstShown}–{lastShown} de {filtered.length.toLocaleString('pt-BR')}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  className="inline-flex size-7 items-center justify-center rounded-md text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40 dark:ring-white/10"
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="px-1 text-xs font-semibold tabular-nums text-on-surface">
+                  {safePage + 1}/{pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={safePage >= pageCount - 1}
+                  className="inline-flex size-7 items-center justify-center rounded-md text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40 dark:ring-white/10"
+                  aria-label="Próxima página"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )
@@ -420,8 +516,52 @@ function ActionsPanel({ summary }: { summary: UsageSummary }) {
 
 export function UsageRadarScreen() {
   const [days, setDays] = useState<number>(7)
+  const [customStart, setCustomStart] = useState<string>('')
+  const [customEnd, setCustomEnd] = useState<string>('')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
-  const { data, isLoading, isError, error, refetch, isFetching } = useUsageAnalytics(days, selectedUser)
+
+  const isCustom = customStart !== '' && customEnd !== ''
+  const query = useMemo(
+    () =>
+      isCustom
+        ? { start: `${customStart}T00:00:00`, end: `${customEnd}T23:59:59`, userEmail: selectedUser }
+        : { days, userEmail: selectedUser },
+    [isCustom, customStart, customEnd, days, selectedUser],
+  )
+  const periodLabel = isCustom ? `${customStart}_a_${customEnd}` : `${days}d`
+
+  const { data, isLoading, isError, error, refetch, isFetching } = useUsageAnalytics(query)
+
+  // Anos disponíveis para o atalho "por ano" (o projeto começou em 2025).
+  const years = useMemo(() => {
+    const current = new Date().getFullYear()
+    const out: number[] = []
+    for (let y = current; y >= 2025; y -= 1) out.push(y)
+    return out
+  }, [])
+  // Ano selecionado = intervalo custom que cobre exatamente um ano inteiro.
+  const selectedYear =
+    isCustom &&
+    customStart.endsWith('-01-01') &&
+    customEnd.endsWith('-12-31') &&
+    customStart.slice(0, 4) === customEnd.slice(0, 4)
+      ? customStart.slice(0, 4)
+      : ''
+
+  const applyPreset = (d: number) => {
+    setDays(d)
+    setCustomStart('')
+    setCustomEnd('')
+  }
+  const applyYear = (year: string) => {
+    if (year === '') {
+      setCustomStart('')
+      setCustomEnd('')
+      return
+    }
+    setCustomStart(`${year}-01-01`)
+    setCustomEnd(`${year}-12-31`)
+  }
 
   // Lista de usuários para o seletor — capturada do carregamento SEM filtro,
   // para não sumir quando um usuário estiver selecionado.
@@ -432,9 +572,12 @@ export function UsageRadarScreen() {
     }
   }, [selectedUser, data])
 
+  const inputCls =
+    'h-9 rounded-lg bg-surface-container-lowest px-2.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 focus:outline-none focus:ring-primary dark:ring-white/10'
+
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-on-surface">
             <Radar size={22} className="text-primary" /> Radar de uso
@@ -443,16 +586,16 @@ export function UsageRadarScreen() {
             Quais módulos são mais acessados e por quem — para priorizar as próximas atualizações.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
             {PERIODS.map((p) => (
               <button
                 key={p.days}
                 type="button"
-                onClick={() => setDays(p.days)}
+                onClick={() => applyPreset(p.days)}
                 className={cn(
                   'rounded-md px-3 py-1.5 text-xs font-semibold transition',
-                  days === p.days
+                  !isCustom && days === p.days
                     ? 'bg-surface-container-lowest text-on-surface shadow-sm'
                     : 'text-on-surface-variant hover:text-on-surface',
                 )}
@@ -462,13 +605,57 @@ export function UsageRadarScreen() {
             ))}
           </div>
           <select
+            value={selectedYear}
+            onChange={(e) => applyYear(e.target.value)}
+            className={inputCls}
+            aria-label="Filtrar por ano"
+            title="Ano inteiro"
+          >
+            <option value="">Ano…</option>
+            {years.map((y) => (
+              <option key={y} value={String(y)}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1 rounded-lg bg-surface-container-low px-2 py-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+            <span className="text-[11px] font-semibold text-on-surface-variant">De</span>
+            <input
+              type="date"
+              value={customStart}
+              max={customEnd || undefined}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="h-8 bg-transparent text-xs text-on-surface focus:outline-none"
+              aria-label="Data inicial"
+            />
+            <span className="text-[11px] font-semibold text-on-surface-variant">até</span>
+            <input
+              type="date"
+              value={customEnd}
+              min={customStart || undefined}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="h-8 bg-transparent text-xs text-on-surface focus:outline-none"
+              aria-label="Data final"
+            />
+            {isCustom ? (
+              <button
+                type="button"
+                onClick={() => applyPreset(days)}
+                className="ml-0.5 rounded px-1 text-[11px] font-semibold text-on-surface-variant hover:text-on-surface"
+                title="Limpar intervalo"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+          <select
             value={selectedUser ?? ''}
             onChange={(e) => setSelectedUser(e.target.value === '' ? null : e.target.value)}
-            className="h-9 rounded-lg bg-surface-container-lowest px-2.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 focus:outline-none focus:ring-primary dark:ring-white/10"
-            aria-label="Filtrar por usuário"
-            title="Filtrar por usuário"
+            className={inputCls}
+            aria-label="Filtrar por colaborador"
+            title="Filtrar por colaborador"
           >
-            <option value="">Todos os usuários</option>
+            <option value="">Todos os colaboradores</option>
             {userOptions.map((u) => (
               <option key={u.email} value={u.email}>
                 {firstName(u.name, u.email)}
@@ -477,7 +664,7 @@ export function UsageRadarScreen() {
           </select>
           <button
             type="button"
-            onClick={() => data && downloadUsageCsv(data, { days, userEmail: selectedUser })}
+            onClick={() => data && downloadUsageCsv(data, { period: periodLabel, userEmail: selectedUser })}
             disabled={!data || data.byUserModule.length === 0}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-50 dark:ring-white/10"
             title="Exportar CSV (usuário × módulo)"
