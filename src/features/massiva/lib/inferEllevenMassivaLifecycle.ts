@@ -19,8 +19,6 @@ export function inferEllevenMassivaLifecycle(input: {
   expectedCloseAt: Date | null
   nowMs?: number
 }): EllevenMassivaLifecycle {
-  const now = input.nowMs ?? Date.now()
-
   if (input.closedAt != null || input.cancelledAt != null) return 'closed'
 
   const fromIncidentId = resolveMassivaStatusFromIncidentStatusId(
@@ -37,13 +35,12 @@ export function inferEllevenMassivaLifecycle(input: {
 
   if (input.statusTexts.some(ellevenStatusTextIndicatesOpen)) return 'open'
 
-  if (
-    input.expectedCloseAt != null &&
-    input.expectedCloseAt.getTime() < now - 2 * 60 * 60 * 1000
-  ) {
-    return 'closed'
-  }
-
+  // NÃO inferir encerramento pela previsão de encerramento vencida (OCO-006).
+  // Previsão vencida = massiva ATRASADA, não encerrada — é o oposto de motivo para
+  // considerá-la fechada. Antes, um SLA vencido há +2h sem texto conclusivo virava
+  // 'closed': a massiva sumia do painel de abertas enquanto continuava ABERTA no
+  // Elleven, e ninguém a encerrava de fato. Sem status conclusivo, deixamos 'unknown'
+  // (a elegibilidade trata unknown como aberta) e o atraso aparece pelo SLA vencido na UI.
   return 'unknown'
 }
 
