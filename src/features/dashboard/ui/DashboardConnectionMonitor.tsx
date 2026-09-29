@@ -84,7 +84,7 @@ export function DashboardConnectionMonitor() {
   const busy = statsQ.isFetching || listConnectivity.isFetching || autoIspQ.isFetching
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest via-stone-50/40 dark:via-white/5 to-amber-50/20 dark:to-amber-950/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80">
+    <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest via-stone-50/40 dark:via-white/5 to-amber-50/20 dark:to-amber-950/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80 dark:ring-white/10">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/40 dark:via-amber-900/30 to-transparent" />
 
       <div className="relative p-4 md:p-6">
