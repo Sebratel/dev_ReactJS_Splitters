@@ -215,7 +215,8 @@ function TimeByModule({ summary }: { summary: UsageSummary }) {
   const data = useMemo(
     () =>
       [...summary.byModule]
-        .filter((m) => m.totalDurationMs > 0)
+        // Dashboard omitido (tela inicial) — mesma razão do ranking de acessos.
+        .filter((m) => m.module !== 'dashboard' && m.totalDurationMs > 0)
         .sort((a, b) => b.totalDurationMs - a.totalDurationMs)
         .slice(0, 8),
     [summary.byModule],
@@ -226,7 +227,9 @@ function TimeByModule({ summary }: { summary: UsageSummary }) {
       <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-on-surface">
         <Clock size={15} className="text-primary" /> Onde passam mais tempo
       </p>
-      <p className="mb-3 text-xs text-on-surface-variant">Tempo total acumulado por módulo no período.</p>
+      <p className="mb-3 text-xs text-on-surface-variant">
+        Tempo total acumulado por módulo no período. Dashboard omitido (tela inicial).
+      </p>
       {data.length === 0 ? (
         <p className="py-6 text-center text-sm text-on-surface-variant">Sem tempo medido no período.</p>
       ) : (
