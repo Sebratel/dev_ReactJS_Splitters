@@ -13,6 +13,9 @@ import {
 } from 'recharts'
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -338,9 +341,52 @@ function HourlyHeat({ summary }: { summary: UsageSummary }) {
 
 const USERS_PAGE_SIZE = 10
 
+type UserSortKey = 'name' | 'events' | 'modulesUsed' | 'topModule' | 'lastSeen'
+
+function SortTh({
+  label,
+  columnKey,
+  activeKey,
+  dir,
+  align = 'left',
+  onSort,
+}: {
+  label: string
+  columnKey: UserSortKey
+  activeKey: UserSortKey
+  dir: 'asc' | 'desc'
+  align?: 'left' | 'right'
+  onSort: (key: UserSortKey) => void
+}) {
+  const active = activeKey === columnKey
+  return (
+    <th className={cn('px-4 py-2', align === 'right' ? 'text-right' : 'text-left')}>
+      <button
+        type="button"
+        onClick={() => onSort(columnKey)}
+        className={cn(
+          'inline-flex items-center gap-1 uppercase transition hover:text-on-surface',
+          align === 'right' ? 'flex-row-reverse' : '',
+          active ? 'text-on-surface' : 'text-on-surface-variant/70',
+        )}
+        title="Ordenar por esta coluna"
+      >
+        {label}
+        {active ? (
+          dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+        ) : (
+          <ArrowUpDown size={12} className="opacity-30" />
+        )}
+      </button>
+    </th>
+  )
+}
+
 function TopUsers({ summary }: { summary: UsageSummary }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
+  const [sortKey, setSortKey] = useState<UserSortKey>('events')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const topModuleByUser = useMemo(() => {
     const best = new Map<string, { module: string; events: number }>()
@@ -359,16 +405,55 @@ function TopUsers({ summary }: { summary: UsageSummary }) {
     )
   }, [summary.byUser, search])
 
+  const sorted = useMemo(() => {
+    const topLabel = (email: string) => {
+      const t = topModuleByUser.get(email)
+      return t ? moduleLabel(t.module) : ''
+    }
+    const val = (u: UsageUserStat): string | number => {
+      switch (sortKey) {
+        case 'name':
+          return (u.name || u.email).toLowerCase()
+        case 'events':
+          return u.events
+        case 'modulesUsed':
+          return u.modulesUsed
+        case 'topModule':
+          return topLabel(u.email).toLowerCase()
+        case 'lastSeen':
+          return u.lastSeen ? new Date(u.lastSeen).getTime() || 0 : 0
+      }
+    }
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      const va = val(a)
+      const vb = val(b)
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir
+    })
+  }, [filtered, sortKey, sortDir, topModuleByUser])
+
   // Mantém a página válida quando o filtro/dado encolhe.
-  const pageCount = Math.max(1, Math.ceil(filtered.length / USERS_PAGE_SIZE))
+  const pageCount = Math.max(1, Math.ceil(sorted.length / USERS_PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
   useEffect(() => {
     if (page !== safePage) setPage(safePage)
   }, [page, safePage])
 
-  const pageRows = filtered.slice(safePage * USERS_PAGE_SIZE, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
-  const firstShown = filtered.length === 0 ? 0 : safePage * USERS_PAGE_SIZE + 1
-  const lastShown = Math.min(filtered.length, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
+  const toggleSort = (key: UserSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      // Texto começa A→Z; números/data começam do maior (mais útil no topo).
+      setSortDir(key === 'name' || key === 'topModule' ? 'asc' : 'desc')
+    }
+    setPage(0)
+  }
+
+  const pageRows = sorted.slice(safePage * USERS_PAGE_SIZE, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
+  const firstShown = sorted.length === 0 ? 0 : safePage * USERS_PAGE_SIZE + 1
+  const lastShown = Math.min(sorted.length, safePage * USERS_PAGE_SIZE + USERS_PAGE_SIZE)
 
   return (
     <div className={cn(CARD, 'overflow-hidden')}>
@@ -404,12 +489,12 @@ function TopUsers({ summary }: { summary: UsageSummary }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-                  <th className="px-4 py-2">Usuário</th>
-                  <th className="px-4 py-2 text-right">Acessos</th>
-                  <th className="px-4 py-2 text-right">Módulos</th>
-                  <th className="px-4 py-2">Mais usa</th>
-                  <th className="px-4 py-2 text-right">Último acesso</th>
+                <tr className="text-[11px] font-bold tracking-wide">
+                  <SortTh label="Usuário" columnKey="name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortTh label="Acessos" columnKey="events" activeKey={sortKey} dir={sortDir} align="right" onSort={toggleSort} />
+                  <SortTh label="Módulos" columnKey="modulesUsed" activeKey={sortKey} dir={sortDir} align="right" onSort={toggleSort} />
+                  <SortTh label="Mais usa" columnKey="topModule" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortTh label="Último acesso" columnKey="lastSeen" activeKey={sortKey} dir={sortDir} align="right" onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>
