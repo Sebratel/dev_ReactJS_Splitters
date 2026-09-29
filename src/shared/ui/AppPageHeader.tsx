@@ -38,7 +38,7 @@ export function AppPageHeader({
   return (
     <header
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-amber-50/30 dark:to-amber-950/20 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80 dark:ring-amber-800/40',
+        'relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-white/10 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-amber-50/30 dark:to-amber-950/20 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80 dark:ring-white/10',
         'animate-in fade-in slide-in-from-top-2 zoom-in-[0.99] duration-300 ease-out',
         'motion-reduce:animate-none motion-reduce:opacity-100',
         className,
