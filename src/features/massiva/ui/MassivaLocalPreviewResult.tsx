@@ -38,7 +38,7 @@ export function MassivaLocalPreviewResult({
 
   if (view.status === 'incomplete') {
     return (
-      <div className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/30 dark:to-amber-950/20 px-4 py-3 text-center shadow-sm ring-1 ring-amber-100/60">
+      <div className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/30 dark:to-amber-950/20 px-4 py-3 text-center shadow-sm ring-1 ring-amber-100/60 dark:ring-amber-800/40">
         <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Seleção incompleta</p>
         <p className="mt-1 text-xs leading-relaxed text-amber-900/85 dark:text-amber-200">{view.message}</p>
       </div>
@@ -104,7 +104,7 @@ export function MassivaLocalPreviewResult({
             {view.totals.totalPppoes}
           </p>
         </div>
-        <div className="col-span-2 min-w-0 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 to-white dark:to-surface-container-lowest px-3 py-3 shadow-sm ring-1 ring-amber-100/60 sm:col-span-1">
+        <div className="col-span-2 min-w-0 rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 to-white dark:to-surface-container-lowest px-3 py-3 shadow-sm ring-1 ring-amber-100/60 dark:ring-amber-800/40 sm:col-span-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-800/90 dark:text-amber-200">
             Corporativos
           </p>

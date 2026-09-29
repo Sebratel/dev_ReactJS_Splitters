@@ -113,7 +113,7 @@ export function SuggestionCard({
       transition={{ duration: 0.24, ease: 'easeOut' }}
       whileHover={reduceMotion ? undefined : { y: -2 }}
       className={cn(
-        'overflow-hidden rounded-[28px] border border-amber-200/60 dark:border-amber-800/50 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 transition sm:p-5',
+        'overflow-hidden rounded-[28px] border border-amber-200/60 dark:border-amber-800/50 bg-gradient-to-br p-4 shadow-sm ring-1 ring-amber-100/60 dark:ring-amber-800/40 transition sm:p-5',
         meta.accentClassName,
       )}
     >
