@@ -303,7 +303,7 @@ function HourlyHeat({ summary }: { summary: UsageSummary }) {
       <p className="mb-3 text-sm font-bold text-on-surface">Horários de pico</p>
       <div className="flex items-end gap-[3px]" style={{ height: 90 }}>
         {byHour.arr.map((h) => (
-          <div key={h.hour} className="flex flex-1 flex-col items-center justify-end" title={`${h.hour}h — ${h.events} acessos`}>
+          <div key={h.hour} className="flex h-full flex-1 flex-col items-center justify-end" title={`${h.hour}h — ${h.events} acessos`}>
             <span
               className="w-full rounded-t bg-primary"
               style={{ height: `${Math.max(3, (h.events / byHour.max) * 100)}%`, opacity: 0.35 + 0.65 * (h.events / byHour.max) }}
