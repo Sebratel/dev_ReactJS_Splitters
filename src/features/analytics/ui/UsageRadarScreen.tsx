@@ -148,16 +148,24 @@ function ActiveUsersCard({ summary }: { summary: UsageSummary }) {
 function ModuleRanking({ summary }: { summary: UsageSummary }) {
   const data = useMemo(
     () =>
-      summary.byModule.map((m) => ({
-        ...m,
-        label: moduleLabel(m.module),
-      })),
+      summary.byModule
+        // Dashboard é a tela inicial (rota '/'): todo login cai nela, então o acesso
+        // sempre lidera e não diz nada sobre preferência de uso. Omitido do ranking para
+        // não distorcer a comparação. A coleta continua (conta em usuários ativos/sessões).
+        .filter((m) => m.module !== 'dashboard')
+        .map((m) => ({
+          ...m,
+          label: moduleLabel(m.module),
+        })),
     [summary.byModule],
   )
   const maxEvents = data.length > 0 ? Math.max(...data.map((d) => d.events)) : 0
   return (
     <div className={cn(CARD, 'p-4')}>
-      <p className="mb-3 text-sm font-bold text-on-surface">Módulos mais acessados</p>
+      <p className="text-sm font-bold text-on-surface">Módulos mais acessados</p>
+      <p className="mb-3 text-xs text-on-surface-variant">
+        Dashboard omitido — é a tela inicial, todos passam por ela.
+      </p>
       {data.length === 0 ? (
         <p className="py-8 text-center text-sm text-on-surface-variant">Sem acessos no período.</p>
       ) : (
