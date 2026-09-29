@@ -391,6 +391,9 @@ function TopUsers({ summary }: { summary: UsageSummary }) {
   const topModuleByUser = useMemo(() => {
     const best = new Map<string, { module: string; events: number }>()
     for (const r of summary.byUserModule) {
+      // Dashboard é a tela inicial (todos passam) — não conta como "mais usa", senão
+      // esconde a preferência real de quem navega pouco. Mesma razão dos rankings.
+      if (r.module === 'dashboard') continue
       const cur = best.get(r.email)
       if (!cur || r.events > cur.events) best.set(r.email, { module: r.module, events: r.events })
     }
