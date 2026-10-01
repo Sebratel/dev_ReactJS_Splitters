@@ -4184,6 +4184,80 @@ app.get('/api/usage-events/summary', async (req, res) => {
   }
 });
 
+// GMUD (Gestão de Mudança de Rede): lista as GMUDs direto do Voalle/ERP (Postgres).
+// A GMUD vive nas mesmas tabelas da massiva (assignment_incidents/assignments), com
+// incident_type_id = 1084 (catálogo "GMUD"). Somente leitura — enriquecimento com os
+// campos do formulário (nosso MySQL) vem em etapa posterior.
+const GMUD_INCIDENT_TYPE_ID = 1084;
+
+app.get('/api/gmud/list', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+
+    const rawLimit = Number.parseInt(String(req.query?.limit ?? ''), 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit <= 500 ? rawLimit : 100;
+    const rawOffset = Number.parseInt(String(req.query?.offset ?? ''), 10);
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
+    const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+
+    const params = [GMUD_INCIDENT_TYPE_ID];
+    let searchClause = '';
+    if (search !== '') {
+      params.push(`%${search}%`);
+      searchClause = ` AND (ai.protocol::text ILIKE $${params.length} OR a.title ILIKE $${params.length} OR pe.name ILIKE $${params.length})`;
+    }
+
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+        FROM erp.assignment_incidents ai
+        JOIN erp.assignments a ON a.id = ai.assignment_id
+        LEFT JOIN erp.people pe ON pe.id = ai.person_id
+       WHERE ai.incident_type_id = $1${searchClause}`;
+    const countResult = await pool.query(countSql, params);
+    const total = countResult.rows?.[0]?.total ?? 0;
+
+    const listParams = [...params, limit, offset];
+    const listSql = `
+      SELECT ai.protocol::bigint AS protocol,
+             a.title,
+             a.description,
+             ai.date_to_start AS opened_at,
+             ai.responsible_final_date AS sla_date,
+             a.conclusion_date,
+             ist.title AS status,
+             pe.name AS requester,
+             pe.email AS requester_email
+        FROM erp.assignment_incidents ai
+        JOIN erp.assignments a ON a.id = ai.assignment_id
+        LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+        LEFT JOIN erp.people pe ON pe.id = ai.person_id
+       WHERE ai.incident_type_id = $1${searchClause}
+       ORDER BY ai.protocol DESC
+       LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`;
+    const listResult = await pool.query(listSql, listParams);
+
+    const items = (listResult.rows ?? []).map((r) => ({
+      protocol: Number(r.protocol),
+      title: r.title ?? '',
+      description: r.description ?? '',
+      openedAt: r.opened_at ? new Date(r.opened_at).toISOString() : null,
+      slaDate: r.sla_date ? new Date(r.sla_date).toISOString() : null,
+      conclusionDate: r.conclusion_date ? new Date(r.conclusion_date).toISOString() : null,
+      status: r.status ?? '',
+      requester: r.requester ?? '',
+      requesterEmail: r.requester_email ?? '',
+    }));
+
+    return res.json({ success: true, data: { items, total, limit, offset } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar as GMUDs.',
+    });
+  }
+});
+
 app.put('/api/admin/isa-config', async (req, res) => {
   try {
     const actor = await requireIsaAdminAccess(req);
