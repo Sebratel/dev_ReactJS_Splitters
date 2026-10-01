@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
@@ -43,6 +44,12 @@ export function GmudScreen() {
   const headerTrailing = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
+        <Link
+          to="/gmud/nova"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90"
+        >
+          <Plus size={15} /> Nova GMUD
+        </Link>
         <div className="relative">
           <Search
             size={14}
@@ -112,19 +119,22 @@ export function GmudScreen() {
                 <thead>
                   <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
                     <th className="px-4 py-2">Protocolo</th>
+                    <th className="px-4 py-2">Tipo</th>
                     <th className="px-4 py-2">Título</th>
                     <th className="px-4 py-2">Solicitante</th>
                     <th className="px-4 py-2">Abertura</th>
                     <th className="px-4 py-2">Prazo (SLA)</th>
                     <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Comitê</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((g) => (
                     <tr key={g.protocol} className="border-t border-neutral-200/60 dark:border-white/5">
                       <td className="px-4 py-2.5 font-mono tabular-nums text-on-surface">{g.protocol}</td>
+                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.extra?.tipo || '—'}</td>
                       <td className="px-4 py-2.5 text-on-surface">
-                        <span className="line-clamp-2 max-w-[38rem]" title={g.title}>
+                        <span className="line-clamp-2 max-w-[34rem]" title={g.title}>
                           {g.title || '—'}
                         </span>
                       </td>
@@ -136,6 +146,7 @@ export function GmudScreen() {
                           {g.status || '—'}
                         </span>
                       </td>
+                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.extra?.statusComite ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

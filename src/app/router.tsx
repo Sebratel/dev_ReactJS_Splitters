@@ -51,6 +51,9 @@ const UsageRadarPage = lazy(() =>
 const GmudPage = lazy(() =>
   import('@/pages/GmudPage').then((m) => ({ default: m.GmudPage })),
 )
+const GmudNewPage = lazy(() =>
+  import('@/pages/GmudNewPage').then((m) => ({ default: m.GmudNewPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -143,6 +146,18 @@ export const router = createBrowserRouter([
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
                 <Page><GmudPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/nova',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudNewPage /></Page>
               </PermissionGuard>
             ),
           },

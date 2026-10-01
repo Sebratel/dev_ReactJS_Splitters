@@ -73,6 +73,10 @@ import {
   recordUsageEvents,
   summarizeUsage,
 } from './usageAnalyticsStore.js';
+import {
+  createGmudRequest,
+  getGmudExtrasByProtocols,
+} from './gmudStore.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -4236,7 +4240,7 @@ app.get('/api/gmud/list', async (req, res) => {
        LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`;
     const listResult = await pool.query(listSql, listParams);
 
-    const items = (listResult.rows ?? []).map((r) => ({
+    const baseItems = (listResult.rows ?? []).map((r) => ({
       protocol: Number(r.protocol),
       title: r.title ?? '',
       description: r.description ?? '',
@@ -4248,12 +4252,53 @@ app.get('/api/gmud/list', async (req, res) => {
       requesterEmail: r.requester_email ?? '',
     }));
 
+    // Enriquece com os campos do formulário/aprovação (nosso MySQL). Best-effort:
+    // se o MySQL falhar/estiver indisponível, devolve só os dados do Voalle.
+    let extras = new Map();
+    try {
+      extras = await getGmudExtrasByProtocols(baseItems.map((i) => i.protocol));
+    } catch (extraError) {
+      logger.warn('[gmud] Falha ao enriquecer lista com campos locais (segue só Voalle): %s', extraError?.message);
+    }
+    const items = baseItems.map((i) => ({ ...i, extra: extras.get(i.protocol) ?? null }));
+
     return res.json({ success: true, data: { items, total, limit, offset } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao carregar as GMUDs.',
+    });
+  }
+});
+
+// Cria/atualiza uma requisição de GMUD no nosso MySQL (campos do formulário que não
+// existem no Voalle). Nesta etapa NÃO abre protocolo no Elleven — o "Protocolo Voalle"
+// é informado manualmente (como no Google Form de hoje). A abertura automática entra
+// numa etapa posterior, com endpoint dedicado no gateway.
+app.post('/api/gmud/create', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para registrar GMUDs.');
+    const body = req.body ?? {};
+
+    const voalleProtocol = Number.parseInt(String(body.voalleProtocol ?? ''), 10);
+    if (!Number.isFinite(voalleProtocol) || voalleProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Informe o Protocolo Voalle da GMUD.' });
+    }
+    if (String(body.titulo ?? '').trim() === '') {
+      return res.status(400).json({ success: false, message: 'Informe o título da GMUD.' });
+    }
+
+    const createdByEmail =
+      actor?.profile?.email || actor?.identity?.email || String(body.solicitanteEmail ?? '');
+
+    const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao registrar a GMUD.',
     });
   }
 });

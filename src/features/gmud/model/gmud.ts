@@ -12,6 +12,20 @@ export type GmudListItem = {
   status: string
   requester: string
   requesterEmail: string
+  /** Campos do formulário/aprovação (nosso MySQL), quando a GMUD já foi registrada na plataforma. */
+  extra: GmudExtra | null
+}
+
+export type GmudExtra = {
+  tipo: string | null
+  popSite: string | null
+  impactoParada: string | null
+  comunicaCliente: string | null
+  statusComite: string | null
+  statusExec: string | null
+  rnc: string | null
+  dataCab: string | null
+  ambienteAfetado: string[] | null
 }
 
 export type GmudListResult = {
