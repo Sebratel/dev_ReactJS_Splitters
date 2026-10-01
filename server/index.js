@@ -76,6 +76,7 @@ import {
 import {
   createGmudRequest,
   getGmudExtrasByProtocols,
+  setGmudApproval,
 } from './gmudStore.js';
 import logger, { captureConsole } from './logger.js';
 
@@ -4299,6 +4300,35 @@ app.post('/api/gmud/create', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao registrar a GMUD.',
+    });
+  }
+});
+
+// Decisão do Comitê + status de execução de uma GMUD (só no nosso banco; não reflete no Elleven).
+app.post('/api/gmud/approval', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const body = req.body ?? {};
+    const voalleProtocol = Number.parseInt(String(body.voalleProtocol ?? ''), 10);
+    if (!Number.isFinite(voalleProtocol) || voalleProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const aprovadoPor =
+      actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || '';
+    const result = await setGmudApproval({
+      voalleProtocol,
+      statusComite: body.statusComite,
+      statusExec: body.statusExec,
+      dataCab: body.dataCab,
+      rnc: body.rnc,
+      aprovadoPor,
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao registrar a aprovação.',
     });
   }
 });

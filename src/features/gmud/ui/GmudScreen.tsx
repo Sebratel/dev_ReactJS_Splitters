@@ -2,9 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
+import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
+import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
+import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
+
+function comiteLabel(status: string | null | undefined): string {
+  if (!status) return '—'
+  return GMUD_STATUS_COMITE_LABEL[status as GmudStatusComite] ?? status
+}
 
 const CARD =
   'rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
@@ -19,6 +28,8 @@ export function GmudScreen() {
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [page, setPage] = useState(0)
+  const [approving, setApproving] = useState<GmudListItem | null>(null)
+  const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
 
   // Debounce simples da busca (reseta pra página 0 quando muda).
   useEffect(() => {
@@ -126,6 +137,7 @@ export function GmudScreen() {
                     <th className="px-4 py-2">Prazo (SLA)</th>
                     <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2">Comitê</th>
+                    {canApprove ? <th className="px-4 py-2 text-right">Ações</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -146,7 +158,31 @@ export function GmudScreen() {
                           {g.status || '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.extra?.statusComite ?? '—'}</td>
+                      <td className="px-4 py-2.5 text-xs">
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            g.extra?.statusComite === 'aprovada'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                              : g.extra?.statusComite === 'negada'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
+                                : 'bg-surface-container-low text-on-surface-variant',
+                          )}
+                        >
+                          {comiteLabel(g.extra?.statusComite)}
+                        </span>
+                      </td>
+                      {canApprove ? (
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setApproving(g)}
+                            className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
+                          >
+                            Avaliar
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -185,6 +221,17 @@ export function GmudScreen() {
           </>
         )}
       </div>
+
+      {approving ? (
+        <GmudApprovalModal
+          gmud={approving}
+          onClose={() => setApproving(null)}
+          onSaved={() => {
+            setApproving(null)
+            void refetch()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

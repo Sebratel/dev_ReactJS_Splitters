@@ -182,6 +182,59 @@ export async function createGmudRequest(input) {
   return { id: insertedId, voalleProtocol: protocol };
 }
 
+const STATUS_COMITE = new Set(['pendente', 'aprovada', 'negada']);
+const STATUS_EXEC = new Set(['pendente', 'em_execucao', 'concluida']);
+
+/**
+ * Aplica a decisão do Comitê (e status de execução) a uma GMUD, por protocolo.
+ * UPSERT: se a GMUD ainda não tem linha local (ex.: existia só no Voalle), cria uma
+ * com os campos de aprovação. Só altera os campos informados.
+ */
+export async function setGmudApproval(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+
+  const protocol = normalizePositiveInt(input.voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido para aprovação de GMUD.', 400);
+
+  const statusComite = STATUS_COMITE.has(input.statusComite) ? input.statusComite : null;
+  const statusExec = STATUS_EXEC.has(input.statusExec) ? input.statusExec : null;
+  const aprovadoPor = toCleanString(input.aprovadoPor) || null;
+  const dataCab = toCleanString(input.dataCab) || null;
+  const rnc = toCleanString(input.rnc) || null;
+
+  // Monta dinamicamente só os campos enviados (demais ficam intactos no UPDATE).
+  const sets = [];
+  const insertCols = ['voalle_protocol'];
+  const insertVals = [protocol];
+  const pushField = (col, value, always = false) => {
+    if (value === null && !always) return;
+    sets.push(`${col} = ?`);
+    insertCols.push(col);
+    insertVals.push(value);
+  };
+  pushField('status_comite', statusComite);
+  pushField('status_exec', statusExec);
+  pushField('aprovado_por', aprovadoPor);
+  pushField('data_cab', dataCab);
+  pushField('rnc', rnc);
+
+  if (sets.length === 0) return { voalleProtocol: protocol, changed: false };
+
+  const placeholders = insertCols.map(() => '?').join(', ');
+  const sql = `INSERT INTO ${TABLE} (${insertCols.join(', ')}) VALUES (${placeholders})
+               ON DUPLICATE KEY UPDATE ${sets.join(', ')}`;
+  // Params: primeiro o INSERT (insertVals), depois o UPDATE (os mesmos valores dos sets, na ordem).
+  const updateVals = [];
+  if (statusComite !== null) updateVals.push(statusComite);
+  if (statusExec !== null) updateVals.push(statusExec);
+  if (aprovadoPor !== null) updateVals.push(aprovadoPor);
+  if (dataCab !== null) updateVals.push(dataCab);
+  if (rnc !== null) updateVals.push(rnc);
+  await pool.query(sql, [...insertVals, ...updateVals]);
+  return { voalleProtocol: protocol, changed: true };
+}
+
 /** Busca os campos extras (nosso banco) para um conjunto de protocolos — para enriquecer o painel. */
 export async function getGmudExtrasByProtocols(protocols) {
   if (!Array.isArray(protocols) || protocols.length === 0) return new Map();
