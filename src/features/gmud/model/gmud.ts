@@ -14,6 +14,8 @@ export type GmudListItem = {
   requesterEmail: string
   /** Campos do formulário/aprovação (nosso MySQL), quando a GMUD já foi registrada na plataforma. */
   extra: GmudExtra | null
+  /** Quantas massivas estão vinculadas a esta GMUD. */
+  massivaLinksCount: number
 }
 
 export type GmudExtra = {

@@ -11,6 +11,7 @@ import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
  */
 
 const TABLE = 'gmud_requests';
+const LINKS_TABLE = 'gmud_massiva_links';
 
 let dataPool = null;
 let readyPromise = null;
@@ -106,6 +107,18 @@ async function ensureTable() {
         UNIQUE KEY uq_${TABLE}_protocol (voalle_protocol),
         INDEX idx_${TABLE}_status_comite (status_comite),
         INDEX idx_${TABLE}_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${LINKS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        gmud_protocol BIGINT UNSIGNED NOT NULL,
+        massiva_protocol BIGINT UNSIGNED NOT NULL,
+        created_by_email VARCHAR(191) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_${LINKS_TABLE} (gmud_protocol, massiva_protocol),
+        INDEX idx_${LINKS_TABLE}_gmud (gmud_protocol),
+        INDEX idx_${LINKS_TABLE}_massiva (massiva_protocol)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
   })().catch((error) => {
@@ -233,6 +246,67 @@ export async function setGmudApproval(input) {
   if (rnc !== null) updateVals.push(rnc);
   await pool.query(sql, [...insertVals, ...updateVals]);
   return { voalleProtocol: protocol, changed: true };
+}
+
+/** Vincula uma massiva (por protocolo) a uma GMUD. Idempotente (dedupe por par). */
+export async function addMassivaLink(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const gmud = normalizePositiveInt(input.gmudProtocol);
+  const massiva = normalizePositiveInt(input.massivaProtocol);
+  if (!gmud || !massiva) throw buildError('Protocolos inválidos para o vínculo.', 400);
+  await pool.query(
+    `INSERT IGNORE INTO ${LINKS_TABLE} (gmud_protocol, massiva_protocol, created_by_email) VALUES (?, ?, ?)`,
+    [gmud, massiva, toCleanString(input.createdByEmail) || null],
+  );
+  return { gmudProtocol: gmud, massivaProtocol: massiva };
+}
+
+/** Remove um vínculo GMUD↔massiva. */
+export async function removeMassivaLink(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const gmud = normalizePositiveInt(input.gmudProtocol);
+  const massiva = normalizePositiveInt(input.massivaProtocol);
+  if (!gmud || !massiva) throw buildError('Protocolos inválidos para o vínculo.', 400);
+  await pool.query(
+    `DELETE FROM ${LINKS_TABLE} WHERE gmud_protocol = ? AND massiva_protocol = ?`,
+    [gmud, massiva],
+  );
+  return { gmudProtocol: gmud, massivaProtocol: massiva };
+}
+
+/** Lista os protocolos de massiva vinculados a uma GMUD. */
+export async function getMassivaLinks(gmudProtocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const gmud = normalizePositiveInt(gmudProtocol);
+  if (!gmud) return [];
+  const [rows] = await pool.query(
+    `SELECT massiva_protocol, created_at FROM ${LINKS_TABLE} WHERE gmud_protocol = ? ORDER BY created_at DESC`,
+    [gmud],
+  );
+  return rows.map((r) => ({
+    massivaProtocol: Number(r.massiva_protocol),
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+  }));
+}
+
+/** Contagem de massivas vinculadas por GMUD — para o painel. */
+export async function getMassivaLinkCounts(gmudProtocols) {
+  if (!Array.isArray(gmudProtocols) || gmudProtocols.length === 0) return new Map();
+  await ensureTable();
+  const pool = getMysqlPool();
+  const ids = gmudProtocols.map((p) => normalizePositiveInt(p)).filter((p) => p != null);
+  if (ids.length === 0) return new Map();
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await pool.query(
+    `SELECT gmud_protocol, COUNT(*) AS total FROM ${LINKS_TABLE} WHERE gmud_protocol IN (${placeholders}) GROUP BY gmud_protocol`,
+    ids,
+  );
+  const map = new Map();
+  for (const r of rows) map.set(Number(r.gmud_protocol), Number(r.total));
+  return map;
 }
 
 /** Busca os campos extras (nosso banco) para um conjunto de protocolos — para enriquecer o painel. */

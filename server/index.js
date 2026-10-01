@@ -77,6 +77,10 @@ import {
   createGmudRequest,
   getGmudExtrasByProtocols,
   setGmudApproval,
+  addMassivaLink,
+  removeMassivaLink,
+  getMassivaLinks,
+  getMassivaLinkCounts,
 } from './gmudStore.js';
 import logger, { captureConsole } from './logger.js';
 
@@ -4256,12 +4260,21 @@ app.get('/api/gmud/list', async (req, res) => {
     // Enriquece com os campos do formulário/aprovação (nosso MySQL). Best-effort:
     // se o MySQL falhar/estiver indisponível, devolve só os dados do Voalle.
     let extras = new Map();
+    let linkCounts = new Map();
     try {
-      extras = await getGmudExtrasByProtocols(baseItems.map((i) => i.protocol));
+      const protocols = baseItems.map((i) => i.protocol);
+      [extras, linkCounts] = await Promise.all([
+        getGmudExtrasByProtocols(protocols),
+        getMassivaLinkCounts(protocols),
+      ]);
     } catch (extraError) {
       logger.warn('[gmud] Falha ao enriquecer lista com campos locais (segue só Voalle): %s', extraError?.message);
     }
-    const items = baseItems.map((i) => ({ ...i, extra: extras.get(i.protocol) ?? null }));
+    const items = baseItems.map((i) => ({
+      ...i,
+      extra: extras.get(i.protocol) ?? null,
+      massivaLinksCount: linkCounts.get(i.protocol) ?? 0,
+    }));
 
     return res.json({ success: true, data: { items, total, limit, offset } });
   } catch (error) {
@@ -4329,6 +4342,66 @@ app.post('/api/gmud/approval', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao registrar a aprovação.',
+    });
+  }
+});
+
+// Vínculo GMUD ↔ massiva (lista / criar / remover). Só no nosso banco.
+app.get('/api/gmud/:protocol/links', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const links = await getMassivaLinks(protocol);
+    return res.json({ success: true, data: { links } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar os vínculos.',
+    });
+  }
+});
+
+app.post('/api/gmud/link', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para vincular massivas.');
+    const body = req.body ?? {};
+    const gmudProtocol = Number.parseInt(String(body.gmudProtocol ?? ''), 10);
+    const massivaProtocol = Number.parseInt(String(body.massivaProtocol ?? ''), 10);
+    if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Informe o protocolo da GMUD e da massiva.' });
+    }
+    const createdByEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await addMassivaLink({ gmudProtocol, massivaProtocol, createdByEmail });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao vincular a massiva.',
+    });
+  }
+});
+
+app.delete('/api/gmud/link', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para desvincular massivas.');
+    const body = req.body ?? {};
+    const gmudProtocol = Number.parseInt(String(body.gmudProtocol ?? ''), 10);
+    const massivaProtocol = Number.parseInt(String(body.massivaProtocol ?? ''), 10);
+    if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolos inválidos.' });
+    }
+    const result = await removeMassivaLink({ gmudProtocol, massivaProtocol });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao desvincular a massiva.',
     });
   }
 });

@@ -9,6 +9,8 @@ import {
 } from '@/features/massiva/lib/massivaRecentOpensStorage'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
 import { splittersKeys } from '@/features/splitters/model/splittersKeys'
+import { clearPendingGmudLink, getPendingGmudLink } from '@/features/gmud/lib/pendingGmudLink'
+import { linkMassivaToGmud } from '@/features/gmud/api/gmudLinks'
 import type {
   MassivaOpenMutationSuccessPayload,
 } from '@/features/massiva/model/massivaOpenMutation'
@@ -60,6 +62,18 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
           query.queryKey[1] === 'history-list',
       })
       void queryClient.invalidateQueries({ queryKey: splittersKeys.all })
+
+      // Vínculo automático com GMUD: se o operador veio de "Abrir massiva vinculada"
+      // numa GMUD, vincula os protocolos recém-abertos a ela e limpa o pendente.
+      const pendingGmud = getPendingGmudLink()
+      if (pendingGmud != null) {
+        const protocols = data.results
+          .map((r) => r.protocol)
+          .filter((p): p is number => typeof p === 'number' && p > 0)
+        void Promise.allSettled(
+          protocols.map((p) => linkMassivaToGmud(pendingGmud, p)),
+        ).finally(() => clearPendingGmudLink())
+      }
     },
   })
 

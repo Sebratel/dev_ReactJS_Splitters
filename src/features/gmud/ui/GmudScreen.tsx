@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, Link2, Plus, RefreshCw, Search } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
+import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
@@ -29,6 +30,7 @@ export function GmudScreen() {
   const [appliedSearch, setAppliedSearch] = useState('')
   const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
+  const [linking, setLinking] = useState<GmudListItem | null>(null)
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
 
   // Debounce simples da busca (reseta pra página 0 quando muda).
@@ -137,7 +139,7 @@ export function GmudScreen() {
                     <th className="px-4 py-2">Prazo (SLA)</th>
                     <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2">Comitê</th>
-                    {canApprove ? <th className="px-4 py-2 text-right">Ações</th> : null}
+                    <th className="px-4 py-2 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,17 +174,28 @@ export function GmudScreen() {
                           {comiteLabel(g.extra?.statusComite)}
                         </span>
                       </td>
-                      {canApprove ? (
-                        <td className="px-4 py-2.5 text-right">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setApproving(g)}
-                            className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
+                            onClick={() => setLinking(g)}
+                            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+                            title="Massivas vinculadas"
                           >
-                            Avaliar
+                            <Link2 size={13} />
+                            {g.massivaLinksCount > 0 ? g.massivaLinksCount : 'Vincular'}
                           </button>
-                        </td>
-                      ) : null}
+                          {canApprove ? (
+                            <button
+                              type="button"
+                              onClick={() => setApproving(g)}
+                              className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
+                            >
+                              Avaliar
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -232,6 +245,8 @@ export function GmudScreen() {
           }}
         />
       ) : null}
+
+      {linking ? <GmudLinksModal gmud={linking} onClose={() => setLinking(null)} /> : null}
     </div>
   )
 }
