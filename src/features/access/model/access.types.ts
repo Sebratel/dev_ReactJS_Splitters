@@ -5,6 +5,10 @@
   canViewIntelligence: boolean
   canUsePlanningAssistant: boolean
   canViewRedistribution: boolean
+  /** Ver o módulo de GMUD (Gestão de Mudança de Rede). Liberado individualmente pelo admin. */
+  canViewGmud: boolean
+  /** Aprovar/negar GMUD no Comitê (depende de ver GMUD). Liberado individualmente pelo admin. */
+  canApproveGmud: boolean
   isAdmin: boolean
 }
 
@@ -29,6 +33,8 @@ export const defaultSplittersPermissions: SplittersPermissionSet = {
   canViewIntelligence: false,
   canUsePlanningAssistant: false,
   canViewRedistribution: false,
+  canViewGmud: false,
+  canApproveGmud: false,
   isAdmin: false,
 }
 

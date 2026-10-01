@@ -48,6 +48,9 @@ const CondoRedistributionPage = lazy(() =>
 const UsageRadarPage = lazy(() =>
   import('@/pages/UsageRadarPage').then((m) => ({ default: m.UsageRadarPage })),
 )
+const GmudPage = lazy(() =>
+  import('@/pages/GmudPage').then((m) => ({ default: m.GmudPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -128,6 +131,18 @@ export const router = createBrowserRouter([
                 description="Seu perfil não possui acesso ao painel de inteligência."
               >
                 <Page><NetworkIntelligencePage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudPage /></Page>
               </PermissionGuard>
             ),
           },

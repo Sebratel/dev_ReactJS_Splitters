@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRightLeft,
+  ClipboardList,
   Cpu,
   LayoutDashboard,
   AlertTriangle,
@@ -38,6 +39,7 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
   const canAccessMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
   const canAccessIntelligence = useAccessAuthStore((s) => s.hasPermission('canViewIntelligence'))
   const canAccessRedistribution = useAccessAuthStore((s) => s.hasPermission('canViewRedistribution'))
+  const canAccessGmud = useAccessAuthStore((s) => s.hasPermission('canViewGmud'))
   const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
   const { openCount } = useHomeDashboardMassivaOpen()
 
@@ -64,6 +66,9 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
             badge: openCount > 0 ? openCount : undefined,
           },
         ]
+      : []),
+    ...(canAccessGmud || isAdmin
+      ? [{ label: 'GMUD', icon: ClipboardList, to: '/gmud' }]
       : []),
     ...(isAdmin
       ? [
