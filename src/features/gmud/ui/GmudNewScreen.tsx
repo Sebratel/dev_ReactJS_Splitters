@@ -21,6 +21,7 @@ import {
   type GmudRecursoPapel,
 } from '@/features/gmud/model/gmudForm'
 import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
+import { buildGmudDescription, buildGmudTitle } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
@@ -60,8 +61,8 @@ export function GmudNewScreen() {
       }
       const result = await openGmudInElleven({
         solicitanteEmail: form.solicitanteEmail,
-        titulo: form.titulo,
-        descricao: form.descricao || form.titulo,
+        titulo: buildGmudTitle(form),
+        descricao: buildGmudDescription(form),
         finalDateLocal: `${form.dataFim}T${form.horaFim}:00`,
         idempotencyKey: idempotencyKeyRef.current,
       })
@@ -388,6 +389,26 @@ export function GmudNewScreen() {
             </select>
           </label>
         </Section>
+
+        <div className={CARD}>
+          <p className="mb-2 text-sm font-bold text-on-surface">
+            Pré-visualização — como vai ficar no Elleven
+          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
+            Título
+          </p>
+          <p className="mt-0.5 break-words font-mono text-sm text-on-surface">{buildGmudTitle(form)}</p>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant/70">
+            Descrição (máscara)
+          </p>
+          <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-container-low p-3 font-mono text-xs leading-relaxed text-on-surface">
+            {buildGmudDescription(form)}
+          </pre>
+          <p className="mt-2 text-[11px] text-on-surface-variant/70">
+            Classificação: Catálogo GMUD · Tipo "Gestão de Mudança de Rede" · Categoria "Infraestrutura
+            (GMUD)" · Equipe CGR.
+          </p>
+        </div>
 
         {missing.length > 0 ? (
           <div className="rounded-xl border border-amber-300/70 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
