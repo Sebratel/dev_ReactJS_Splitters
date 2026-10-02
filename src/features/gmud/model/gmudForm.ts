@@ -79,16 +79,13 @@ export function collectAmbienteAfetado(form: GmudFormState): string[] {
 }
 
 /** Valida os campos obrigatórios (paridade com o Google Form). Retorna os rótulos faltando. */
-export function validateGmudForm(
-  form: GmudFormState,
-  opts: { abrirNoElleven: boolean },
-): string[] {
+export function validateGmudForm(form: GmudFormState): string[] {
   const missing: string[] = []
   const req = (ok: boolean, label: string) => {
     if (!ok) missing.push(label)
   }
-  if (!opts.abrirNoElleven) req(form.voalleProtocol.trim() !== '', 'Protocolo Voalle')
-  else req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
+  // A GMUD sempre abre o protocolo no Elleven — o e-mail define o solicitante.
+  req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
   req(form.tipo !== '', 'Tipo da GMUD')
   req(form.titulo.trim() !== '', 'Título')
   req(form.descricao.trim() !== '', 'Descrição da atividade')

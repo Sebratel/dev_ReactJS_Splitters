@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
-import { ClipboardList, Loader2, Send, Zap } from 'lucide-react'
+import { ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -44,7 +44,6 @@ export function GmudNewScreen() {
   const [form, setForm] = useState<GmudFormState>(() =>
     emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
   )
-  const [abrirNoElleven, setAbrirNoElleven] = useState(false)
   const [missing, setMissing] = useState<string[]>([])
   const idempotencyKeyRef = useRef<string | null>(null)
   const set = <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) =>
@@ -52,26 +51,24 @@ export function GmudNewScreen() {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      let protocol = form.voalleProtocol
-      if (abrirNoElleven) {
-        if (idempotencyKeyRef.current === null) {
-          idempotencyKeyRef.current =
-            typeof crypto !== 'undefined' && 'randomUUID' in crypto
-              ? crypto.randomUUID()
-              : `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
-        }
-        const result = await openGmudInElleven({
-          solicitanteEmail: form.solicitanteEmail,
-          titulo: form.titulo,
-          descricao: form.descricao || form.titulo,
-          finalDateLocal: `${form.dataFim}T${form.horaFim}:00`,
-          idempotencyKey: idempotencyKeyRef.current,
-        })
-        if (result.protocol == null) {
-          throw new Error('O Elleven não retornou o número do protocolo da GMUD.')
-        }
-        protocol = String(result.protocol)
+      // A GMUD SEMPRE abre o protocolo no Elleven (como a massiva) e preenche sozinha.
+      if (idempotencyKeyRef.current === null) {
+        idempotencyKeyRef.current =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
       }
+      const result = await openGmudInElleven({
+        solicitanteEmail: form.solicitanteEmail,
+        titulo: form.titulo,
+        descricao: form.descricao || form.titulo,
+        finalDateLocal: `${form.dataFim}T${form.horaFim}:00`,
+        idempotencyKey: idempotencyKeyRef.current,
+      })
+      if (result.protocol == null) {
+        throw new Error('O Elleven não retornou o número do protocolo da GMUD.')
+      }
+      const protocol = String(result.protocol)
       await createGmud({
         ...form,
         voalleProtocol: protocol,
@@ -86,7 +83,7 @@ export function GmudNewScreen() {
   })
 
   const handleSubmit = () => {
-    const miss = validateGmudForm(form, { abrirNoElleven })
+    const miss = validateGmudForm(form)
     setMissing(miss)
     if (miss.length === 0) mutation.mutate()
   }
@@ -109,36 +106,19 @@ export function GmudNewScreen() {
       <AppPageHeader
         badge="Gestão de Mudança de Rede"
         title="Abrir GMUD"
-        description="Requisição de mudança — mesmos campos do formulário. O protocolo Voalle é informado manualmente nesta etapa."
+        description="Requisição de mudança — abre o protocolo no Elleven e registra na plataforma em um passo só."
         icon={ClipboardList}
         primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
       />
 
-      <label
-        className={cn(
-          'flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition',
-          abrirNoElleven
-            ? 'border-primary/40 bg-primary/5'
-            : 'border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest',
-        )}
-      >
-        <input
-          type="checkbox"
-          className="mt-0.5 size-4 accent-primary"
-          checked={abrirNoElleven}
-          onChange={(e) => setAbrirNoElleven(e.target.checked)}
-        />
-        <span className="min-w-0">
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-on-surface">
-            <Zap size={15} className="text-primary" /> Abrir o protocolo no Elleven automaticamente
-          </span>
-          <span className="mt-0.5 block text-xs text-on-surface-variant">
-            Ligado: a plataforma abre a GMUD no Elleven e preenche o protocolo sozinha (exige
-            e-mail do solicitante e a janela de fim). Desligado: você informa o protocolo manualmente
-            (como no formulário atual).
-          </span>
+      <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-on-surface-variant">
+        <Zap size={15} className="mt-0.5 shrink-0 text-primary" />
+        <span>
+          Ao registrar, a plataforma <span className="font-semibold text-on-surface">abre o
+          protocolo no Elleven automaticamente</span> e preenche o número sozinha — igual à abertura
+          de massiva. O e-mail do solicitante define o responsável no Elleven.
         </span>
-      </label>
+      </div>
 
       <form
         className="space-y-4"
@@ -148,19 +128,6 @@ export function GmudNewScreen() {
         }}
       >
         <Section title="Identificação">
-          <label>
-            <span className={LABEL}>
-              Protocolo Voalle da GMUD {abrirNoElleven ? '' : '*'}
-            </span>
-            <input
-              className={cn(FIELD, abrirNoElleven && 'opacity-60')}
-              inputMode="numeric"
-              value={form.voalleProtocol}
-              disabled={abrirNoElleven}
-              onChange={(e) => set('voalleProtocol', e.target.value.replace(/\D/g, ''))}
-              placeholder={abrirNoElleven ? 'Será gerado no Elleven ao abrir' : 'Ex.: 1833914'}
-            />
-          </label>
           <label>
             <span className={LABEL}>Tipo da GMUD *</span>
             <select className={FIELD} value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
@@ -450,12 +417,10 @@ export function GmudNewScreen() {
           >
             {mutation.isPending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : abrirNoElleven ? (
-              <Zap className="size-4" aria-hidden />
             ) : (
-              <Send className="size-4" aria-hidden />
+              <Zap className="size-4" aria-hidden />
             )}
-            {abrirNoElleven ? 'Abrir GMUD no Elleven' : 'Registrar GMUD'}
+            {mutation.isPending ? 'Abrindo no Elleven…' : 'Abrir GMUD no Elleven'}
           </button>
         </div>
       </form>
