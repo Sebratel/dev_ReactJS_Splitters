@@ -37,8 +37,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function GmudNewScreen() {
   const navigate = useNavigate()
-  const profileEmail = useAccessAuthStore((s) => s.profile?.email ?? '')
-  const [form, setForm] = useState<GmudFormState>(() => emptyGmudForm(profileEmail))
+  const profile = useAccessAuthStore((s) => s.profile)
+  const [form, setForm] = useState<GmudFormState>(() =>
+    emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
+  )
   const [abrirNoElleven, setAbrirNoElleven] = useState(false)
   const idempotencyKeyRef = useRef<string | null>(null)
   const set = <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) =>
@@ -196,6 +198,10 @@ export function GmudNewScreen() {
               value={form.solicitanteEmail}
               onChange={(e) => set('solicitanteEmail', e.target.value)}
             />
+            <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+              Preenchido do seu login — edite se estiver abrindo para outra pessoa (define o
+              solicitante no Elleven).
+            </span>
           </label>
         </Section>
 

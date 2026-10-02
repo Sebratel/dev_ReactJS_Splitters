@@ -70,14 +70,14 @@ export type GmudFormState = {
   listaClientesCor: string
 }
 
-export function emptyGmudForm(prefillEmail = ''): GmudFormState {
+export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormState {
   return {
     voalleProtocol: '',
     tipo: '',
     titulo: '',
     descricao: '',
     popSite: '',
-    solicitanteNome: '',
+    solicitanteNome: prefillName,
     solicitanteEmail: prefillEmail,
     areaSolicitante: '',
     riscoNaoImplementacao: '',
