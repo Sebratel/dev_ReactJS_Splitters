@@ -7,6 +7,7 @@ import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
 import { openGmudInElleven } from '@/features/gmud/api/openGmudInElleven'
 import {
+  collectAmbienteAfetado,
   emptyGmudForm,
   GMUD_AMBIENTE_OPTIONS,
   GMUD_AREA_OPTIONS,
@@ -15,9 +16,11 @@ import {
   GMUD_RECURSO_PAPEIS,
   GMUD_SIM_NAO,
   GMUD_TIPO_OPTIONS,
+  validateGmudForm,
   type GmudFormState,
   type GmudRecursoPapel,
 } from '@/features/gmud/model/gmudForm'
+import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
@@ -42,6 +45,7 @@ export function GmudNewScreen() {
     emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
   )
   const [abrirNoElleven, setAbrirNoElleven] = useState(false)
+  const [missing, setMissing] = useState<string[]>([])
   const idempotencyKeyRef = useRef<string | null>(null)
   const set = <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -68,7 +72,11 @@ export function GmudNewScreen() {
         }
         protocol = String(result.protocol)
       }
-      await createGmud({ ...form, voalleProtocol: protocol })
+      await createGmud({
+        ...form,
+        voalleProtocol: protocol,
+        ambienteAfetado: collectAmbienteAfetado(form),
+      })
       return protocol
     },
     onSuccess: () => {
@@ -76,6 +84,12 @@ export function GmudNewScreen() {
       navigate('/gmud')
     },
   })
+
+  const handleSubmit = () => {
+    const miss = validateGmudForm(form, { abrirNoElleven })
+    setMissing(miss)
+    if (miss.length === 0) mutation.mutate()
+  }
 
   const toggleAmbiente = (opt: string) =>
     set(
@@ -88,12 +102,7 @@ export function GmudNewScreen() {
   const setRecurso = (area: string, papel: GmudRecursoPapel) =>
     set('recursosAdministrativos', { ...form.recursosAdministrativos, [area]: papel })
 
-  const canSubmit =
-    form.titulo.trim() !== '' &&
-    !mutation.isPending &&
-    (abrirNoElleven
-      ? form.solicitanteEmail.trim() !== '' && form.dataFim !== '' && form.horaFim !== ''
-      : form.voalleProtocol.trim() !== '')
+  const canSubmit = !mutation.isPending
 
   return (
     <div className="mx-auto min-w-0 max-w-[1100px] space-y-4">
@@ -135,7 +144,7 @@ export function GmudNewScreen() {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
-          if (canSubmit) mutation.mutate()
+          if (canSubmit) handleSubmit()
         }}
       >
         <Section title="Identificação">
@@ -207,7 +216,7 @@ export function GmudNewScreen() {
 
         <Section title="Atividade">
           <label className="sm:col-span-2">
-            <span className={LABEL}>Descrição da atividade</span>
+            <span className={LABEL}>Descrição da atividade *</span>
             <textarea
               className={cn(FIELD, 'min-h-[90px]')}
               value={form.descricao}
@@ -215,11 +224,15 @@ export function GmudNewScreen() {
             />
           </label>
           <label>
-            <span className={LABEL}>POP/Site</span>
-            <input className={FIELD} value={form.popSite} onChange={(e) => set('popSite', e.target.value)} />
+            <span className={LABEL}>POP/Site *</span>
+            <GmudPopSiteField
+              className={FIELD}
+              value={form.popSite}
+              onChange={(v) => set('popSite', v)}
+            />
           </label>
           <label>
-            <span className={LABEL}>Risco(s) da não implementação</span>
+            <span className={LABEL}>Risco(s) da não implementação *</span>
             <input
               className={FIELD}
               value={form.riscoNaoImplementacao}
@@ -229,7 +242,7 @@ export function GmudNewScreen() {
         </Section>
 
         <div className={CARD}>
-          <p className="mb-3 text-sm font-bold text-on-surface">Ambiente afetado</p>
+          <p className="mb-3 text-sm font-bold text-on-surface">Ambiente afetado *</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {GMUD_AMBIENTE_OPTIONS.map((opt) => (
               <label key={opt} className="flex items-center gap-2 text-sm text-on-surface">
@@ -243,11 +256,20 @@ export function GmudNewScreen() {
               </label>
             ))}
           </div>
+          <label className="mt-3 block">
+            <span className={LABEL}>Outro (especificar)</span>
+            <input
+              className={FIELD}
+              value={form.ambienteOutro}
+              onChange={(e) => set('ambienteOutro', e.target.value)}
+              placeholder="Se o ambiente não estiver na lista acima"
+            />
+          </label>
         </div>
 
         <Section title="Impacto">
           <label>
-            <span className={LABEL}>Comunica cliente?</span>
+            <span className={LABEL}>Comunica cliente? *</span>
             <select
               className={FIELD}
               value={form.comunicaCliente}
@@ -262,7 +284,7 @@ export function GmudNewScreen() {
             </select>
           </label>
           <label>
-            <span className={LABEL}>Haverá impacto de parada do serviço?</span>
+            <span className={LABEL}>Haverá impacto de parada do serviço? *</span>
             <select
               className={FIELD}
               value={form.impactoParada}
@@ -280,7 +302,7 @@ export function GmudNewScreen() {
 
         <Section title="Execução">
           <label className="sm:col-span-2">
-            <span className={LABEL}>Plano de execução da GMUD</span>
+            <span className={LABEL}>Plano de execução da GMUD *</span>
             <textarea
               className={cn(FIELD, 'min-h-[80px]')}
               value={form.planoExecucao}
@@ -288,7 +310,7 @@ export function GmudNewScreen() {
             />
           </label>
           <label className="sm:col-span-2">
-            <span className={LABEL}>Risco(s) durante a execução</span>
+            <span className={LABEL}>Risco(s) durante a execução *</span>
             <textarea
               className={cn(FIELD, 'min-h-[70px]')}
               value={form.riscoExecucao}
@@ -296,7 +318,7 @@ export function GmudNewScreen() {
             />
           </label>
           <label className="sm:col-span-2">
-            <span className={LABEL}>Plano de rollback (retorno)</span>
+            <span className={LABEL}>Plano de rollback (retorno) *</span>
             <textarea
               className={cn(FIELD, 'min-h-[70px]')}
               value={form.planoRollback}
@@ -343,7 +365,7 @@ export function GmudNewScreen() {
 
         <Section title="Janela de mudança">
           <label>
-            <span className={LABEL}>Data início</span>
+            <span className={LABEL}>Data início *</span>
             <input
               type="date"
               className={FIELD}
@@ -352,7 +374,7 @@ export function GmudNewScreen() {
             />
           </label>
           <label>
-            <span className={LABEL}>Horário início</span>
+            <span className={LABEL}>Horário início *</span>
             <input
               type="time"
               className={FIELD}
@@ -361,7 +383,7 @@ export function GmudNewScreen() {
             />
           </label>
           <label>
-            <span className={LABEL}>Data fim</span>
+            <span className={LABEL}>Data fim *</span>
             <input
               type="date"
               className={FIELD}
@@ -370,7 +392,7 @@ export function GmudNewScreen() {
             />
           </label>
           <label>
-            <span className={LABEL}>Horário fim (deadline)</span>
+            <span className={LABEL}>Horário fim (deadline) *</span>
             <input
               type="time"
               className={FIELD}
@@ -383,7 +405,7 @@ export function GmudNewScreen() {
         <Section title="Alinhamento">
           <label className="sm:col-span-2">
             <span className={LABEL}>
-              Caso necessário informar clientes, a lista de clientes impactados foi enviada ao COR?
+              Caso necessário informar clientes, a lista de clientes impactados foi enviada ao COR? *
             </span>
             <select
               className={FIELD}
@@ -399,6 +421,13 @@ export function GmudNewScreen() {
             </select>
           </label>
         </Section>
+
+        {missing.length > 0 ? (
+          <div className="rounded-xl border border-amber-300/70 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+            <p className="font-semibold">Preencha os campos obrigatórios:</p>
+            <p className="mt-1">{missing.join(' · ')}</p>
+          </div>
+        ) : null}
 
         {mutation.isError ? (
           <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">

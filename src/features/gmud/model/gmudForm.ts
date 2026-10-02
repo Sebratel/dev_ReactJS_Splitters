@@ -68,6 +68,43 @@ export type GmudFormState = {
   dataFim: string
   horaFim: string
   listaClientesCor: string
+  /** Texto livre do "Outro" em Ambiente afetado (opção que existe no Google Form). */
+  ambienteOutro: string
+}
+
+/** Junta o ambiente selecionado com o "Outro" (se preenchido) — o que vai pro banco. */
+export function collectAmbienteAfetado(form: GmudFormState): string[] {
+  const outro = form.ambienteOutro.trim()
+  return outro !== '' ? [...form.ambienteAfetado, `Outro: ${outro}`] : [...form.ambienteAfetado]
+}
+
+/** Valida os campos obrigatórios (paridade com o Google Form). Retorna os rótulos faltando. */
+export function validateGmudForm(
+  form: GmudFormState,
+  opts: { abrirNoElleven: boolean },
+): string[] {
+  const missing: string[] = []
+  const req = (ok: boolean, label: string) => {
+    if (!ok) missing.push(label)
+  }
+  if (!opts.abrirNoElleven) req(form.voalleProtocol.trim() !== '', 'Protocolo Voalle')
+  else req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
+  req(form.tipo !== '', 'Tipo da GMUD')
+  req(form.titulo.trim() !== '', 'Título')
+  req(form.descricao.trim() !== '', 'Descrição da atividade')
+  req(form.popSite.trim() !== '', 'POP/Site')
+  req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação')
+  req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado')
+  req(form.comunicaCliente !== '', 'Comunica cliente?')
+  req(form.impactoParada !== '', 'Impacto de parada?')
+  req(form.planoExecucao.trim() !== '', 'Plano de execução')
+  req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
+  req(Object.keys(form.recursosAdministrativos).length > 0, 'Recursos administrativos')
+  req(form.planoRollback.trim() !== '', 'Plano de rollback')
+  req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)')
+  req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)')
+  req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
+  return missing
 }
 
 export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormState {
@@ -93,5 +130,6 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     dataFim: '',
     horaFim: '',
     listaClientesCor: '',
+    ambienteOutro: '',
   }
 }
