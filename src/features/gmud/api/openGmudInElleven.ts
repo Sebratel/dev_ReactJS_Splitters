@@ -1,7 +1,32 @@
 import { bffClient } from '@/shared/api/bffClient'
+import { ApiError } from '@/shared/api/apiError'
 import { fetchEmployeePersonIdByEmail } from '@/features/massiva/api/fetchEmployeePersonIdByEmail'
 import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { GMUD_API_GATEWAY_DEFAULTS, GMUD_OPEN_PATH } from '@/features/gmud/model/gmudApiGateway'
+
+/** Extrai a mensagem real do corpo de erro do gateway (ApiResponse ou GlobalExceptionHandler). */
+function describeGatewayError(error: unknown): string {
+  if (error instanceof ApiError) {
+    try {
+      const parsed = JSON.parse(error.body) as {
+        message?: unknown
+        error?: unknown
+        details?: unknown
+      }
+      const parts: string[] = []
+      if (typeof parsed.message === 'string' && parsed.message.trim() !== '') parts.push(parsed.message.trim())
+      if (typeof parsed.error === 'string' && parsed.error.trim() !== '') parts.push(parsed.error.trim())
+      if (Array.isArray(parsed.details)) {
+        const d = parsed.details.map((x) => String(x).trim()).filter((s) => s !== '')
+        if (d.length > 0) parts.push(d.join(' | '))
+      }
+      if (parts.length > 0) return `Elleven recusou a abertura (HTTP ${error.status}): ${parts.join(' — ')}`
+    } catch {
+      if (error.body && error.body.trim() !== '') return `HTTP ${error.status}: ${error.body.slice(0, 400)}`
+    }
+  }
+  return error instanceof Error ? error.message : String(error)
+}
 
 export type OpenGmudResult = { protocol: number | null; assignmentId: number | null }
 
@@ -52,12 +77,17 @@ export async function openGmudInElleven(input: {
     affectedUsers: [],
   }
 
-  const data = await bffClient.request<Record<string, unknown>>({
-    path: GMUD_OPEN_PATH,
-    method: 'POST',
-    headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
-    body,
-  })
+  let data: Record<string, unknown>
+  try {
+    data = await bffClient.request<Record<string, unknown>>({
+      path: GMUD_OPEN_PATH,
+      method: 'POST',
+      headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
+      body,
+    })
+  } catch (error) {
+    throw new Error(describeGatewayError(error))
+  }
 
   const inner = (data?.data ?? data) as Record<string, unknown> | undefined
   if (inner?.success === false) {

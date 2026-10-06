@@ -6,7 +6,7 @@ import {
 
 /** 'yyyy-mm-dd' → 'dd/mm/yyyy'. */
 function fmtDate(iso: string): string {
-  if (!iso || iso.length < 10) return iso || '—'
+  if (!iso || iso.length < 10) return iso || '-'
   const [y, m, d] = iso.split('-')
   return d && m && y ? `${d}/${m}/${y}` : iso
 }
@@ -14,11 +14,11 @@ function fmtDate(iso: string): string {
 function fmtJanela(form: GmudFormState): string {
   const ini = form.dataInicio
     ? `${fmtDate(form.dataInicio)}${form.horaInicio ? ` ${form.horaInicio}` : ''}`
-    : '—'
+    : '-'
   const fim = form.dataFim
     ? `${fmtDate(form.dataFim)}${form.horaFim ? ` ${form.horaFim}` : ''}`
-    : '—'
-  return `${ini}  →  ${fim}`
+    : '-'
+  return `${ini}  ->  ${fim}`
 }
 
 /** Título padronizado: "GMUD - {Tipo} - {POP} - {Título}". */
@@ -31,12 +31,12 @@ export function buildGmudTitle(form: GmudFormState): string {
 }
 
 /**
- * Máscara estruturada da descrição que vai no protocolo do Elleven — organizada em blocos,
+ * Máscara estruturada da descrição que vai no protocolo do Elleven - organizada em blocos,
  * com todos os campos da GMUD. Elleven usa texto puro, então formatamos com rótulos/seções.
  */
 export function buildGmudDescription(form: GmudFormState): string {
   const out: string[] = []
-  const sep = '────────────────────────────────────────'
+  const sep = '----------------------------------------'
 
   const field = (label: string, value: string) => {
     const v = (value ?? '').trim()
@@ -46,12 +46,12 @@ export function buildGmudDescription(form: GmudFormState): string {
     const v = (value ?? '').trim()
     if (v === '') return
     out.push('')
-    out.push(`▸ ${title.toUpperCase()}`)
+    out.push(`>> ${title.toUpperCase()}`)
     out.push(v)
   }
 
   // Cabeçalho + resumo
-  out.push(`GESTÃO DE MUDANÇA DE REDE (GMUD)${form.tipo.trim() ? ` — ${form.tipo.trim()}` : ''}`)
+  out.push(`GESTÃO DE MUDANÇA DE REDE (GMUD)${form.tipo.trim() ? ` - ${form.tipo.trim()}` : ''}`)
   out.push(sep)
   field('POP/Site', form.popSite)
   field('Janela de mudança', fmtJanela(form))
@@ -73,7 +73,7 @@ export function buildGmudDescription(form: GmudFormState): string {
     riscos.push(`Durante a execução: ${form.riscoExecucao.trim()}`)
   if (riscos.length > 0) {
     out.push('')
-    out.push('▸ RISCOS')
+    out.push('>> RISCOS')
     riscos.forEach((r) => out.push(r))
   }
 
@@ -86,7 +86,7 @@ export function buildGmudDescription(form: GmudFormState): string {
     })
   if (recursos.length > 0) {
     out.push('')
-    out.push('▸ RECURSOS ADMINISTRATIVOS')
+    out.push('>> RECURSOS ADMINISTRATIVOS')
     out.push(recursos.join('  |  '))
   }
 
@@ -98,7 +98,7 @@ export function buildGmudDescription(form: GmudFormState): string {
   const solicEmail = form.solicitanteEmail.trim()
   if (solicNome !== '' || solicEmail !== '') {
     const email = solicEmail !== '' ? ` (${solicEmail})` : ''
-    const area = form.areaSolicitante.trim() !== '' ? ` — Área: ${form.areaSolicitante.trim()}` : ''
+    const area = form.areaSolicitante.trim() !== '' ? ` - Área: ${form.areaSolicitante.trim()}` : ''
     out.push(`Solicitante: ${solicNome}${email}${area}`)
   }
 
