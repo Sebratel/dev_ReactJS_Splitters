@@ -81,6 +81,8 @@ import {
   removeMassivaLink,
   getMassivaLinks,
   getMassivaLinkCounts,
+  listPendingGmuds,
+  getPendingGmudCount,
 } from './gmudStore.js';
 import logger, { captureConsole } from './logger.js';
 
@@ -4313,6 +4315,36 @@ app.post('/api/gmud/create', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao registrar a GMUD.',
+    });
+  }
+});
+
+// Fila de aprovação: GMUDs pendentes de decisão do Comitê (escopo completo). Só p/ aprovadores.
+app.get('/api/gmud/pending', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const items = await listPendingGmuds();
+    return res.json({ success: true, data: { items, total: items.length } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar as GMUDs pendentes.',
+    });
+  }
+});
+
+// Contador de GMUDs pendentes (badge do menu). Só p/ aprovadores.
+app.get('/api/gmud/pending-count', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const count = await getPendingGmudCount();
+    return res.json({ success: true, data: { count } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao contar GMUDs pendentes.',
     });
   }
 });

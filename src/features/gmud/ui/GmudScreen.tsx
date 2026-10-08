@@ -5,7 +5,9 @@ import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
+import { GmudApprovalQueue } from '@/features/gmud/ui/GmudApprovalQueue'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
+import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
@@ -31,7 +33,9 @@ export function GmudScreen() {
   const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
   const [linking, setLinking] = useState<GmudListItem | null>(null)
+  const [view, setView] = useState<'all' | 'pending'>('all')
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
+  const pendingCount = useGmudPendingCount()
 
   // Debounce simples da busca (reseta pra página 0 quando muda).
   useEffect(() => {
@@ -102,6 +106,43 @@ export function GmudScreen() {
         trailing={headerTrailing}
       />
 
+      {canApprove ? (
+        <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+          <button
+            type="button"
+            onClick={() => setView('all')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              view === 'all'
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+          >
+            Todas as GMUDs
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('pending')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              view === 'pending'
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+          >
+            Pendentes de aprovação
+            {pendingCount > 0 ? (
+              <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white">
+                {pendingCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
+      ) : null}
+
+      {view === 'pending' && canApprove ? (
+        <GmudApprovalQueue />
+      ) : (
       <div className={cn(CARD, 'overflow-hidden')}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 p-4 dark:border-white/10">
           <p className="text-sm font-bold text-on-surface">
@@ -234,6 +275,7 @@ export function GmudScreen() {
           </>
         )}
       </div>
+      )}
 
       {approving ? (
         <GmudApprovalModal

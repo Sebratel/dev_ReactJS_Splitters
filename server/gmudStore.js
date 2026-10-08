@@ -248,6 +248,71 @@ export async function setGmudApproval(input) {
   return { voalleProtocol: protocol, changed: true };
 }
 
+function toDateStr(value) {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const s = String(value);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+function toTimeStr(value) {
+  if (value == null) return null;
+  return String(value).slice(0, 5); // HH:mm
+}
+
+/** Mapeia uma linha do gmud_requests para o formato do app (camelCase, JSON parseado). */
+function mapGmudRow(r) {
+  return {
+    voalleProtocol: r.voalle_protocol != null ? Number(r.voalle_protocol) : null,
+    tipo: r.tipo ?? null,
+    titulo: r.titulo ?? null,
+    descricao: r.descricao ?? null,
+    popSite: r.pop_site ?? null,
+    solicitanteNome: r.solicitante_nome ?? null,
+    solicitanteEmail: r.solicitante_email ?? null,
+    areaSolicitante: r.area_solicitante ?? null,
+    riscoNaoImplementacao: r.risco_nao_implementacao ?? null,
+    ambienteAfetado: parseJsonColumn(r.ambiente_afetado),
+    comunicaCliente: r.comunica_cliente ?? null,
+    impactoParada: r.impacto_parada ?? null,
+    planoExecucao: r.plano_execucao ?? null,
+    riscoExecucao: r.risco_execucao ?? null,
+    recursosAdministrativos: parseJsonColumn(r.recursos_administrativos),
+    planoRollback: r.plano_rollback ?? null,
+    dataInicio: toDateStr(r.data_inicio),
+    horaInicio: toTimeStr(r.hora_inicio),
+    dataFim: toDateStr(r.data_fim),
+    horaFim: toTimeStr(r.hora_fim),
+    listaClientesCor: r.lista_clientes_cor ?? null,
+    statusComite: r.status_comite ?? null,
+    aprovadoPor: r.aprovado_por ?? null,
+    dataCab: toDateStr(r.data_cab),
+    rnc: r.rnc ?? null,
+    statusExec: r.status_exec ?? null,
+    createdByEmail: r.created_by_email ?? null,
+    createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+  };
+}
+
+/** Lista as GMUDs aguardando decisão do Comitê (status_comite = 'pendente'), escopo completo. */
+export async function listPendingGmuds() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE} WHERE status_comite = 'pendente' ORDER BY created_at DESC LIMIT 200`,
+  );
+  return rows.map(mapGmudRow);
+}
+
+/** Quantidade de GMUDs pendentes de aprovação (para o badge do menu). */
+export async function getPendingGmudCount() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente'`,
+  );
+  return Number(rows?.[0]?.total ?? 0);
+}
+
 /** Vincula uma massiva (por protocolo) a uma GMUD. Idempotente (dedupe por par). */
 export async function addMassivaLink(input) {
   await ensureTable();

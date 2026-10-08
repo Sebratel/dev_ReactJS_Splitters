@@ -16,6 +16,7 @@ import {
 import { cn } from '@/shared/lib/utils'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useHomeDashboardMassivaOpen } from '@/features/massiva/hooks/useHomeDashboardMassivaOpen'
+import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { prefetchNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
@@ -42,6 +43,7 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
   const canAccessGmud = useAccessAuthStore((s) => s.hasPermission('canViewGmud'))
   const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
   const { openCount } = useHomeDashboardMassivaOpen()
+  const gmudPendingCount = useGmudPendingCount()
 
   const isActive = (to: string) => {
     if (to === '/') return currentPath === '/'
@@ -68,7 +70,14 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
         ]
       : []),
     ...(canAccessGmud || isAdmin
-      ? [{ label: 'GMUD', icon: ClipboardList, to: '/gmud' }]
+      ? [
+          {
+            label: 'GMUD',
+            icon: ClipboardList,
+            to: '/gmud',
+            badge: gmudPendingCount > 0 ? gmudPendingCount : undefined,
+          },
+        ]
       : []),
     ...(isAdmin
       ? [
