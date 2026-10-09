@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Link2 } from 'lucide-react'
-import type { GmudListItem } from '@/features/gmud/model/gmud'
+import { ArrowDown, ArrowUp, ArrowUpDown, Link2 } from 'lucide-react'
+import type { GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { gmudDisplayTitle } from '@/features/gmud/lib/gmudTitle'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
@@ -29,28 +29,65 @@ function fmtDate(iso: string | null): string {
   return iso ? formatBrazilDateTimeShortDisplay(iso, '—') : '—'
 }
 
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+  className,
+}: {
+  label: string
+  column: GmudSortKey
+  sort: GmudSort
+  onSort: (key: GmudSortKey) => void
+  className?: string
+}) {
+  const active = sort.key === column
+  const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
+  return (
+    <th className={cn('px-4 py-2', className)} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={cn(
+          'inline-flex items-center gap-1 uppercase tracking-wide transition hover:text-on-surface',
+          active ? 'text-primary' : '',
+        )}
+        title={`Ordenar por ${label.toLowerCase()}`}
+      >
+        {label}
+        <Icon size={12} className={active ? '' : 'opacity-50'} />
+      </button>
+    </th>
+  )
+}
+
 /** Tabela do painel de GMUDs: título limpo, origem, prazo e Comitê, com link para o detalhe. */
 export function GmudListTable({
   items,
   canApprove,
   onLink,
   onApprove,
+  sort,
+  onSort,
 }: {
   items: GmudListItem[]
   canApprove: boolean
   onLink: (g: GmudListItem) => void
   onApprove: (g: GmudListItem) => void
+  sort: GmudSort
+  onSort: (key: GmudSortKey) => void
 }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-            <th className="px-4 py-2">GMUD</th>
-            <th className="px-4 py-2">Solicitante</th>
-            <th className="px-4 py-2">Abertura</th>
-            <th className="px-4 py-2">Prazo</th>
-            <th className="px-4 py-2">Voalle</th>
+            <SortHeader label="GMUD" column="protocolo" sort={sort} onSort={onSort} />
+            <SortHeader label="Solicitante" column="solicitante" sort={sort} onSort={onSort} />
+            <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} />
+            <SortHeader label="Prazo" column="prazo" sort={sort} onSort={onSort} />
+            <SortHeader label="Voalle" column="status" sort={sort} onSort={onSort} />
             <th className="px-4 py-2">Comitê</th>
             <th className="px-4 py-2 text-right">Ações</th>
           </tr>

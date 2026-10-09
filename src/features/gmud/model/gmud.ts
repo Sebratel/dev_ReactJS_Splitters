@@ -41,6 +41,10 @@ export type GmudExtra = {
 /** Filtros rápidos do painel (abertas/vencidas/minhas vêm do Voalle; Comitê/plataforma do nosso banco). */
 export type GmudListFilter = 'todas' | 'abertas' | 'vencidas' | 'comite_pendente' | 'aprovadas' | 'plataforma' | 'minhas'
 
+/** Colunas ordenáveis do painel (ordenação feita no servidor, sobre toda a lista). */
+export type GmudSortKey = 'protocolo' | 'solicitante' | 'abertura' | 'prazo' | 'status'
+export type GmudSort = { key: GmudSortKey; dir: 'asc' | 'desc' }
+
 export type GmudListResult = {
   items: GmudListItem[]
   total: number

@@ -4222,6 +4222,17 @@ app.get('/api/gmud/list', async (req, res) => {
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
     const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
     const filter = typeof req.query?.filter === 'string' ? req.query.filter : 'todas';
+    // Ordenação por coluna (whitelist — o valor nunca entra cru no SQL).
+    const SORT_COLUMNS = {
+      protocolo: 'ai.protocol',
+      solicitante: 'pe.name',
+      abertura: 'ai.date_to_start',
+      prazo: 'ai.responsible_final_date',
+      status: 'ist.title',
+    };
+    const sortColumn = SORT_COLUMNS[String(req.query?.sort ?? '')] ?? 'ai.protocol';
+    const sortDir = String(req.query?.dir ?? '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const orderBy = `${sortColumn} ${sortDir} NULLS LAST${sortColumn === 'ai.protocol' ? '' : ', ai.protocol DESC'}`;
 
     const params = [GMUD_INCIDENT_TYPE_ID];
     let searchClause = '';
@@ -4271,7 +4282,7 @@ app.get('/api/gmud/list', async (req, res) => {
         LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
         LEFT JOIN erp.people pe ON pe.id = ai.person_id
        WHERE ai.incident_type_id = $1${searchClause}
-       ORDER BY ai.protocol DESC
+       ORDER BY ${orderBy}
        LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`;
     const listResult = await pool.query(listSql, listParams);
 

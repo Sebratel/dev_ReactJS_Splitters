@@ -10,7 +10,7 @@ import { GmudCalendar } from '@/features/gmud/ui/GmudCalendar'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
-import type { GmudListFilter, GmudListItem } from '@/features/gmud/model/gmud'
+import type { GmudListFilter, GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
@@ -35,6 +35,17 @@ export function GmudScreen() {
   const [linking, setLinking] = useState<GmudListItem | null>(null)
   const [view, setView] = useState<'all' | 'pending' | 'agenda'>('all')
   const [filter, setFilter] = useState<GmudListFilter>('todas')
+  const [sort, setSort] = useState<GmudSort>({ key: 'protocolo', dir: 'desc' })
+  // Clique na mesma coluna inverte a direção; em outra coluna começa pela ordem mais útil
+  // (datas e protocolo: mais recentes primeiro; textos: A→Z).
+  const changeSort = (key: GmudSortKey) => {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'solicitante' || key === 'status' || key === 'prazo' ? 'asc' : 'desc' },
+    )
+    setPage(0)
+  }
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
   const pendingCount = useGmudPendingCount()
 
@@ -52,6 +63,7 @@ export function GmudScreen() {
     offset: page * PAGE_SIZE,
     q: appliedSearch,
     filter,
+    sort,
   })
 
   const total = data?.total ?? 0
@@ -210,7 +222,7 @@ export function GmudScreen() {
           </p>
         ) : (
           <>
-            <GmudListTable items={items} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} />
+            <GmudListTable items={items} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} sort={sort} onSort={changeSort} />
             {pageCount > 1 ? (
               <div className="flex items-center justify-between gap-2 border-t border-neutral-200/60 px-4 py-2.5 dark:border-white/5">
                 <span className="text-xs text-on-surface-variant">
