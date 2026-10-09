@@ -5,7 +5,9 @@ import type { GmudRecursoPapel } from '@/features/gmud/model/gmudForm'
 /** GMUD pendente de aprovação — escopo completo (do nosso banco) para o Comitê avaliar. */
 export type GmudPendingItem = {
   voalleProtocol: number | null
+  assignmentId: number | null
   tipo: string | null
+  assunto: string | null
   titulo: string | null
   descricao: string | null
   popSite: string | null
@@ -29,6 +31,8 @@ export type GmudPendingItem = {
   statusExec: string | null
   dataCab: string | null
   rnc: string | null
+  ellevenEncerradoEm: string | null
+  ellevenEncerradoStatus: string | null
   createdByEmail: string | null
   createdAt: string | null
 }

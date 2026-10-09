@@ -12,6 +12,21 @@ import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 
 const TABLE = 'gmud_requests';
 const LINKS_TABLE = 'gmud_massiva_links';
+/** Histórico (trilha) da GMUD: quem fez o quê e quando. Alimenta a linha do tempo e os indicadores. */
+const EVENTS_TABLE = 'gmud_events';
+export const GMUD_EVENT_TYPES = new Set([
+  'criada',
+  'comite_aprovada',
+  'comite_negada',
+  'comite_pendente',
+  'execucao_em_execucao',
+  'execucao_concluida',
+  'execucao_pendente',
+  'encerrada_elleven',
+  'reagendada',
+  'massiva_vinculada',
+  'massiva_desvinculada',
+]);
 
 let dataPool = null;
 let readyPromise = null;
@@ -76,7 +91,9 @@ async function ensureTable() {
       CREATE TABLE IF NOT EXISTS ${TABLE} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         voalle_protocol BIGINT UNSIGNED NULL,
+        assignment_id BIGINT UNSIGNED NULL,
         tipo VARCHAR(32) NULL,
+        assunto VARCHAR(80) NULL,
         titulo VARCHAR(512) NULL,
         descricao TEXT NULL,
         pop_site VARCHAR(191) NULL,
@@ -101,6 +118,8 @@ async function ensureTable() {
         data_cab DATE NULL,
         rnc VARCHAR(255) NULL,
         status_exec VARCHAR(16) NOT NULL DEFAULT 'pendente',
+        elleven_encerrado_em DATETIME NULL,
+        elleven_encerrado_status VARCHAR(16) NULL,
         created_by_email VARCHAR(191) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -121,11 +140,44 @@ async function ensureTable() {
         INDEX idx_${LINKS_TABLE}_massiva (massiva_protocol)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${EVENTS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        voalle_protocol BIGINT UNSIGNED NOT NULL,
+        event_type VARCHAR(32) NOT NULL,
+        actor VARCHAR(191) NULL,
+        payload JSON NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_${EVENTS_TABLE}_protocol (voalle_protocol, created_at),
+        INDEX idx_${EVENTS_TABLE}_type (event_type, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Migração idempotente: adiciona colunas novas em tabelas já existentes (o CREATE acima só
+    // vale para instalações novas). MySQL não tem "ADD COLUMN IF NOT EXISTS", então checamos antes.
+    await ensureColumn(pool, TABLE, 'assignment_id', 'BIGINT UNSIGNED NULL AFTER voalle_protocol');
+    await ensureColumn(pool, TABLE, 'assunto', 'VARCHAR(80) NULL AFTER tipo');
+    await ensureColumn(pool, TABLE, 'elleven_encerrado_em', 'DATETIME NULL');
+    await ensureColumn(pool, TABLE, 'elleven_encerrado_status', 'VARCHAR(16) NULL');
+    // Quando o Comitê decidiu (aprovada/negada) — base do "tempo até a decisão".
+    await ensureColumn(pool, TABLE, 'decidido_em', 'DATETIME NULL AFTER aprovado_por');
   })().catch((error) => {
     readyPromise = null;
     throw error;
   });
   return readyPromise;
+}
+
+/** Adiciona uma coluna à tabela se ela ainda não existir (migração idempotente). */
+async function ensureColumn(pool, table, column, definition) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS c FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, column],
+  );
+  if (Number(rows?.[0]?.c ?? 0) > 0) return;
+  await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 function jsonOrNull(value) {
@@ -154,7 +206,9 @@ export async function createGmudRequest(input) {
   const protocol = normalizePositiveInt(input.voalleProtocol);
   const row = {
     voalle_protocol: protocol,
+    assignment_id: normalizePositiveInt(input.assignmentId),
     tipo: toCleanString(input.tipo) || null,
+    assunto: toCleanString(input.assunto) || null,
     titulo: toCleanString(input.titulo) || null,
     descricao: toCleanString(input.descricao) || null,
     pop_site: toCleanString(input.popSite) || null,
@@ -186,7 +240,8 @@ export async function createGmudRequest(input) {
   // UPSERT pelo protocolo (reenvio do mesmo protocolo atualiza os campos, não duplica).
   const updates = cols
     .filter((c) => c !== 'voalle_protocol')
-    .map((c) => `${c} = VALUES(${c})`)
+    // assignment_id: não sobrescreve um valor já existente com null (re-create sem o id).
+    .map((c) => (c === 'assignment_id' ? `${c} = COALESCE(VALUES(${c}), ${c})` : `${c} = VALUES(${c})`))
     .join(', ');
   const sql = `INSERT INTO ${TABLE} (${cols.join(', ')}) VALUES (${placeholders})
                ${protocol ? `ON DUPLICATE KEY UPDATE ${updates}` : ''}`;
@@ -197,6 +252,8 @@ export async function createGmudRequest(input) {
 
 const STATUS_COMITE = new Set(['pendente', 'aprovada', 'negada']);
 const STATUS_EXEC = new Set(['pendente', 'em_execucao', 'concluida']);
+// Motivo do encerramento no Elleven: 'concluida' (GMUD concluída) ou 'negada' (reprovada pelo Comitê).
+const STATUS_EXEC_OR_NEGADA = new Set(['concluida', 'negada']);
 
 /**
  * Aplica a decisão do Comitê (e status de execução) a uma GMUD, por protocolo.
@@ -215,14 +272,37 @@ export async function setGmudApproval(input) {
   const aprovadoPor = toCleanString(input.aprovadoPor) || null;
   const dataCab = toCleanString(input.dataCab) || null;
   const rnc = toCleanString(input.rnc) || null;
+  // Encerramento no Elleven já efetivado pelo frontend: marca data + status ('concluida'/'negada')
+  // para o painel exibir e para evitar re-encerrar. Enviado como { status } em input.ellevenEncerrado.
+  const ellevenStatus =
+    input.ellevenEncerrado && STATUS_EXEC_OR_NEGADA.has(input.ellevenEncerrado.status)
+      ? input.ellevenEncerrado.status
+      : null;
+
+  // Estado anterior: para registrar só o que mudou (trilha) e carimbar a data da decisão.
+  const [prevRows] = await pool.query(
+    `SELECT status_comite, status_exec, elleven_encerrado_em FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`,
+    [protocol],
+  );
+  const prev = prevRows?.[0] ?? null;
+  const prevComite = prev?.status_comite ?? null;
+  const prevExec = prev?.status_exec ?? null;
+  const changes = [];
+  if (statusComite !== null && statusComite !== prevComite) changes.push(`comite_${statusComite}`);
+  if (statusExec !== null && statusExec !== prevExec) changes.push(`execucao_${statusExec}`);
+  if (ellevenStatus !== null && !prev?.elleven_encerrado_em) changes.push('encerrada_elleven');
+  const decidiu =
+    statusComite !== null && statusComite !== prevComite && (statusComite === 'aprovada' || statusComite === 'negada');
 
   // Monta dinamicamente só os campos enviados (demais ficam intactos no UPDATE).
   const sets = [];
   const insertCols = ['voalle_protocol'];
   const insertVals = [protocol];
-  const pushField = (col, value, always = false) => {
-    if (value === null && !always) return;
+  const rawSets = []; // expressões de UPDATE (podem usar NOW())
+  const pushField = (col, value) => {
+    if (value === null) return;
     sets.push(`${col} = ?`);
+    rawSets.push({ raw: false, value });
     insertCols.push(col);
     insertVals.push(value);
   };
@@ -231,21 +311,161 @@ export async function setGmudApproval(input) {
   pushField('aprovado_por', aprovadoPor);
   pushField('data_cab', dataCab);
   pushField('rnc', rnc);
+  if (ellevenStatus !== null) {
+    // Timestamp via NOW() (não placeholder) + o status do encerramento.
+    sets.push('elleven_encerrado_em = NOW()');
+    rawSets.push({ raw: true });
+    insertCols.push('elleven_encerrado_em');
+    insertVals.push(new Date());
+    pushField('elleven_encerrado_status', ellevenStatus);
+  }
+  if (decidiu) {
+    sets.push('decidido_em = NOW()');
+    rawSets.push({ raw: true });
+    insertCols.push('decidido_em');
+    insertVals.push(new Date());
+  }
 
-  if (sets.length === 0) return { voalleProtocol: protocol, changed: false };
+  if (sets.length === 0) return { voalleProtocol: protocol, changed: false, changes: [] };
 
   const placeholders = insertCols.map(() => '?').join(', ');
   const sql = `INSERT INTO ${TABLE} (${insertCols.join(', ')}) VALUES (${placeholders})
                ON DUPLICATE KEY UPDATE ${sets.join(', ')}`;
-  // Params: primeiro o INSERT (insertVals), depois o UPDATE (os mesmos valores dos sets, na ordem).
-  const updateVals = [];
-  if (statusComite !== null) updateVals.push(statusComite);
-  if (statusExec !== null) updateVals.push(statusExec);
-  if (aprovadoPor !== null) updateVals.push(aprovadoPor);
-  if (dataCab !== null) updateVals.push(dataCab);
-  if (rnc !== null) updateVals.push(rnc);
+  // Params: primeiro o INSERT (insertVals), depois o UPDATE (só os sets com placeholder, na ordem).
+  const updateVals = rawSets.filter((s) => !s.raw).map((s) => s.value);
   await pool.query(sql, [...insertVals, ...updateVals]);
-  return { voalleProtocol: protocol, changed: true };
+  return { voalleProtocol: protocol, changed: true, changes };
+}
+
+/**
+ * Registra um evento na trilha da GMUD. Best-effort: falha aqui nunca derruba a ação principal
+ * (a trilha é auditoria/indicador, não regra de negócio).
+ */
+export async function logGmudEvent(input) {
+  try {
+    await ensureTable();
+    const protocol = normalizePositiveInt(input?.voalleProtocol);
+    const type = toCleanString(input?.type);
+    if (!protocol || !GMUD_EVENT_TYPES.has(type)) return;
+    const pool = getMysqlPool();
+    await pool.query(
+      `INSERT INTO ${EVENTS_TABLE} (voalle_protocol, event_type, actor, payload) VALUES (?, ?, ?, ?)`,
+      [protocol, type, toCleanString(input.actor) || null, jsonOrNull(input.payload ?? null)],
+    );
+  } catch (error) {
+    console.warn('[gmud] falha ao registrar evento:', error?.message ?? error);
+  }
+}
+
+/** Trilha completa de uma GMUD (mais antigo → mais recente). */
+export async function getGmudEvents(protocol) {
+  await ensureTable();
+  const id = normalizePositiveInt(protocol);
+  if (!id) return [];
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT event_type, actor, payload, created_at FROM ${EVENTS_TABLE}
+      WHERE voalle_protocol = ? ORDER BY created_at, id LIMIT 500`,
+    [id],
+  );
+  return rows.map((r) => ({
+    type: r.event_type,
+    actor: r.actor ?? null,
+    payload: parseJsonColumn(r.payload),
+    at: r.created_at ? new Date(r.created_at).toISOString() : null,
+  }));
+}
+
+/** Protocolos registrados na plataforma, opcionalmente filtrados por status do Comitê. */
+export async function listRegisteredGmudProtocols(statusesComite = null) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const statuses = Array.isArray(statusesComite) ? statusesComite.filter((s) => STATUS_COMITE.has(s)) : null;
+  const [rows] = statuses && statuses.length > 0
+    ? await pool.query(
+        `SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL AND status_comite IN (${statuses.map(() => '?').join(', ')})`,
+        statuses,
+      )
+    : await pool.query(`SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL`);
+  return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/** GMUDs registradas na plataforma com created_at no período [from, to] (YYYY-MM-DD). */
+export async function listGmudRequestsCreatedBetween(from, to) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE} WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) LIMIT 5000`,
+    [from, to],
+  );
+  return rows.map(mapGmudRow);
+}
+
+/** Eventos da trilha no período (para contagens como reagendamentos). */
+export async function listGmudEventsBetween(from, to) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, event_type FROM ${EVENTS_TABLE}
+      WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) LIMIT 20000`,
+    [from, to],
+  );
+  return rows.map((r) => ({ voalleProtocol: Number(r.voalle_protocol), type: r.event_type }));
+}
+
+/**
+ * Vínculos GMUD↔massiva com os clientes afetados de cada massiva (histórico local da massiva,
+ * mesmo banco). Se a tabela de massivas não existir, devolve afetados = null.
+ */
+export async function getLinksWithAffected(gmudProtocols) {
+  await ensureTable();
+  const ids = [...new Set((gmudProtocols ?? []).map(normalizePositiveInt).filter(Boolean))];
+  if (ids.length === 0) return [];
+  const pool = getMysqlPool();
+  const placeholders = ids.map(() => '?').join(', ');
+  try {
+    const [rows] = await pool.query(
+      `SELECT l.gmud_protocol, l.massiva_protocol, l.created_at,
+              (SELECT MAX(mh.affected_clients) FROM massiva_history mh WHERE mh.protocol = l.massiva_protocol) AS affected,
+              (SELECT mh.title FROM massiva_history mh WHERE mh.protocol = l.massiva_protocol ORDER BY mh.id DESC LIMIT 1) AS title,
+              (SELECT mh.status FROM massiva_history mh WHERE mh.protocol = l.massiva_protocol ORDER BY mh.id DESC LIMIT 1) AS status
+         FROM ${LINKS_TABLE} l
+        WHERE l.gmud_protocol IN (${placeholders})`,
+      ids,
+    );
+    return rows.map((r) => ({
+      gmudProtocol: Number(r.gmud_protocol),
+      massivaProtocol: Number(r.massiva_protocol),
+      affectedClients: r.affected != null ? Number(r.affected) : null,
+      title: r.title ?? null,
+      status: r.status ?? null,
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+    }));
+  } catch (error) {
+    console.warn('[gmud] vínculos sem afetados (massiva_history indisponível):', error?.message ?? error);
+    const [rows] = await pool.query(
+      `SELECT gmud_protocol, massiva_protocol, created_at FROM ${LINKS_TABLE} WHERE gmud_protocol IN (${placeholders})`,
+      ids,
+    );
+    return rows.map((r) => ({
+      gmudProtocol: Number(r.gmud_protocol),
+      massivaProtocol: Number(r.massiva_protocol),
+      affectedClients: null,
+      title: null,
+      status: null,
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+    }));
+  }
+}
+
+/** Uma GMUD registrada na plataforma (escopo completo), ou null. */
+export async function getGmudRequest(protocol) {
+  await ensureTable();
+  const id = normalizePositiveInt(protocol);
+  if (!id) return null;
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`, [id]);
+  return rows?.[0] ? mapGmudRow(rows[0]) : null;
 }
 
 function toDateStr(value) {
@@ -263,7 +483,9 @@ function toTimeStr(value) {
 function mapGmudRow(r) {
   return {
     voalleProtocol: r.voalle_protocol != null ? Number(r.voalle_protocol) : null,
+    assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
     tipo: r.tipo ?? null,
+    assunto: r.assunto ?? null,
     titulo: r.titulo ?? null,
     descricao: r.descricao ?? null,
     popSite: r.pop_site ?? null,
@@ -285,9 +507,12 @@ function mapGmudRow(r) {
     listaClientesCor: r.lista_clientes_cor ?? null,
     statusComite: r.status_comite ?? null,
     aprovadoPor: r.aprovado_por ?? null,
+    decididoEm: r.decidido_em ? new Date(r.decidido_em).toISOString() : null,
     dataCab: toDateStr(r.data_cab),
     rnc: r.rnc ?? null,
     statusExec: r.status_exec ?? null,
+    ellevenEncerradoEm: r.elleven_encerrado_em ? new Date(r.elleven_encerrado_em).toISOString() : null,
+    ellevenEncerradoStatus: r.elleven_encerrado_status ?? null,
     createdByEmail: r.created_by_email ?? null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
   };
@@ -311,6 +536,101 @@ export async function getPendingGmudCount() {
     `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente'`,
   );
   return Number(rows?.[0]?.total ?? 0);
+}
+
+/**
+ * Status do Comitê de uma GMUD (por protocolo), para o guard de "disponibilização".
+ * Retorna null se a GMUD não tem linha local (nunca registrada/aprovada).
+ */
+export async function getGmudApprovalStatus(protocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(protocol);
+  if (!id) return null;
+  const [rows] = await pool.query(
+    `SELECT status_comite FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`,
+    [id],
+  );
+  return rows?.[0]?.status_comite ?? null;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+/**
+ * Agenda: GMUDs **aprovadas** pelo Comitê cuja janela (data_inicio..data_fim) cruza o intervalo
+ * [from, to] (datas YYYY-MM-DD). Pendente/negada não entra na agenda (regra de disponibilização).
+ */
+export async function listScheduledGmuds(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const from = toCleanString(input?.from);
+  const to = toCleanString(input?.to);
+  if (!DATE_RE.test(from) || !DATE_RE.test(to)) throw buildError('Intervalo de datas inválido.', 400);
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE}
+      WHERE status_comite = 'aprovada'
+        AND data_inicio IS NOT NULL
+        AND data_inicio <= ?
+        AND COALESCE(data_fim, data_inicio) >= ?
+      ORDER BY data_inicio, hora_inicio
+      LIMIT 500`,
+    [to, from],
+  );
+  return rows.map(mapGmudRow);
+}
+
+/**
+ * Reagenda a janela de uma GMUD (só no nosso banco). Exige GMUD aprovada e não encerrada no
+ * Elleven. Retorna a janela anterior e a nova — o frontend registra o relato no protocolo.
+ */
+export async function rescheduleGmud(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(input?.voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido para reagendamento.', 400);
+
+  const next = {
+    dataInicio: toCleanString(input.dataInicio),
+    horaInicio: toCleanString(input.horaInicio),
+    dataFim: toCleanString(input.dataFim),
+    horaFim: toCleanString(input.horaFim),
+  };
+  if (!DATE_RE.test(next.dataInicio) || !DATE_RE.test(next.dataFim)) {
+    throw buildError('Datas da nova janela inválidas.', 400);
+  }
+  if (!TIME_RE.test(next.horaInicio) || !TIME_RE.test(next.horaFim)) {
+    throw buildError('Horários da nova janela inválidos.', 400);
+  }
+  if (`${next.dataFim} ${next.horaFim}` <= `${next.dataInicio} ${next.horaInicio}`) {
+    throw buildError('O fim da janela deve ser depois do início.', 400);
+  }
+
+  const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`, [protocol]);
+  const current = rows?.[0];
+  if (!current) throw buildError('GMUD não registrada na plataforma.', 404);
+  if (current.status_comite !== 'aprovada') {
+    throw buildError('Só GMUD aprovada pelo Comitê pode ser reagendada.', 409);
+  }
+  if (current.elleven_encerrado_em) throw buildError('GMUD já encerrada no Elleven.', 409);
+
+  const previous = mapGmudRow(current);
+  await pool.query(
+    `UPDATE ${TABLE} SET data_inicio = ?, hora_inicio = ?, data_fim = ?, hora_fim = ?
+      WHERE voalle_protocol = ?`,
+    [next.dataInicio, next.horaInicio, next.dataFim, next.horaFim, protocol],
+  );
+  return {
+    voalleProtocol: protocol,
+    assignmentId: previous.assignmentId,
+    previous: {
+      dataInicio: previous.dataInicio,
+      horaInicio: previous.horaInicio,
+      dataFim: previous.dataFim,
+      horaFim: previous.horaFim,
+    },
+    next,
+  };
 }
 
 /** Vincula uma massiva (por protocolo) a uma GMUD. Idempotente (dedupe por par). */
@@ -383,15 +703,18 @@ export async function getGmudExtrasByProtocols(protocols) {
   if (ids.length === 0) return new Map();
   const placeholders = ids.map(() => '?').join(', ');
   const [rows] = await pool.query(
-    `SELECT voalle_protocol, tipo, pop_site, impacto_parada, comunica_cliente,
-            status_comite, status_exec, rnc, data_cab, ambiente_afetado
+    `SELECT voalle_protocol, assignment_id, tipo, assunto, pop_site, impacto_parada, comunica_cliente,
+            status_comite, status_exec, rnc, data_cab, ambiente_afetado,
+            elleven_encerrado_em, elleven_encerrado_status
        FROM ${TABLE} WHERE voalle_protocol IN (${placeholders})`,
     ids,
   );
   const map = new Map();
   for (const r of rows) {
     map.set(Number(r.voalle_protocol), {
+      assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
       tipo: r.tipo ?? null,
+      assunto: r.assunto ?? null,
       popSite: r.pop_site ?? null,
       impactoParada: r.impacto_parada ?? null,
       comunicaCliente: r.comunica_cliente ?? null,
@@ -400,6 +723,8 @@ export async function getGmudExtrasByProtocols(protocols) {
       rnc: r.rnc ?? null,
       dataCab: r.data_cab ? new Date(r.data_cab).toISOString().slice(0, 10) : null,
       ambienteAfetado: parseJsonColumn(r.ambiente_afetado),
+      ellevenEncerradoEm: r.elleven_encerrado_em ? new Date(r.elleven_encerrado_em).toISOString() : null,
+      ellevenEncerradoStatus: r.elleven_encerrado_status ?? null,
     });
   }
   return map;

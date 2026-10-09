@@ -326,6 +326,7 @@ export function MassivaOpenDraftFields({
                   { value: 'tecnico', label: 'Técnico' },
                   { value: 'zabbix',  label: 'Zabbix'  },
                   { value: 'int6',    label: 'INT6'     },
+                  { value: 'gmud',    label: 'GMUD'     },
                 ] as const
               ).map(({ value, label }) => (
                 <button

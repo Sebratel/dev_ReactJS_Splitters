@@ -11,6 +11,7 @@ import {
   emptyGmudForm,
   GMUD_AMBIENTE_OPTIONS,
   GMUD_AREA_OPTIONS,
+  GMUD_ASSUNTO_OPTIONS,
   GMUD_LISTA_COR,
   GMUD_RECURSO_AREAS,
   GMUD_RECURSO_PAPEIS,
@@ -73,6 +74,7 @@ export function GmudNewScreen() {
       await createGmud({
         ...form,
         voalleProtocol: protocol,
+        assignmentId: result.assignmentId,
         ambienteAfetado: collectAmbienteAfetado(form),
       })
       return protocol
@@ -134,6 +136,17 @@ export function GmudNewScreen() {
             <select className={FIELD} value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
               <option value="">Escolher…</option>
               {GMUD_TIPO_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className={LABEL}>Assunto da mudança *</span>
+            <select className={FIELD} value={form.assunto} onChange={(e) => set('assunto', e.target.value)}>
+              <option value="">Escolher…</option>
+              {GMUD_ASSUNTO_OPTIONS.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>

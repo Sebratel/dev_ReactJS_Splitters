@@ -83,7 +83,18 @@ import {
   getMassivaLinkCounts,
   listPendingGmuds,
   getPendingGmudCount,
+  getGmudApprovalStatus,
+  listScheduledGmuds,
+  rescheduleGmud,
+  logGmudEvent,
+  getGmudEvents,
+  getGmudRequest,
+  listGmudRequestsCreatedBetween,
+  listGmudEventsBetween,
+  getLinksWithAffected,
+  listRegisteredGmudProtocols,
 } from './gmudStore.js';
+import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -4203,13 +4214,14 @@ const GMUD_INCIDENT_TYPE_ID = 1084;
 
 app.get('/api/gmud/list', async (req, res) => {
   try {
-    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
 
     const rawLimit = Number.parseInt(String(req.query?.limit ?? ''), 10);
     const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit <= 500 ? rawLimit : 100;
     const rawOffset = Number.parseInt(String(req.query?.offset ?? ''), 10);
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
     const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const filter = typeof req.query?.filter === 'string' ? req.query.filter : 'todas';
 
     const params = [GMUD_INCIDENT_TYPE_ID];
     let searchClause = '';
@@ -4217,11 +4229,26 @@ app.get('/api/gmud/list', async (req, res) => {
       params.push(`%${search}%`);
       searchClause = ` AND (ai.protocol::text ILIKE $${params.length} OR a.title ILIKE $${params.length} OR pe.name ILIKE $${params.length})`;
     }
+    // Filtros rápidos. Os do Voalle (abertas/vencidas/minhas) são SQL; os da plataforma
+    // (Comitê/registradas) usam a lista de protocolos do nosso MySQL.
+    const OPEN_SQL = ` AND a.conclusion_date IS NULL AND COALESCE(ist.title, '') NOT ILIKE '%cancel%'`;
+    if (filter === 'abertas') searchClause += OPEN_SQL;
+    else if (filter === 'vencidas') searchClause += `${OPEN_SQL} AND ai.responsible_final_date < now()`;
+    else if (filter === 'minhas') {
+      params.push(String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase());
+      searchClause += ` AND lower(pe.email) = $${params.length}`;
+    } else if (['comite_pendente', 'aprovadas', 'plataforma'].includes(filter)) {
+      const statuses = filter === 'comite_pendente' ? ['pendente'] : filter === 'aprovadas' ? ['aprovada'] : null;
+      const protocols = await listRegisteredGmudProtocols(statuses);
+      params.push(protocols.length > 0 ? protocols : [0]);
+      searchClause += ` AND ai.protocol = ANY($${params.length}::bigint[])`;
+    }
 
     const countSql = `
       SELECT COUNT(*)::int AS total
         FROM erp.assignment_incidents ai
         JOIN erp.assignments a ON a.id = ai.assignment_id
+        LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
         LEFT JOIN erp.people pe ON pe.id = ai.person_id
        WHERE ai.incident_type_id = $1${searchClause}`;
     const countResult = await pool.query(countSql, params);
@@ -4230,6 +4257,7 @@ app.get('/api/gmud/list', async (req, res) => {
     const listParams = [...params, limit, offset];
     const listSql = `
       SELECT ai.protocol::bigint AS protocol,
+             ai.assignment_id::bigint AS assignment_id,
              a.title,
              a.description,
              ai.date_to_start AS opened_at,
@@ -4249,6 +4277,7 @@ app.get('/api/gmud/list', async (req, res) => {
 
     const baseItems = (listResult.rows ?? []).map((r) => ({
       protocol: Number(r.protocol),
+      assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
       title: r.title ?? '',
       description: r.description ?? '',
       openedAt: r.opened_at ? new Date(r.opened_at).toISOString() : null,
@@ -4272,11 +4301,18 @@ app.get('/api/gmud/list', async (req, res) => {
     } catch (extraError) {
       logger.warn('[gmud] Falha ao enriquecer lista com campos locais (segue só Voalle): %s', extraError?.message);
     }
-    const items = baseItems.map((i) => ({
-      ...i,
-      extra: extras.get(i.protocol) ?? null,
-      massivaLinksCount: linkCounts.get(i.protocol) ?? 0,
-    }));
+    const items = baseItems.map((i) => {
+      const extra = extras.get(i.protocol) ?? null;
+      // assignmentId para o encerramento no Elleven: prioriza o do nosso banco (gravado na abertura);
+      // se faltar (GMUD antiga/só no Voalle), usa o do Voalle (assignment_incidents.assignment_id).
+      const assignmentId = extra?.assignmentId ?? i.assignmentId ?? null;
+      return {
+        ...i,
+        assignmentId,
+        extra: extra ? { ...extra, assignmentId } : null,
+        massivaLinksCount: linkCounts.get(i.protocol) ?? 0,
+      };
+    });
 
     return res.json({ success: true, data: { items, total, limit, offset } });
   } catch (error) {
@@ -4309,6 +4345,12 @@ app.post('/api/gmud/create', async (req, res) => {
       actor?.profile?.email || actor?.identity?.email || String(body.solicitanteEmail ?? '');
 
     const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
+    await logGmudEvent({
+      voalleProtocol,
+      type: 'criada',
+      actor: gmudActorName(actor) || createdByEmail,
+      payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
+    });
     return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
@@ -4367,13 +4409,226 @@ app.post('/api/gmud/approval', async (req, res) => {
       dataCab: body.dataCab,
       rnc: body.rnc,
       aprovadoPor,
+      ellevenEncerrado:
+        body.ellevenEncerrado && typeof body.ellevenEncerrado === 'object'
+          ? { status: String(body.ellevenEncerrado.status ?? '') }
+          : null,
     });
+    for (const type of result.changes ?? []) {
+      await logGmudEvent({
+        voalleProtocol,
+        type,
+        actor: aprovadoPor,
+        payload: type === 'encerrada_elleven'
+          ? { motivo: String(body.ellevenEncerrado?.status ?? '') }
+          : { dataCab: body.dataCab ?? null, rnc: body.rnc ?? null },
+      });
+    }
     return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: error instanceof Error ? error.message : 'Falha ao registrar a aprovação.',
+    });
+  }
+});
+
+/** Nome legível de quem executou a ação (trilha da GMUD). */
+function gmudActorName(actor) {
+  return actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || '';
+}
+
+/** Todas as GMUDs do Voalle (histórico completo, poucas centenas) — base dos indicadores. */
+async function fetchVoalleGmudRows(protocol = null) {
+  const params = [GMUD_INCIDENT_TYPE_ID];
+  let extra = '';
+  if (protocol) {
+    params.push(protocol);
+    extra = ' AND ai.protocol = $2';
+  }
+  const result = await pool.query(
+    `SELECT ai.protocol::bigint AS protocol,
+            ai.assignment_id::bigint AS assignment_id,
+            a.title,
+            a.description,
+            ai.date_to_start AS opened_at,
+            ai.responsible_final_date AS sla_date,
+            a.conclusion_date,
+            ai.incident_status_id AS status_id,
+            ist.title AS status,
+            pe.name AS requester,
+            pe.email AS requester_email
+       FROM erp.assignment_incidents ai
+       JOIN erp.assignments a ON a.id = ai.assignment_id
+       LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+       LEFT JOIN erp.people pe ON pe.id = ai.person_id
+      WHERE ai.incident_type_id = $1${extra}`,
+    params,
+  );
+  return (result.rows ?? []).map((r) => ({
+    protocol: Number(r.protocol),
+    assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+    title: r.title ?? '',
+    description: r.description ?? '',
+    openedAt: r.opened_at ? new Date(r.opened_at).toISOString() : null,
+    slaDate: r.sla_date ? new Date(r.sla_date).toISOString() : null,
+    conclusionDate: r.conclusion_date ? new Date(r.conclusion_date).toISOString() : null,
+    statusId: r.status_id != null ? Number(r.status_id) : null,
+    status: r.status ?? '',
+    requester: r.requester ?? '',
+    requesterEmail: r.requester_email ?? '',
+  }));
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// Indicadores de GMUD: histórico do Voalle (foto de agora + fluxo do período) e dados da plataforma.
+app.get('/api/gmud/indicators', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const today = new Date();
+    const defaultFrom = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = ISO_DAY.test(String(req.query?.from ?? '')) ? String(req.query.from) : fmt(defaultFrom);
+    const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
+    if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
+
+    const voalleRows = await fetchVoalleGmudRows();
+    const voalle = aggregateVoalle(voalleRows, { from, to });
+
+    let platform = null;
+    let platformError = null;
+    try {
+      const requests = await listGmudRequestsCreatedBetween(from, to);
+      const events = await listGmudEventsBetween(from, to);
+      const links = await getLinksWithAffected(requests.map((r) => r.voalleProtocol));
+      platform = aggregatePlatform(requests, events, links);
+    } catch (error) {
+      platformError = error instanceof Error ? error.message : 'Dados da plataforma indisponíveis.';
+    }
+
+    return res.json({ success: true, data: { from, to, generatedAt: today.toISOString(), voalle, platform, platformError } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao calcular os indicadores de GMUD.',
+    });
+  }
+});
+
+// Detalhe de uma GMUD: dados do Voalle + escopo da plataforma + trilha + massivas vinculadas.
+app.get('/api/gmud/:protocol/detail', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const [voalle] = await fetchVoalleGmudRows(protocol);
+    if (!voalle) return res.status(404).json({ success: false, message: 'GMUD não encontrada no Voalle.' });
+    const [request, events, links] = await Promise.all([
+      getGmudRequest(protocol),
+      getGmudEvents(protocol),
+      getLinksWithAffected([protocol]),
+    ]);
+    return res.json({ success: true, data: { voalle, request, events, links } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar a GMUD.',
+    });
+  }
+});
+
+/** Status atual do protocolo no Elleven (id + título), por protocolo — para o relato não mudar o status. */
+async function fetchGmudEllevenStatus(protocols) {
+  const ids = protocols.filter((p) => Number.isFinite(p) && p > 0);
+  const map = new Map();
+  if (ids.length === 0) return map;
+  const result = await pool.query(
+    `SELECT ai.protocol::bigint AS protocol,
+            ai.assignment_id::bigint AS assignment_id,
+            ai.incident_status_id AS status_id,
+            ist.title AS status
+       FROM erp.assignment_incidents ai
+       LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+      WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[])`,
+    [GMUD_INCIDENT_TYPE_ID, ids],
+  );
+  for (const r of result.rows ?? []) {
+    map.set(Number(r.protocol), {
+      assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+      statusId: r.status_id != null ? Number(r.status_id) : null,
+      status: r.status ?? '',
+    });
+  }
+  return map;
+}
+
+// Agenda de GMUDs: aprovadas com janela no intervalo [from, to] (YYYY-MM-DD).
+app.get('/api/gmud/agenda', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const items = await listScheduledGmuds({ from: req.query?.from, to: req.query?.to });
+    const statusByProtocol = await fetchGmudEllevenStatus(items.map((i) => i.voalleProtocol));
+    const enriched = items.map((i) => {
+      const elleven = statusByProtocol.get(i.voalleProtocol) ?? null;
+      return {
+        ...i,
+        assignmentId: i.assignmentId ?? elleven?.assignmentId ?? null,
+        ellevenStatusId: elleven?.statusId ?? null,
+        ellevenStatus: elleven?.status ?? '',
+      };
+    });
+    return res.json({ success: true, data: { items: enriched } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar a agenda de GMUDs.',
+    });
+  }
+});
+
+// Reagendamento da janela (só no nosso banco). O relato no protocolo do Elleven é enviado pelo
+// frontend em seguida, com o status atual do protocolo (devolvido aqui) para não alterá-lo.
+app.post('/api/gmud/reschedule', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para reagendar GMUDs.');
+    const body = req.body ?? {};
+    const result = await rescheduleGmud({
+      voalleProtocol: body.voalleProtocol,
+      dataInicio: body.dataInicio,
+      horaInicio: body.horaInicio,
+      dataFim: body.dataFim,
+      horaFim: body.horaFim,
+    });
+    const elleven = (await fetchGmudEllevenStatus([result.voalleProtocol])).get(result.voalleProtocol) ?? null;
+    const reagendadoPor = gmudActorName(actor);
+    await logGmudEvent({
+      voalleProtocol: result.voalleProtocol,
+      type: 'reagendada',
+      actor: reagendadoPor,
+      payload: { previous: result.previous, next: result.next },
+    });
+    return res.json({
+      success: true,
+      data: {
+        ...result,
+        assignmentId: result.assignmentId ?? elleven?.assignmentId ?? null,
+        ellevenStatusId: elleven?.statusId ?? null,
+        reagendadoPor,
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao reagendar a GMUD.',
     });
   }
 });
@@ -4406,8 +4661,22 @@ app.post('/api/gmud/link', async (req, res) => {
     if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
       return res.status(400).json({ success: false, message: 'Informe o protocolo da GMUD e da massiva.' });
     }
+    // Guard de "disponibilização": só vincula massiva a GMUD APROVADA pelo Comitê.
+    // Pendente/negada (ou sem registro local) é bloqueada — backstop do bloqueio do front.
+    const statusComite = await getGmudApprovalStatus(gmudProtocol);
+    if (statusComite !== 'aprovada') {
+      const motivo =
+        statusComite === 'negada'
+          ? 'A GMUD foi negada pelo Comitê.'
+          : 'A GMUD ainda não foi aprovada pelo Comitê.';
+      return res.status(409).json({
+        success: false,
+        message: `${motivo} O vínculo de massivas libera somente após a aprovação.`,
+      });
+    }
     const createdByEmail = actor?.profile?.email || actor?.identity?.email || '';
     const result = await addMassivaLink({ gmudProtocol, massivaProtocol, createdByEmail });
+    await logGmudEvent({ voalleProtocol: gmudProtocol, type: 'massiva_vinculada', actor: gmudActorName(actor), payload: { massivaProtocol } });
     return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
@@ -4420,7 +4689,7 @@ app.post('/api/gmud/link', async (req, res) => {
 
 app.delete('/api/gmud/link', async (req, res) => {
   try {
-    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para desvincular massivas.');
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para desvincular massivas.');
     const body = req.body ?? {};
     const gmudProtocol = Number.parseInt(String(body.gmudProtocol ?? ''), 10);
     const massivaProtocol = Number.parseInt(String(body.massivaProtocol ?? ''), 10);
@@ -4428,6 +4697,7 @@ app.delete('/api/gmud/link', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Protocolos inválidos.' });
     }
     const result = await removeMassivaLink({ gmudProtocol, massivaProtocol });
+    await logGmudEvent({ voalleProtocol: gmudProtocol, type: 'massiva_desvinculada', actor: gmudActorName(actor), payload: { massivaProtocol } });
     return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);

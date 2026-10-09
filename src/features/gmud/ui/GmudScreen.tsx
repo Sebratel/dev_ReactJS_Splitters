@@ -1,31 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ClipboardList, Link2, Plus, RefreshCw, Search } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
 import { GmudApprovalQueue } from '@/features/gmud/ui/GmudApprovalQueue'
+import { GmudCalendar } from '@/features/gmud/ui/GmudCalendar'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
-import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
-import type { GmudListItem } from '@/features/gmud/model/gmud'
-import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
+import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
+import type { GmudListFilter, GmudListItem } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
-
-function comiteLabel(status: string | null | undefined): string {
-  if (!status) return '—'
-  return GMUD_STATUS_COMITE_LABEL[status as GmudStatusComite] ?? status
-}
 
 const CARD =
   'rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
 const PAGE_SIZE = 20
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—'
-  return formatBrazilDateTimeShortDisplay(iso, '—')
-}
+const FILTERS: { key: GmudListFilter; label: string }[] = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'abertas', label: 'Abertas' },
+  { key: 'vencidas', label: 'Prazo vencido' },
+  { key: 'comite_pendente', label: 'Aguardando Comitê' },
+  { key: 'aprovadas', label: 'Aprovadas' },
+  { key: 'plataforma', label: 'Abertas pela plataforma' },
+  { key: 'minhas', label: 'Minhas' },
+]
 
 export function GmudScreen() {
   const [searchInput, setSearchInput] = useState('')
@@ -33,7 +33,8 @@ export function GmudScreen() {
   const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
   const [linking, setLinking] = useState<GmudListItem | null>(null)
-  const [view, setView] = useState<'all' | 'pending'>('all')
+  const [view, setView] = useState<'all' | 'pending' | 'agenda'>('all')
+  const [filter, setFilter] = useState<GmudListFilter>('todas')
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
   const pendingCount = useGmudPendingCount()
 
@@ -50,6 +51,7 @@ export function GmudScreen() {
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
     q: appliedSearch,
+    filter,
   })
 
   const total = data?.total ?? 0
@@ -66,6 +68,12 @@ export function GmudScreen() {
           className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90"
         >
           <Plus size={15} /> Nova GMUD
+        </Link>
+        <Link
+          to="/gmud/indicadores"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+        >
+          <BarChart3 size={15} /> Indicadores
         </Link>
         <div className="relative">
           <Search
@@ -106,8 +114,7 @@ export function GmudScreen() {
         trailing={headerTrailing}
       />
 
-      {canApprove ? (
-        <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+      <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
           <button
             type="button"
             onClick={() => setView('all')}
@@ -120,6 +127,19 @@ export function GmudScreen() {
           >
             Todas as GMUDs
           </button>
+          <button
+            type="button"
+            onClick={() => setView('agenda')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              view === 'agenda'
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+          >
+            <CalendarDays size={14} /> Agenda
+          </button>
+          {canApprove ? (
           <button
             type="button"
             onClick={() => setView('pending')}
@@ -137,11 +157,13 @@ export function GmudScreen() {
               </span>
             ) : null}
           </button>
-        </div>
-      ) : null}
+          ) : null}
+      </div>
 
       {view === 'pending' && canApprove ? (
         <GmudApprovalQueue />
+      ) : view === 'agenda' ? (
+        <GmudCalendar />
       ) : (
       <div className={cn(CARD, 'overflow-hidden')}>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 p-4 dark:border-white/10">
@@ -149,9 +171,29 @@ export function GmudScreen() {
             Painel de GMUDs
             <span className="ml-2 text-xs font-normal text-on-surface-variant">
               {total.toLocaleString('pt-BR')} protocolo{total === 1 ? '' : 's'}
-              {appliedSearch !== '' ? ' (filtrado)' : ''}
+              {appliedSearch !== '' || filter !== 'todas' ? ' (filtrado)' : ''}
             </span>
           </p>
+          <div className="flex flex-wrap gap-1.5">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => {
+                  setFilter(f.key)
+                  setPage(0)
+                }}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
+                  filter === f.key
+                    ? 'bg-primary text-white ring-primary'
+                    : 'text-on-surface-variant ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {isLoading ? (
@@ -164,84 +206,11 @@ export function GmudScreen() {
           </div>
         ) : items.length === 0 ? (
           <p className="py-10 text-center text-sm text-on-surface-variant">
-            {appliedSearch !== '' ? 'Nenhuma GMUD corresponde à busca.' : 'Nenhuma GMUD encontrada.'}
+            {appliedSearch !== '' || filter !== 'todas' ? 'Nenhuma GMUD corresponde ao filtro.' : 'Nenhuma GMUD encontrada.'}
           </p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-                    <th className="px-4 py-2">Protocolo</th>
-                    <th className="px-4 py-2">Tipo</th>
-                    <th className="px-4 py-2">Título</th>
-                    <th className="px-4 py-2">Solicitante</th>
-                    <th className="px-4 py-2">Abertura</th>
-                    <th className="px-4 py-2">Prazo (SLA)</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2">Comitê</th>
-                    <th className="px-4 py-2 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((g) => (
-                    <tr key={g.protocol} className="border-t border-neutral-200/60 dark:border-white/5">
-                      <td className="px-4 py-2.5 font-mono tabular-nums text-on-surface">{g.protocol}</td>
-                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.extra?.tipo || '—'}</td>
-                      <td className="px-4 py-2.5 text-on-surface">
-                        <span className="line-clamp-2 max-w-[34rem]" title={g.title}>
-                          {g.title || '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-on-surface-variant">{g.requester || '—'}</td>
-                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{fmtDate(g.openedAt)}</td>
-                      <td className="px-4 py-2.5 text-xs text-on-surface-variant">{fmtDate(g.slaDate)}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="inline-flex items-center rounded-full border border-neutral-200 dark:border-white/10 bg-surface-container-low px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
-                          {g.status || '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-xs">
-                        <span
-                          className={cn(
-                            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                            g.extra?.statusComite === 'aprovada'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-                              : g.extra?.statusComite === 'negada'
-                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
-                                : 'bg-surface-container-low text-on-surface-variant',
-                          )}
-                        >
-                          {comiteLabel(g.extra?.statusComite)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setLinking(g)}
-                            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
-                            title="Massivas vinculadas"
-                          >
-                            <Link2 size={13} />
-                            {g.massivaLinksCount > 0 ? g.massivaLinksCount : 'Vincular'}
-                          </button>
-                          {canApprove ? (
-                            <button
-                              type="button"
-                              onClick={() => setApproving(g)}
-                              className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
-                            >
-                              Avaliar
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <GmudListTable items={items} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} />
             {pageCount > 1 ? (
               <div className="flex items-center justify-between gap-2 border-t border-neutral-200/60 px-4 py-2.5 dark:border-white/5">
                 <span className="text-xs text-on-surface-variant">

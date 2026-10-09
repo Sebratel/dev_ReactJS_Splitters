@@ -1,17 +1,19 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
-import type { GmudListResult } from '@/features/gmud/model/gmud'
+import type { GmudListFilter, GmudListResult } from '@/features/gmud/model/gmud'
 
 /** Lista as GMUDs (somente admin/permissão) direto do Voalle, via BFF local. */
 export async function fetchGmudList(params: {
   limit?: number
   offset?: number
   q?: string
+  filter?: GmudListFilter
 }): Promise<GmudListResult> {
   const qs = new URLSearchParams()
   if (params.limit) qs.set('limit', String(params.limit))
   if (params.offset) qs.set('offset', String(params.offset))
   if (params.q && params.q.trim() !== '') qs.set('q', params.q.trim())
+  if (params.filter && params.filter !== 'todas') qs.set('filter', params.filter)
 
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/list?${qs.toString()}`)
   const result = await response.json().catch(() => null)

@@ -5,8 +5,10 @@ import {
   updateGmudApproval,
   type GmudStatusComite,
 } from '@/features/gmud/api/updateGmudApproval'
+import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import { GMUD_RECURSO_PAPEIS } from '@/features/gmud/model/gmudForm'
 import type { GmudPendingItem } from '@/features/gmud/api/gmudApprovals'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
@@ -47,7 +49,7 @@ function PendingCard({
   pending,
 }: {
   gmud: GmudPendingItem
-  onDecide: (protocol: number, status: GmudStatusComite) => void
+  onDecide: (gmud: GmudPendingItem, status: GmudStatusComite) => void
   pending: boolean
 }) {
   const protocol = gmud.voalleProtocol
@@ -70,7 +72,7 @@ function PendingCard({
           <button
             type="button"
             disabled={pending || protocol == null}
-            onClick={() => protocol != null && onDecide(protocol, 'negada')}
+            onClick={() => protocol != null && onDecide(gmud, 'negada')}
             className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 dark:border-rose-800/60 px-3 py-2 text-sm font-semibold text-rose-700 dark:text-rose-200 transition hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-60"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />} Negar
@@ -78,7 +80,7 @@ function PendingCard({
           <button
             type="button"
             disabled={pending || protocol == null}
-            onClick={() => protocol != null && onDecide(protocol, 'aprovada')}
+            onClick={() => protocol != null && onDecide(gmud, 'aprovada')}
             className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
           >
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />} Aprovar
@@ -87,6 +89,7 @@ function PendingCard({
       </div>
 
       <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+        <Field label="Assunto da mudança" value={gmud.assunto} />
         <Field label="Comunica cliente" value={gmud.comunicaCliente} />
         <Field label="Impacto de parada" value={gmud.impactoParada} />
         <div className="sm:col-span-2">
@@ -115,11 +118,53 @@ function PendingCard({
 export function GmudApprovalQueue() {
   const queryClient = useQueryClient()
   const { data, isLoading, isError, error } = usePendingGmuds(true)
+  const profile = useAccessAuthStore((s) => s.profile)
+  const currentUser = profile?.displayName || profile?.email || ''
 
   const mutation = useMutation({
-    mutationFn: ({ protocol, status }: { protocol: number; status: GmudStatusComite }) =>
-      updateGmudApproval({ voalleProtocol: protocol, statusComite: status }),
-    onSuccess: () => {
+    mutationFn: async ({ gmud, status }: { gmud: GmudPendingItem; status: GmudStatusComite }) => {
+      const protocol = gmud.voalleProtocol
+      if (protocol == null) throw new Error('GMUD sem protocolo.')
+
+      // "Negar" encerra o protocolo no Elleven (cancelamento). Confirmação obrigatória — é uma
+      // ação real em produção. "Aprovar" não encerra nada.
+      if (status === 'negada') {
+        const jaEncerrado = Boolean(gmud.ellevenEncerradoEm)
+        const assignmentId = gmud.assignmentId
+        if (!jaEncerrado && assignmentId != null) {
+          const ok = window.confirm(
+            `Negar esta GMUD vai ENCERRAR o protocolo ${protocol} no Elleven (cancelamento). Confirmar?`,
+          )
+          if (!ok) return { aborted: true }
+          await closeGmudInElleven({
+            assignmentId,
+            mode: 'negada',
+            description: buildGmudCloseDescription('negada', currentUser),
+          })
+          await updateGmudApproval({
+            voalleProtocol: protocol,
+            statusComite: 'negada',
+            ellevenEncerrado: { status: 'negada' },
+          })
+          return { aborted: false }
+        }
+        // Sem assignmentId (GMUD antiga/só no Voalle) ou já encerrado: só registra a decisão.
+        const ok = window.confirm(
+          jaEncerrado
+            ? `O protocolo ${protocol} já foi encerrado no Elleven. Marcar a GMUD como negada?`
+            : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
+                `A GMUD será marcada como negada, mas o protocolo deve ser encerrado manualmente no Elleven. Continuar?`,
+        )
+        if (!ok) return { aborted: true }
+        await updateGmudApproval({ voalleProtocol: protocol, statusComite: 'negada' })
+        return { aborted: false }
+      }
+
+      await updateGmudApproval({ voalleProtocol: protocol, statusComite: status })
+      return { aborted: false }
+    },
+    onSuccess: (result) => {
+      if (result?.aborted) return
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'pending'] })
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'pending-count'] })
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'list'] })
@@ -160,7 +205,7 @@ export function GmudApprovalQueue() {
           key={g.voalleProtocol ?? g.createdAt}
           gmud={g}
           pending={mutation.isPending}
-          onDecide={(protocol, status) => mutation.mutate({ protocol, status })}
+          onDecide={(gmud, status) => mutation.mutate({ gmud, status })}
         />
       ))}
     </div>

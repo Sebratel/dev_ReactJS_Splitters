@@ -2,6 +2,17 @@
 
 export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
 
+/**
+ * Assunto da mudança (natureza do que está sendo mudado). Reutilizável pelo futuro
+ * módulo de notificações ao cliente (frente 2 — parte de notificações fica para depois).
+ */
+export const GMUD_ASSUNTO_OPTIONS = [
+  'Rede externa',
+  'Sistemas internos',
+  'Manutenção/atualização com indisponibilidade temporária',
+  'Outros motivos internos',
+] as const
+
 export const GMUD_AREA_OPTIONS = [
   'Oper/Infra',
   'Oper/Reparo',
@@ -49,6 +60,8 @@ export const GMUD_RECURSO_PAPEIS: { value: GmudRecursoPapel; label: string }[] =
 export type GmudFormState = {
   voalleProtocol: string
   tipo: string
+  /** Assunto da mudança (GMUD_ASSUNTO_OPTIONS). */
+  assunto: string
   titulo: string
   descricao: string
   popSite: string
@@ -87,6 +100,7 @@ export function validateGmudForm(form: GmudFormState): string[] {
   // A GMUD sempre abre o protocolo no Elleven — o e-mail define o solicitante.
   req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
   req(form.tipo !== '', 'Tipo da GMUD')
+  req(form.assunto !== '', 'Assunto da mudança')
   req(form.titulo.trim() !== '', 'Título')
   req(form.descricao.trim() !== '', 'Descrição da atividade')
   req(form.popSite.trim() !== '', 'POP/Site')
@@ -108,6 +122,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
   return {
     voalleProtocol: '',
     tipo: '',
+    assunto: '',
     titulo: '',
     descricao: '',
     popSite: '',

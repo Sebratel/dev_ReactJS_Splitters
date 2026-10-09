@@ -148,6 +148,7 @@ export function buildMassivaOpeningTechnicalDescription(
     tecnico: 'tecnico em campo',
     zabbix: 'monitoramento Zabbix',
     int6: 'sistema INT6',
+    gmud: 'GMUD (mudanca programada)',
   }
   const origem = EVENT_IDENTIFIED_BY_LABEL[params.eventIdentifiedBy] ?? 'nao informado'
 

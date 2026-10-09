@@ -53,6 +53,7 @@ export function buildGmudDescription(form: GmudFormState): string {
   // Cabeçalho + resumo
   out.push(`GESTÃO DE MUDANÇA DE REDE (GMUD)${form.tipo.trim() ? ` - ${form.tipo.trim()}` : ''}`)
   out.push(sep)
+  field('Assunto', form.assunto)
   field('POP/Site', form.popSite)
   field('Janela de mudança', fmtJanela(form))
   field('Comunica cliente', form.comunicaCliente)

@@ -30,6 +30,34 @@ export async function linkMassivaToGmud(gmudProtocol: number, massivaProtocol: n
   await parse(response, 'Falha ao vincular a massiva.')
 }
 
+export type GmudBulkLinkResult = {
+  linked: number[]
+  failed: { massivaProtocol: number; message: string }[]
+}
+
+/**
+ * Vincula várias massivas de uma vez (seleção múltipla). Envia em sequência para não
+ * concorrer no MySQL e devolve o que vinculou e o que falhou, sem abortar no primeiro erro.
+ */
+export async function linkMassivasToGmud(
+  gmudProtocol: number,
+  massivaProtocols: number[],
+): Promise<GmudBulkLinkResult> {
+  const result: GmudBulkLinkResult = { linked: [], failed: [] }
+  for (const massivaProtocol of massivaProtocols) {
+    try {
+      await linkMassivaToGmud(gmudProtocol, massivaProtocol)
+      result.linked.push(massivaProtocol)
+    } catch (error) {
+      result.failed.push({
+        massivaProtocol,
+        message: error instanceof Error ? error.message : 'Falha ao vincular a massiva.',
+      })
+    }
+  }
+  return result
+}
+
 export async function unlinkMassivaFromGmud(gmudProtocol: number, massivaProtocol: number): Promise<void> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/link`, {
     method: 'DELETE',

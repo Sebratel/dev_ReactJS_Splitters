@@ -4,8 +4,14 @@ import type { GmudFormState } from '@/features/gmud/model/gmudForm'
 
 export type CreateGmudResult = { id: number | null; voalleProtocol: number | null }
 
-/** Registra a GMUD no nosso banco (campos do formulário). Não abre protocolo no Elleven nesta etapa. */
-export async function createGmud(form: GmudFormState): Promise<CreateGmudResult> {
+/**
+ * Registra a GMUD no nosso banco (campos do formulário). O protocolo já foi aberto no Elleven
+ * antes desta chamada; `assignmentId` (quando informado) é guardado para permitir o encerramento
+ * automático do protocolo quando a GMUD for concluída/negada.
+ */
+export async function createGmud(
+  form: GmudFormState & { voalleProtocol: string; assignmentId?: number | null },
+): Promise<CreateGmudResult> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

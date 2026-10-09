@@ -7,7 +7,9 @@ import {
   type GmudStatusComite,
   type GmudStatusExec,
 } from '@/features/gmud/api/updateGmudApproval'
+import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
+import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
 
 const FIELD =
@@ -38,16 +40,71 @@ export function GmudApprovalModal({
   const [dataCab, setDataCab] = useState(gmud.extra?.dataCab ?? '')
   const [rnc, setRnc] = useState(gmud.extra?.rnc ?? '')
 
+  const profile = useAccessAuthStore((s) => s.profile)
+  const currentUser = profile?.displayName || profile?.email || ''
+
+  const prevComite = (gmud.extra?.statusComite as GmudStatusComite) || 'pendente'
+  const prevExec = (gmud.extra?.statusExec as GmudStatusExec) || 'pendente'
+  const assignmentId = gmud.extra?.assignmentId ?? gmud.assignmentId ?? null
+  const jaEncerrado = Boolean(gmud.extra?.ellevenEncerradoEm)
+
   const mutation = useMutation({
-    mutationFn: () =>
-      updateGmudApproval({
+    mutationFn: async () => {
+      // Transições que encerram o protocolo no Elleven:
+      //  - Comitê → Negada  => cancelamento (incidentStatusId 8)
+      //  - Execução → Concluída => encerramento (incidentStatusId de encerrado)
+      // "Negada" tem prioridade (uma GMUD negada não segue para concluída).
+      const vaiNegar = statusComite === 'negada' && prevComite !== 'negada'
+      const vaiConcluir = statusExec === 'concluida' && prevExec !== 'concluida'
+      const encerra: 'negada' | 'concluida' | null = vaiNegar
+        ? 'negada'
+        : vaiConcluir
+          ? 'concluida'
+          : null
+
+      if (encerra && !jaEncerrado && assignmentId != null) {
+        const label = encerra === 'negada' ? 'cancelamento' : 'encerramento'
+        const ok = window.confirm(
+          `Esta ação vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (${label}). Confirmar?`,
+        )
+        if (!ok) return { aborted: true }
+        await closeGmudInElleven({
+          assignmentId,
+          mode: encerra,
+          description: buildGmudCloseDescription(encerra, currentUser),
+        })
+        await updateGmudApproval({
+          voalleProtocol: gmud.protocol,
+          statusComite,
+          statusExec,
+          dataCab: dataCab || undefined,
+          rnc: rnc || undefined,
+          ellevenEncerrado: { status: encerra },
+        })
+        return { aborted: false }
+      }
+
+      // Sem encerramento (ou já encerrado, ou sem assignmentId): só registra a avaliação.
+      if (encerra && !jaEncerrado && assignmentId == null) {
+        const ok = window.confirm(
+          `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${gmud.protocol}. ` +
+            `A avaliação será salva, mas encerre o protocolo manualmente no Elleven. Continuar?`,
+        )
+        if (!ok) return { aborted: true }
+      }
+      await updateGmudApproval({
         voalleProtocol: gmud.protocol,
         statusComite,
         statusExec,
         dataCab: dataCab || undefined,
         rnc: rnc || undefined,
-      }),
-    onSuccess: () => onSaved(),
+      })
+      return { aborted: false }
+    },
+    onSuccess: (result) => {
+      if (result?.aborted) return
+      onSaved()
+    },
   })
 
   return (

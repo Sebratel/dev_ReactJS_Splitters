@@ -148,6 +148,10 @@ export const env = {
   massivaOpenPath: massivaOpenPathResolved(),
   /** DELETE para encerramento de massiva no BFF (paridade `finalizar-chamado-via-api`). */
   massivaClosePath: massivaClosePathResolved(),
+  /** DELETE para encerramento de GMUD no gateway (endpoint dedicado, sem a lógica de vinculados). */
+  gmudClosePath: str(import.meta.env.VITE_GMUD_CLOSE_PATH, '/api/v1/gmud/encerrar-via-api'),
+  /** POST de relato no protocolo da GMUD (sem encerrar), ex.: reagendamento. */
+  gmudReportPath: str(import.meta.env.VITE_GMUD_REPORT_PATH, '/api/v1/gmud/relato-via-api'),
   /** POST de abertura de protocolo de infraestrutura no BFF (`abrir-protocolo-infra-via-api`). */
   massivaInfraOpenPath: massivaInfraOpenPathResolved(),
   /** POST de afetados no BFF (segunda etapa após abertura). */
