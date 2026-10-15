@@ -1,4 +1,5 @@
-import { Info } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Copy, Info } from 'lucide-react'
 import type { GmudDetail } from '@/features/gmud/api/gmudDetail'
 import type { GmudDeadline, GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
@@ -31,6 +32,38 @@ function fmt(iso: string | null | undefined): string {
   return iso ? formatBrazilDateTimeShortDisplay(iso, '—') : '—'
 }
 
+/** Número do protocolo em destaque, com botão de copiar (para buscar no Voalle). */
+function ProtocolBadge({ protocol }: { protocol: number }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(String(protocol))
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // clipboard indisponível — número continua visível para cópia manual
+    }
+  }
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Protocolo Voalle</p>
+        <p className="font-mono text-2xl font-bold leading-tight tabular-nums text-on-surface">{protocol}</p>
+      </div>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label="Copiar número do protocolo"
+        title={copied ? 'Copiado!' : 'Copiar'}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+        {copied ? 'Copiado' : 'Copiar'}
+      </button>
+    </div>
+  )
+}
+
 /** Resumo lateral: prazo, status no Voalle, Comitê e execução. */
 export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; deadline: GmudDeadline }) {
   const r = detail.request
@@ -38,7 +71,8 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
   return (
     <section className={cn(CARD, 'p-4')}>
       <CardTitle icon={<Info size={16} />}>Resumo</CardTitle>
-      <div className="mt-2 divide-y divide-neutral-200/60 dark:divide-white/5">
+      <ProtocolBadge protocol={detail.voalle.protocol} />
+      <div className="divide-y divide-neutral-200/60 dark:divide-white/5">
         <Row label="Prazo">
           <span className={TONE[deadline.tone]}>{deadline.label}</span>
         </Row>
