@@ -4,6 +4,34 @@ import { fetchEmployeePersonIdByEmail } from '@/features/massiva/api/fetchEmploy
 import { massivaLocalDateTimeToGatewayIso } from '@/features/massiva/lib/validateMassivaOpenDraft'
 import { GMUD_API_GATEWAY_DEFAULTS, GMUD_OPEN_PATH } from '@/features/gmud/model/gmudApiGateway'
 
+/** Coleta as mensagens do Elleven embrulhadas no `data` do ApiResponse (quando success=false). */
+function collectEllevenMessages(data: unknown): string[] {
+  if (!data || typeof data !== 'object') return []
+  const d = data as Record<string, unknown>
+  const out: string[] = []
+  const pushMsgs = (arr: unknown) => {
+    if (Array.isArray(arr)) {
+      for (const m of arr) {
+        const text =
+          typeof m === 'string'
+            ? m
+            : m && typeof m === 'object'
+              ? String((m as Record<string, unknown>).message ?? (m as Record<string, unknown>).description ?? '')
+              : ''
+        if (text.trim() !== '') out.push(text.trim())
+      }
+    }
+  }
+  pushMsgs(d.messages)
+  // Alguns retornos aninham em response.{messages|message}
+  const resp = d.response as Record<string, unknown> | undefined
+  if (resp && typeof resp === 'object') {
+    pushMsgs(resp.messages)
+    if (typeof resp.message === 'string' && resp.message.trim() !== '') out.push(resp.message.trim())
+  }
+  return out
+}
+
 /** Extrai a mensagem real do corpo de erro do gateway (ApiResponse ou GlobalExceptionHandler). */
 function describeGatewayError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -12,8 +40,12 @@ function describeGatewayError(error: unknown): string {
         message?: unknown
         error?: unknown
         details?: unknown
+        data?: unknown
       }
       const parts: string[] = []
+      // Motivo específico do Elleven (dentro de data.messages) tem prioridade sobre a mensagem genérica.
+      const ellevenMsgs = collectEllevenMessages(parsed.data)
+      if (ellevenMsgs.length > 0) parts.push(ellevenMsgs.join(' | '))
       if (typeof parsed.message === 'string' && parsed.message.trim() !== '') parts.push(parsed.message.trim())
       if (typeof parsed.error === 'string' && parsed.error.trim() !== '') parts.push(parsed.error.trim())
       if (Array.isArray(parsed.details)) {
