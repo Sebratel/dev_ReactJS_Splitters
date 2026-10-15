@@ -169,10 +169,16 @@ export function GmudApprovalModal({
             <label>
               <span className={LABEL}>Data CAB</span>
               <input type="date" className={FIELD} value={dataCab} onChange={(e) => setDataCab(e.target.value)} />
+              <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+                Data da reunião do Comitê (CAB — Change Advisory Board) que avaliou esta GMUD.
+              </span>
             </label>
             <label>
               <span className={LABEL}>RNC</span>
               <input className={FIELD} value={rnc} onChange={(e) => setRnc(e.target.value)} placeholder="Opcional" />
+              <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+                Registro de Não Conformidade — preencha se a mudança gerou desvio/incidente.
+              </span>
             </label>
           </div>
 
