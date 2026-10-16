@@ -12,6 +12,8 @@ export type GmudListItem = {
   conclusionDate: string | null
   /** Status do atendimento no Elleven (ex.: "Abertura"). */
   status: string
+  /** ID numérico do status no Elleven (incident_status_id) — para relatos não alterarem o status. */
+  statusId: number | null
   requester: string
   requesterEmail: string
   /** Campos do formulário/aprovação (nosso MySQL), quando a GMUD já foi registrada na plataforma. */

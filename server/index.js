@@ -4274,6 +4274,7 @@ app.get('/api/gmud/list', async (req, res) => {
              ai.date_to_start AS opened_at,
              ai.responsible_final_date AS sla_date,
              a.conclusion_date,
+             ai.incident_status_id::int AS status_id,
              ist.title AS status,
              pe.name AS requester,
              pe.email AS requester_email
@@ -4295,6 +4296,7 @@ app.get('/api/gmud/list', async (req, res) => {
       slaDate: r.sla_date ? new Date(r.sla_date).toISOString() : null,
       conclusionDate: r.conclusion_date ? new Date(r.conclusion_date).toISOString() : null,
       status: r.status ?? '',
+      statusId: r.status_id != null ? Number(r.status_id) : null,
       requester: r.requester ?? '',
       requesterEmail: r.requester_email ?? '',
     }));

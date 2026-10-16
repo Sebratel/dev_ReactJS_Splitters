@@ -65,6 +65,7 @@ export function buildGmudDescription(form: GmudFormState): string {
   section('Descrição da atividade', form.descricao)
   section('Plano de execução', form.planoExecucao)
   section('Plano de rollback (retorno)', form.planoRollback)
+  section('Observações', form.observacoes)
 
   // Riscos
   const riscos: string[] = []

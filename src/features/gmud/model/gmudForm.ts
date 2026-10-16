@@ -83,6 +83,8 @@ export type GmudFormState = {
   listaClientesCor: string
   /** Texto livre do "Outro" em Ambiente afetado (opção que existe no Google Form). */
   ambienteOutro: string
+  /** Observações livres do solicitante — entram na máscara/relato do protocolo no Elleven. */
+  observacoes: string
 }
 
 /** Junta o ambiente selecionado com o "Outro" (se preenchido) — o que vai pro banco. */
@@ -143,5 +145,6 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     horaFim: '',
     listaClientesCor: '',
     ambienteOutro: '',
+    observacoes: '',
   }
 }

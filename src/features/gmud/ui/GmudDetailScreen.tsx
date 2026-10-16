@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree } from 'lucide-react'
+import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree, MessageSquarePlus } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchGmudDetail, type GmudDetail } from '@/features/gmud/api/gmudDetail'
@@ -18,7 +18,8 @@ import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard } from '@/featu
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import { updateGmudApproval } from '@/features/gmud/api/updateGmudApproval'
-import { gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
+import { gmudEncerrada, gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
+import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
 
@@ -35,6 +36,7 @@ function toListItem(d: GmudDetail): GmudListItem {
     slaDate: d.voalle.slaDate,
     conclusionDate: d.voalle.conclusionDate,
     status: d.voalle.status,
+    statusId: d.voalle.statusId,
     requester: d.voalle.requester,
     requesterEmail: d.voalle.requesterEmail,
     massivaLinksCount: d.links.length,
@@ -86,7 +88,7 @@ export function GmudDetailScreen() {
   const { protocol: raw } = useParams()
   const protocol = Number.parseInt(String(raw ?? ''), 10)
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
-  const [modal, setModal] = useState<'approve' | 'links' | 'reschedule' | null>(null)
+  const [modal, setModal] = useState<'approve' | 'links' | 'reschedule' | 'report' | null>(null)
 
   const query = useQuery({
     queryKey: ['gmud', 'detail', protocol],
@@ -119,15 +121,27 @@ export function GmudDetailScreen() {
       const assignmentId = data.request?.assignmentId ?? data.voalle.assignmentId ?? null
       const verbo = mode === 'concluida' ? 'CONCLUIR' : 'CANCELAR'
       const efeito = mode === 'concluida' ? 'ENCERRAR' : 'CANCELAR'
-      const ok = window.confirm(
+      // window.prompt dupla como confirmação (null = cancelar) e captura um relato opcional
+      // que vai junto no encerramento do protocolo no Elleven.
+      const nota =
         assignmentId != null
-          ? `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven. Confirmar?`
-          : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
-              `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven. Continuar?`,
-      )
-      if (!ok) return { aborted: true }
+          ? window.prompt(
+              `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven.\n\n` +
+                `(Opcional) Escreva um relato que vai junto no protocolo — ou deixe em branco.\n` +
+                `Clique OK para confirmar, ou Cancelar para desistir.`,
+              '',
+            )
+          : window.prompt(
+              `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
+                `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven.\n\n` +
+                `Clique OK para confirmar, ou Cancelar para desistir.`,
+              '',
+            )
+      if (nota === null) return { aborted: true }
       if (assignmentId != null) {
-        await closeGmudInElleven({ assignmentId, mode, description: buildGmudCloseDescription(mode, currentUser) })
+        const base = buildGmudCloseDescription(mode, currentUser)
+        const description = nota.trim() !== '' ? `${base}\n${nota.trim()}` : base
+        await closeGmudInElleven({ assignmentId, mode, description })
       }
       await updateGmudApproval({
         voalleProtocol: protocol,
@@ -214,6 +228,16 @@ export function GmudDetailScreen() {
                 <CalendarClock size={14} /> Reagendar
               </button>
             ) : null}
+            {(listItem.extra?.assignmentId ?? listItem.assignmentId) != null && !gmudEncerrada(listItem) ? (
+              <button
+                type="button"
+                onClick={() => setModal('report')}
+                title="Registra um relato no protocolo do Elleven sem mudar o status"
+                className={cn(ACTION, 'text-on-surface ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10')}
+              >
+                <MessageSquarePlus size={14} /> Adicionar relato
+              </button>
+            ) : null}
             <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
@@ -250,6 +274,18 @@ export function GmudDetailScreen() {
             <GmudLinksModal
               gmud={listItem}
               onClose={() => {
+                setModal(null)
+                void query.refetch()
+              }}
+            />
+          ) : null}
+          {modal === 'report' ? (
+            <GmudReportModal
+              protocol={protocol}
+              assignmentId={listItem.extra?.assignmentId ?? listItem.assignmentId}
+              incidentStatusId={listItem.statusId}
+              onClose={() => setModal(null)}
+              onSent={() => {
                 setModal(null)
                 void query.refetch()
               }}

@@ -3,9 +3,22 @@ import { useMutation } from '@tanstack/react-query'
 import { Check, Loader2, X } from 'lucide-react'
 import { updateGmudApproval, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
+import { sendGmudReport } from '@/features/gmud/api/gmudAgenda'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
+
+/** Relato da decisão do Comitê para registrar no protocolo do Elleven. */
+function buildComiteRelato(decisao: 'Aprovada' | 'Negada', user: string, dataCab: string, rnc: string, obs: string): string {
+  const quem = user.trim() !== '' ? user.trim() : 'equipe Splitters'
+  const now = new Date()
+  const quando = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
+  const linhas = [`AVALIACAO DO COMITE - ${decisao} por ${quem} em ${quando}.`]
+  if (dataCab.trim() !== '') linhas.push(`Data CAB: ${dataCab.split('-').reverse().join('/')}`)
+  if (rnc.trim() !== '') linhas.push(`RNC: ${rnc.trim()}`)
+  if (obs.trim() !== '') linhas.push(`Observacoes: ${obs.trim()}`)
+  return linhas.join('\n')
+}
 
 const FIELD =
   'mt-1 w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
@@ -31,6 +44,7 @@ export function GmudApprovalModal({
   )
   const [dataCab, setDataCab] = useState(gmud.extra?.dataCab ?? '')
   const [rnc, setRnc] = useState(gmud.extra?.rnc ?? '')
+  const [obs, setObs] = useState('')
 
   const profile = useAccessAuthStore((s) => s.profile)
   const currentUser = profile?.displayName || profile?.email || ''
@@ -50,10 +64,11 @@ export function GmudApprovalModal({
           `Negar esta GMUD vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (cancelamento). Confirmar?`,
         )
         if (!ok) return { aborted: true }
+        // Encerra com o relato da decisão (inclui Data CAB/RNC/observações).
         await closeGmudInElleven({
           assignmentId,
           mode: 'negada',
-          description: buildGmudCloseDescription('negada', currentUser),
+          description: `${buildGmudCloseDescription('negada', currentUser)}\n${buildComiteRelato('Negada', currentUser, dataCab, rnc, obs)}`,
         })
         await updateGmudApproval({
           voalleProtocol: gmud.protocol,
@@ -78,6 +93,20 @@ export function GmudApprovalModal({
         dataCab: dataCab || undefined,
         rnc: rnc || undefined,
       })
+
+      // Aprovada: registra a decisão como relato no Elleven (sem mudar o status). Best-effort —
+      // a decisão já foi salva; uma falha no relato não deve derrubar a aprovação.
+      if (statusComite === 'aprovada' && prevComite !== 'aprovada' && assignmentId != null) {
+        try {
+          await sendGmudReport({
+            assignmentId,
+            incidentStatusId: gmud.statusId ?? 1,
+            description: buildComiteRelato('Aprovada', currentUser, dataCab, rnc, obs),
+          })
+        } catch {
+          // Relato é auxiliar — ignora falha (a aprovação está salva).
+        }
+      }
       return { aborted: false }
     },
     onSuccess: (result) => {
@@ -145,6 +174,16 @@ export function GmudApprovalModal({
               </span>
             </label>
           </div>
+
+          <label>
+            <span className={LABEL}>Observações do Comitê</span>
+            <textarea
+              className={cn(FIELD, 'min-h-[70px] resize-y')}
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+              placeholder="Opcional — vai junto no relato registrado no protocolo do Elleven"
+            />
+          </label>
 
           {mutation.isError ? (
             <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-800 dark:text-red-200">

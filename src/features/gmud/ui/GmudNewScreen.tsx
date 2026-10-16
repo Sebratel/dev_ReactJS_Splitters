@@ -403,6 +403,18 @@ export function GmudNewScreen() {
           </label>
         </Section>
 
+        <Section title="Observações (opcional)">
+          <label className="sm:col-span-2">
+            <span className={LABEL}>Observações</span>
+            <textarea
+              className={cn(FIELD, 'min-h-[70px]')}
+              value={form.observacoes}
+              onChange={(e) => set('observacoes', e.target.value)}
+              placeholder="Qualquer detalhe adicional — entra na máscara do protocolo no Elleven"
+            />
+          </label>
+        </Section>
+
         <div className={CARD}>
           <p className="mb-2 text-sm font-bold text-on-surface">
             Pré-visualização — como vai ficar no Elleven
