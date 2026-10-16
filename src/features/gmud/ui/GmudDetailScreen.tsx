@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { CalendarClock, ClipboardList, Gavel, Link2, ListTree } from 'lucide-react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchGmudDetail, type GmudDetail } from '@/features/gmud/api/gmudDetail'
@@ -16,6 +16,9 @@ import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
 import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
+import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
+import { updateGmudApproval } from '@/features/gmud/api/updateGmudApproval'
+import { gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
 
@@ -104,6 +107,40 @@ export function GmudDetailScreen() {
     [d],
   )
 
+  const profile = useAccessAuthStore((s) => s.profile)
+  const currentUser = profile?.displayName || profile?.email || ''
+
+  // Concluir (encerra no Elleven, status 4) ou Cancelar (status 8). Ambos exigem confirmação
+  // e marcam o encerramento no nosso banco — o que torna a GMUD terminal (some os botões).
+  const closeMutation = useMutation({
+    mutationFn: async (mode: 'concluida' | 'cancelada') => {
+      const data = query.data
+      if (!data) return { aborted: true }
+      const assignmentId = data.request?.assignmentId ?? data.voalle.assignmentId ?? null
+      const verbo = mode === 'concluida' ? 'CONCLUIR' : 'CANCELAR'
+      const efeito = mode === 'concluida' ? 'ENCERRAR' : 'CANCELAR'
+      const ok = window.confirm(
+        assignmentId != null
+          ? `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven. Confirmar?`
+          : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
+              `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven. Continuar?`,
+      )
+      if (!ok) return { aborted: true }
+      if (assignmentId != null) {
+        await closeGmudInElleven({ assignmentId, mode, description: buildGmudCloseDescription(mode, currentUser) })
+      }
+      await updateGmudApproval({
+        voalleProtocol: protocol,
+        ...(mode === 'concluida' ? { statusExec: 'concluida' as const } : {}),
+        ellevenEncerrado: { status: mode },
+      })
+      return { aborted: false }
+    },
+    onSuccess: (r) => {
+      if (!r?.aborted) void query.refetch()
+    },
+  })
+
   if (!Number.isFinite(protocol) || protocol <= 0) {
     return <div className={cn(CARD, 'mx-auto max-w-xl p-8 text-center text-sm')}>Protocolo inválido.</div>
   }
@@ -133,15 +170,34 @@ export function GmudDetailScreen() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            {canApprove ? (
+            {canApprove && gmudPodeAvaliar(listItem) ? (
               <button
                 type="button"
                 onClick={() => setModal('approve')}
-                disabled={!d.request}
-                title={d.request ? undefined : 'GMUD legado: sem escopo para o Comitê avaliar'}
                 className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90')}
               >
-                <Gavel size={14} /> Avaliar / execução
+                <Gavel size={14} /> Avaliar
+              </button>
+            ) : null}
+            {canApprove && gmudPodeConcluir(listItem) ? (
+              <button
+                type="button"
+                onClick={() => closeMutation.mutate('concluida')}
+                disabled={closeMutation.isPending}
+                className={cn(ACTION, 'bg-emerald-600 text-white ring-emerald-600 hover:bg-emerald-700 disabled:opacity-60')}
+              >
+                <CheckCircle2 size={14} /> Concluir GMUD
+              </button>
+            ) : null}
+            {canApprove && gmudPodeCancelar(listItem) ? (
+              <button
+                type="button"
+                onClick={() => closeMutation.mutate('cancelada')}
+                disabled={closeMutation.isPending}
+                title="Cancela a mudança e encerra o protocolo no Elleven"
+                className={cn(ACTION, 'text-rose-700 ring-rose-300 hover:bg-rose-50 dark:text-rose-200 dark:ring-rose-800/60 dark:hover:bg-rose-950/40 disabled:opacity-60')}
+              >
+                <Ban size={14} /> Cancelar GMUD
               </button>
             ) : null}
             <button type="button" onClick={() => setModal('links')} className={cn(ACTION, 'text-on-surface ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10')}>
@@ -162,6 +218,12 @@ export function GmudDetailScreen() {
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
           </div>
+
+          {closeMutation.isError ? (
+            <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+              {closeMutation.error instanceof Error ? closeMutation.error.message : 'Falha ao encerrar a GMUD no Elleven.'}
+            </div>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">

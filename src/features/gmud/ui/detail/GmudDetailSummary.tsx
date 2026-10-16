@@ -19,6 +19,7 @@ const TONE: Record<GmudDeadlineTone, string> = {
 }
 
 const EXEC_LABEL: Record<string, string> = { pendente: 'Pendente', em_execucao: 'Em execução', concluida: 'Concluída' }
+const ENCERR_LABEL: Record<string, string> = { concluida: 'Concluída', negada: 'Negada', cancelada: 'Cancelada' }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -110,6 +111,12 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
               </Row>
             ) : null}
             <Row label="Execução">{EXEC_LABEL[r.statusExec ?? ''] ?? r.statusExec ?? '—'}</Row>
+            {r.ellevenEncerradoStatus ? (
+              <Row label="Encerrada no Elleven">
+                {ENCERR_LABEL[r.ellevenEncerradoStatus] ?? r.ellevenEncerradoStatus}
+                {r.ellevenEncerradoEm ? ` · ${fmt(r.ellevenEncerradoEm)}` : ''}
+              </Row>
+            ) : null}
             {r.dataCab ? <Row label="Data CAB">{r.dataCab.split('-').reverse().join('/')}</Row> : null}
             {r.rnc ? <Row label="RNC">{r.rnc}</Row> : null}
           </>

@@ -3,7 +3,7 @@ import { ApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 
 /** Motivo do encerramento da GMUD no Elleven. */
-export type GmudCloseMode = 'concluida' | 'negada'
+export type GmudCloseMode = 'concluida' | 'negada' | 'cancelada'
 
 function describeGatewayError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -38,9 +38,9 @@ function fmtDate(date = new Date()): string {
 export function buildGmudCloseDescription(mode: GmudCloseMode, user: string): string {
   const quem = user.trim() !== '' ? user.trim() : 'equipe Splitters'
   const quando = fmtDate()
-  return mode === 'negada'
-    ? `GMUD não aprovada pelo Comitê — encerrada via plataforma por ${quem} em ${quando}.`
-    : `GMUD concluída via plataforma por ${quem} em ${quando}.`
+  if (mode === 'negada') return `GMUD não aprovada pelo Comitê — encerrada via plataforma por ${quem} em ${quando}.`
+  if (mode === 'cancelada') return `GMUD cancelada via plataforma por ${quem} em ${quando}.`
+  return `GMUD concluída via plataforma por ${quem} em ${quando}.`
 }
 
 /**
@@ -53,8 +53,9 @@ export async function closeGmudInElleven(input: {
   mode: GmudCloseMode
   description: string
 }): Promise<void> {
+  // Concluída = encerramento (status de encerrado); negada/cancelada = cancelamento (status 8).
   const incidentStatusId =
-    input.mode === 'negada' ? env.massivaCancelIncidentStatusId : env.massivaCloseIncidentStatusId
+    input.mode === 'concluida' ? env.massivaCloseIncidentStatusId : env.massivaCancelIncidentStatusId
 
   try {
     await bffClient.request({

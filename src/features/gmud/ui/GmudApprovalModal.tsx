@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Check, Loader2, X } from 'lucide-react'
-import {
-  GMUD_STATUS_EXEC_LABEL,
-  updateGmudApproval,
-  type GmudStatusComite,
-  type GmudStatusExec,
-} from '@/features/gmud/api/updateGmudApproval'
+import { updateGmudApproval, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -34,9 +29,6 @@ export function GmudApprovalModal({
   const [statusComite, setStatusComite] = useState<GmudStatusComite>(
     (gmud.extra?.statusComite as GmudStatusComite) || 'pendente',
   )
-  const [statusExec, setStatusExec] = useState<GmudStatusExec>(
-    (gmud.extra?.statusExec as GmudStatusExec) || 'pendente',
-  )
   const [dataCab, setDataCab] = useState(gmud.extra?.dataCab ?? '')
   const [rnc, setRnc] = useState(gmud.extra?.rnc ?? '')
 
@@ -44,58 +36,45 @@ export function GmudApprovalModal({
   const currentUser = profile?.displayName || profile?.email || ''
 
   const prevComite = (gmud.extra?.statusComite as GmudStatusComite) || 'pendente'
-  const prevExec = (gmud.extra?.statusExec as GmudStatusExec) || 'pendente'
   const assignmentId = gmud.extra?.assignmentId ?? gmud.assignmentId ?? null
   const jaEncerrado = Boolean(gmud.extra?.ellevenEncerradoEm)
 
   const mutation = useMutation({
     mutationFn: async () => {
-      // Transições que encerram o protocolo no Elleven:
-      //  - Comitê → Negada  => cancelamento (incidentStatusId 8)
-      //  - Execução → Concluída => encerramento (incidentStatusId de encerrado)
-      // "Negada" tem prioridade (uma GMUD negada não segue para concluída).
+      // A avaliação do Comitê é um ato único (Aprovar/Negar). A conclusão e o cancelamento
+      // têm botões próprios no detalhe. Aqui só "Negar" encerra o protocolo (cancelamento).
       const vaiNegar = statusComite === 'negada' && prevComite !== 'negada'
-      const vaiConcluir = statusExec === 'concluida' && prevExec !== 'concluida'
-      const encerra: 'negada' | 'concluida' | null = vaiNegar
-        ? 'negada'
-        : vaiConcluir
-          ? 'concluida'
-          : null
 
-      if (encerra && !jaEncerrado && assignmentId != null) {
-        const label = encerra === 'negada' ? 'cancelamento' : 'encerramento'
+      if (vaiNegar && !jaEncerrado && assignmentId != null) {
         const ok = window.confirm(
-          `Esta ação vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (${label}). Confirmar?`,
+          `Negar esta GMUD vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (cancelamento). Confirmar?`,
         )
         if (!ok) return { aborted: true }
         await closeGmudInElleven({
           assignmentId,
-          mode: encerra,
-          description: buildGmudCloseDescription(encerra, currentUser),
+          mode: 'negada',
+          description: buildGmudCloseDescription('negada', currentUser),
         })
         await updateGmudApproval({
           voalleProtocol: gmud.protocol,
           statusComite,
-          statusExec,
           dataCab: dataCab || undefined,
           rnc: rnc || undefined,
-          ellevenEncerrado: { status: encerra },
+          ellevenEncerrado: { status: 'negada' },
         })
         return { aborted: false }
       }
 
-      // Sem encerramento (ou já encerrado, ou sem assignmentId): só registra a avaliação.
-      if (encerra && !jaEncerrado && assignmentId == null) {
+      if (vaiNegar && !jaEncerrado && assignmentId == null) {
         const ok = window.confirm(
           `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${gmud.protocol}. ` +
-            `A avaliação será salva, mas encerre o protocolo manualmente no Elleven. Continuar?`,
+            `A decisão será salva, mas encerre o protocolo manualmente no Elleven. Continuar?`,
         )
         if (!ok) return { aborted: true }
       }
       await updateGmudApproval({
         voalleProtocol: gmud.protocol,
         statusComite,
-        statusExec,
         dataCab: dataCab || undefined,
         rnc: rnc || undefined,
       })
@@ -149,21 +128,6 @@ export function GmudApprovalModal({
               ))}
             </div>
           </div>
-
-          <label>
-            <span className={LABEL}>Status de execução</span>
-            <select
-              className={FIELD}
-              value={statusExec}
-              onChange={(e) => setStatusExec(e.target.value as GmudStatusExec)}
-            >
-              {(Object.keys(GMUD_STATUS_EXEC_LABEL) as GmudStatusExec[]).map((s) => (
-                <option key={s} value={s}>
-                  {GMUD_STATUS_EXEC_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label>

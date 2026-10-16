@@ -5,6 +5,7 @@ import { gmudDisplayTitle } from '@/features/gmud/lib/gmudTitle'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
+import { gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
@@ -148,13 +149,12 @@ export function GmudListTable({
                       <Link2 size={13} />
                       {g.massivaLinksCount > 0 ? g.massivaLinksCount : 'Vincular'}
                     </button>
-                    {canApprove ? (
+                    {canApprove && gmudPodeAvaliar(g) ? (
                       <button
                         type="button"
                         onClick={() => onApprove(g)}
-                        disabled={!plataforma}
-                        title={plataforma ? 'Avaliação do Comitê' : 'GMUD legado: sem escopo registrado para o Comitê avaliar'}
-                        className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                        title="Avaliação do Comitê"
+                        className="rounded-md px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10"
                       >
                         Avaliar
                       </button>

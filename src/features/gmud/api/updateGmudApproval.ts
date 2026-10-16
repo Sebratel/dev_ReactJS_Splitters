@@ -10,8 +10,8 @@ export type GmudApprovalInput = {
   statusExec?: GmudStatusExec
   dataCab?: string
   rnc?: string
-  /** Marca que o protocolo foi encerrado no Elleven (concluída/negada) — registra data e motivo. */
-  ellevenEncerrado?: { status: 'concluida' | 'negada' }
+  /** Marca que o protocolo foi encerrado no Elleven (concluída/negada/cancelada) — data e motivo. */
+  ellevenEncerrado?: { status: 'concluida' | 'negada' | 'cancelada' }
 }
 
 /** Registra a decisão do Comitê + status de execução (só no nosso banco). Exige canApproveGmud. */

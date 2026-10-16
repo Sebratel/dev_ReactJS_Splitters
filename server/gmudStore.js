@@ -252,8 +252,9 @@ export async function createGmudRequest(input) {
 
 const STATUS_COMITE = new Set(['pendente', 'aprovada', 'negada']);
 const STATUS_EXEC = new Set(['pendente', 'em_execucao', 'concluida']);
-// Motivo do encerramento no Elleven: 'concluida' (GMUD concluída) ou 'negada' (reprovada pelo Comitê).
-const STATUS_EXEC_OR_NEGADA = new Set(['concluida', 'negada']);
+// Motivo do encerramento no Elleven: 'concluida' (GMUD concluída), 'negada' (reprovada pelo Comitê)
+// ou 'cancelada' (GMUD cancelada — mudança abortada, como o cancelamento de massiva).
+const ELLEVEN_ENCERRADO_STATUS = new Set(['concluida', 'negada', 'cancelada']);
 
 /**
  * Aplica a decisão do Comitê (e status de execução) a uma GMUD, por protocolo.
@@ -275,7 +276,7 @@ export async function setGmudApproval(input) {
   // Encerramento no Elleven já efetivado pelo frontend: marca data + status ('concluida'/'negada')
   // para o painel exibir e para evitar re-encerrar. Enviado como { status } em input.ellevenEncerrado.
   const ellevenStatus =
-    input.ellevenEncerrado && STATUS_EXEC_OR_NEGADA.has(input.ellevenEncerrado.status)
+    input.ellevenEncerrado && ELLEVEN_ENCERRADO_STATUS.has(input.ellevenEncerrado.status)
       ? input.ellevenEncerrado.status
       : null;
 
