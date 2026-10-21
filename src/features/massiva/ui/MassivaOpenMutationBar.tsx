@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { MassivaOpenMutationSuccessPayload } from '@/features/massiva/model/massivaOpenMutation'
 import {
   isMassivaOpenAggregateError,
@@ -34,6 +35,25 @@ function isUnauthorizedError(error: unknown): boolean {
   return msg.includes('401') || msg.includes('sessão expirada')
 }
 
+/**
+ * Timeout do cliente (HTTP 408) na abertura: o Elleven é lento e pode TER criado o protocolo
+ * mesmo sem devolver a resposta a tempo. Nesse caso avisamos o operador que uma nova tentativa
+ * é segura — a chave de idempotência é reusada e o gateway devolve o mesmo protocolo em vez de
+ * duplicar. O objetivo é evitar que o operador feche/reabra por engano e gere protocolo repetido.
+ */
+function isTimeoutError(error: unknown): boolean {
+  if (error instanceof ApiError && error.status === 408) return true
+  if (isMassivaOpenAggregateError(error)) {
+    return error.failures.some(
+      (f) =>
+        f.message.includes('408') ||
+        f.message.toLowerCase().includes('tempo limite'),
+    )
+  }
+  const msg = formatQueryError(error).toLowerCase()
+  return msg.includes('408') || msg.includes('tempo limite')
+}
+
 function SingleResultLine(props: {
   r: MassivaOpenMutationSuccessPayload['results'][number]
 }) {
@@ -66,6 +86,18 @@ export function MassivaOpenMutationBar({
   const showSubmit = !isSuccess
   const showDismiss = isSuccess || isError
   const unauthorized = isError && isUnauthorizedError(error)
+  const timedOut = isError && !unauthorized && isTimeoutError(error)
+
+  // Barreira de confirmação no caminho do timeout: após um 408 o formulário fica intacto e o
+  // operador poderia clicar "Abrir" de novo às cegas — e se o gateway também falhou no downstream
+  // (resposta não-2xx, não cacheada), o retry re-encaminha e o Elleven pode criar um 2º protocolo.
+  // O botão só reabilita depois que o operador confirma que conferiu que a massiva NÃO existe.
+  const [timeoutAck, setTimeoutAck] = useState(false)
+  useEffect(() => {
+    // Zera a confirmação sempre que sai do estado de timeout (novo erro, sucesso, ou limpar).
+    if (!timedOut) setTimeoutAck(false)
+  }, [timedOut])
+  const blockedByTimeout = timedOut && !timeoutAck
 
   return (
     <div className="mt-4 space-y-3 rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-gradient-to-b from-neutral-50/90 dark:from-white/5 to-white dark:to-surface-container-lowest px-4 py-4 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] ring-1 ring-black/[0.03] dark:border-neutral-600 dark:bg-neutral-900/50">
@@ -91,21 +123,38 @@ export function MassivaOpenMutationBar({
 
       {showSubmit ? (
         <div className="space-y-1.5">
+          {timedOut ? (
+            <label className="flex items-start gap-2 rounded-md border border-amber-300/80 bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                checked={timeoutAck}
+                onChange={(e) => setTimeoutAck(e.target.checked)}
+              />
+              <span>
+                Confirmo que <span className="font-medium">conferi em Massivas recentes / no Elleven</span> e
+                que a massiva <span className="font-medium">não foi criada</span>. Só então libero a nova
+                tentativa (o botão fica bloqueado até esta confirmação para evitar protocolo duplicado).
+              </span>
+            </label>
+          ) : null}
           <button
             type="button"
             className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-violet-400 disabled:opacity-70"
-            disabled={!canSubmitOpen || isPending}
+            disabled={!canSubmitOpen || isPending || blockedByTimeout}
             onClick={onSubmit}
-            aria-disabled={!canSubmitOpen || isPending}
+            aria-disabled={!canSubmitOpen || isPending || blockedByTimeout}
             aria-describedby={
               !canSubmitOpen && submitBlockedReason
                 ? 'massiva-post-submit-blocked'
                 : undefined
             }
             title={
-              !canSubmitOpen && submitBlockedReason
-                ? 'Corrija o bloqueio acima para habilitar o envio.'
-                : undefined
+              blockedByTimeout
+                ? 'Marque a confirmação acima para liberar a nova tentativa.'
+                : !canSubmitOpen && submitBlockedReason
+                  ? 'Corrija o bloqueio acima para habilitar o envio.'
+                  : undefined
             }
           >
             {isPending ? 'Abrindo…' : 'Abrir massiva'}
@@ -206,6 +255,16 @@ export function MassivaOpenMutationBar({
           ) : (
             <p className="mt-2 text-xs">{formatQueryError(error)}</p>
           )}
+          {timedOut ? (
+            <p className="mt-2 rounded-md border border-amber-300/80 bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/40 px-2.5 py-2 text-xs text-amber-950 dark:text-amber-100">
+              <span className="font-semibold">Atenção: </span>
+              o Elleven demorou a responder e a massiva <span className="font-medium">pode já ter
+              sido criada</span>. Antes de repetir, confira em <span className="font-medium">Massivas
+              recentes</span>/no Elleven. Se não aparecer, clique em <span className="font-medium">Abrir
+              massiva</span> de novo — a proteção de idempotência reaproveita a mesma tentativa e
+              devolve o mesmo protocolo, sem duplicar.
+            </p>
+          ) : null}
           {unauthorized ? (
             <p className="mt-2 text-xs text-red-900/90 dark:text-red-200">
               Dica: em desenvolvimento local, defina{' '}

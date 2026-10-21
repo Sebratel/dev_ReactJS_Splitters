@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { trackUsageAction } from '@/features/analytics/api/trackUsageEvent'
 import { openMassivaFromContext } from '@/features/massiva/api/openMassivaFromContext'
@@ -26,6 +27,11 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
   const queryClient = useQueryClient()
   const resetDraft = useMassivaOpenDraftStore((s) => s.reset)
 
+  // Chave de idempotência da tentativa: gerada uma vez e REUSADA em retries (ex.:
+  // após timeout, quando o Elleven pode já ter criado), para o gateway deduplicar.
+  // Rotacionada (null) a cada sucesso — a próxima abertura ganha uma chave nova.
+  const attemptKeyRef = useRef<string | null>(null)
+
   const mutation = useMutation<
     MassivaOpenMutationSuccessPayload,
     unknown,
@@ -34,6 +40,7 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     mutationFn: (context) => openMassivaFromContext(context),
     onSuccess: (data, context) => {
       resetDraft()
+      attemptKeyRef.current = null // rotaciona a chave após sucesso
       trackUsageAction('massiva_abrir', { module: 'massiva' })
       const fresh = massivaTicketsFromOpenSuccess(data, context)
       if (fresh.length > 0) {
@@ -56,10 +63,31 @@ export function useMassivaOpenMutation(readiness: MassivaOpenReadinessView) {
     },
   })
 
+  // Trava síncrona contra duplo/triplo clique: `mutation.isPending` é o valor do
+  // render (closure) e só vira `true` no próximo render — nesse intervalo, cliques
+  // rápidos disparariam `mutate` mais de uma vez (protocolos duplicados no Elleven).
+  // O ref é setado no instante do clique, antes de qualquer render, e liberado no
+  // `onSettled` (sucesso ou erro), permitindo um novo envio legítimo depois.
+  const submittingRef = useRef(false)
+
   const submitOpen = () => {
-    if (mutation.isPending) return
+    if (submittingRef.current || mutation.isPending) return
     if (readiness.status !== 'ready-to-open') return
-    mutation.mutate(readiness.context)
+    submittingRef.current = true
+    if (attemptKeyRef.current === null) {
+      attemptKeyRef.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+    }
+    mutation.mutate(
+      { ...readiness.context, idempotencyKey: attemptKeyRef.current },
+      {
+        onSettled: () => {
+          submittingRef.current = false
+        },
+      },
+    )
   }
 
   const canSubmitOpen =
