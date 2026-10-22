@@ -48,6 +48,18 @@ const CondoRedistributionPage = lazy(() =>
 const UsageRadarPage = lazy(() =>
   import('@/pages/UsageRadarPage').then((m) => ({ default: m.UsageRadarPage })),
 )
+const GmudPage = lazy(() =>
+  import('@/pages/GmudPage').then((m) => ({ default: m.GmudPage })),
+)
+const GmudNewPage = lazy(() =>
+  import('@/pages/GmudNewPage').then((m) => ({ default: m.GmudNewPage })),
+)
+const GmudIndicatorsPage = lazy(() =>
+  import('@/pages/GmudIndicatorsPage').then((m) => ({ default: m.GmudIndicatorsPage })),
+)
+const GmudDetailPage = lazy(() =>
+  import('@/pages/GmudDetailPage').then((m) => ({ default: m.GmudDetailPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -128,6 +140,54 @@ export const router = createBrowserRouter([
                 description="Seu perfil não possui acesso ao painel de inteligência."
               >
                 <Page><NetworkIntelligencePage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/nova',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudNewPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/indicadores',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudIndicatorsPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/:protocol',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <Page><GmudDetailPage /></Page>
               </PermissionGuard>
             ),
           },

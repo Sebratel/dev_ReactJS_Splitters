@@ -339,7 +339,9 @@ export function MassivaTicketsSection({
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
   const todayValue = useMemo(() => toDateValue(new Date()), [])
   const { view, refetch: refetchBffList, isRefreshing } = useMassivaTickets({
-    refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : undefined,
+    // Lista do Elleven ao vivo: 60s na visão normal (antes usava o padrão de 5min, então
+    // massivas abertas por outros atendentes demoravam a aparecer). 90s no fora-de-catálogo.
+    refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : 60_000,
   })
   const queryClient = useQueryClient()
   const didRestoreVisibleCountRef = useRef(false)
@@ -476,7 +478,10 @@ export function MassivaTicketsSection({
         startDate: historyListStart,
         limit: historyListLimit,
       }),
-    staleTime: 60_000,
+    // Base local é leve (MySQL próprio): pollamos a cada 10s para os cards se atualizarem
+    // sozinhos — massivas abertas (por você ou por outro atendente) aparecem sem refresh.
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnMount: 'always',
   })
 

@@ -266,6 +266,7 @@ export function MassivaOpenDraftFields({
                   type="date"
                   required
                   aria-required="true"
+                  min={new Date().toISOString().slice(0, 10)}
                   className={inputClassName}
                   value={assignmentForecastDate}
                   onChange={(e) => setAssignmentForecastDate(e.target.value)}
@@ -326,6 +327,7 @@ export function MassivaOpenDraftFields({
                   { value: 'tecnico', label: 'Técnico' },
                   { value: 'zabbix',  label: 'Zabbix'  },
                   { value: 'int6',    label: 'INT6'     },
+                  { value: 'gmud',    label: 'GMUD'     },
                 ] as const
               ).map(({ value, label }) => (
                 <button

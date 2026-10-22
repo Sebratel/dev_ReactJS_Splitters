@@ -185,7 +185,7 @@ export function HomePage() {
     <>
     <div className="mx-auto max-w-[1600px] min-w-0 space-y-4 md:space-y-5 rounded-[28px] bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(255,176,0,0.06),transparent_52%)] px-1 pb-1 pt-0.5 sm:px-2">
       <motion.section
-        className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-br from-white dark:from-surface-container-lowest via-surface-container-lowest to-primary/[0.04] shadow-[0_8px_40px_-16px_rgba(15,23,42,0.12)] ring-1 ring-white/60"
+        className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-br from-white dark:from-surface-container-lowest via-surface-container-lowest to-primary/[0.04] shadow-[0_8px_40px_-16px_rgba(15,23,42,0.12)] ring-1 ring-white/60 dark:ring-white/10"
         aria-labelledby="dashboard-hero-heading"
         aria-label={statusSummaryLine}
         {...fadeUp}
@@ -478,7 +478,7 @@ export function HomePage() {
         transition={{ duration: 0.35, delay: reduceMotion ? 0 : 0.06 }}
       >
         <div className="min-w-0 lg:col-span-8">
-          <div className="overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-surface-container-lowest/90 shadow-[0_12px_48px_-24px_rgba(15,23,42,0.18)] ring-1 ring-white/70 backdrop-blur-sm">
+          <div className="overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-surface-container-lowest/90 shadow-[0_12px_48px_-24px_rgba(15,23,42,0.18)] ring-1 ring-white/70 dark:ring-white/10 backdrop-blur-sm">
               <header className="flex flex-col gap-2 border-b border-stone-100/90 dark:border-white/5 bg-gradient-to-r from-stone-50/80 dark:from-white/5 to-white dark:to-surface-container-lowest p-4 md:flex-row md:items-center md:justify-between md:py-3.5 md:pl-5 md:pr-4">
                 <div className="min-w-0 space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-on-surface-variant sm:text-[11px]">

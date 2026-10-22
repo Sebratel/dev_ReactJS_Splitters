@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { MassivaInfraProtocolSelection } from '@/features/massiva/model/massivaInfraProtocol'
 
-/** Quem identificou / solicitou a abertura do evento de massiva. */
-export type MassivaEventIdentifiedBy = 'tecnico' | 'zabbix' | 'int6'
+/** Quem identificou / solicitou a abertura do evento de massiva. 'gmud' = originada de uma GMUD. */
+export type MassivaEventIdentifiedBy = 'tecnico' | 'zabbix' | 'int6' | 'gmud'
 
 /**
  * Rascunho de abertura: campos do formulário + descrição técnica (template ou editada).
@@ -22,7 +22,7 @@ type MassivaOpenDraftState = {
   eventIdentifiedTime: string
 
   initialReport: string
-  /** Quem identificou o evento: 'tecnico' | 'zabbix' | 'int6' */
+  /** Quem identificou o evento: 'tecnico' | 'zabbix' | 'int6' | 'gmud' */
   eventIdentifiedBy: MassivaEventIdentifiedBy
   /**
    * Quando definido (ex.: clique em evento AutoISP), substitui a linha “Clientes afetados”
