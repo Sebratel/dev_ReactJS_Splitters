@@ -199,6 +199,12 @@ export const env = {
   /** Endpoint de listagem de eventos do AutoISP (não é segredo — só a URL). A autenticação
    * é feita no backend (`AUTOISP_*`), que devolve o token via `GET /api/autoisp/token`. */
   autoIspEventsEndpoint: str(import.meta.env.VITE_AUTOISP_EVENTS_ENDPOINT, ''),
+  /**
+   * `true` = o painel AutoISP resolve rotas por PPPoE em `POST /api/v1/splitters/rotas-por-pppoe`
+   * (gateway -> splitters-service -> banco do ERP) e, se falhar, usa o BFF local. Deixe `false`
+   * até esse endpoint estar publicado no gateway do ambiente.
+   */
+  autoIspRouteLookupViaGateway: str(import.meta.env.VITE_AUTOISP_ROUTE_LOOKUP_VIA_GATEWAY, 'false') === 'true',
   /** BFF operacional para queries SQL/auxiliares (local no dev, remoto em staging/prod). */
   localBffUrl: localBffUrlResolved(),
   /**
