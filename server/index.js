@@ -96,6 +96,19 @@ import {
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
 import logger, { captureConsole } from './logger.js';
+import {
+  countResponseBytes,
+  createInFlightTracker,
+  getMemorySnapshot,
+  reportPreviousRun,
+  startRuntimeDiagnostics,
+} from './lib/runtimeDiagnostics.js';
+import { attachPgPoolErrorHandler } from './lib/pgPoolErrors.js';
+import { createSingleFlight } from './lib/singleFlight.js';
+import {
+  buildRouteLookupQuery,
+  parseRouteLookupBody,
+} from './lib/autoIspRouteLookup.js';
 
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
@@ -131,6 +144,12 @@ const hubBaseUrl = (
 app.use(cors()); // Permite qualquer origem em desenvolvimento local
 app.use(express.json({ limit: '512kb' }));
 
+const inFlightRequests = createInFlightTracker();
+const LARGE_RESPONSE_BYTES =
+  Number.parseInt(process.env.LARGE_RESPONSE_BYTES || '', 10) || 5 * 1024 * 1024;
+const LARGE_QUERY_ROWS =
+  Number.parseInt(process.env.LARGE_QUERY_ROWS || '', 10) || 10000;
+
 // Observabilidade aditiva: um id de correlação por requisição, gerado
 // sincronamente (antes de qualquer trabalho assíncrono) e logado como
 // 'http_request_start'. Ao final (res.on('finish')), loga 'http_request_finish'
@@ -153,8 +172,37 @@ app.use((req, res, next) => {
     poolStats: getPostgresPoolStats(pool),
   });
 
+  // Diagnóstico de queda: requisições em voo entram no heartbeat; bytes da resposta
+  // identificam rotas que materializam payloads enormes (risco de estouro de heap).
+  const endInFlight = inFlightRequests.begin({ id, method: req.method, path: req.originalUrl });
+  const getResponseBytes = countResponseBytes(res);
+  res.on('close', () => {
+    endInFlight();
+    if (!res.writableFinished) {
+      logger.warn('http_request_aborted', {
+        id,
+        method: req.method,
+        path: req.route?.path || req.originalUrl,
+        durationMs: Date.now() - startedAt,
+        responseBytes: getResponseBytes(),
+      });
+    }
+  });
+
   res.on('finish', () => {
     const durationMs = Date.now() - startedAt;
+    const responseBytes = getResponseBytes();
+    if (responseBytes >= LARGE_RESPONSE_BYTES) {
+      logger.warn('http_large_response', {
+        id,
+        method: req.method,
+        path: req.route?.path || req.originalUrl,
+        responseMb: Math.round((responseBytes / (1024 * 1024)) * 10) / 10,
+        durationMs,
+        memory: getMemorySnapshot(),
+        inFlightCount: inFlightRequests.count(),
+      });
+    }
     const status = res.statusCode;
     const userEmail =
       req.user?.email ||
@@ -168,6 +216,7 @@ app.use((req, res, next) => {
       path: req.route?.path || req.originalUrl,
       status,
       durationMs,
+      responseBytes,
       userEmail,
     };
     if (status >= 500) {
@@ -370,6 +419,19 @@ function instrumentPgPool(pgPool, poolName) {
           rowCount: value?.rowCount ?? undefined,
           poolStats: getPostgresPoolStats(pgPool),
         });
+        // Resultado gigante entra inteiro no heap do Node (objetos JS + JSON da resposta).
+        if ((value?.rowCount ?? 0) >= LARGE_QUERY_ROWS) {
+          logger.warn('pg_large_result', {
+            id,
+            pool: poolName,
+            sql: previewSql(text),
+            rowCount: value.rowCount,
+            columns: value.fields?.length,
+            durationMs: Date.now() - startedAt,
+            memory: getMemorySnapshot(),
+            inFlightCount: inFlightRequests.count(),
+          });
+        }
         return value;
       },
       (error) => {
@@ -390,6 +452,8 @@ function instrumentPgPool(pgPool, poolName) {
 }
 
 instrumentPgPool(pool, 'postgres_main');
+// Sem este listener, um erro em client ocioso do pool vira uncaughtException e derruba o processo.
+attachPgPoolErrorHandler(pool, 'postgres_main', { getPoolStats: getPostgresPoolStats });
 instrumentPgPool(onuPool, 'postgres_onu');
 
 // Log periódico (~7s) do estado dos pools de conexão (Postgres principal,
@@ -1599,6 +1663,9 @@ function massivaConnectionsSummaryQuery(where) {
   `;
 }
 
+// A base inteira roda no maximo UMA vez por vez (ver lib/singleFlight.js).
+const fullBaseConnectionsFlight = createSingleFlight();
+
 app.get('/api/massiva/connections', async (req, res) => {
   try {
     const apCode = String(req.query.apCode ?? '').trim();
@@ -1625,22 +1692,70 @@ app.get('/api/massiva/connections', async (req, res) => {
       splitterCodes: splitterCodes.length > 0 ? splitterCodes : undefined,
     });
 
-    const result = await queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
-      retries: 1,
-      delayMs: 180,
-    });
-    let rows = result.rows;
-    if (slotPortFilter) {
-      rows = rows.filter((row) => rowMatchesMassivaOltRoute(slotN, portN, row));
+    const loadConnectionsBody = async () => {
+      const result = await queryWithTransientRetry(massivaConnectionsSelectQuery(where), values, {
+        retries: 1,
+        delayMs: 180,
+      });
+      let rows = result.rows;
+      if (slotPortFilter) {
+        rows = rows.filter((row) => rowMatchesMassivaOltRoute(slotN, portN, row));
+      }
+      return JSON.stringify({ success: true, count: rows.length, data: rows });
+    };
+
+    // Sem filtro de AP/splitter/rota = BASE INTEIRA (~87k linhas x 59 colunas, ~150 MB de corpo e
+    // centenas de MB no heap). O painel AutoISP nao chama mais essa variante (usa lookup-by-pppoe);
+    // ela fica para chamadores externos e roda uma execucao por vez: quem chega durante a
+    // execucao espera a mesma resposta. Com 10 simultaneas o processo estourava o heap (incidente
+    // de restart loop). As variantes filtradas sao pequenas e vao direto ao banco.
+    const isFullBaseRequest =
+      apCode === '' && splitterCodes.length === 0 && !slotPortFilter;
+
+    if (!isFullBaseRequest) {
+      res.type('application/json').send(await loadConnectionsBody());
+      return;
     }
-    res.json({
-      success: true,
-      count: rows.length,
-      data: rows,
+
+    const { value: body, shared } = await fullBaseConnectionsFlight.run(
+      'massiva-connections-full-base',
+      async () => Buffer.from(await loadConnectionsBody()),
+    );
+    logger.info('massiva_connections_full_base', {
+      sharedExecution: shared,
+      bodyMb: Math.round((body.length / (1024 * 1024)) * 10) / 10,
     });
+    res.type('application/json').send(body);
   } catch (error) {
     console.error('Erro ao listar conexões para Massiva:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota por PPPoE para o painel AutoISP: substitui o download da base inteira por uma consulta
+// so dos PPPoE dos eventos em tela. Devolve apenas colunas de rota (sem dados pessoais), no mesmo
+// formato das linhas de /api/massiva/connections: o frontend reaproveita o mesmo mapper.
+// Fallback do endpoint equivalente do splitters-service (gateway); sem cache: a consulta e curta.
+app.post('/api/massiva/connections/lookup-by-pppoe', async (req, res) => {
+  try {
+    const parsed = parseRouteLookupBody(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ success: false, error: parsed.error });
+    }
+    if (parsed.keys.length === 0) {
+      return res.json({ success: true, count: 0, data: [] });
+    }
+
+    const result = await queryWithTransientRetry(
+      buildRouteLookupQuery(SPLITTERS_BASE_QUERY),
+      [parsed.keys],
+      { retries: 1, delayMs: 180 },
+    );
+    const rows = result.rows;
+    return res.json({ success: true, count: rows.length, data: rows });
+  } catch (error) {
+    console.error('Erro ao resolver rotas por PPPoE (AutoISP):', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -6695,6 +6810,22 @@ app.post('/api/dashboard/kpi-daily-snapshot', async (req, res) => {
 });
 
 async function startServer() {
+  // Antes de qualquer coisa: o que aconteceu com a execução anterior? (ver lib/runtimeDiagnostics.js)
+  logger.info('process_boot', {
+    pid: process.pid,
+    node: process.version,
+    nodeOptions: process.env.NODE_OPTIONS ?? null,
+    memory: getMemorySnapshot(),
+  });
+  reportPreviousRun();
+  startRuntimeDiagnostics({
+    getInFlight: () => ({ count: inFlightRequests.count(), list: inFlightRequests.list() }),
+    getPoolStats: () => ({
+      postgres_main: getPostgresPoolStats(pool),
+      postgres_onu: onuPool ? getPostgresPoolStats(onuPool) : undefined,
+    }),
+  });
+
   // Escutar primeiro: /api/health fica pronto de imediato (Docker/Portainer). Antes, await a
   // Postgresql/MySQL podia atrasar ou bloquear e o healthcheck falhava (container unhealthy).
   await new Promise((resolve, reject) => {
@@ -6830,12 +6961,16 @@ async function startServer() {
 }
 
 process.on('uncaughtException', (error) => {
-  logger.fatal('uncaught_exception', { error });
+  logger.fatal('uncaught_exception', {
+    error,
+    memory: getMemorySnapshot(),
+    inFlight: inFlightRequests.list(),
+  });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.fatal('unhandled_rejection', { reason });
+  logger.fatal('unhandled_rejection', { reason, memory: getMemorySnapshot() });
 });
 
 app.use((error, req, res, next) => {

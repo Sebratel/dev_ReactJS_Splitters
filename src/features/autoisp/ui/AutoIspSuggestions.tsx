@@ -6,9 +6,10 @@ import { useAutoIspCorrelation } from '@/features/autoisp/hooks/useAutoIspCorrel
 import { resolveRouteFromEventStandalone } from '@/features/autoisp/lib/correlation'
 import type { AutoIspEvent } from '@/features/autoisp/model/autoIsp.types'
 import type { ResolvedAutoIspRoute } from '@/features/autoisp/model/topology.types'
-import { buildTopologyIndicesFromConnections } from '@/features/autoisp/lib/buildTopologyIndices'
-import { massivaKeys } from '@/features/massiva/model/massivaKeys'
-import { fetchSplitterConnectionsFromLocalDb } from '@/features/splitters/api/fetchSplitterConnectionsFromLocalDb'
+import { fetchAutoIspRoutesByPppoe } from '@/features/autoisp/api/fetchAutoIspRoutesByPppoe'
+import { buildTopologyIndicesFromLookup } from '@/features/autoisp/lib/buildTopologyIndices'
+import { collectPppoeUsernamesFromEvents } from '@/features/autoisp/lib/collectPppoeUsernames'
+import { fetchMassivaRoutesFromLocalDb } from '@/features/massiva/api/fetchMassivaRoutesFromLocalDb'
 import { SPLITTERS_CONNECTIONS_STALE_TIME_MS } from '@/features/splitters/model/constants'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import { isAutoIspBrowserReady, isAutoIspConfigured } from '@/shared/config/env'
@@ -47,8 +48,9 @@ function sortEventsForDisplay(events: AutoIspEvent[]): AutoIspEvent[] {
 
 /**
  * Lista eventos do AutoISP. A rota preferencial vem dos PPPoE dos recursos do evento cruzados
- * com GET `/api/massiva/connections` (base inteira). Ponlink + catálogo e ponlink “standalone”
- * são fallback; o preview local só entra no índice enquanto a base global ainda não carregou.
+ * com a base de conexões via POST `/api/massiva/connections/lookup-by-pppoe` (só os PPPoE em
+ * tela, nunca a base inteira). Ponlink + catálogo (`/api/massiva/routes`) e ponlink “standalone”
+ * são fallback; o preview local também entra no índice.
  */
 export function AutoIspSuggestions({
   connections,
@@ -58,21 +60,34 @@ export function AutoIspSuggestions({
   const browserReady = isAutoIspBrowserReady()
   const { data: events, isLoading, isError, error, isFetched } = useAutoIspEvents()
 
-  const connectionsIndexQuery = useQuery({
-    queryKey: massivaKeys.connectionsForAutoIspIndex(),
-    queryFn: () => fetchSplitterConnectionsFromLocalDb(),
+  const pppoeUsernames = useMemo(() => collectPppoeUsernamesFromEvents(events ?? []), [events])
+
+  // Rota só dos PPPoE dos eventos em tela (antes: base inteira, ~87k linhas, a cada usuário).
+  const routeLookupQuery = useQuery({
+    queryKey: ['autoisp', 'route-lookup', pppoeUsernames],
+    queryFn: () => fetchAutoIspRoutesByPppoe(pppoeUsernames),
+    staleTime: SPLITTERS_CONNECTIONS_STALE_TIME_MS,
+    enabled: configured && browserReady && pppoeUsernames.length > 0,
+    refetchOnWindowFocus: false,
+  })
+
+  // Catálogo AP/slot/porta (fallback por ponlink). Mesma chave do assistente de massiva: um cache só.
+  const routesCatalogQuery = useQuery({
+    queryKey: ['massiva', 'routes'],
+    queryFn: () => fetchMassivaRoutesFromLocalDb(),
     staleTime: SPLITTERS_CONNECTIONS_STALE_TIME_MS,
     enabled: configured && browserReady,
     refetchOnWindowFocus: false,
   })
 
-  const topologyIndices = useMemo(() => {
-    const full = connectionsIndexQuery.data
-    if (full !== undefined && full.length > 0) {
-      return buildTopologyIndicesFromConnections(full)
-    }
-    return buildTopologyIndicesFromConnections(connections)
-  }, [connectionsIndexQuery.data, connections])
+  const topologyIndices = useMemo(
+    () =>
+      buildTopologyIndicesFromLookup(
+        [...(routeLookupQuery.data ?? []), ...connections],
+        routesCatalogQuery.data ?? [],
+      ),
+    [routeLookupQuery.data, routesCatalogQuery.data, connections],
+  )
 
   const { correlatedEvents } = useAutoIspCorrelation({
     events: events ?? [],
@@ -182,16 +197,15 @@ export function AutoIspSuggestions({
         )}
       </div>
 
-      {connectionsIndexQuery.isPending ? (
+      {routeLookupQuery.isLoading ? (
         <p className="text-[11px] text-sky-800 dark:text-sky-200">
-          Carregando <code className="text-[10px]">/api/massiva/connections</code> para correlacionar os PPPoE dos
-          eventos com AP, slot e PON…
+          Correlacionando os PPPoE dos eventos com AP, slot e PON…
         </p>
       ) : null}
-      {connectionsIndexQuery.isError ? (
+      {routeLookupQuery.isError ? (
         <p className="text-[11px] text-amber-900 dark:text-amber-200">
-          Não foi possível carregar a base de conexões para correlacionar PPPoE; usando só o preview local ou{' '}
-          <code className="text-[10px]">ponlink</code>. {formatQueryError(connectionsIndexQuery.error)}
+          Não foi possível correlacionar os PPPoE com a base de conexões; usando só o preview local ou{' '}
+          <code className="text-[10px]">ponlink</code>. {formatQueryError(routeLookupQuery.error)}
         </p>
       ) : null}
 

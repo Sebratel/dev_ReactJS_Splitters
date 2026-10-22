@@ -280,6 +280,7 @@ Principais grupos em `server/index.js`:
 - `/api/geogrid/...`
 - `/api/massiva/routes`
 - `/api/massiva/connections`
+- `/api/massiva/connections/lookup-by-pppoe` (rota por PPPoE para o painel AutoISP; só colunas de rota)
 - `/api/massiva/history/...`
 - `/api/splitters/snapshots/capture`
 - `/api/dashboard/kpi-daily-snapshot`
