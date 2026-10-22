@@ -96,6 +96,7 @@ import {
   listRegisteredGmudProtocols,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
+import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -154,21 +155,8 @@ app.use(
 
 app.use(express.json({ limit: '512kb' }));
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-
-/**
- * Mensagem de erro segura para incluir na resposta HTTP.
- * Em produção, erros inesperados (5xx) não expõem detalhes internos.
- * Erros operacionais com statusCode < 500 (validação, permissão) sempre mostram a mensagem.
- */
-function safeErrorMessage(error, fallback = 'Ocorreu um erro interno.') {
-  const statusCode = Number(error?.statusCode ?? 500);
-  const isOperational = Number.isFinite(statusCode) && statusCode < 500;
-  if (isOperational || !IS_PRODUCTION) {
-    return error instanceof Error ? error.message : fallback;
-  }
-  return fallback;
-}
+// safeErrorMessage, validateGmudDateWindow e canEditGmudRequest importados de gmudValidation.js
+const safeErrorMessage = (error, fallback) => _safeErrorMessage(error, fallback);
 
 // Observabilidade aditiva: um id de correlação por requisição, gerado
 // sincronamente (antes de qualquer trabalho assíncrono) e logado como
@@ -4402,9 +4390,9 @@ app.post('/api/gmud/create', async (req, res) => {
     const actorEmail = actor?.profile?.email || actor?.identity?.email || '';
     const canApprove = actor?.permissions?.canApproveGmud === true;
 
-    // F-01: em caso de UPSERT (registro já existe), apenas o criador ou um aprovador pode atualizar.
+    // F-01: em caso de UPSERT, apenas o criador ou um aprovador pode atualizar (canEditGmudRequest).
     const existing = await getGmudRequest(voalleProtocol);
-    if (existing && existing.createdByEmail && existing.createdByEmail !== actorEmail && !canApprove) {
+    if (!canEditGmudRequest(existing, actorEmail, canApprove)) {
       return res.status(403).json({
         success: false,
         message: 'Você não tem permissão para editar a GMUD de outro usuário.',
@@ -4682,18 +4670,10 @@ app.post('/api/gmud/reschedule', async (req, res) => {
     const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para reagendar GMUDs.');
     const body = req.body ?? {};
 
-    // F-02: valida que dataFim >= dataInicio (janela de datas consistente).
-    if (body.dataInicio && body.dataFim && body.dataInicio > body.dataFim) {
-      return res.status(400).json({
-        success: false,
-        message: 'A data de fim da janela não pode ser anterior à data de início.',
-      });
-    }
-    if (body.dataInicio === body.dataFim && body.horaInicio && body.horaFim && body.horaInicio >= body.horaFim) {
-      return res.status(400).json({
-        success: false,
-        message: 'No mesmo dia, a hora de fim deve ser posterior à hora de início.',
-      });
+    // F-02: valida janela de datas via validateGmudDateWindow (testável em gmudValidation.test.js).
+    const dateWindowError = validateGmudDateWindow(body.dataInicio, body.dataFim, body.horaInicio, body.horaFim);
+    if (dateWindowError) {
+      return res.status(400).json({ success: false, message: dateWindowError });
     }
 
     const result = await rescheduleGmud({
