@@ -20,6 +20,8 @@ const EVENTS_TABLE = 'gmud_events';
 const ATTACHMENTS_TABLE = 'gmud_attachments';
 /** Fluxogramas Mermaid gerados por IA ou criados manualmente para uma GMUD. */
 const FLOWCHARTS_TABLE = 'gmud_flowcharts';
+/** Aprovadores de e-mail por equipe — recebem notificação N8N quando uma GMUD é aberta. */
+const TEAM_APPROVERS_TABLE = 'gmud_team_approvers';
 
 export const GMUD_EVENT_TYPES = new Set([
   'criada',
@@ -208,6 +210,19 @@ async function ensureTable() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${TEAM_APPROVERS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        equipe_id BIGINT UNSIGNED NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        user_display_name VARCHAR(255) NULL,
+        created_by VARCHAR(191) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_${TEAM_APPROVERS_TABLE}_equipe_email (equipe_id, user_email),
+        INDEX idx_${TEAM_APPROVERS_TABLE}_equipe (equipe_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS ${FLOWCHARTS_TABLE} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         voalle_protocol BIGINT UNSIGNED NOT NULL,
@@ -259,6 +274,7 @@ async function ensureTable() {
     // Formulários dinâmicos (Massivas 3.4 fase 2): categoria da GMUD + dados específicos.
     await ensureColumn(pool, TABLE, 'categoria', "VARCHAR(32) NULL COMMENT 'rede_externa | sistemas_internos | sistemas_externos'");
     await ensureColumn(pool, TABLE, 'categoria_data', 'JSON NULL');
+    await ensureColumn(pool, TABLE, 'equipe_responsavel_id', 'BIGINT UNSIGNED NULL COMMENT \'ID da equipe responsável (gmud_config_lists) — usada no fluxo de aprovação por e-mail\'');
   })().catch((error) => {
     readyPromise = null;
     throw error;
@@ -308,6 +324,7 @@ export async function createGmudRequest(input) {
     assunto: toCleanString(input.assunto) || null,
     categoria: toCleanString(input.categoria) || null,
     categoria_data: jsonOrNull(input.categoriaData ?? null),
+    equipe_responsavel_id: normalizePositiveInt(input.equipeResponsavelId ?? null),
     titulo: toCleanString(input.titulo) || null,
     descricao: toCleanString(input.descricao) || null,
     pop_site: toCleanString(input.popSite) || null,
@@ -615,6 +632,7 @@ function mapGmudRow(r) {
     statusExec: r.status_exec ?? null,
     ellevenEncerradoEm: r.elleven_encerrado_em ? new Date(r.elleven_encerrado_em).toISOString() : null,
     ellevenEncerradoStatus: r.elleven_encerrado_status ?? null,
+    equipeResponsavelId: r.equipe_responsavel_id != null ? Number(r.equipe_responsavel_id) : null,
     createdByEmail: r.created_by_email ?? null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
   };
@@ -1019,6 +1037,85 @@ export async function softDeleteGmudAttachment(attachmentId) {
     `UPDATE ${ATTACHMENTS_TABLE} SET deleted_at = NOW() WHERE id = ?`, [id],
   );
   return { id, voalleProtocol: protocol, filenameStored };
+}
+
+// ─── Aprovadores de e-mail por equipe ───────────────────────────────────────
+
+/**
+ * Retorna todos os aprovadores agrupados por equipe: { [equipeId]: [{id, userEmail, userDisplayName}] }
+ */
+export async function getAllTeamApprovers() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT id, equipe_id, user_email, user_display_name FROM ${TEAM_APPROVERS_TABLE} ORDER BY equipe_id, id`,
+  );
+  const result = {};
+  for (const r of rows) {
+    const key = Number(r.equipe_id);
+    if (!result[key]) result[key] = [];
+    result[key].push({
+      id: Number(r.id),
+      userEmail: r.user_email,
+      userDisplayName: r.user_display_name ?? null,
+    });
+  }
+  return result;
+}
+
+/** Retorna os aprovadores de uma única equipe. */
+export async function getTeamApprovers(equipeId) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(equipeId);
+  if (!id) return [];
+  const [rows] = await pool.query(
+    `SELECT id, user_email, user_display_name FROM ${TEAM_APPROVERS_TABLE} WHERE equipe_id = ? ORDER BY id`,
+    [id],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    userEmail: r.user_email,
+    userDisplayName: r.user_display_name ?? null,
+  }));
+}
+
+/**
+ * Adiciona um aprovador a uma equipe. Idempotente por (equipeId, userEmail).
+ */
+export async function addTeamApprover({ equipeId, userEmail, userDisplayName, createdBy }) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(equipeId);
+  if (!id) throw buildError('ID de equipe inválido.', 400);
+  const email = toCleanString(userEmail);
+  if (email === '' || !email.includes('@')) throw buildError('E-mail inválido.', 400);
+  if (email.length > 255) throw buildError('E-mail muito longo.', 400);
+  const displayName = toCleanString(userDisplayName) || null;
+  const createdByClean = toCleanString(createdBy) || null;
+  const [existing] = await pool.query(
+    `SELECT id FROM ${TEAM_APPROVERS_TABLE} WHERE equipe_id = ? AND user_email = ? LIMIT 1`,
+    [id, email],
+  );
+  if (existing.length > 0) throw buildError(`"${email}" já é aprovador desta equipe.`, 409);
+  const [result] = await pool.query(
+    `INSERT INTO ${TEAM_APPROVERS_TABLE} (equipe_id, user_email, user_display_name, created_by) VALUES (?, ?, ?, ?)`,
+    [id, email, displayName, createdByClean],
+  );
+  return { id: result.insertId, equipeId: id, userEmail: email, userDisplayName: displayName };
+}
+
+/** Remove um aprovador por ID. */
+export async function removeTeamApprover(approverRowId) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(approverRowId);
+  if (!id) throw buildError('ID de aprovador inválido.', 400);
+  const [result] = await pool.query(
+    `DELETE FROM ${TEAM_APPROVERS_TABLE} WHERE id = ?`, [id],
+  );
+  if (result.affectedRows === 0) throw buildError('Aprovador não encontrado.', 404);
+  return { id };
 }
 
 // ─── Fluxogramas GMUD ───────────────────────────────────────────────────────
