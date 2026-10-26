@@ -25,6 +25,7 @@ type StepAberturaProps = {
   draftFormEnabled: boolean
   onRetryPersonId: () => void
   solicitationTypeLabel?: string
+  hideNetworkFields?: boolean
 }
 
 function Notice({
@@ -57,6 +58,7 @@ export function StepAbertura({
   draftFormEnabled,
   onRetryPersonId,
   solicitationTypeLabel,
+  hideNetworkFields,
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
@@ -361,6 +363,7 @@ export function StepAbertura({
         descriptionByAp={descriptionByAp}
         siteCandidates={siteCandidates}
         solicitationTypeLabel={solicitationTypeLabel}
+        hideNetworkFields={hideNetworkFields}
       />
     </div>
   )

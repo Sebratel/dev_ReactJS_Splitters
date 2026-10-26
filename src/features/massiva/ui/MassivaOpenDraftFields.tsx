@@ -31,6 +31,8 @@ type MassivaOpenDraftFieldsProps = {
   siteCandidates?: string[]
   /** Substituição do label de assunto exibido no campo "Tipo de solicitação" (padrão: MASSIVA_SOLICITATION_TYPE_LABEL). */
   solicitationTypeLabel?: string
+  /** Oculta campos exclusivos de rede: "Quem identificou" e "Protocolo de infraestrutura". */
+  hideNetworkFields?: boolean
 }
 
 function DraftSection({
@@ -112,6 +114,7 @@ export function MassivaOpenDraftFields({
   descriptionByAp = [],
   siteCandidates = [],
   solicitationTypeLabel = MASSIVA_SOLICITATION_TYPE_LABEL,
+  hideNetworkFields = false,
 }: MassivaOpenDraftFieldsProps) {
   const enableDescriptionAutoSync = useMassivaOpenDraftStore((s) => s.enableDescriptionAutoSync)
 
@@ -316,7 +319,7 @@ export function MassivaOpenDraftFields({
           </div>
 
           {/* Quem identificou o evento — seletor segmentado */}
-          <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
+          {!hideNetworkFields && <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
               Quem identificou o evento
             </p>
@@ -353,10 +356,10 @@ export function MassivaOpenDraftFields({
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Protocolo de infraestrutura (opcional) */}
-          <div className={cn('space-y-2 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
+          {!hideNetworkFields && <div className={cn('space-y-2 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
                 Protocolo de infraestrutura
@@ -472,7 +475,7 @@ export function MassivaOpenDraftFields({
                 descritivo.
               </p>
             ) : null}
-          </div>
+          </div>}
 
           <div className="rounded-xl border border-violet-200/70 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-950/40 p-2.5 sm:p-3">
             <button

@@ -447,6 +447,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         draftFormEnabled={draftFormEnabled}
         onRetryPersonId={refetchPersonId}
         solicitationTypeLabel={selectedSubject?.label}
+        hideNetworkFields={isSistema}
       />
     )
   })()
