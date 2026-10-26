@@ -6,9 +6,11 @@ import type {
 
 /**
  * Plano estatico por AP - uma requisicao por AP selecionado na topologia.
+ * `subjectLabel` sobrescreve o `assignmentTitle` de cada requisicao (padrao: display do AP).
  */
 export function buildMassivaOpeningPlanDraft(
   basis: MassivaOpeningBasis,
+  subjectLabel?: string,
 ): MassivaOpeningPlanDraft {
   const apByCode = new Map<string, string>()
 
@@ -24,9 +26,9 @@ export function buildMassivaOpeningPlanDraft(
 
   const requests = [...apByCode.entries()]
     .sort(([apA], [apB]) => apA.localeCompare(apB, 'pt-BR'))
-    .map(([authenticationAccessPointCode, assignmentTitle]) => ({
+    .map(([authenticationAccessPointCode]) => ({
       authenticationAccessPointCode,
-      assignmentTitle,
+      assignmentTitle: subjectLabel ?? authenticationAccessPointCode,
     }))
 
   return {

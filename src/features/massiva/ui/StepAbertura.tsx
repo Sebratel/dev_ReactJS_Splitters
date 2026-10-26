@@ -24,6 +24,7 @@ type StepAberturaProps = {
   openingPreparation: MassivaOpeningPreparationView
   draftFormEnabled: boolean
   onRetryPersonId: () => void
+  solicitationTypeLabel?: string
 }
 
 function Notice({
@@ -55,6 +56,7 @@ export function StepAbertura({
   openingPreparation,
   draftFormEnabled,
   onRetryPersonId,
+  solicitationTypeLabel,
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
@@ -358,6 +360,7 @@ export function StepAbertura({
         disabled={!draftFormEnabled}
         descriptionByAp={descriptionByAp}
         siteCandidates={siteCandidates}
+        solicitationTypeLabel={solicitationTypeLabel}
       />
     </div>
   )
