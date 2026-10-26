@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree, MessageSquarePlus } from 'lucide-react'
+import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree, Maximize2, MessageSquarePlus } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchGmudDetail, type GmudDetail } from '@/features/gmud/api/gmudDetail'
@@ -14,12 +14,18 @@ import { buildGmudTimeline } from '@/features/gmud/lib/gmudTimeline'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
-import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard } from '@/features/gmud/ui/detail/GmudDetailCards'
+import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard, GmudWindowHistoryCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
+import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
+import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
+import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
+import { GmudSistemasExternosCard, GmudSistemasInternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
+import type { GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import { updateGmudApproval } from '@/features/gmud/api/updateGmudApproval'
 import { gmudEncerrada, gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
 import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
+import { GmudEllevenStatusAlert } from '@/features/gmud/ui/GmudEllevenStatusAlert'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
 
@@ -45,6 +51,7 @@ function toListItem(d: GmudDetail): GmudListItem {
           assignmentId,
           tipo: r.tipo,
           assunto: r.assunto,
+          categoria: r.categoria,
           popSite: r.popSite,
           impactoParada: r.impactoParada,
           comunicaCliente: r.comunicaCliente,
@@ -89,12 +96,22 @@ export function GmudDetailScreen() {
   const protocol = Number.parseInt(String(raw ?? ''), 10)
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
   const [modal, setModal] = useState<'approve' | 'links' | 'reschedule' | 'report' | null>(null)
+  const [presenting, setPresenting] = useState(false)
 
   const query = useQuery({
     queryKey: ['gmud', 'detail', protocol],
     queryFn: () => fetchGmudDetail(protocol),
     enabled: Number.isFinite(protocol) && protocol > 0,
   })
+
+  // Cache compartilhado com GmudFlowchartSection — sem requisição dupla
+  const flowchartQuery = useQuery({
+    queryKey: ['gmud', 'flowchart', protocol],
+    queryFn: () => fetchGmudFlowchart(protocol),
+    staleTime: 30_000,
+    enabled: Number.isFinite(protocol) && protocol > 0,
+  })
+  const flowchart = flowchartQuery.data ?? null
   const d = query.data
   const timeline = useMemo(
     () =>
@@ -238,6 +255,15 @@ export function GmudDetailScreen() {
                 <MessageSquarePlus size={14} /> Adicionar relato
               </button>
             ) : null}
+            {flowchart ? (
+              <button
+                type="button"
+                onClick={() => setPresenting(true)}
+                className={cn(ACTION, 'bg-violet-600 text-white ring-violet-600 hover:bg-violet-700')}
+              >
+                <Maximize2 size={14} /> Apresentar ao Comitê
+              </button>
+            ) : null}
             <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
@@ -249,13 +275,50 @@ export function GmudDetailScreen() {
             </div>
           ) : null}
 
+          <GmudEllevenStatusAlert
+            statusComite={d.request?.statusComite}
+            dataFim={d.request?.dataFim || d.request?.dataInicio}
+            ellevenEncerradoEm={d.request?.ellevenEncerradoEm}
+            conclusionDate={d.voalle.conclusionDate}
+          />
+
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
               <GmudScopeCard request={d.request} voalleDescription={d.voalle.description} />
+              {d.request?.categoria === 'sistemas_internos' && d.request.categoriaData ? (
+                <GmudSistemasInternosCard data={d.request.categoriaData as GmudSistemasInternosData} />
+              ) : null}
+              {d.request?.categoria === 'sistemas_externos' && d.request.categoriaData ? (
+                <GmudSistemasExternosCard data={d.request.categoriaData as GmudSistemasExternosData} />
+              ) : null}
+              <GmudAttachmentsSection
+                protocol={protocol}
+                canUpload={!closed}
+                canDelete={canApprove}
+              />
+              <GmudFlowchartSection
+                protocol={protocol}
+                closed={closed}
+                gmudTitle={title}
+                description={d.request?.assunto ?? undefined}
+                gmudContext={
+                  d.request
+                    ? [
+                        d.request.tipo && `Tipo: ${d.request.tipo}`,
+                        d.request.assunto && `Assunto: ${d.request.assunto}`,
+                        d.request.ambienteAfetado && `Ambiente: ${d.request.ambienteAfetado}`,
+                        d.request.popSite && `POP/Site: ${d.request.popSite}`,
+                      ]
+                        .filter(Boolean)
+                        .join('\n') || undefined
+                    : undefined
+                }
+              />
               <GmudLinkedMassivasCard links={d.links} onManage={() => setModal('links')} />
             </div>
             <div className="space-y-4">
               <GmudDetailSummary detail={d} deadline={gmudDeadline(d.voalle)} />
+              <GmudWindowHistoryCard request={d.request} events={d.events} />
               <GmudTimelineCard items={timeline} />
             </div>
           </div>
@@ -307,6 +370,15 @@ export function GmudDetailScreen() {
           ) : null}
         </>
       )}
+
+      {presenting && flowchart ? (
+        <GmudPresentationModal
+          protocol={protocol}
+          flowchart={flowchart}
+          gmudTitle={title}
+          onClose={() => setPresenting(false)}
+        />
+      ) : null}
     </div>
   )
 }

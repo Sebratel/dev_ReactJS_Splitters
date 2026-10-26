@@ -1,6 +1,10 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
-import type { GmudFormState } from '@/features/gmud/model/gmudForm'
+import type {
+  GmudFormState,
+  GmudSistemasInternosData,
+  GmudSistemasExternosData,
+} from '@/features/gmud/model/gmudForm'
 
 export type CreateGmudResult = { id: number | null; voalleProtocol: number | null }
 
@@ -10,7 +14,11 @@ export type CreateGmudResult = { id: number | null; voalleProtocol: number | nul
  * automático do protocolo quando a GMUD for concluída/negada.
  */
 export async function createGmud(
-  form: GmudFormState & { voalleProtocol: string; assignmentId?: number | null },
+  form: GmudFormState & {
+    voalleProtocol: string
+    assignmentId?: number | null
+    categoriaData?: GmudSistemasInternosData | GmudSistemasExternosData | null
+  },
 ): Promise<CreateGmudResult> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/create`, {
     method: 'POST',

@@ -26,6 +26,8 @@ export type GmudExtra = {
   assignmentId: number | null
   tipo: string | null
   assunto: string | null
+  /** Categoria da GMUD: 'rede_externa' | 'sistemas_internos' | 'sistemas_externos'. Null = legado (RE). */
+  categoria: string | null
   popSite: string | null
   impactoParada: string | null
   comunicaCliente: string | null

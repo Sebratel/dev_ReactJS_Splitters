@@ -60,6 +60,9 @@ const GmudIndicatorsPage = lazy(() =>
 const GmudDetailPage = lazy(() =>
   import('@/pages/GmudDetailPage').then((m) => ({ default: m.GmudDetailPage })),
 )
+const GmudConfigPage = lazy(() =>
+  import('@/pages/GmudConfigPage').then((m) => ({ default: m.GmudConfigPage })),
+)
 
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -176,6 +179,18 @@ export const router = createBrowserRouter([
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
                 <Page><GmudIndicatorsPage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/configuracoes',
+            element: (
+              <PermissionGuard
+                permission="canConfigureGmud"
+                allowAdmin
+                description="Seu perfil não possui permissão para configurar o módulo de GMUD."
+              >
+                <Page><GmudConfigPage /></Page>
               </PermissionGuard>
             ),
           },

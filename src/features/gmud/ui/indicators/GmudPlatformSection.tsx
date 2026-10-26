@@ -106,6 +106,18 @@ export function GmudPlatformSection({ data, error }: { data: GmudPlatformIndicat
         </Panel>
       </div>
 
+      {data.byCategoria ? (
+        <Panel title="Distribuição por categoria" subtitle="GMUDs da plataforma classificadas por categoria de mudança.">
+          <Funnel
+            steps={[
+              { label: 'Rede externa', value: data.byCategoria.rede_externa ?? 0, color: COLORS.primary },
+              { label: 'Sist. internos', value: data.byCategoria.sistemas_internos ?? 0, color: COLORS.backlog },
+              { label: 'Sist. externos', value: data.byCategoria.sistemas_externos ?? 0, color: COLORS.neutral },
+            ]}
+          />
+        </Panel>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Panel title="Tipo"><BarList items={data.tipos} color={COLORS.primary} /></Panel>
         <Panel title="Assunto da mudança"><BarList items={data.assuntos} color={COLORS.backlog} /></Panel>

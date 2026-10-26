@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
@@ -47,6 +47,7 @@ export function GmudScreen() {
     setPage(0)
   }
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
+  const canConfigure = useAccessAuthStore((s) => s.hasPermission('canConfigureGmud') || s.hasPermission('isAdmin'))
   const pendingCount = useGmudPendingCount()
 
   // Debounce simples da busca (reseta pra página 0 quando muda).
@@ -87,6 +88,15 @@ export function GmudScreen() {
         >
           <BarChart3 size={15} /> Indicadores
         </Link>
+        {canConfigure ? (
+          <Link
+            to="/gmud/configuracoes"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+            title="Configurações do módulo GMUD"
+          >
+            <Settings2 size={15} /> Configurações
+          </Link>
+        ) : null}
         <div className="relative">
           <Search
             size={14}

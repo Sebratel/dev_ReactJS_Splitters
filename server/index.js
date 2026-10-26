@@ -6,7 +6,10 @@ import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
 import {
   analyzeStreetReliefContext,
@@ -94,9 +97,24 @@ import {
   listGmudEventsBetween,
   getLinksWithAffected,
   listRegisteredGmudProtocols,
+  getGmudConfigLists,
+  addGmudConfigItem,
+  deactivateGmudConfigItem,
+  addGmudAttachment,
+  listGmudAttachments,
+  getGmudAttachment,
+  softDeleteGmudAttachment,
+  getGmudFlowchart,
+  saveGmudFlowchart,
+  deleteGmudFlowchart,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
 import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
+import {
+  generateGmudFlowchart,
+  assistGmudFlowchart,
+  isPlanningAssistantConfigured as isGeminiConfigured,
+} from './gmudFlowchartAI.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -104,6 +122,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), override: true });
+
+// ─── Upload de anexos GMUD ────────────────────────────────────────────────────
+// Arquivos ficam em /uploads/gmud/{protocol}/ com nome UUID+extensão.
+// O diretório é criado on-demand no handler (não no startup).
+const GMUD_UPLOADS_ROOT = path.resolve(
+  process.env.GMUD_UPLOADS_DIR || path.join(__dirname, '..', 'uploads', 'gmud'),
+);
+const GMUD_ALLOWED_MIMETYPES = new Set([
+  'application/pdf', 'image/png', 'image/jpeg', 'image/webp',
+]);
+const GMUD_MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const gmudUpload = multer({
+  storage: multer.diskStorage({
+    destination(req, _file, cb) {
+      const protocol = String(req.params.protocol ?? '').trim();
+      if (!/^\d+$/.test(protocol)) return cb(new Error('Protocolo inválido.'));
+      const dir = path.join(GMUD_UPLOADS_ROOT, protocol);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename(_req, file, cb) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${uuidv4()}${ext}`);
+    },
+  }),
+  limits: { fileSize: GMUD_MAX_FILE_BYTES },
+  fileFilter(_req, file, cb) {
+    cb(null, GMUD_ALLOWED_MIMETYPES.has(file.mimetype));
+  },
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 if (!String(process.env.REVERSE_GEOCODE_ENDPOINT ?? '').trim()) {
   const viteReverse = String(process.env.VITE_REVERSE_GEOCODE_ENDPOINT ?? '').trim();
@@ -4448,6 +4498,320 @@ app.get('/api/gmud/pending-count', async (req, res) => {
   }
 });
 
+// Listas configuráveis do módulo GMUD (setores, equipes, sistemas…). Aberto a todos com canViewGmud.
+app.get('/api/gmud/config-lists', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const lists = await getGmudConfigLists();
+    return res.json({ success: true, data: lists });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar listas de configuração.',
+    });
+  }
+});
+
+// Adiciona item a uma lista configurável (requer canConfigureGmud ou isAdmin).
+app.post('/api/gmud/config-lists', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const body = req.body ?? {};
+    const { listKey, label } = body;
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const item = await addGmudConfigItem(listKey, label, createdBy);
+    return res.json({ success: true, data: item });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao adicionar item.',
+    });
+  }
+});
+
+// Remove (soft-delete) um item de uma lista configurável (requer canConfigureGmud ou isAdmin).
+app.delete('/api/gmud/config-lists/:id', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID inválido.' });
+    }
+    const result = await deactivateGmudConfigItem(id);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover item.',
+    });
+  }
+});
+
+// ─── Fluxogramas GMUD ────────────────────────────────────────────────────────
+
+app.get('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const flowchart = await getGmudFlowchart(protocol);
+    return res.json({ success: true, data: flowchart });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar o fluxograma.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/flowchart/generate', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({ success: false, message: 'Assistente IA não configurado no servidor (GEMINI_API_KEY ausente).' });
+    }
+    const description = String(req.body?.description ?? '').trim();
+    const gmudContext = String(req.body?.gmudContext ?? '').trim() || null;
+    if (!description || description.length < 20) {
+      return res.status(400).json({ success: false, message: 'Descrição deve ter pelo menos 20 caracteres.' });
+    }
+
+    const actor = gmudActorName(req.user);
+    const { mermaidSource, model, warnings } = await generateGmudFlowchart(description, gmudContext);
+
+    // Salva automaticamente como rascunho de IA
+    const flowchart = await saveGmudFlowchart({
+      voalleProtocol: protocol,
+      mermaidSource,
+      origin: 'ai',
+      reviewStatus: 'draft',
+      aiModel: model,
+      aiWarnings: warnings,
+      createdBy: actor,
+    });
+
+    // Registra na trilha (best-effort)
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_criado', actor, payload: { origin: 'ai', model } }).catch(() => {});
+
+    return res.json({ success: true, data: { flowchart, warnings } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao gerar o fluxograma.',
+    });
+  }
+});
+
+app.put('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const mermaidSource = String(req.body?.mermaidSource ?? '').trim();
+    if (!mermaidSource) {
+      return res.status(400).json({ success: false, message: 'Fonte Mermaid é obrigatória.' });
+    }
+    const VALID_ORIGINS = new Set(['ai', 'manual', 'imported']);
+    const origin = VALID_ORIGINS.has(req.body?.origin) ? req.body.origin : 'manual';
+    const actor = gmudActorName(req.user);
+
+    const flowchart = await saveGmudFlowchart({
+      voalleProtocol: protocol,
+      mermaidSource,
+      origin,
+      reviewStatus: req.body?.reviewStatus === 'reviewed' ? 'reviewed' : 'draft',
+      createdBy: actor,
+    });
+
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_atualizado', actor, payload: { origin, version: flowchart.version } }).catch(() => {});
+
+    return res.json({ success: true, data: flowchart });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao salvar o fluxograma.',
+    });
+  }
+});
+
+app.delete('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canApproveGmud', 'Somente membros do Comitê podem remover fluxogramas.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const result = await deleteGmudFlowchart(protocol);
+    const actor = gmudActorName(req.user);
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_removido', actor, payload: {} }).catch(() => {});
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover o fluxograma.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/flowchart/assist', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({ success: false, message: 'Assistente IA não configurado no servidor (GEMINI_API_KEY ausente).' });
+    }
+    const VALID_TYPES = new Set(['checklist', 'risks', 'summary']);
+    const type = String(req.body?.type ?? '');
+    if (!VALID_TYPES.has(type)) {
+      return res.status(400).json({ success: false, message: 'Tipo de assistência inválido. Use: checklist, risks ou summary.' });
+    }
+    const description = String(req.body?.description ?? '').trim();
+    const gmudContext = String(req.body?.gmudContext ?? '').trim() || null;
+    if (!description || description.length < 10) {
+      return res.status(400).json({ success: false, message: 'Descrição insuficiente.' });
+    }
+
+    const { result, model } = await assistGmudFlowchart(type, description, gmudContext);
+    return res.json({ success: true, data: { result, model, type, generatedByAI: true } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha na assistência de IA.',
+    });
+  }
+});
+
+// ─── Anexos GMUD ─────────────────────────────────────────────────────────────
+
+app.get('/api/gmud/:protocol/attachments', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const protocol = Number.parseInt(req.params.protocol, 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const attachments = await listGmudAttachments(protocol);
+    return res.json({ success: true, data: attachments });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao listar anexos.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/attachments', gmudUpload.single('file'), async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const protocol = Number.parseInt(req.params.protocol, 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      if (req.file) fs.rmSync(req.file.path, { force: true });
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Nenhum arquivo enviado ou tipo não permitido (PDF, PNG, JPG, WEBP).' });
+    }
+    if (!GMUD_ALLOWED_MIMETYPES.has(req.file.mimetype)) {
+      fs.rmSync(req.file.path, { force: true });
+      return res.status(400).json({ success: false, message: 'Tipo de arquivo não permitido.' });
+    }
+    const uploadedBy = actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || null;
+    const description = String(req.body?.description ?? '').trim() || null;
+    const attachment = await addGmudAttachment({
+      voalleProtocol: protocol,
+      filenameOriginal: req.file.originalname,
+      filenameStored: req.file.filename,
+      mimetype: req.file.mimetype,
+      sizeBytes: req.file.size,
+      description,
+      uploadedBy,
+    });
+    // best-effort: falha no evento não desfaz o upload
+    logGmudEvent({ voalleProtocol: protocol, eventType: 'anexo_adicionado', actor: uploadedBy, payload: { attachmentId: attachment.id, filename: req.file.originalname } })
+      .catch((e) => console.warn('[gmud] evento anexo_adicionado falhou:', e?.message));
+    return res.status(201).json({ success: true, data: attachment });
+  } catch (error) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao salvar anexo.',
+    });
+  }
+});
+
+app.get('/api/gmud/attachments/:id/file', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID de anexo inválido.' });
+    }
+    const attachment = await getGmudAttachment(id);
+    const filePath = path.join(GMUD_UPLOADS_ROOT, String(attachment.voalleProtocol), attachment.filenameStored);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Arquivo não encontrado no servidor.' });
+    }
+    res.setHeader('Content-Type', attachment.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.filenameOriginal)}"`);
+    res.setHeader('Content-Length', attachment.sizeBytes);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao servir arquivo.',
+    });
+  }
+});
+
+app.delete('/api/gmud/attachments/:id', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID de anexo inválido.' });
+    }
+    const deleted = await softDeleteGmudAttachment(id);
+    // Remove o arquivo do filesystem após confirmar o soft-delete
+    const filePath = path.join(GMUD_UPLOADS_ROOT, String(deleted.voalleProtocol), deleted.filenameStored);
+    fs.rmSync(filePath, { force: true });
+    const actorName = actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || null;
+    logGmudEvent({ voalleProtocol: deleted.voalleProtocol, eventType: 'anexo_removido', actor: actorName, payload: { attachmentId: deleted.id } })
+      .catch((e) => console.warn('[gmud] evento anexo_removido falhou:', e?.message));
+    return res.json({ success: true, data: { id: deleted.id } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover anexo.',
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Decisão do Comitê + status de execução de uma GMUD (só no nosso banco; não reflete no Elleven).
 app.post('/api/gmud/approval', async (req, res) => {
   try {
@@ -4559,8 +4923,10 @@ app.get('/api/gmud/indicators', async (req, res) => {
     const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
     if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
 
+    const VALID_CATEGORIAS = new Set(['rede_externa', 'sistemas_internos', 'sistemas_externos']);
+    const categoriaFilter = VALID_CATEGORIAS.has(String(req.query?.categoria ?? '')) ? String(req.query.categoria) : null;
+
     // F-03: busca Voalle e dados da plataforma em paralelo; cada lado tolera falha do outro.
-    // O timeout do driver (VOALLE_QUERY_TIMEOUT_MS) já cancela queries lentas no Postgres.
     let voalle = null;
     let voalleError = null;
     let platform = null;
@@ -4572,18 +4938,82 @@ app.get('/api/gmud/indicators', async (req, res) => {
       Promise.all([
         listGmudRequestsCreatedBetween(from, to),
         listGmudEventsBetween(from, to),
-      ]).then(async ([requests, events]) => {
-        const links = await getLinksWithAffected(requests.map((r) => r.voalleProtocol));
-        platform = aggregatePlatform(requests, events, links);
+      ]).then(async ([requestsAll, events]) => {
+        const requests = categoriaFilter
+          ? requestsAll.filter((r) => (r.categoria ?? 'rede_externa') === categoriaFilter)
+          : requestsAll;
+        const protocols = requests.map((r) => r.voalleProtocol);
+        const protocolSet = new Set(protocols);
+        const filteredEvents = categoriaFilter ? events.filter((e) => protocolSet.has(e.voalleProtocol)) : events;
+        const links = await getLinksWithAffected(protocols);
+        platform = aggregatePlatform(requests, filteredEvents, links);
       }).catch((err) => { platformError = err instanceof Error ? err.message : 'Dados da plataforma indisponíveis.'; }),
     ]);
 
-    return res.json({ success: true, data: { from, to, generatedAt: today.toISOString(), voalle, voalleError, platform, platformError } });
+    return res.json({ success: true, data: { from, to, categoria: categoriaFilter, generatedAt: today.toISOString(), voalle, voalleError, platform, platformError } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: safeErrorMessage(error, 'Falha ao calcular os indicadores de GMUD.'),
+    });
+  }
+});
+
+// Exportação CSV dos dados de plataforma no período (com filtro opcional de categoria).
+app.get('/api/gmud/indicators/export.csv', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const today = new Date();
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const defaultFrom = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const from = ISO_DAY.test(String(req.query?.from ?? '')) ? String(req.query.from) : fmt(defaultFrom);
+    const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
+    if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
+
+    const VALID_CATEGORIAS = new Set(['rede_externa', 'sistemas_internos', 'sistemas_externos']);
+    const categoriaFilter = VALID_CATEGORIAS.has(String(req.query?.categoria ?? '')) ? String(req.query.categoria) : null;
+
+    let requests = await listGmudRequestsCreatedBetween(from, to);
+    if (categoriaFilter) {
+      requests = requests.filter((r) => (r.categoria ?? 'rede_externa') === categoriaFilter);
+    }
+
+    const COLS = [
+      'Protocolo', 'Tipo', 'Assunto', 'Categoria', 'Título', 'POP/Site',
+      'Ambiente afetado', 'Comunica cliente', 'Impacto parada',
+      'Status comitê', 'Status execução', 'Data início', 'Hora início', 'Data fim', 'Hora fim',
+      'Data CAB', 'RNC', 'Encerrado status', 'Encerrado em', 'Criado em',
+    ];
+
+    const csvEsc = (v) => {
+      const s = v == null ? '' : String(v).replace(/"/g, '""');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+    };
+
+    const rows = [COLS.join(',')];
+    for (const r of requests) {
+      rows.push([
+        r.voalleProtocol, r.tipo, r.assunto, r.categoria ?? 'rede_externa',
+        r.titulo, r.popSite,
+        Array.isArray(r.ambienteAfetado) ? r.ambienteAfetado.join(';') : '',
+        r.comunicaCliente, r.impactoParada,
+        r.statusComite, r.statusExec,
+        r.dataInicio, r.horaInicio, r.dataFim, r.horaFim,
+        r.dataCab, r.rnc, r.ellevenEncerradoStatus, r.ellevenEncerradoEm, r.createdAt,
+      ].map(csvEsc).join(','));
+    }
+
+    const filename = `gmud_indicadores_${from}_${to}${categoriaFilter ? `_${categoriaFilter}` : ''}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send('﻿' + rows.join('\r\n'));
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao exportar indicadores de GMUD.',
     });
   }
 });

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlarmClock, BarChart3, CheckCircle2, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
+import { AlarmClock, BarChart3, CheckCircle2, Download, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
-import { fetchGmudIndicators, type GmudIndicators } from '@/features/gmud/api/gmudIndicators'
+import { fetchGmudIndicators, gmudIndicatorsExportUrl, type GmudCategoria, type GmudIndicators } from '@/features/gmud/api/gmudIndicators'
 import { localDayKey } from '@/features/gmud/lib/gmudSchedule'
 import { GmudHistorySection } from '@/features/gmud/ui/indicators/GmudHistorySection'
 import { GmudPlatformSection } from '@/features/gmud/ui/indicators/GmudPlatformSection'
@@ -17,6 +17,13 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: '12m', label: '12 meses' },
   { key: 'ano', label: 'Este ano' },
   { key: 'tudo', label: 'Tudo' },
+]
+
+const CATEGORIA_OPTIONS: { key: GmudCategoria | ''; label: string }[] = [
+  { key: '', label: 'Todas' },
+  { key: 'rede_externa', label: 'Rede externa' },
+  { key: 'sistemas_internos', label: 'Sistemas internos' },
+  { key: 'sistemas_externos', label: 'Sistemas externos' },
 ]
 
 function periodRange(key: PeriodKey, now = new Date()): { from: string; to: string } {
@@ -43,14 +50,17 @@ function buildHeadline(data: GmudIndicators): string | null {
 
 export function GmudIndicatorsScreen() {
   const [period, setPeriod] = useState<PeriodKey>('12m')
+  const [categoria, setCategoria] = useState<GmudCategoria | ''>('')
   const range = useMemo(() => periodRange(period), [period])
+  const categoriaFilter = categoria || null
   const query = useQuery({
-    queryKey: ['gmud', 'indicators', range.from, range.to],
-    queryFn: () => fetchGmudIndicators(range.from, range.to),
+    queryKey: ['gmud', 'indicators', range.from, range.to, categoriaFilter],
+    queryFn: () => fetchGmudIndicators(range.from, range.to, categoriaFilter),
     staleTime: 60_000,
   })
   const data = query.data
   const headline = data ? buildHeadline(data) : null
+  const exportUrl = gmudIndicatorsExportUrl(range.from, range.to, categoriaFilter)
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
@@ -73,7 +83,7 @@ export function GmudIndicatorsScreen() {
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
           {PERIODS.map((p) => (
             <button
@@ -89,9 +99,36 @@ export function GmudIndicatorsScreen() {
             </button>
           ))}
         </div>
-        <p className="text-xs text-on-surface-variant">
-          {range.from.split('-').reverse().join('/')} a {range.to.split('-').reverse().join('/')}
-        </p>
+
+        <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+          {CATEGORIA_OPTIONS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setCategoria(c.key)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                categoria === c.key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <p className="text-xs text-on-surface-variant">
+            {range.from.split('-').reverse().join('/')} a {range.to.split('-').reverse().join('/')}
+          </p>
+          <a
+            href={exportUrl}
+            download
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+            title="Exportar dados da plataforma como CSV"
+          >
+            <Download size={13} /> CSV
+          </a>
+        </div>
       </div>
 
       {query.isLoading ? (

@@ -9,6 +9,8 @@
   canViewGmud: boolean
   /** Aprovar/negar GMUD no Comitê (depende de ver GMUD). Liberado individualmente pelo admin. */
   canApproveGmud: boolean
+  /** Gerenciar listas configuráveis do módulo GMUD (setores, equipes, sistemas, etc.). */
+  canConfigureGmud: boolean
   isAdmin: boolean
 }
 
@@ -35,6 +37,7 @@ export const defaultSplittersPermissions: SplittersPermissionSet = {
   canViewRedistribution: false,
   canViewGmud: false,
   canApproveGmud: false,
+  canConfigureGmud: false,
   isAdmin: false,
 }
 
