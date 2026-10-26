@@ -320,7 +320,7 @@ function RedeExternaFields({
 // Seções específicas de Sistemas Internos
 // ---------------------------------------------------------------------------
 function SistemasInternosFields({
-  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, equipesOptions, processosOptions, sistemasInternosOptions, listsLoading,
+  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, sistemasInternosOptions, listsLoading,
 }: {
   si: GmudSistemasInternosData
   setSi: (updater: (prev: GmudSistemasInternosData) => GmudSistemasInternosData) => void
@@ -333,8 +333,6 @@ function SistemasInternosFields({
   planoRollback: string
   setPlanoRollback: (v: string) => void
   areasOptions: GmudConfigItem[]
-  equipesOptions: GmudConfigItem[]
-  processosOptions: GmudConfigItem[]
   sistemasInternosOptions: GmudConfigItem[]
   listsLoading: boolean
 }) {
@@ -343,7 +341,7 @@ function SistemasInternosFields({
 
   return (
     <>
-      <Section title="Sistema e responsáveis">
+      <Section title="Sistema">
         <Field label="Sistema afetado" required>
           <select className={FIELD} value={si.sistemaAfetado} onChange={(e) => s('sistemaAfetado', e.target.value)}>
             <option value="">Escolher…</option>
@@ -352,13 +350,10 @@ function SistemasInternosFields({
           </select>
         </Field>
         {si.sistemaAfetado === 'Outro (especificar)' ? (
-          <Field label="Nome do sistema (especificar)" required>
+          <Field label="Nome do sistema" required>
             <input className={FIELD} value={si.sistemaAfetadoOutro} onChange={(e) => s('sistemaAfetadoOutro', e.target.value)} placeholder="Nome do sistema interno" />
           </Field>
         ) : null}
-        <Field label="Módulo ou funcionalidade afetada">
-          <input className={FIELD} value={si.moduloFuncionalidade} onChange={(e) => s('moduloFuncionalidade', e.target.value)} />
-        </Field>
         <Field label="Ambiente" required>
           <select className={FIELD} value={si.ambiente} onChange={(e) => s('ambiente', e.target.value)}>
             <option value="">Escolher…</option>
@@ -371,30 +366,15 @@ function SistemasInternosFields({
             {GMUD_NATUREZA_SI_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </Field>
-        <Field label="Responsável técnico">
-          <input className={FIELD} value={si.responsavelTecnico} onChange={(e) => s('responsavelTecnico', e.target.value)} />
-        </Field>
-        <Field label="Equipe responsável">
-          <input className={FIELD} value={si.equipeResponsavel} onChange={(e) => s('equipeResponsavel', e.target.value)} />
-        </Field>
       </Section>
 
       <Section title="Descrição">
-        <Field label="Objetivo da mudança" required full>
-          <textarea className={cn(FIELD, 'min-h-[80px]')} value={si.objetivo} onChange={(e) => s('objetivo', e.target.value)} />
-        </Field>
-        <Field label="Descrição da atividade" required full>
-          <textarea className={cn(FIELD, 'min-h-[80px]')} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-        </Field>
-        <Field label="Justificativa" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={si.justificativa} onChange={(e) => s('justificativa', e.target.value)} />
-        </Field>
-        <Field label="Resultado esperado" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={si.resultadoEsperado} onChange={(e) => s('resultadoEsperado', e.target.value)} />
+        <Field label="Objetivo / Descrição da mudança" required full>
+          <textarea className={cn(FIELD, 'min-h-[90px]')} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descreva o objetivo e o que será feito" />
         </Field>
       </Section>
 
-      <Section title="Impacto operacional">
+      <Section title="Impacto">
         <Field label="Áreas impactadas" full>
           <GmudMultiSelect
             options={areasOptions}
@@ -402,17 +382,6 @@ function SistemasInternosFields({
             onChange={(v) => s('areasImpactadas', v)}
             loading={listsLoading}
           />
-        </Field>
-        <Field label="Processos de negócio afetados" full>
-          <GmudMultiSelect
-            options={processosOptions}
-            value={si.processosNegocio}
-            onChange={(v) => s('processosNegocio', v)}
-            loading={listsLoading}
-          />
-        </Field>
-        <Field label="Usuários potencialmente afetados">
-          <input className={FIELD} value={si.usuariosImpactados} onChange={(e) => s('usuariosImpactados', e.target.value)} />
         </Field>
         <Field label="Haverá indisponibilidade?" required>
           <SimNaoSelect value={impactoParada} onChange={setImpactoParada} />
@@ -430,30 +399,6 @@ function SistemasInternosFields({
             </Field>
           </>
         ) : null}
-        <Field label="Impacto esperado na operação" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={si.impactoEsperado} onChange={(e) => s('impactoEsperado', e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section title="Dependências" hint="Preencha apenas os campos aplicáveis à mudança.">
-        <Field label="APIs envolvidas">
-          <input className={FIELD} value={si.apisEnvolvidas} onChange={(e) => s('apisEnvolvidas', e.target.value)} />
-        </Field>
-        <Field label="Integrações com outros sistemas">
-          <input className={FIELD} value={si.integracoes} onChange={(e) => s('integracoes', e.target.value)} />
-        </Field>
-        <Field label="Automações n8n impactadas">
-          <input className={FIELD} value={si.automacoesN8n} onChange={(e) => s('automacoesN8n', e.target.value)} />
-        </Field>
-        <Field label="Banco de dados afetado">
-          <input className={FIELD} value={si.bancoDados} onChange={(e) => s('bancoDados', e.target.value)} />
-        </Field>
-        <Field label="Serviços dependentes">
-          <input className={FIELD} value={si.servicosDependentes} onChange={(e) => s('servicosDependentes', e.target.value)} />
-        </Field>
-        <Field label="Pré-requisitos" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={si.prerequisitos} onChange={(e) => s('prerequisitos', e.target.value)} />
-        </Field>
       </Section>
 
       <Section title="Execução">
@@ -464,38 +409,6 @@ function SistemasInternosFields({
           <textarea className={cn(FIELD, 'min-h-[70px]')} value={planoRollback} onChange={(e) => setPlanoRollback(e.target.value)} />
         </Field>
       </Section>
-
-      <Section title="Validação">
-        <Field label="Testes necessários" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={si.testesNecessarios} onChange={(e) => s('testesNecessarios', e.target.value)} />
-        </Field>
-        <Field label="Critérios de sucesso">
-          <input className={FIELD} value={si.criteriosSucesso} onChange={(e) => s('criteriosSucesso', e.target.value)} />
-        </Field>
-        <Field label="Responsável pela homologação">
-          <input className={FIELD} value={si.responsavelHomologacao} onChange={(e) => s('responsavelHomologacao', e.target.value)} />
-        </Field>
-        <Field label="Procedimento de validação pós-implantação" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={si.procedimentoValidacao} onChange={(e) => s('procedimentoValidacao', e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section title="Comunicação">
-        <Field label="Equipes que precisam ser informadas" full>
-          <GmudMultiSelect
-            options={equipesOptions}
-            value={si.equipesInformadas}
-            onChange={(v) => s('equipesInformadas', v)}
-            loading={listsLoading}
-          />
-        </Field>
-        <Field label="Necessidade de comunicação prévia?">
-          <SimNaoSelect value={si.comunicacaoPrevia} onChange={(v) => s('comunicacaoPrevia', v)} />
-        </Field>
-        <Field label="Observações adicionais" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={si.observacoesAdicionais} onChange={(e) => s('observacoesAdicionais', e.target.value)} />
-        </Field>
-      </Section>
     </>
   )
 }
@@ -504,16 +417,17 @@ function SistemasInternosFields({
 // Seções específicas de Sistemas Externos
 // ---------------------------------------------------------------------------
 function SistemasExternosFields({
-  se, setSe, impactoParada, setImpactoParada, planoExecucao, setPlanoExecucao, areasOptions, processosOptions, sistemasExternosOptions, listsLoading,
+  se, setSe, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, areasOptions, sistemasExternosOptions, listsLoading,
 }: {
   se: GmudSistemasExternosData
   setSe: (updater: (prev: GmudSistemasExternosData) => GmudSistemasExternosData) => void
   impactoParada: string
   setImpactoParada: (v: string) => void
+  descricao: string
+  setDescricao: (v: string) => void
   planoExecucao: string
   setPlanoExecucao: (v: string) => void
   areasOptions: GmudConfigItem[]
-  processosOptions: GmudConfigItem[]
   sistemasExternosOptions: GmudConfigItem[]
   listsLoading: boolean
 }) {
@@ -531,18 +445,12 @@ function SistemasExternosFields({
           </select>
         </Field>
         {se.sistemaExterno === 'Outro (especificar)' ? (
-          <Field label="Nome do sistema (especificar)" required>
+          <Field label="Nome do sistema" required>
             <input className={FIELD} value={se.sistemaExternoOutro} onChange={(e) => s('sistemaExternoOutro', e.target.value)} placeholder="Nome do sistema ou fornecedor" />
           </Field>
         ) : null}
         <Field label="Fornecedor">
           <input className={FIELD} value={se.fornecedor} onChange={(e) => s('fornecedor', e.target.value)} />
-        </Field>
-        <Field label="Serviço ou funcionalidade afetada">
-          <input className={FIELD} value={se.servicoFuncionalidade} onChange={(e) => s('servicoFuncionalidade', e.target.value)} />
-        </Field>
-        <Field label="Ambiente (quando aplicável)">
-          <input className={FIELD} value={se.ambienteSE} onChange={(e) => s('ambienteSE', e.target.value)} placeholder="Ex.: Produção, Homologação" />
         </Field>
         <Field label="Natureza da mudança" required>
           <select className={FIELD} value={se.natureza} onChange={(e) => s('natureza', e.target.value)}>
@@ -550,45 +458,30 @@ function SistemasExternosFields({
             {GMUD_NATUREZA_SE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </Field>
-        <Field label="Responsável interno pelo acompanhamento">
-          <input className={FIELD} value={se.responsavelInterno} onChange={(e) => s('responsavelInterno', e.target.value)} />
+        <Field label="Chamado no fornecedor">
+          <input
+            className={FIELD}
+            value={se.chamadoFornecedor}
+            onChange={(e) => s('chamadoFornecedor', e.target.value)}
+            placeholder="Opcional — referência ao chamado no fornecedor"
+          />
         </Field>
       </Section>
 
-      <Section title="Descrição">
-        <Field label="Mudança prevista" required full>
-          <textarea className={cn(FIELD, 'min-h-[80px]')} value={se.mudancaPrevista} onChange={(e) => s('mudancaPrevista', e.target.value)} />
-        </Field>
-        <Field label="Motivo da alteração" full>
-          <input className={FIELD} value={se.motivoAlteracao} onChange={(e) => s('motivoAlteracao', e.target.value)} />
-        </Field>
-        <Field label="Origem da solicitação">
-          <input className={FIELD} value={se.origemSolicitacao} onChange={(e) => s('origemSolicitacao', e.target.value)} placeholder="Ex.: comunicado do fornecedor, requisição interna" />
-        </Field>
-        <Field label="Comunicado do fornecedor" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={se.comunicadoFornecedor} onChange={(e) => s('comunicadoFornecedor', e.target.value)} placeholder="Cole aqui o texto do comunicado, se disponível" />
+      <Section title="Mudança prevista">
+        <Field label="Descrição da mudança" required full>
+          <textarea className={cn(FIELD, 'min-h-[90px]')} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="O que o fornecedor vai fazer e qual o impacto esperado" />
         </Field>
       </Section>
 
-      <Section title="Impacto operacional">
-        <Field label="Áreas internas afetadas" full>
+      <Section title="Impacto">
+        <Field label="Áreas afetadas" full>
           <GmudMultiSelect
             options={areasOptions}
             value={se.areasAfetadas}
             onChange={(v) => s('areasAfetadas', v)}
             loading={listsLoading}
           />
-        </Field>
-        <Field label="Processos dependentes" full>
-          <GmudMultiSelect
-            options={processosOptions}
-            value={se.processosDependentes}
-            onChange={(v) => s('processosDependentes', v)}
-            loading={listsLoading}
-          />
-        </Field>
-        <Field label="Integrações que poderão ser afetadas" full>
-          <input className={FIELD} value={se.integracoesAfetadas} onChange={(e) => s('integracoesAfetadas', e.target.value)} />
         </Field>
         <Field label="Haverá indisponibilidade?" required>
           <SimNaoSelect value={impactoParada} onChange={setImpactoParada} />
@@ -606,75 +499,11 @@ function SistemasExternosFields({
             </Field>
           </>
         ) : null}
-        <Field label="Impacto esperado na operação" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={se.impactoEsperado} onChange={(e) => s('impactoEsperado', e.target.value)} />
-        </Field>
       </Section>
 
-      <Section title="Informações do fornecedor">
-        <Field label="Número do chamado no fornecedor">
-          <input
-            className={FIELD}
-            value={se.chamadoFornecedor}
-            onChange={(e) => s('chamadoFornecedor', e.target.value)}
-            placeholder="Opcional — referência externa ao chamado do fornecedor"
-          />
-          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
-            Campo opcional. Não é o protocolo da GMUD — esse é gerado automaticamente no Elleven.
-          </span>
-        </Field>
-        <Field label="Janela informada pelo fornecedor">
-          <input className={FIELD} value={se.janelaFornecedor} onChange={(e) => s('janelaFornecedor', e.target.value)} placeholder="Ex.: 22/10 das 02h às 04h" />
-        </Field>
-        <Field label="Canal de acompanhamento" full>
-          <input className={FIELD} value={se.canalAcompanhamento} onChange={(e) => s('canalAcompanhamento', e.target.value)} placeholder="Ex.: portal do fornecedor, WhatsApp, e-mail" />
-        </Field>
-      </Section>
-
-      <Section title="Contingência" hint="Quando a mudança estiver sob controle do fornecedor, descreva alternativas e procedimentos de recuperação — rollback formal não é obrigatório.">
-        <Field label="Alternativa operacional durante a manutenção" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={se.alternativaOperacional} onChange={(e) => s('alternativaOperacional', e.target.value)} />
-        </Field>
+      <Section title="Contingência">
         <Field label="Plano de contingência/execução" required full>
           <textarea className={cn(FIELD, 'min-h-[80px]')} value={planoExecucao} onChange={(e) => setPlanoExecucao(e.target.value)} />
-        </Field>
-        <Field label="Ações para reduzir o impacto" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={se.acoesMitigar} onChange={(e) => s('acoesMitigar', e.target.value)} />
-        </Field>
-        <Field label="Procedimento de recuperação" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={se.procedimentoRecuperacao} onChange={(e) => s('procedimentoRecuperacao', e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section title="Validação">
-        <Field label="Testes pós-mudança" full>
-          <textarea className={cn(FIELD, 'min-h-[70px]')} value={se.testesPosMudanca} onChange={(e) => s('testesPosMudanca', e.target.value)} />
-        </Field>
-        <Field label="Validação das integrações" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={se.validacaoIntegracoes} onChange={(e) => s('validacaoIntegracoes', e.target.value)} />
-        </Field>
-        <Field label="Critérios de normalização">
-          <input className={FIELD} value={se.criteriosNormalizacao} onChange={(e) => s('criteriosNormalizacao', e.target.value)} />
-        </Field>
-        <Field label="Responsável pela validação interna">
-          <input className={FIELD} value={se.responsavelValidacao} onChange={(e) => s('responsavelValidacao', e.target.value)} />
-        </Field>
-      </Section>
-
-      <Section title="Comunicação">
-        <Field label="Áreas que precisam ser notificadas" full>
-          <GmudMultiSelect
-            options={areasOptions}
-            value={se.areasNotificar}
-            onChange={(v) => s('areasNotificar', v)}
-            loading={listsLoading}
-          />
-        </Field>
-        <Field label="Necessidade de aviso aos usuários?">
-          <SimNaoSelect value={se.avisoUsuarios} onChange={(v) => s('avisoUsuarios', v)} />
-        </Field>
-        <Field label="Observações adicionais" full>
-          <textarea className={cn(FIELD, 'min-h-[60px]')} value={se.observacoesAdicionais} onChange={(e) => s('observacoesAdicionais', e.target.value)} />
         </Field>
       </Section>
     </>
@@ -849,8 +678,6 @@ export function GmudNewScreen() {
             planoRollback={form.planoRollback}
             setPlanoRollback={(v) => set('planoRollback', v)}
             areasOptions={areasOptions}
-            equipesOptions={equipesOptions}
-            processosOptions={processosOptions}
             sistemasInternosOptions={sistemasInternosOptions}
             listsLoading={listsLoading}
           />
@@ -862,10 +689,11 @@ export function GmudNewScreen() {
             setSe={setSeData}
             impactoParada={form.impactoParada}
             setImpactoParada={(v) => set('impactoParada', v)}
+            descricao={form.descricao}
+            setDescricao={(v) => set('descricao', v)}
             planoExecucao={form.planoExecucao}
             setPlanoExecucao={(v) => set('planoExecucao', v)}
             areasOptions={areasOptions}
-            processosOptions={processosOptions}
             sistemasExternosOptions={sistemasExternosOptions}
             listsLoading={listsLoading}
           />
@@ -874,10 +702,8 @@ export function GmudNewScreen() {
         {/* Janela de mudança — comum a todas */}
         <JanelaDeMudanca form={form} set={set} />
 
-        {/* Observações — só para RE (SI/SE têm seu próprio campo dentro de cada seção) */}
-        {form.categoria === 'rede_externa' && (
-          <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
-        )}
+        {/* Observações — comum a todas as categorias */}
+        <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
 
         {/* Pré-visualização da máscara */}
         <div className={CARD}>

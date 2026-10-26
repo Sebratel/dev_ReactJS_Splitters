@@ -131,72 +131,26 @@ function buildGmudDescriptionSistemasInternos(form: GmudFormState, si: GmudSiste
   out.push(`GESTÃO DE MUDANÇA — SISTEMAS INTERNOS${form.tipo.trim() ? ` (${form.tipo.trim()})` : ''}`)
   out.push(SEP)
   field(out, 'Sistema afetado', sistema)
-  field(out, 'Módulo/Funcionalidade', si.moduloFuncionalidade)
   field(out, 'Ambiente', si.ambiente)
   field(out, 'Natureza da mudança', si.natureza)
   field(out, 'Janela de execução', fmtJanela(form))
-  field(out, 'Responsável técnico', si.responsavelTecnico)
-  field(out, 'Equipe responsável', si.equipeResponsavel)
 
-  section(out, 'Objetivo da mudança', si.objetivo)
-  section(out, 'Descrição da atividade', form.descricao)
-  section(out, 'Justificativa', si.justificativa)
-  section(out, 'Resultado esperado', si.resultadoEsperado)
+  section(out, 'Objetivo / Descrição', form.descricao)
 
-  // Impacto operacional
   const impactoLines: string[] = []
   if (si.areasImpactadas.length > 0) impactoLines.push(`Áreas impactadas: ${si.areasImpactadas.join(', ')}`)
-  if (si.processosNegocio.length > 0) impactoLines.push(`Processos de negócio: ${si.processosNegocio.join(', ')}`)
-  if (si.usuariosImpactados.trim()) impactoLines.push(`Usuários potencialmente afetados: ${si.usuariosImpactados.trim()}`)
   if (form.impactoParada) impactoLines.push(`Haverá indisponibilidade: ${form.impactoParada}`)
   if (si.tipoIndisponibilidade && form.impactoParada === 'Sim') impactoLines.push(`Tipo: ${si.tipoIndisponibilidade}`)
   if (si.duracaoEstimada.trim()) impactoLines.push(`Duração estimada: ${si.duracaoEstimada.trim()}`)
-  if (si.impactoEsperado.trim()) impactoLines.push(`Impacto esperado: ${si.impactoEsperado.trim()}`)
   if (impactoLines.length > 0) {
     out.push('')
-    out.push('>> IMPACTO OPERACIONAL')
+    out.push('>> IMPACTO')
     impactoLines.forEach((l) => out.push(l))
   }
 
-  // Dependências
-  const depLines: string[] = []
-  if (si.apisEnvolvidas.trim()) depLines.push(`APIs envolvidas: ${si.apisEnvolvidas.trim()}`)
-  if (si.integracoes.trim()) depLines.push(`Integrações: ${si.integracoes.trim()}`)
-  if (si.automacoesN8n.trim()) depLines.push(`Automações n8n: ${si.automacoesN8n.trim()}`)
-  if (si.bancoDados.trim()) depLines.push(`Banco de dados: ${si.bancoDados.trim()}`)
-  if (si.servicosDependentes.trim()) depLines.push(`Serviços dependentes: ${si.servicosDependentes.trim()}`)
-  if (depLines.length > 0) {
-    out.push('')
-    out.push('>> DEPENDÊNCIAS')
-    depLines.forEach((l) => out.push(l))
-  }
-
-  if (si.prerequisitos.trim()) section(out, 'Pré-requisitos', si.prerequisitos)
   section(out, 'Plano de execução', form.planoExecucao)
   section(out, 'Plano de rollback', form.planoRollback)
-
-  // Validação
-  const valLines: string[] = []
-  if (si.testesNecessarios.trim()) valLines.push(`Testes: ${si.testesNecessarios.trim()}`)
-  if (si.criteriosSucesso.trim()) valLines.push(`Critérios de sucesso: ${si.criteriosSucesso.trim()}`)
-  if (si.responsavelHomologacao.trim()) valLines.push(`Responsável pela homologação: ${si.responsavelHomologacao.trim()}`)
-  if (si.procedimentoValidacao.trim()) valLines.push(`Procedimento pós-implantação: ${si.procedimentoValidacao.trim()}`)
-  if (valLines.length > 0) {
-    out.push('')
-    out.push('>> VALIDAÇÃO')
-    valLines.forEach((l) => out.push(l))
-  }
-
-  const comLines: string[] = []
-  if (si.equipesInformadas.length > 0) comLines.push(`Equipes a notificar: ${si.equipesInformadas.join(', ')}`)
-  if (si.comunicacaoPrevia) comLines.push(`Comunicação prévia necessária: ${si.comunicacaoPrevia}`)
-  if (comLines.length > 0) {
-    out.push('')
-    out.push('>> COMUNICAÇÃO')
-    comLines.forEach((l) => out.push(l))
-  }
-
-  section(out, 'Observações', si.observacoesAdicionais || form.observacoes)
+  section(out, 'Observações', form.observacoes)
 
   out.push('')
   out.push(SEP)
@@ -223,77 +177,25 @@ function buildGmudDescriptionSistemasExternos(form: GmudFormState, se: GmudSiste
   out.push(SEP)
   field(out, 'Sistema externo', sistema)
   field(out, 'Fornecedor', se.fornecedor)
-  field(out, 'Serviço/Funcionalidade', se.servicoFuncionalidade)
-  field(out, 'Ambiente', se.ambienteSE)
   field(out, 'Natureza da mudança', se.natureza)
   field(out, 'Janela de execução', fmtJanela(form))
-  field(out, 'Responsável interno', se.responsavelInterno)
+  if (se.chamadoFornecedor.trim()) field(out, 'Chamado no fornecedor', se.chamadoFornecedor)
 
-  section(out, 'Mudança prevista', se.mudancaPrevista)
-  section(out, 'Motivo da alteração', se.motivoAlteracao)
-  section(out, 'Origem da solicitação', se.origemSolicitacao)
-  if (se.comunicadoFornecedor.trim()) section(out, 'Comunicado do fornecedor', se.comunicadoFornecedor)
+  section(out, 'Mudança prevista', form.descricao)
 
-  // Impacto operacional
   const impactoLines: string[] = []
-  if (se.areasAfetadas.length > 0) impactoLines.push(`Áreas internas afetadas: ${se.areasAfetadas.join(', ')}`)
-  if (se.processosDependentes.length > 0) impactoLines.push(`Processos dependentes: ${se.processosDependentes.join(', ')}`)
-  if (se.integracoesAfetadas.trim()) impactoLines.push(`Integrações que poderão ser afetadas: ${se.integracoesAfetadas.trim()}`)
+  if (se.areasAfetadas.length > 0) impactoLines.push(`Áreas afetadas: ${se.areasAfetadas.join(', ')}`)
   if (form.impactoParada) impactoLines.push(`Haverá indisponibilidade: ${form.impactoParada}`)
   if (se.tipoIndisponibilidade && form.impactoParada === 'Sim') impactoLines.push(`Tipo: ${se.tipoIndisponibilidade}`)
   if (se.duracaoEstimada.trim()) impactoLines.push(`Duração estimada: ${se.duracaoEstimada.trim()}`)
-  if (se.impactoEsperado.trim()) impactoLines.push(`Impacto esperado: ${se.impactoEsperado.trim()}`)
   if (impactoLines.length > 0) {
     out.push('')
-    out.push('>> IMPACTO OPERACIONAL')
+    out.push('>> IMPACTO')
     impactoLines.forEach((l) => out.push(l))
   }
 
-  // Informações do fornecedor
-  const fornLines: string[] = []
-  if (se.chamadoFornecedor.trim()) fornLines.push(`Número do chamado no fornecedor: ${se.chamadoFornecedor.trim()}`)
-  if (se.janelaFornecedor.trim()) fornLines.push(`Janela informada pelo fornecedor: ${se.janelaFornecedor.trim()}`)
-  if (se.canalAcompanhamento.trim()) fornLines.push(`Canal de acompanhamento: ${se.canalAcompanhamento.trim()}`)
-  if (fornLines.length > 0) {
-    out.push('')
-    out.push('>> INFORMAÇÕES DO FORNECEDOR')
-    fornLines.forEach((l) => out.push(l))
-  }
-
-  // Contingência
-  const contLines: string[] = []
-  if (se.alternativaOperacional.trim()) contLines.push(`Alternativa operacional: ${se.alternativaOperacional.trim()}`)
-  if (se.acoesMitigar.trim()) contLines.push(`Ações para reduzir o impacto: ${se.acoesMitigar.trim()}`)
-  if (se.procedimentoRecuperacao.trim()) contLines.push(`Procedimento de recuperação: ${se.procedimentoRecuperacao.trim()}`)
-  if (form.planoExecucao.trim()) contLines.push(`Plano de contingência/execução: ${form.planoExecucao.trim()}`)
-  if (contLines.length > 0) {
-    out.push('')
-    out.push('>> CONTINGÊNCIA')
-    contLines.forEach((l) => out.push(l))
-  }
-
-  // Validação
-  const valLines: string[] = []
-  if (se.testesPosMudanca.trim()) valLines.push(`Testes pós-mudança: ${se.testesPosMudanca.trim()}`)
-  if (se.validacaoIntegracoes.trim()) valLines.push(`Validação das integrações: ${se.validacaoIntegracoes.trim()}`)
-  if (se.criteriosNormalizacao.trim()) valLines.push(`Critérios de normalização: ${se.criteriosNormalizacao.trim()}`)
-  if (se.responsavelValidacao.trim()) valLines.push(`Responsável pela validação interna: ${se.responsavelValidacao.trim()}`)
-  if (valLines.length > 0) {
-    out.push('')
-    out.push('>> VALIDAÇÃO')
-    valLines.forEach((l) => out.push(l))
-  }
-
-  const comLines: string[] = []
-  if (se.areasNotificar.length > 0) comLines.push(`Áreas a notificar: ${se.areasNotificar.join(', ')}`)
-  if (se.avisoUsuarios) comLines.push(`Aviso aos usuários necessário: ${se.avisoUsuarios}`)
-  if (comLines.length > 0) {
-    out.push('')
-    out.push('>> COMUNICAÇÃO')
-    comLines.forEach((l) => out.push(l))
-  }
-
-  section(out, 'Observações', se.observacoesAdicionais || form.observacoes)
+  section(out, 'Plano de contingência/execução', form.planoExecucao)
+  section(out, 'Observações', form.observacoes)
 
   out.push('')
   out.push(SEP)

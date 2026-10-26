@@ -85,84 +85,25 @@ export const GMUD_TIPO_INDISPONIBILIDADE_OPTIONS = ['Parcial', 'Total'] as const
 
 /** Campos específicos de Sistemas Internos — persistidos como JSON em `categoria_data`. */
 export type GmudSistemasInternosData = {
-  // Identificação
   sistemaAfetado: string
   sistemaAfetadoOutro: string
-  moduloFuncionalidade: string
   ambiente: string
   natureza: string
-  responsavelTecnico: string
-  equipeResponsavel: string
-  // Descrição
-  objetivo: string
-  justificativa: string
-  resultadoEsperado: string
-  // Impacto operacional
-  areasImpactadas: string[]
-  processosNegocio: string[]
-  usuariosImpactados: string
-  haraIndisponibilidade: string
   tipoIndisponibilidade: string
   duracaoEstimada: string
-  impactoEsperado: string
-  // Dependências
-  apisEnvolvidas: string
-  integracoes: string
-  automacoesN8n: string
-  bancoDados: string
-  servicosDependentes: string
-  prerequisitos: string
-  // Validação
-  testesNecessarios: string
-  criteriosSucesso: string
-  responsavelHomologacao: string
-  procedimentoValidacao: string
-  // Comunicação
-  equipesInformadas: string[]
-  comunicacaoPrevia: string
-  observacoesAdicionais: string
+  areasImpactadas: string[]
 }
 
 /** Campos específicos de Sistemas Externos — persistidos como JSON em `categoria_data`. */
 export type GmudSistemasExternosData = {
-  // Identificação
   sistemaExterno: string
   sistemaExternoOutro: string
   fornecedor: string
-  servicoFuncionalidade: string
-  ambienteSE: string
-  responsavelInterno: string
   natureza: string
-  // Descrição
-  mudancaPrevista: string
-  motivoAlteracao: string
-  origemSolicitacao: string
-  comunicadoFornecedor: string
-  // Impacto operacional
-  areasAfetadas: string[]
-  processosDependentes: string[]
-  integracoesAfetadas: string
-  haIndisponibilidade: string
   tipoIndisponibilidade: string
   duracaoEstimada: string
-  impactoEsperado: string
-  // Informações do fornecedor
-  chamadoFornecedor: string  // OPCIONAL — nunca obrigatório
-  janelaFornecedor: string
-  canalAcompanhamento: string
-  // Contingência
-  alternativaOperacional: string
-  acoesMitigar: string
-  procedimentoRecuperacao: string
-  // Validação
-  testesPosMudanca: string
-  validacaoIntegracoes: string
-  criteriosNormalizacao: string
-  responsavelValidacao: string
-  // Comunicação
-  areasNotificar: string[]
-  avisoUsuarios: string
-  observacoesAdicionais: string
+  areasAfetadas: string[]
+  chamadoFornecedor: string
 }
 
 // ---------------------------------------------------------------------------
@@ -267,34 +208,11 @@ export function emptyGmudSistemasInternosData(): GmudSistemasInternosData {
   return {
     sistemaAfetado: '',
     sistemaAfetadoOutro: '',
-    moduloFuncionalidade: '',
     ambiente: '',
     natureza: '',
-    responsavelTecnico: '',
-    equipeResponsavel: '',
-    objetivo: '',
-    justificativa: '',
-    resultadoEsperado: '',
-    areasImpactadas: [],
-    processosNegocio: [],
-    usuariosImpactados: '',
-    haraIndisponibilidade: '',
     tipoIndisponibilidade: '',
     duracaoEstimada: '',
-    impactoEsperado: '',
-    apisEnvolvidas: '',
-    integracoes: '',
-    automacoesN8n: '',
-    bancoDados: '',
-    servicosDependentes: '',
-    prerequisitos: '',
-    testesNecessarios: '',
-    criteriosSucesso: '',
-    responsavelHomologacao: '',
-    procedimentoValidacao: '',
-    equipesInformadas: [],
-    comunicacaoPrevia: '',
-    observacoesAdicionais: '',
+    areasImpactadas: [],
   }
 }
 
@@ -304,34 +222,11 @@ export function emptyGmudSistemasExternosData(): GmudSistemasExternosData {
     sistemaExterno: '',
     sistemaExternoOutro: '',
     fornecedor: '',
-    servicoFuncionalidade: '',
-    ambienteSE: '',
-    responsavelInterno: '',
     natureza: '',
-    mudancaPrevista: '',
-    motivoAlteracao: '',
-    origemSolicitacao: '',
-    comunicadoFornecedor: '',
-    areasAfetadas: [],
-    processosDependentes: [],
-    integracoesAfetadas: '',
-    haIndisponibilidade: '',
     tipoIndisponibilidade: '',
     duracaoEstimada: '',
-    impactoEsperado: '',
+    areasAfetadas: [],
     chamadoFornecedor: '',
-    janelaFornecedor: '',
-    canalAcompanhamento: '',
-    alternativaOperacional: '',
-    acoesMitigar: '',
-    procedimentoRecuperacao: '',
-    testesPosMudanca: '',
-    validacaoIntegracoes: '',
-    criteriosNormalizacao: '',
-    responsavelValidacao: '',
-    areasNotificar: [],
-    avisoUsuarios: '',
-    observacoesAdicionais: '',
   }
 }
 
@@ -379,8 +274,7 @@ export function validateGmudForm(
     req(sistema !== '', 'Sistema afetado')
     req(si.natureza !== '', 'Natureza da mudança')
     req(si.ambiente !== '', 'Ambiente')
-    req(si.objetivo.trim() !== '', 'Objetivo da mudança')
-    req(form.descricao.trim() !== '', 'Descrição da atividade')
+    req(form.descricao.trim() !== '', 'Objetivo / Descrição')
     req(form.impactoParada !== '', 'Haverá indisponibilidade?')
     req(form.planoExecucao.trim() !== '', 'Plano de execução')
     req(form.planoRollback.trim() !== '', 'Plano de rollback')
@@ -393,9 +287,8 @@ export function validateGmudForm(
       : se.sistemaExterno.trim()
     req(sistema !== '', 'Sistema externo')
     req(se.natureza !== '', 'Natureza da mudança')
-    req(se.mudancaPrevista.trim() !== '', 'Mudança prevista')
+    req(form.descricao.trim() !== '', 'Mudança prevista')
     req(form.impactoParada !== '', 'Haverá indisponibilidade?')
-    // chamadoFornecedor é SEMPRE opcional — nunca valida
     req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução')
   }
 
