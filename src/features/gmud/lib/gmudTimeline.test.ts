@@ -32,6 +32,37 @@ describe('buildGmudTimeline', () => {
     expect(items[3].detail).toBe('05/10/2026 22:00 às 06/10/2026 02:00 → 07/10/2026 22:00 às 08/10/2026 02:00')
   })
 
+  it('exibe eventos de fluxograma com títulos e tons corretos', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'fluxograma_criado', actor: 'Bruno', payload: {}, at: '2026-10-10T09:00:00Z' },
+        { type: 'fluxograma_atualizado', actor: 'Ana', payload: {}, at: '2026-10-11T10:00:00Z' },
+        { type: 'fluxograma_removido', actor: 'Bruno', payload: {}, at: '2026-10-12T11:00:00Z' },
+      ],
+    })
+    expect(items).toHaveLength(3)
+    expect(items[0]).toMatchObject({ title: 'Fluxograma gerado', tone: 'primary', actor: 'Bruno' })
+    expect(items[1]).toMatchObject({ title: 'Fluxograma atualizado', tone: 'neutral', actor: 'Ana' })
+    expect(items[2]).toMatchObject({ title: 'Fluxograma removido', tone: 'warning', actor: 'Bruno' })
+  })
+
+  it('exibe eventos de anexo com nome do arquivo no detail', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'anexo_adicionado', actor: 'Bruno', payload: { filename: 'plano.pdf' }, at: '2026-10-10T08:00:00Z' },
+        { type: 'anexo_removido', actor: 'Ana', payload: { filename: 'rascunho.docx' }, at: '2026-10-10T09:00:00Z' },
+      ],
+    })
+    expect(items[0]).toMatchObject({ title: 'Anexo incluído', detail: 'plano.pdf', tone: 'neutral' })
+    expect(items[1]).toMatchObject({ title: 'Anexo removido', detail: 'rascunho.docx', tone: 'warning' })
+  })
+
   it('usa o encerramento do Voalle só quando a plataforma não encerrou', () => {
     const legado = buildGmudTimeline({ openedAt: '2026-01-01T10:00:00Z', conclusionDate: '2026-02-01T10:00:00Z', voalleStatus: 'Cancelado', events: [] })
     expect(legado.at(-1)).toMatchObject({ title: 'Protocolo cancelado no Elleven', tone: 'danger' })

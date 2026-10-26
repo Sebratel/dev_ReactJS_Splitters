@@ -2,9 +2,53 @@
 
 export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
 
+// ---------------------------------------------------------------------------
+// CATEGORIA (área afetada) — selector principal do formulário dinâmico
+// ---------------------------------------------------------------------------
+
+export type GmudCategoria = 'rede_externa' | 'sistemas_internos' | 'sistemas_externos'
+
+export const GMUD_CATEGORIA_LABEL: Record<GmudCategoria, string> = {
+  rede_externa: 'Rede externa',
+  sistemas_internos: 'Sistemas internos',
+  sistemas_externos: 'Sistemas externos',
+}
+
+// ---------------------------------------------------------------------------
+// NATUREZA DA MUDANÇA — específica por categoria
+// ---------------------------------------------------------------------------
+
+/** Natureza da mudança para Rede Externa (persiste no campo `assunto` — retrocompat). */
+export const GMUD_NATUREZA_RE_OPTIONS = [
+  'Alteração de infraestrutura',
+  'Manutenção programada',
+  'Substituição de equipamento',
+  'Atualização de firmware/sistema',
+  'Mudança emergencial',
+  'Outros',
+] as const
+
+export const GMUD_NATUREZA_SI_OPTIONS = [
+  'Atualização de sistema',
+  'Implantação de funcionalidade',
+  'Correção técnica',
+  'Manutenção programada',
+  'Mudança emergencial',
+  'Outros',
+] as const
+
+export const GMUD_NATUREZA_SE_OPTIONS = [
+  'Manutenção programada do fornecedor',
+  'Atualização de sistema do fornecedor',
+  'Migração de dados/infraestrutura',
+  'Alteração de integração',
+  'Mudança emergencial',
+  'Outros',
+] as const
+
 /**
- * Assunto da mudança (natureza do que está sendo mudado). Reutilizável pelo futuro
- * módulo de notificações ao cliente (frente 2 — parte de notificações fica para depois).
+ * Mantido para compatibilidade de exibição de registros antigos — o campo `assunto` do DB
+ * pode conter qualquer um desses valores históricos. Novos registros usam GMUD_NATUREZA_RE_OPTIONS.
  */
 export const GMUD_ASSUNTO_OPTIONS = [
   'Rede externa',
@@ -12,6 +56,118 @@ export const GMUD_ASSUNTO_OPTIONS = [
   'Manutenção/atualização com indisponibilidade temporária',
   'Outros motivos internos',
 ] as const
+
+// ---------------------------------------------------------------------------
+// CATÁLOGOS DE SISTEMAS
+// ---------------------------------------------------------------------------
+
+export const GMUD_SISTEMAS_INTERNOS_OPTIONS = [
+  'Sebratel Hub Apps',
+  'Monitoramento Splitters',
+  'CRM Comercial',
+  'Outro (especificar)',
+] as const
+
+export const GMUD_SISTEMAS_EXTERNOS_OPTIONS = [
+  'Voalle/Elleven',
+  'GeoGrid',
+  'Native',
+  'Matrix',
+  'Outro (especificar)',
+] as const
+
+export const GMUD_AMBIENTE_SI_OPTIONS = ['Produção', 'Homologação', 'Desenvolvimento'] as const
+export const GMUD_TIPO_INDISPONIBILIDADE_OPTIONS = ['Parcial', 'Total'] as const
+
+// ---------------------------------------------------------------------------
+// TIPOS DE DADOS POR CATEGORIA
+// ---------------------------------------------------------------------------
+
+/** Campos específicos de Sistemas Internos — persistidos como JSON em `categoria_data`. */
+export type GmudSistemasInternosData = {
+  // Identificação
+  sistemaAfetado: string
+  sistemaAfetadoOutro: string
+  moduloFuncionalidade: string
+  ambiente: string
+  natureza: string
+  responsavelTecnico: string
+  equipeResponsavel: string
+  // Descrição
+  objetivo: string
+  justificativa: string
+  resultadoEsperado: string
+  // Impacto operacional
+  areasImpactadas: string[]
+  processosNegocio: string[]
+  usuariosImpactados: string
+  haraIndisponibilidade: string
+  tipoIndisponibilidade: string
+  duracaoEstimada: string
+  impactoEsperado: string
+  // Dependências
+  apisEnvolvidas: string
+  integracoes: string
+  automacoesN8n: string
+  bancoDados: string
+  servicosDependentes: string
+  prerequisitos: string
+  // Validação
+  testesNecessarios: string
+  criteriosSucesso: string
+  responsavelHomologacao: string
+  procedimentoValidacao: string
+  // Comunicação
+  equipesInformadas: string[]
+  comunicacaoPrevia: string
+  observacoesAdicionais: string
+}
+
+/** Campos específicos de Sistemas Externos — persistidos como JSON em `categoria_data`. */
+export type GmudSistemasExternosData = {
+  // Identificação
+  sistemaExterno: string
+  sistemaExternoOutro: string
+  fornecedor: string
+  servicoFuncionalidade: string
+  ambienteSE: string
+  responsavelInterno: string
+  natureza: string
+  // Descrição
+  mudancaPrevista: string
+  motivoAlteracao: string
+  origemSolicitacao: string
+  comunicadoFornecedor: string
+  // Impacto operacional
+  areasAfetadas: string[]
+  processosDependentes: string[]
+  integracoesAfetadas: string
+  haIndisponibilidade: string
+  tipoIndisponibilidade: string
+  duracaoEstimada: string
+  impactoEsperado: string
+  // Informações do fornecedor
+  chamadoFornecedor: string  // OPCIONAL — nunca obrigatório
+  janelaFornecedor: string
+  canalAcompanhamento: string
+  // Contingência
+  alternativaOperacional: string
+  acoesMitigar: string
+  procedimentoRecuperacao: string
+  // Validação
+  testesPosMudanca: string
+  validacaoIntegracoes: string
+  criteriosNormalizacao: string
+  responsavelValidacao: string
+  // Comunicação
+  areasNotificar: string[]
+  avisoUsuarios: string
+  observacoesAdicionais: string
+}
+
+// ---------------------------------------------------------------------------
+// CAMPOS COMPARTILHADOS (Rede Externa — preservados integralmente)
+// ---------------------------------------------------------------------------
 
 export const GMUD_AREA_OPTIONS = [
   'Oper/Infra',
@@ -57,10 +213,19 @@ export const GMUD_RECURSO_PAPEIS: { value: GmudRecursoPapel; label: string }[] =
   { value: 'validador', label: 'Validador' },
 ]
 
+// ---------------------------------------------------------------------------
+// ESTADO DO FORMULÁRIO
+// ---------------------------------------------------------------------------
+
 export type GmudFormState = {
+  // Selector de categoria — o campo que guia todo o formulário dinâmico
+  categoria: GmudCategoria
   voalleProtocol: string
   tipo: string
-  /** Assunto da mudança (GMUD_ASSUNTO_OPTIONS). */
+  /**
+   * Para Rede Externa: natureza da mudança (persiste no DB como `assunto` para retrocompat).
+   * Para Sistemas Internos/Externos: vazio (natureza fica em categoriaData.natureza).
+   */
   assunto: string
   titulo: string
   descricao: string
@@ -81,11 +246,15 @@ export type GmudFormState = {
   dataFim: string
   horaFim: string
   listaClientesCor: string
-  /** Texto livre do "Outro" em Ambiente afetado (opção que existe no Google Form). */
+  /** Texto livre do "Outro" em Ambiente afetado. */
   ambienteOutro: string
-  /** Observações livres do solicitante — entram na máscara/relato do protocolo no Elleven. */
+  /** Observações livres — entram na máscara do protocolo no Elleven. */
   observacoes: string
 }
+
+// ---------------------------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------------------------
 
 /** Junta o ambiente selecionado com o "Outro" (se preenchido) — o que vai pro banco. */
 export function collectAmbienteAfetado(form: GmudFormState): string[] {
@@ -93,35 +262,153 @@ export function collectAmbienteAfetado(form: GmudFormState): string[] {
   return outro !== '' ? [...form.ambienteAfetado, `Outro: ${outro}`] : [...form.ambienteAfetado]
 }
 
-/** Valida os campos obrigatórios (paridade com o Google Form). Retorna os rótulos faltando. */
-export function validateGmudForm(form: GmudFormState): string[] {
-  const missing: string[] = []
-  const req = (ok: boolean, label: string) => {
-    if (!ok) missing.push(label)
+/** Estado inicial vazio para Sistemas Internos. */
+export function emptyGmudSistemasInternosData(): GmudSistemasInternosData {
+  return {
+    sistemaAfetado: '',
+    sistemaAfetadoOutro: '',
+    moduloFuncionalidade: '',
+    ambiente: '',
+    natureza: '',
+    responsavelTecnico: '',
+    equipeResponsavel: '',
+    objetivo: '',
+    justificativa: '',
+    resultadoEsperado: '',
+    areasImpactadas: [],
+    processosNegocio: [],
+    usuariosImpactados: '',
+    haraIndisponibilidade: '',
+    tipoIndisponibilidade: '',
+    duracaoEstimada: '',
+    impactoEsperado: '',
+    apisEnvolvidas: '',
+    integracoes: '',
+    automacoesN8n: '',
+    bancoDados: '',
+    servicosDependentes: '',
+    prerequisitos: '',
+    testesNecessarios: '',
+    criteriosSucesso: '',
+    responsavelHomologacao: '',
+    procedimentoValidacao: '',
+    equipesInformadas: [],
+    comunicacaoPrevia: '',
+    observacoesAdicionais: '',
   }
-  // A GMUD sempre abre o protocolo no Elleven — o e-mail define o solicitante.
+}
+
+/** Estado inicial vazio para Sistemas Externos. */
+export function emptyGmudSistemasExternosData(): GmudSistemasExternosData {
+  return {
+    sistemaExterno: '',
+    sistemaExternoOutro: '',
+    fornecedor: '',
+    servicoFuncionalidade: '',
+    ambienteSE: '',
+    responsavelInterno: '',
+    natureza: '',
+    mudancaPrevista: '',
+    motivoAlteracao: '',
+    origemSolicitacao: '',
+    comunicadoFornecedor: '',
+    areasAfetadas: [],
+    processosDependentes: [],
+    integracoesAfetadas: '',
+    haIndisponibilidade: '',
+    tipoIndisponibilidade: '',
+    duracaoEstimada: '',
+    impactoEsperado: '',
+    chamadoFornecedor: '',
+    janelaFornecedor: '',
+    canalAcompanhamento: '',
+    alternativaOperacional: '',
+    acoesMitigar: '',
+    procedimentoRecuperacao: '',
+    testesPosMudanca: '',
+    validacaoIntegracoes: '',
+    criteriosNormalizacao: '',
+    responsavelValidacao: '',
+    areasNotificar: [],
+    avisoUsuarios: '',
+    observacoesAdicionais: '',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VALIDAÇÃO — condicional por categoria
+// ---------------------------------------------------------------------------
+
+/** Valida campos obrigatórios por categoria. Retorna rótulos dos campos faltando. */
+export function validateGmudForm(
+  form: GmudFormState,
+  siData?: GmudSistemasInternosData | null,
+  seData?: GmudSistemasExternosData | null,
+): string[] {
+  const missing: string[] = []
+  const req = (ok: boolean, label: string) => { if (!ok) missing.push(label) }
+
+  // Campos comuns a todas as categorias
   req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
   req(form.tipo !== '', 'Tipo da GMUD')
-  req(form.assunto !== '', 'Assunto da mudança')
   req(form.titulo.trim() !== '', 'Título')
-  req(form.descricao.trim() !== '', 'Descrição da atividade')
-  req(form.popSite.trim() !== '', 'POP/Site')
-  req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação')
-  req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado')
-  req(form.comunicaCliente !== '', 'Comunica cliente?')
-  req(form.impactoParada !== '', 'Impacto de parada?')
-  req(form.planoExecucao.trim() !== '', 'Plano de execução')
-  req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
-  req(Object.keys(form.recursosAdministrativos).length > 0, 'Recursos administrativos')
-  req(form.planoRollback.trim() !== '', 'Plano de rollback')
   req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)')
   req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)')
-  req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
+
+  if (form.categoria === 'rede_externa') {
+    // Campos obrigatórios de Rede Externa (comportamento original preservado)
+    req(form.assunto !== '', 'Natureza da mudança')
+    req(form.descricao.trim() !== '', 'Descrição da atividade')
+    req(form.popSite.trim() !== '', 'POP/Site')
+    req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação')
+    req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado')
+    req(form.comunicaCliente !== '', 'Comunica cliente?')
+    req(form.impactoParada !== '', 'Impacto de parada?')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução')
+    req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
+    req(Object.keys(form.recursosAdministrativos).length > 0, 'Recursos administrativos')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback')
+    req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
+  }
+
+  if (form.categoria === 'sistemas_internos' && siData) {
+    const si = siData
+    const sistema = si.sistemaAfetado === 'Outro (especificar)'
+      ? si.sistemaAfetadoOutro.trim()
+      : si.sistemaAfetado.trim()
+    req(sistema !== '', 'Sistema afetado')
+    req(si.natureza !== '', 'Natureza da mudança')
+    req(si.ambiente !== '', 'Ambiente')
+    req(si.objetivo.trim() !== '', 'Objetivo da mudança')
+    req(form.descricao.trim() !== '', 'Descrição da atividade')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback')
+  }
+
+  if (form.categoria === 'sistemas_externos' && seData) {
+    const se = seData
+    const sistema = se.sistemaExterno === 'Outro (especificar)'
+      ? se.sistemaExternoOutro.trim()
+      : se.sistemaExterno.trim()
+    req(sistema !== '', 'Sistema externo')
+    req(se.natureza !== '', 'Natureza da mudança')
+    req(se.mudancaPrevista.trim() !== '', 'Mudança prevista')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
+    // chamadoFornecedor é SEMPRE opcional — nunca valida
+    req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução')
+  }
+
   return missing
 }
 
+// ---------------------------------------------------------------------------
+// ESTADO INICIAL
+// ---------------------------------------------------------------------------
+
 export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormState {
   return {
+    categoria: 'rede_externa',
     voalleProtocol: '',
     tipo: '',
     assunto: '',

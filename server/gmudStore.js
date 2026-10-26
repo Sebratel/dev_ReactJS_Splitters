@@ -12,8 +12,15 @@ import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 
 const TABLE = 'gmud_requests';
 const LINKS_TABLE = 'gmud_massiva_links';
+/** Listas configuráveis pelo admin do módulo (setores, equipes, sistemas, etc.). */
+const CONFIG_TABLE = 'gmud_config_lists';
 /** Histórico (trilha) da GMUD: quem fez o quê e quando. Alimenta a linha do tempo e os indicadores. */
 const EVENTS_TABLE = 'gmud_events';
+/** Metadados de arquivos anexados a GMUDs (o binário fica no filesystem). */
+const ATTACHMENTS_TABLE = 'gmud_attachments';
+/** Fluxogramas Mermaid gerados por IA ou criados manualmente para uma GMUD. */
+const FLOWCHARTS_TABLE = 'gmud_flowcharts';
+
 export const GMUD_EVENT_TYPES = new Set([
   'criada',
   'comite_aprovada',
@@ -26,6 +33,11 @@ export const GMUD_EVENT_TYPES = new Set([
   'reagendada',
   'massiva_vinculada',
   'massiva_desvinculada',
+  'anexo_adicionado',
+  'anexo_removido',
+  'fluxograma_criado',
+  'fluxograma_atualizado',
+  'fluxograma_removido',
 ]);
 
 let dataPool = null;
@@ -80,6 +92,18 @@ function getMysqlPool() {
   });
   instrumentMysqlPool(dataPool, 'mysql_gmud');
   return dataPool;
+}
+
+/** Insere valores padrão de uma lista se ela ainda não tiver nenhuma linha ativa. */
+async function seedConfigList(pool, listKey, labels) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS c FROM ${CONFIG_TABLE} WHERE list_key = ?`, [listKey],
+  );
+  if (Number(rows?.[0]?.c ?? 0) > 0) return;
+  const values = labels.map((label, i) => [listKey, label, i]);
+  await pool.query(
+    `INSERT INTO ${CONFIG_TABLE} (list_key, label, sort_order) VALUES ?`, [values],
+  );
 }
 
 async function ensureTable() {
@@ -154,6 +178,76 @@ async function ensureTable() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${CONFIG_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        list_key VARCHAR(64) NOT NULL,
+        label VARCHAR(191) NOT NULL,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_by VARCHAR(191) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_${CONFIG_TABLE}_key (list_key, active, sort_order)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${ATTACHMENTS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        voalle_protocol BIGINT UNSIGNED NOT NULL,
+        filename_original VARCHAR(512) NOT NULL,
+        filename_stored VARCHAR(256) NOT NULL,
+        mimetype VARCHAR(127) NOT NULL,
+        size_bytes INT UNSIGNED NOT NULL,
+        description VARCHAR(512) NULL,
+        uploaded_by VARCHAR(191) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        INDEX idx_${ATTACHMENTS_TABLE}_protocol (voalle_protocol, deleted_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${FLOWCHARTS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        voalle_protocol BIGINT UNSIGNED NOT NULL,
+        mermaid_source MEDIUMTEXT NOT NULL,
+        version INT UNSIGNED NOT NULL DEFAULT 1,
+        origin ENUM('ai', 'manual', 'imported') NOT NULL DEFAULT 'manual',
+        review_status ENUM('draft', 'reviewed') NOT NULL DEFAULT 'draft',
+        ai_model VARCHAR(64) NULL,
+        ai_warnings JSON NULL,
+        created_by VARCHAR(191) NULL,
+        updated_by VARCHAR(191) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
+        INDEX idx_${FLOWCHARTS_TABLE}_protocol (voalle_protocol, deleted_at),
+        INDEX idx_${FLOWCHARTS_TABLE}_updated (voalle_protocol, updated_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await seedConfigList(pool, 'areas', [
+      'Oper/Infra', 'Oper/Reparo', 'T&TI/CGR', 'T&TI/COR', 'T&TI/Suporte',
+      'T&TI/TI-Dev', 'T&TI/TI-Infra', 'Dir/Projetos', 'Atendimento', 'Comercial',
+      'Financeiro', 'RH', 'Jurídico',
+    ]);
+    await seedConfigList(pool, 'equipes', [
+      'TI', 'CGR', 'COR', 'NOC', 'Suporte Técnico', 'Infraestrutura',
+      'Desenvolvimento', 'Comercial', 'Qualidade', 'Projetos',
+    ]);
+    await seedConfigList(pool, 'processos', [
+      'Ativação de serviços', 'Cobrança e faturamento', 'Suporte ao cliente',
+      'Atendimento presencial', 'Vendas e contratos', 'Planejamento de rede',
+      'Monitoramento e NOC', 'Projetos e implantação',
+    ]);
+    await seedConfigList(pool, 'sistemas_internos', [
+      'Sebratel Hub Apps', 'Monitoramento Splitters', 'CRM Comercial',
+    ]);
+    await seedConfigList(pool, 'sistemas_externos', [
+      'Voalle/Elleven', 'GeoGrid', 'Native', 'Matrix',
+    ]);
+
     // Migração idempotente: adiciona colunas novas em tabelas já existentes (o CREATE acima só
     // vale para instalações novas). MySQL não tem "ADD COLUMN IF NOT EXISTS", então checamos antes.
     await ensureColumn(pool, TABLE, 'assignment_id', 'BIGINT UNSIGNED NULL AFTER voalle_protocol');
@@ -162,6 +256,9 @@ async function ensureTable() {
     await ensureColumn(pool, TABLE, 'elleven_encerrado_status', 'VARCHAR(16) NULL');
     // Quando o Comitê decidiu (aprovada/negada) — base do "tempo até a decisão".
     await ensureColumn(pool, TABLE, 'decidido_em', 'DATETIME NULL AFTER aprovado_por');
+    // Formulários dinâmicos (Massivas 3.4 fase 2): categoria da GMUD + dados específicos.
+    await ensureColumn(pool, TABLE, 'categoria', "VARCHAR(32) NULL COMMENT 'rede_externa | sistemas_internos | sistemas_externos'");
+    await ensureColumn(pool, TABLE, 'categoria_data', 'JSON NULL');
   })().catch((error) => {
     readyPromise = null;
     throw error;
@@ -209,6 +306,8 @@ export async function createGmudRequest(input) {
     assignment_id: normalizePositiveInt(input.assignmentId),
     tipo: toCleanString(input.tipo) || null,
     assunto: toCleanString(input.assunto) || null,
+    categoria: toCleanString(input.categoria) || null,
+    categoria_data: jsonOrNull(input.categoriaData ?? null),
     titulo: toCleanString(input.titulo) || null,
     descricao: toCleanString(input.descricao) || null,
     pop_site: toCleanString(input.popSite) || null,
@@ -487,6 +586,8 @@ function mapGmudRow(r) {
     assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
     tipo: r.tipo ?? null,
     assunto: r.assunto ?? null,
+    categoria: r.categoria ?? null,
+    categoriaData: parseJsonColumn(r.categoria_data),
     titulo: r.titulo ?? null,
     descricao: r.descricao ?? null,
     popSite: r.pop_site ?? null,
@@ -704,7 +805,7 @@ export async function getGmudExtrasByProtocols(protocols) {
   if (ids.length === 0) return new Map();
   const placeholders = ids.map(() => '?').join(', ');
   const [rows] = await pool.query(
-    `SELECT voalle_protocol, assignment_id, tipo, assunto, pop_site, impacto_parada, comunica_cliente,
+    `SELECT voalle_protocol, assignment_id, tipo, assunto, categoria, pop_site, impacto_parada, comunica_cliente,
             status_comite, status_exec, rnc, data_cab, ambiente_afetado,
             elleven_encerrado_em, elleven_encerrado_status
        FROM ${TABLE} WHERE voalle_protocol IN (${placeholders})`,
@@ -716,6 +817,7 @@ export async function getGmudExtrasByProtocols(protocols) {
       assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
       tipo: r.tipo ?? null,
       assunto: r.assunto ?? null,
+      categoria: r.categoria ?? null,
       popSite: r.pop_site ?? null,
       impactoParada: r.impacto_parada ?? null,
       comunicaCliente: r.comunica_cliente ?? null,
@@ -729,4 +831,292 @@ export async function getGmudExtrasByProtocols(protocols) {
     });
   }
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Listas configuráveis do módulo GMUD
+// ---------------------------------------------------------------------------
+
+/**
+ * Retorna todas as listas configuráveis como um mapa { [listKey]: string[] }.
+ * Somente itens ativos, ordenados por sort_order, label.
+ */
+export async function getGmudConfigLists() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT id, list_key, label FROM ${CONFIG_TABLE}
+      WHERE active = 1 ORDER BY list_key, sort_order, label`,
+  );
+  const result = {};
+  for (const r of rows) {
+    if (!result[r.list_key]) result[r.list_key] = [];
+    result[r.list_key].push({ id: Number(r.id), label: r.label });
+  }
+  return result;
+}
+
+/**
+ * Adiciona um novo item a uma lista configurável.
+ * @returns {{ id: number, label: string }}
+ */
+export async function addGmudConfigItem(listKey, label, createdBy) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const key = toCleanString(listKey);
+  const lbl = toCleanString(label);
+  const VALID_KEYS = new Set(['areas', 'equipes', 'processos', 'sistemas_internos', 'sistemas_externos']);
+  if (!VALID_KEYS.has(key)) throw buildError(`Lista inválida: ${key}`, 400);
+  if (lbl === '') throw buildError('O nome do item não pode ser vazio.', 400);
+  if (lbl.length > 191) throw buildError('Nome muito longo (máx. 191 caracteres).', 400);
+  // Dedupe: não duplicar label ativa na mesma lista
+  const [existing] = await pool.query(
+    `SELECT id FROM ${CONFIG_TABLE} WHERE list_key = ? AND label = ? AND active = 1 LIMIT 1`,
+    [key, lbl],
+  );
+  if (existing.length > 0) throw buildError(`"${lbl}" já existe na lista.`, 409);
+  const [result] = await pool.query(
+    `INSERT INTO ${CONFIG_TABLE} (list_key, label, sort_order, created_by) VALUES (?, ?, 999, ?)`,
+    [key, lbl, toCleanString(createdBy) || null],
+  );
+  return { id: result.insertId, label: lbl };
+}
+
+/**
+ * Desativa (soft-delete) um item da lista configurável.
+ * Não remove registros históricos — apenas oculta da seleção em novos formulários.
+ */
+export async function deactivateGmudConfigItem(id) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const itemId = normalizePositiveInt(id);
+  if (!itemId) throw buildError('ID de item inválido.', 400);
+  const [result] = await pool.query(
+    `UPDATE ${CONFIG_TABLE} SET active = 0 WHERE id = ? AND active = 1`, [itemId],
+  );
+  if (result.affectedRows === 0) throw buildError('Item não encontrado ou já removido.', 404);
+  return { id: itemId };
+}
+
+// ─── ANEXOS ──────────────────────────────────────────────────────────────────
+
+const ALLOWED_MIMETYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Grava os metadados de um arquivo recém-enviado.
+ * O arquivo já deve estar salvo no filesystem antes desta chamada.
+ */
+export async function addGmudAttachment({ voalleProtocol, filenameOriginal, filenameStored, mimetype, sizeBytes, description, uploadedBy }) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido.', 400);
+  if (!ALLOWED_MIMETYPES.has(mimetype)) throw buildError(`Tipo de arquivo não permitido: ${mimetype}`, 400);
+  if (sizeBytes > MAX_ATTACHMENT_BYTES) throw buildError('Arquivo excede o limite de 10 MB.', 400);
+
+  const [result] = await pool.query(
+    `INSERT INTO ${ATTACHMENTS_TABLE}
+       (voalle_protocol, filename_original, filename_stored, mimetype, size_bytes, description, uploaded_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [protocol, filenameOriginal, filenameStored, mimetype, sizeBytes, description ?? null, uploadedBy ?? null],
+  );
+  return {
+    id: result.insertId,
+    voalleProtocol: protocol,
+    filenameOriginal,
+    filenameStored,
+    mimetype,
+    sizeBytes,
+    description: description ?? null,
+    uploadedBy: uploadedBy ?? null,
+  };
+}
+
+/**
+ * Lista os metadados de anexos ativos de uma GMUD (excluindo soft-deleted).
+ */
+export async function listGmudAttachments(voalleProtocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido.', 400);
+
+  const [rows] = await pool.query(
+    `SELECT id, voalle_protocol, filename_original, filename_stored, mimetype, size_bytes, description, uploaded_by, created_at
+     FROM ${ATTACHMENTS_TABLE}
+     WHERE voalle_protocol = ? AND deleted_at IS NULL
+     ORDER BY created_at ASC`,
+    [protocol],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    voalleProtocol: r.voalle_protocol,
+    filenameOriginal: r.filename_original,
+    filenameStored: r.filename_stored,
+    mimetype: r.mimetype,
+    sizeBytes: r.size_bytes,
+    description: r.description,
+    uploadedBy: r.uploaded_by,
+    createdAt: r.created_at,
+  }));
+}
+
+/**
+ * Retorna os metadados de um único anexo (para validação antes de servir o arquivo).
+ * Lança 404 se não encontrado ou já excluído.
+ */
+export async function getGmudAttachment(attachmentId) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(attachmentId);
+  if (!id) throw buildError('ID de anexo inválido.', 400);
+
+  const [rows] = await pool.query(
+    `SELECT id, voalle_protocol, filename_original, filename_stored, mimetype, size_bytes, description, uploaded_by, created_at
+     FROM ${ATTACHMENTS_TABLE}
+     WHERE id = ? AND deleted_at IS NULL`,
+    [id],
+  );
+  if (!rows || rows.length === 0) throw buildError('Anexo não encontrado.', 404);
+  const r = rows[0];
+  return {
+    id: r.id,
+    voalleProtocol: r.voalle_protocol,
+    filenameOriginal: r.filename_original,
+    filenameStored: r.filename_stored,
+    mimetype: r.mimetype,
+    sizeBytes: r.size_bytes,
+    description: r.description,
+    uploadedBy: r.uploaded_by,
+    createdAt: r.created_at,
+  };
+}
+
+/**
+ * Soft-delete de um anexo. Retorna o `filenameStored` para que o handler
+ * possa excluir o arquivo do filesystem após confirmar o soft-delete.
+ */
+export async function softDeleteGmudAttachment(attachmentId) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const id = normalizePositiveInt(attachmentId);
+  if (!id) throw buildError('ID de anexo inválido.', 400);
+
+  const [rows] = await pool.query(
+    `SELECT id, voalle_protocol, filename_stored FROM ${ATTACHMENTS_TABLE} WHERE id = ? AND deleted_at IS NULL`,
+    [id],
+  );
+  if (!rows || rows.length === 0) throw buildError('Anexo não encontrado.', 404);
+  const { voalle_protocol: protocol, filename_stored: filenameStored } = rows[0];
+
+  await pool.query(
+    `UPDATE ${ATTACHMENTS_TABLE} SET deleted_at = NOW() WHERE id = ?`, [id],
+  );
+  return { id, voalleProtocol: protocol, filenameStored };
+}
+
+// ─── Fluxogramas GMUD ───────────────────────────────────────────────────────
+
+function mapFlowchartRow(row) {
+  return {
+    id: Number(row.id),
+    voalleProtocol: Number(row.voalle_protocol),
+    mermaidSource: row.mermaid_source,
+    version: Number(row.version),
+    origin: row.origin,
+    reviewStatus: row.review_status,
+    aiModel: row.ai_model ?? null,
+    aiWarnings: Array.isArray(row.ai_warnings) ? row.ai_warnings : (row.ai_warnings ? JSON.parse(row.ai_warnings) : []),
+    createdBy: row.created_by ?? null,
+    updatedBy: row.updated_by ?? null,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at ?? ''),
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at ?? ''),
+  };
+}
+
+/** Retorna o fluxograma ativo mais recente de uma GMUD, ou null se não existir. */
+export async function getGmudFlowchart(voalleProtocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido.', 400);
+
+  const [rows] = await pool.query(
+    `SELECT * FROM ${FLOWCHARTS_TABLE}
+      WHERE voalle_protocol = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC LIMIT 1`,
+    [protocol],
+  );
+  return rows && rows.length > 0 ? mapFlowchartRow(rows[0]) : null;
+}
+
+/**
+ * Cria ou atualiza o fluxograma de uma GMUD (upsert por protocolo — uma GMUD tem no máximo um
+ * fluxograma ativo; salvar novamente incrementa a versão).
+ */
+export async function saveGmudFlowchart(input) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(input?.voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido.', 400);
+
+  const source = toCleanString(input?.mermaidSource);
+  if (!source) throw buildError('Fonte Mermaid não pode ser vazia.', 400);
+  if (source.length > 200000) throw buildError('Fluxograma excede o limite de tamanho.', 413);
+
+  const VALID_ORIGINS = new Set(['ai', 'manual', 'imported']);
+  const origin = VALID_ORIGINS.has(input?.origin) ? input.origin : 'manual';
+  const reviewStatus = input?.reviewStatus === 'reviewed' ? 'reviewed' : 'draft';
+  const createdBy = toCleanString(input?.createdBy) || null;
+  const aiModel = toCleanString(input?.aiModel) || null;
+  const aiWarnings = Array.isArray(input?.aiWarnings) ? JSON.stringify(input.aiWarnings) : null;
+
+  // Verificar se já existe fluxograma ativo para incrementar versão
+  const [existing] = await pool.query(
+    `SELECT id, version FROM ${FLOWCHARTS_TABLE} WHERE voalle_protocol = ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`,
+    [protocol],
+  );
+
+  if (existing && existing.length > 0) {
+    const row = existing[0];
+    const newVersion = Number(row.version) + 1;
+    await pool.query(
+      `UPDATE ${FLOWCHARTS_TABLE}
+        SET mermaid_source = ?, version = ?, origin = ?, review_status = ?,
+            ai_model = ?, ai_warnings = ?, updated_by = ?, updated_at = NOW()
+        WHERE id = ?`,
+      [source, newVersion, origin, reviewStatus, aiModel, aiWarnings, createdBy, row.id],
+    );
+    return await getGmudFlowchart(protocol);
+  }
+
+  await pool.query(
+    `INSERT INTO ${FLOWCHARTS_TABLE}
+      (voalle_protocol, mermaid_source, version, origin, review_status, ai_model, ai_warnings, created_by, updated_by)
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+    [protocol, source, origin, reviewStatus, aiModel, aiWarnings, createdBy, createdBy],
+  );
+  return await getGmudFlowchart(protocol);
+}
+
+/** Marca o fluxograma como deletado (soft delete). */
+export async function deleteGmudFlowchart(voalleProtocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const protocol = normalizePositiveInt(voalleProtocol);
+  if (!protocol) throw buildError('Protocolo inválido.', 400);
+
+  const [rows] = await pool.query(
+    `SELECT id FROM ${FLOWCHARTS_TABLE} WHERE voalle_protocol = ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 1`,
+    [protocol],
+  );
+  if (!rows || rows.length === 0) throw buildError('Fluxograma não encontrado.', 404);
+  await pool.query(`UPDATE ${FLOWCHARTS_TABLE} SET deleted_at = NOW() WHERE id = ?`, [rows[0].id]);
+  return { voalleProtocol: protocol };
 }

@@ -102,6 +102,9 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
         {r ? (
           <>
             <Row label="Tipo">{r.tipo || '—'}</Row>
+            {r.categoria && r.categoria !== 'rede_externa'
+              ? <Row label="Categoria">{r.categoria === 'sistemas_internos' ? 'Sistemas internos' : 'Sistemas externos'}</Row>
+              : null}
             <Row label="Assunto">{r.assunto || '—'}</Row>
             <Row label="Comitê">{comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—'}</Row>
             {r.decididoEm ? (

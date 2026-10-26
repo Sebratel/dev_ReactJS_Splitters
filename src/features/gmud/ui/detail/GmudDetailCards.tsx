@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { History, Layers, ListChecks } from 'lucide-react'
+import { CalendarClock, History, Layers, ListChecks } from 'lucide-react'
 import type { GmudDetailLink, GmudDetailRequest } from '@/features/gmud/api/gmudDetail'
 import type { TimelineItem, TimelineTone } from '@/features/gmud/lib/gmudTimeline'
-import { formatWindow } from '@/features/gmud/lib/gmudSchedule'
+import { formatWindow, type GmudWindow } from '@/features/gmud/lib/gmudSchedule'
 import { GMUD_RECURSO_PAPEIS } from '@/features/gmud/model/gmudForm'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { cn } from '@/shared/lib/utils'
@@ -109,6 +109,77 @@ export function GmudScopeCard({ request, voalleDescription }: { request: GmudDet
         <Field label="Lista de clientes ao COR?" value={request.listaClientesCor} />
         <Field label="Área do solicitante" value={request.areaSolicitante} />
       </div>
+    </section>
+  )
+}
+
+type RescheduleEvent = { type: string; at: string | null; payload: Record<string, unknown> | null }
+
+function isWindow(v: unknown): v is GmudWindow {
+  const w = v as GmudWindow | null
+  return Boolean(w && typeof w.dataInicio === 'string' && typeof w.horaInicio === 'string')
+}
+
+/** Reconstrói a sequência de janelas de execução a partir dos eventos de reagendamento. */
+export function buildWindowHistory(
+  request: GmudDetailRequest | null,
+  events: RescheduleEvent[],
+): { label: string; window: string }[] {
+  const reschedules = events
+    .filter((e) => e.type === 'reagendada')
+    .filter((e) => isWindow(e.payload?.previous) && isWindow(e.payload?.next))
+    .sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''))
+
+  if (reschedules.length === 0) return []
+
+  const history: { label: string; window: string }[] = []
+  const first = reschedules[0]
+  if (isWindow(first.payload?.previous)) {
+    history.push({ label: 'Janela original', window: formatWindow(first.payload.previous as GmudWindow) })
+  }
+  reschedules.forEach((e, i) => {
+    if (isWindow(e.payload?.next)) {
+      const d = e.at ? new Date(e.at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''
+      history.push({
+        label: `${i + 1}º reagendamento${d ? ` (${d})` : ''}`,
+        window: formatWindow(e.payload.next as GmudWindow),
+      })
+    }
+  })
+
+  if (request?.dataInicio && request.horaInicio) {
+    const current = formatWindow({
+      dataInicio: request.dataInicio,
+      horaInicio: request.horaInicio,
+      dataFim: request.dataFim || request.dataInicio,
+      horaFim: request.horaFim || request.horaInicio,
+    })
+    const last = history[history.length - 1]
+    if (last?.window !== current) {
+      history.push({ label: 'Janela atual', window: current })
+    } else if (last) {
+      history[history.length - 1] = { ...last, label: `${last.label} (atual)` }
+    }
+  }
+
+  return history
+}
+
+export function GmudWindowHistoryCard({ request, events }: { request: GmudDetailRequest | null; events: RescheduleEvent[] }) {
+  const history = buildWindowHistory(request, events)
+  if (history.length === 0) return null
+  return (
+    <section className={cn(DETAIL_CARD, 'space-y-3 p-4')}>
+      <CardTitle icon={<CalendarClock size={16} />}>Histórico de janelas</CardTitle>
+      <ol className="relative space-y-3 border-l border-neutral-200 pl-5 dark:border-white/10">
+        {history.map((h, i) => (
+          <li key={i} className="relative">
+            <span className={cn('absolute -left-[25px] top-1 size-2.5 rounded-full ring-4 ring-surface-container-lowest', i === history.length - 1 ? 'bg-primary' : 'bg-amber-400')} />
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant/70">{h.label}</p>
+            <p className="text-sm font-medium text-on-surface">{h.window}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }

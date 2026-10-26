@@ -39,6 +39,7 @@ export function parsePermissions(value: unknown): SplittersPermissionSet {
       raw.canViewRedistribution ?? defaultSplittersPermissions.canViewRedistribution,
     canViewGmud: raw.canViewGmud ?? defaultSplittersPermissions.canViewGmud,
     canApproveGmud: raw.canApproveGmud ?? defaultSplittersPermissions.canApproveGmud,
+    canConfigureGmud: raw.canConfigureGmud ?? defaultSplittersPermissions.canConfigureGmud,
     isAdmin: raw.isAdmin ?? defaultSplittersPermissions.isAdmin,
   }
 }

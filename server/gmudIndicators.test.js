@@ -79,4 +79,6 @@ test('aggregatePlatform: comitê, perfil, reagendamentos e impacto', () => {
   assert.equal(r.impacto.clientesAfetados, 150);
   assert.equal(r.impacto.massivasVinculadas, 2);
   assert.equal(r.impacto.topImpact[0].title, 'Troca de OLT');
+  // byCategoria: nenhum registro tem campo `categoria`, então todos caem em rede_externa
+  assert.deepEqual(r.byCategoria, { rede_externa: 4, sistemas_internos: 0, sistemas_externos: 0 });
 });

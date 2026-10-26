@@ -24,6 +24,11 @@ const EVENT_LABEL: Record<string, { title: string; tone: TimelineTone }> = {
   reagendada: { title: 'Janela reagendada', tone: 'warning' },
   massiva_vinculada: { title: 'Massiva vinculada', tone: 'neutral' },
   massiva_desvinculada: { title: 'Massiva desvinculada', tone: 'neutral' },
+  anexo_adicionado: { title: 'Anexo incluído', tone: 'neutral' },
+  anexo_removido: { title: 'Anexo removido', tone: 'warning' },
+  fluxograma_criado: { title: 'Fluxograma gerado', tone: 'primary' },
+  fluxograma_atualizado: { title: 'Fluxograma atualizado', tone: 'neutral' },
+  fluxograma_removido: { title: 'Fluxograma removido', tone: 'warning' },
 }
 
 function isWindow(value: unknown): value is GmudWindow {
@@ -48,6 +53,9 @@ function detailFor(e: EventLike): string | null {
     return text || null
   }
   if (e.type === 'criada' && p.tipo) return String(p.tipo)
+  if ((e.type === 'anexo_adicionado' || e.type === 'anexo_removido') && p.filename) {
+    return String(p.filename)
+  }
   return null
 }
 

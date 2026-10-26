@@ -40,12 +40,15 @@ export type GmudVoalleIndicators = {
   }
 }
 
+export type GmudCategoria = 'rede_externa' | 'sistemas_internos' | 'sistemas_externos'
+
 export type GmudPlatformIndicators = {
   total: number
   comite: { pendente: number; aprovada: number; negada: number }
   approvalRate: number | null
   medianHoursToDecision: number | null
   exec: { pendente: number; em_execucao: number; concluida: number }
+  byCategoria: Record<GmudCategoria, number>
   tipos: CountItem[]
   assuntos: CountItem[]
   ambientes: CountItem[]
@@ -68,18 +71,35 @@ export type GmudPlatformIndicators = {
 export type GmudIndicators = {
   from: string
   to: string
+  categoria: GmudCategoria | null
   generatedAt: string
   voalle: GmudVoalleIndicators
   platform: GmudPlatformIndicators | null
   platformError: string | null
 }
 
-export async function fetchGmudIndicators(from: string, to: string): Promise<GmudIndicators> {
-  const qs = new URLSearchParams({ from, to }).toString()
+export async function fetchGmudIndicators(
+  from: string,
+  to: string,
+  categoria?: GmudCategoria | null,
+): Promise<GmudIndicators> {
+  const params: Record<string, string> = { from, to }
+  if (categoria) params.categoria = categoria
+  const qs = new URLSearchParams(params).toString()
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/indicators?${qs}`)
   const result = await response.json().catch(() => null)
   if (!response.ok || !result?.success) {
     throw new Error((result && typeof result.message === 'string' && result.message) || 'Falha ao carregar os indicadores.')
   }
   return result.data as GmudIndicators
+}
+
+export function gmudIndicatorsExportUrl(
+  from: string,
+  to: string,
+  categoria?: GmudCategoria | null,
+): string {
+  const params: Record<string, string> = { from, to }
+  if (categoria) params.categoria = categoria
+  return `${env.localBffUrl}/api/gmud/indicators/export.csv?${new URLSearchParams(params).toString()}`
 }

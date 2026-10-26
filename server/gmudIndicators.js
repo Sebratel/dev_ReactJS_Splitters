@@ -254,12 +254,18 @@ export function aggregatePlatform(requests, events, links, { now = new Date() } 
     .slice(0, 10)
     .map((i) => ({ ...i, title: titleByProtocol.get(i.gmudProtocol) ?? '' }));
 
+  const CATEGORIAS = ['rede_externa', 'sistemas_internos', 'sistemas_externos'];
+  const byCategoria = Object.fromEntries(
+    CATEGORIAS.map((cat) => [cat, requests.filter((r) => (r.categoria ?? 'rede_externa') === cat).length]),
+  );
+
   return {
     total,
     comite,
     approvalRate: decided ? round1((comite.aprovada / decided) * 100) : null,
     medianHoursToDecision: round1(median(hoursToDecision)),
     exec,
+    byCategoria,
     tipos: countBy(requests, (r) => r.tipo),
     assuntos: countBy(requests, (r) => r.assunto),
     ambientes,

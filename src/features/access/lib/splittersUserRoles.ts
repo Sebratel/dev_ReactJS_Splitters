@@ -45,6 +45,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewRedistribution: true,
     canViewGmud: true,
     canApproveGmud: true,
+    canConfigureGmud: true,
     isAdmin: true,
   },
   operador: {
@@ -56,6 +57,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewRedistribution: true,
     canViewGmud: false,
     canApproveGmud: false,
+    canConfigureGmud: false,
     isAdmin: false,
   },
   operador_massivas: {
@@ -67,6 +69,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewRedistribution: false,
     canViewGmud: false,
     canApproveGmud: false,
+    canConfigureGmud: false,
     isAdmin: false,
   },
   leitura: {
@@ -78,6 +81,7 @@ export const SPLITTERS_ROLE_PRESETS: Record<
     canViewRedistribution: false,
     canViewGmud: false,
     canApproveGmud: false,
+    canConfigureGmud: false,
     isAdmin: false,
   },
 }
@@ -92,6 +96,7 @@ function permissionsEqual(a: SplittersPermissionSet, b: SplittersPermissionSet):
     a.canViewRedistribution === b.canViewRedistribution &&
     a.canViewGmud === b.canViewGmud &&
     a.canApproveGmud === b.canApproveGmud &&
+    a.canConfigureGmud === b.canConfigureGmud &&
     a.isAdmin === b.isAdmin
   )
 }
