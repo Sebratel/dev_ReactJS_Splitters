@@ -111,6 +111,7 @@ import {
   addTeamApprover,
   removeTeamApprover,
   getTeamApprovers,
+  listGmudUpcomingForHsm,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
 import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
@@ -5324,6 +5325,91 @@ app.delete('/api/gmud/link', async (req, res) => {
       success: false,
       message: safeErrorMessage(error, 'Falha ao desvincular a massiva.'),
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GMUD — Clientes corporativos para HSM D-7
+// Uso exclusivo do N8N (cron diário). Protegido por N8N_INTERNAL_SECRET.
+// Retorna GMUDs aprovadas cuja data_inicio = hoje + daysAhead (padrão 7) com
+// seus clientes corporativos no site (pop_site) para disparo de HSM.
+// ---------------------------------------------------------------------------
+app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
+  try {
+    const secret = (process.env.N8N_INTERNAL_SECRET ?? '').trim();
+    const provided = (req.headers['x-internal-secret'] ?? '').trim();
+    if (!secret || !provided || provided !== secret) {
+      return res.status(401).json({ success: false, message: 'Não autorizado.' });
+    }
+
+    const daysAhead = Math.max(1, Math.min(30, Number.parseInt(String(req.query.daysAhead ?? '7'), 10) || 7));
+
+    const gmudRows = await listGmudUpcomingForHsm(daysAhead);
+
+    if (!gmudRows.length) {
+      return res.json({ success: true, gmudCount: 0, data: [] });
+    }
+
+    const CORPORATE_INSIGNIAS = ['contrato corporativo', 'contrato corporativo pme'];
+    const placeholders = CORPORATE_INSIGNIAS.map(() => '$1').join(', ');
+
+    const corporateQuery = `
+      SELECT DISTINCT
+        client.name          AS nome,
+        client.cell_phone_1  AS telefone,
+        contract.id::text    AS contrato,
+        auth_contract.user   AS pppoe
+      FROM authentication_sites site
+      INNER JOIN authentication_access_points ap
+          ON ap.authentication_site_id = site.id
+      INNER JOIN authentication_splitters ps
+          ON ps.authentication_access_point_id = ap.id
+      INNER JOIN authentication_splitter_ports psp
+          ON psp.authentication_splitter_id = ps.id
+         AND psp.deleted = FALSE
+      INNER JOIN authentication_splitters ss
+          ON ss.id = psp.children_authentication_splitter_id
+      INNER JOIN authentication_splitter_ports ssp
+          ON ssp.authentication_splitter_id = ss.id
+         AND ssp.deleted = FALSE
+         AND ssp.busy = TRUE
+      INNER JOIN authentication_contracts auth_contract
+          ON auth_contract.id = ssp.authentication_contract_id
+      INNER JOIN contracts contract
+          ON contract.id = auth_contract.contract_id
+      INNER JOIN people client
+          ON client.id = contract.client_id
+      INNER JOIN insignias insig
+          ON insig.id = client.insignia_id
+      WHERE site.title = $1
+        AND LOWER(TRIM(COALESCE(insig.title, ''))) = ANY($2::text[])
+        AND client.cell_phone_1 IS NOT NULL
+        AND TRIM(client.cell_phone_1) != ''
+    `;
+
+    const results = await Promise.all(
+      gmudRows.map(async (gmud) => {
+        let clientes = [];
+        try {
+          const { rows } = await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
+          clientes = rows.map((r) => ({
+            nome: (r.nome ?? '').trim(),
+            telefone: (r.telefone ?? '').trim(),
+            contrato: (r.contrato ?? '').trim(),
+            pppoe: (r.pppoe ?? '').trim(),
+          }));
+        } catch (err) {
+          logger.error('[gmud-corporate-hsm] Falha ao buscar clientes do site:', { site: gmud.popSite, error: err.message });
+        }
+        return { gmud, clienteCount: clientes.length, clientes };
+      }),
+    );
+
+    const withClients = results.filter((r) => r.clientes.length > 0);
+    return res.json({ success: true, gmudCount: withClients.length, data: withClients });
+  } catch (error) {
+    logger.error('[gmud-corporate-hsm] Erro no endpoint:', { error: error?.message });
+    return res.status(500).json({ success: false, message: safeErrorMessage(error, 'Erro ao buscar GMUDs para HSM.') });
   }
 });
 

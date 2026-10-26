@@ -1202,6 +1202,37 @@ export async function saveGmudFlowchart(input) {
   return await getGmudFlowchart(protocol);
 }
 
+/**
+ * Retorna GMUDs aprovadas cuja data_inicio cai exatamente daysAhead dias a frente.
+ * Usado pelo endpoint /api/gmud/corporate-hsm-preview (N8N cron D-7).
+ */
+export async function listGmudUpcomingForHsm(daysAhead = 7) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const days = Math.max(1, Math.min(30, Number(daysAhead) || 7));
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, titulo, tipo, categoria, pop_site,
+            data_inicio, hora_inicio, data_fim, hora_fim
+     FROM ${TABLE}
+     WHERE status_comite = 'aprovada'
+       AND pop_site IS NOT NULL
+       AND TRIM(pop_site) != ''
+       AND DATE(data_inicio) = DATE_ADD(CURDATE(), INTERVAL ? DAY)`,
+    [days],
+  );
+  return rows.map((r) => ({
+    voalleProtocol: Number(r.voalle_protocol),
+    titulo: r.titulo ?? '',
+    tipo: r.tipo ?? '',
+    categoria: r.categoria ?? '',
+    popSite: (r.pop_site ?? '').trim(),
+    dataInicio: r.data_inicio ? String(r.data_inicio).slice(0, 10) : '',
+    horaInicio: r.hora_inicio ?? '',
+    dataFim: r.data_fim ? String(r.data_fim).slice(0, 10) : '',
+    horaFim: r.hora_fim ?? '',
+  }));
+}
+
 /** Marca o fluxograma como deletado (soft delete). */
 export async function deleteGmudFlowchart(voalleProtocol) {
   await ensureTable();
