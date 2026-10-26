@@ -112,17 +112,14 @@ ENV NODE_OPTIONS=--max-old-space-size=6144
 ENV NODE_ENV=production
 RUN npx vite build
 
-# Servidor de produção com Node e arquivos estáticos
-FROM node:22-bookworm-slim AS runner
-WORKDIR /app
-# Agente Elastic APM do servidor estático/proxy. Instalação isolada (package.json mínimo)
-# para não arrastar as dependências do build para a imagem final. Se o registry falhar, o
-# servidor arranca à mesma — `frontend-server.apm.mjs` tolera a ausência do pacote.
-RUN printf '{"name":"nexaview-frontend-server","private":true,"type":"module"}\n' > package.json \
- && (npm install --omit=dev --no-audit --no-fund elastic-apm-node@^4.18.0 \
-     || echo "aviso: elastic-apm-node nao instalado; o servidor arranca sem APM")
-COPY --from=builder /app/dist /app/dist
-COPY frontend-server.mjs /app/frontend-server.mjs
-COPY frontend-server.apm.mjs /app/frontend-server.apm.mjs
+# Servidor de produção: nginx alpine com sendfile (sem heap Node.js, ~15 MB RSS)
+FROM nginx:1.27-alpine AS runner
+# gettext fornece envsubst — substitui ${BACKEND_ORIGIN} e ${GATEWAY_ORIGIN} no template
+RUN apk add --no-cache gettext \
+ && mkdir -p /etc/nginx/conf.d
+COPY nginx.conf.template /etc/nginx/nginx.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 3177
-CMD ["node", "./frontend-server.mjs"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

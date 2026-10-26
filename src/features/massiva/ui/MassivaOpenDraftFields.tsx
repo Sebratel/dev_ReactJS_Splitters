@@ -266,6 +266,7 @@ export function MassivaOpenDraftFields({
                   type="date"
                   required
                   aria-required="true"
+                  min={new Date().toISOString().slice(0, 10)}
                   className={inputClassName}
                   value={assignmentForecastDate}
                   onChange={(e) => setAssignmentForecastDate(e.target.value)}

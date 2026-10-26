@@ -1,8 +1,9 @@
 name: nexaview
 
-# Stack: backend + frontend sem Nginx de borda no compose.
+# Stack: backend + frontend (nginx:alpine) sem proxy de borda no compose.
 # O browser acede ao frontend em FRONTEND_PORT (predefinido 3177) e opcionalmente ao backend em BACKEND_PORT.
-# Dentro da imagem do frontend o Nginx serve o SPA na porta 3177. HTTPS na borda: Traefik, Cloudflare ou LB à parte.
+# O nginx serve o SPA em 3177, proxia /api/ → backend e /api/v1/ → GATEWAY_ORIGIN.
+# HTTPS na borda: Traefik, Cloudflare ou LB à parte.
 
 services:
   backend:
@@ -160,29 +161,19 @@ services:
         - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
         - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
     container_name: react-frontend-portainer
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: 256m
+    memswap_limit: 256m
     environment:
-      # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
+      # Proxy do BFF: o SPA chama `/api/...` e o nginx encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
-      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados) — mesmo host usado
-      # em dev no VITE_BFF_PROXY_TARGET (ex.: https://api-gateway-bff.sebratel.net.br).
+      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados).
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
-      # Basic Auth do api-gateway-bff (ex.: admin/admin) — só no proxy server-side; evita popup no browser.
+      # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh.
       GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
       GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
-      # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
+      # Opcional: proxy `/__autoisp/...` (deixe vazio se não usado).
       AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
-      # Desenvolvimento local
-      LOCAL_USER_EMAIL: dev@local
-      LOCAL_USER_PERSON_ID: 629
-      LOCAL_MASSIVA_ENABLED: "true"
-      # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
-      # `-` e não `:-`: ver a nota no serviço backend — vazio tem de significar desligado.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
-      ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
-      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
       - "3177"
     ports:
