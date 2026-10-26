@@ -1,6 +1,7 @@
 import express from 'express';
 import pkg from 'pg';
 import cors from 'cors';
+import helmet from 'helmet';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -95,6 +96,7 @@ import {
   listRegisteredGmudProtocols,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
+import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -128,8 +130,33 @@ const hubBaseUrl = (
   process.env.VITE_HUB_ORIGIN ||
   'https://sebratel-hub.web.app'
 ).replace(/\/+$/, '');
-app.use(cors()); // Permite qualquer origem em desenvolvimento local
+// Helmet: headers de segurança (X-Frame-Options, HSTS, X-Content-Type-Options, etc.)
+// CSP desabilitado: o BFF serve apenas JSON/proxy — quem serve o SPA é o nginx.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS: em produção restringe às origens configuradas; em dev permite qualquer origem.
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+app.use(
+  cors(
+    allowedOrigins.length > 0
+      ? {
+          origin: (origin, callback) => {
+            // Requisições sem origin (server-to-server, nginx proxy) são sempre permitidas.
+            if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+            callback(Object.assign(new Error('CORS: origin não permitida'), { statusCode: 403 }));
+          },
+          credentials: true,
+        }
+      : undefined, // undefined = cors() sem restrição (dev local)
+  ),
+);
+
 app.use(express.json({ limit: '512kb' }));
+
+// safeErrorMessage, validateGmudDateWindow e canEditGmudRequest importados de gmudValidation.js
+const safeErrorMessage = (error, fallback) => _safeErrorMessage(error, fallback);
 
 // Observabilidade aditiva: um id de correlação por requisição, gerado
 // sincronamente (antes de qualquer trabalho assíncrono) e logado como
@@ -4123,7 +4150,7 @@ app.post('/api/usage-events', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar evento de uso.',
+      message: safeErrorMessage(error, 'Falha ao registrar evento de uso.'),
     });
   }
 });
@@ -4172,7 +4199,7 @@ app.post('/api/client-logs', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar evento do cliente.',
+      message: safeErrorMessage(error, 'Falha ao registrar evento do cliente.'),
     });
   }
 });
@@ -4201,7 +4228,7 @@ app.get('/api/usage-events/summary', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar o radar de uso.',
+      message: safeErrorMessage(error, 'Falha ao carregar o radar de uso.'),
     });
   }
 });
@@ -4332,7 +4359,7 @@ app.get('/api/gmud/list', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar as GMUDs.',
+      message: safeErrorMessage(error, 'Falha ao carregar as GMUDs.'),
     });
   }
 });
@@ -4354,8 +4381,25 @@ app.post('/api/gmud/create', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Informe o título da GMUD.' });
     }
 
-    const createdByEmail =
-      actor?.profile?.email || actor?.identity?.email || String(body.solicitanteEmail ?? '');
+    // F-02: verifica que o protocolo existe no Voalle antes de criar o registro local.
+    const [voalleCheck] = await fetchVoalleGmudRows(voalleProtocol);
+    if (!voalleCheck) {
+      return res.status(404).json({ success: false, message: 'Protocolo não encontrado no Voalle. Verifique o número e tente novamente.' });
+    }
+
+    const actorEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const canApprove = actor?.permissions?.canApproveGmud === true;
+
+    // F-01: em caso de UPSERT, apenas o criador ou um aprovador pode atualizar (canEditGmudRequest).
+    const existing = await getGmudRequest(voalleProtocol);
+    if (!canEditGmudRequest(existing, actorEmail, canApprove)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Você não tem permissão para editar a GMUD de outro usuário.',
+      });
+    }
+
+    const createdByEmail = actorEmail || String(body.solicitanteEmail ?? '');
 
     const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
     await logGmudEvent({
@@ -4369,7 +4413,7 @@ app.post('/api/gmud/create', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar a GMUD.',
+      message: safeErrorMessage(error, 'Falha ao registrar a GMUD.'),
     });
   }
 });
@@ -4384,7 +4428,7 @@ app.get('/api/gmud/pending', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar as GMUDs pendentes.',
+      message: safeErrorMessage(error, 'Falha ao carregar as GMUDs pendentes.'),
     });
   }
 });
@@ -4399,7 +4443,7 @@ app.get('/api/gmud/pending-count', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao contar GMUDs pendentes.',
+      message: safeErrorMessage(error, 'Falha ao contar GMUDs pendentes.'),
     });
   }
 });
@@ -4442,7 +4486,7 @@ app.post('/api/gmud/approval', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar a aprovação.',
+      message: safeErrorMessage(error, 'Falha ao registrar a aprovação.'),
     });
   }
 });
@@ -4452,7 +4496,11 @@ function gmudActorName(actor) {
   return actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || '';
 }
 
-/** Todas as GMUDs do Voalle (histórico completo, poucas centenas) — base dos indicadores. */
+// Timeout para queries no Voalle (ERP Postgres) — evita que o endpoint /indicators
+// fique pendurado indefinidamente quando o banco está travado ou sobrecarregado.
+const VOALLE_QUERY_TIMEOUT_MS = Number(process.env.VOALLE_QUERY_TIMEOUT_MS || 8000);
+
+/** Todas as GMUDs do Voalle (histórico completo) — base dos indicadores. */
 async function fetchVoalleGmudRows(protocol = null) {
   const params = [GMUD_INCIDENT_TYPE_ID];
   let extra = '';
@@ -4461,23 +4509,26 @@ async function fetchVoalleGmudRows(protocol = null) {
     extra = ' AND ai.protocol = $2';
   }
   const result = await pool.query(
-    `SELECT ai.protocol::bigint AS protocol,
-            ai.assignment_id::bigint AS assignment_id,
-            a.title,
-            a.description,
-            ai.date_to_start AS opened_at,
-            ai.responsible_final_date AS sla_date,
-            a.conclusion_date,
-            ai.incident_status_id AS status_id,
-            ist.title AS status,
-            pe.name AS requester,
-            pe.email AS requester_email
-       FROM erp.assignment_incidents ai
-       JOIN erp.assignments a ON a.id = ai.assignment_id
-       LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
-       LEFT JOIN erp.people pe ON pe.id = ai.person_id
-      WHERE ai.incident_type_id = $1${extra}`,
-    params,
+    { text:
+      `SELECT ai.protocol::bigint AS protocol,
+              ai.assignment_id::bigint AS assignment_id,
+              a.title,
+              a.description,
+              ai.date_to_start AS opened_at,
+              ai.responsible_final_date AS sla_date,
+              a.conclusion_date,
+              ai.incident_status_id AS status_id,
+              ist.title AS status,
+              pe.name AS requester,
+              pe.email AS requester_email
+         FROM erp.assignment_incidents ai
+         JOIN erp.assignments a ON a.id = ai.assignment_id
+         LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+         LEFT JOIN erp.people pe ON pe.id = ai.person_id
+        WHERE ai.incident_type_id = $1${extra}`,
+      values: params,
+      query_timeout: VOALLE_QUERY_TIMEOUT_MS,
+    },
   );
   return (result.rows ?? []).map((r) => ({
     protocol: Number(r.protocol),
@@ -4508,26 +4559,31 @@ app.get('/api/gmud/indicators', async (req, res) => {
     const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
     if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
 
-    const voalleRows = await fetchVoalleGmudRows();
-    const voalle = aggregateVoalle(voalleRows, { from, to });
-
+    // F-03: busca Voalle e dados da plataforma em paralelo; cada lado tolera falha do outro.
+    // O timeout do driver (VOALLE_QUERY_TIMEOUT_MS) já cancela queries lentas no Postgres.
+    let voalle = null;
+    let voalleError = null;
     let platform = null;
     let platformError = null;
-    try {
-      const requests = await listGmudRequestsCreatedBetween(from, to);
-      const events = await listGmudEventsBetween(from, to);
-      const links = await getLinksWithAffected(requests.map((r) => r.voalleProtocol));
-      platform = aggregatePlatform(requests, events, links);
-    } catch (error) {
-      platformError = error instanceof Error ? error.message : 'Dados da plataforma indisponíveis.';
-    }
 
-    return res.json({ success: true, data: { from, to, generatedAt: today.toISOString(), voalle, platform, platformError } });
+    await Promise.allSettled([
+      fetchVoalleGmudRows().then((rows) => { voalle = aggregateVoalle(rows, { from, to }); })
+        .catch((err) => { voalleError = err instanceof Error ? err.message : 'Dados do Voalle indisponíveis.'; }),
+      Promise.all([
+        listGmudRequestsCreatedBetween(from, to),
+        listGmudEventsBetween(from, to),
+      ]).then(async ([requests, events]) => {
+        const links = await getLinksWithAffected(requests.map((r) => r.voalleProtocol));
+        platform = aggregatePlatform(requests, events, links);
+      }).catch((err) => { platformError = err instanceof Error ? err.message : 'Dados da plataforma indisponíveis.'; }),
+    ]);
+
+    return res.json({ success: true, data: { from, to, generatedAt: today.toISOString(), voalle, voalleError, platform, platformError } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao calcular os indicadores de GMUD.',
+      message: safeErrorMessage(error, 'Falha ao calcular os indicadores de GMUD.'),
     });
   }
 });
@@ -4552,7 +4608,7 @@ app.get('/api/gmud/:protocol/detail', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar a GMUD.',
+      message: safeErrorMessage(error, 'Falha ao carregar a GMUD.'),
     });
   }
 });
@@ -4602,7 +4658,7 @@ app.get('/api/gmud/agenda', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar a agenda de GMUDs.',
+      message: safeErrorMessage(error, 'Falha ao carregar a agenda de GMUDs.'),
     });
   }
 });
@@ -4613,6 +4669,13 @@ app.post('/api/gmud/reschedule', async (req, res) => {
   try {
     const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para reagendar GMUDs.');
     const body = req.body ?? {};
+
+    // F-02: valida janela de datas via validateGmudDateWindow (testável em gmudValidation.test.js).
+    const dateWindowError = validateGmudDateWindow(body.dataInicio, body.dataFim, body.horaInicio, body.horaFim);
+    if (dateWindowError) {
+      return res.status(400).json({ success: false, message: dateWindowError });
+    }
+
     const result = await rescheduleGmud({
       voalleProtocol: body.voalleProtocol,
       dataInicio: body.dataInicio,
@@ -4641,7 +4704,7 @@ app.post('/api/gmud/reschedule', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao reagendar a GMUD.',
+      message: safeErrorMessage(error, 'Falha ao reagendar a GMUD.'),
     });
   }
 });
@@ -4660,7 +4723,7 @@ app.get('/api/gmud/:protocol/links', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar os vínculos.',
+      message: safeErrorMessage(error, 'Falha ao carregar os vínculos.'),
     });
   }
 });
@@ -4695,7 +4758,7 @@ app.post('/api/gmud/link', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao vincular a massiva.',
+      message: safeErrorMessage(error, 'Falha ao vincular a massiva.'),
     });
   }
 });
@@ -4716,7 +4779,7 @@ app.delete('/api/gmud/link', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao desvincular a massiva.',
+      message: safeErrorMessage(error, 'Falha ao desvincular a massiva.'),
     });
   }
 });
