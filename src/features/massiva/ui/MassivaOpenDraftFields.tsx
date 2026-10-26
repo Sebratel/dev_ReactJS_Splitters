@@ -29,6 +29,8 @@ type MassivaOpenDraftFieldsProps = {
   descriptionByAp?: DescriptionByApItem[]
   /** Sites derivados/validados a partir dos OLTs da rota (Backbone). Vários = escolher. */
   siteCandidates?: string[]
+  /** Substituição do label de assunto exibido no campo "Tipo de solicitação" (padrão: MASSIVA_SOLICITATION_TYPE_LABEL). */
+  solicitationTypeLabel?: string
 }
 
 function DraftSection({
@@ -109,6 +111,7 @@ export function MassivaOpenDraftFields({
   disabled,
   descriptionByAp = [],
   siteCandidates = [],
+  solicitationTypeLabel = MASSIVA_SOLICITATION_TYPE_LABEL,
 }: MassivaOpenDraftFieldsProps) {
   const enableDescriptionAutoSync = useMassivaOpenDraftStore((s) => s.enableDescriptionAutoSync)
 
@@ -247,7 +250,7 @@ export function MassivaOpenDraftFields({
                     type="text"
                     readOnly
                     className={cn(inputClassName, 'cursor-not-allowed bg-surface-container-low/90 pr-9')}
-                    value={MASSIVA_SOLICITATION_TYPE_LABEL}
+                    value={solicitationTypeLabel}
                     disabled={disabled}
                     aria-readonly="true"
                   />
