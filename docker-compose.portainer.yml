@@ -72,6 +72,12 @@ services:
       # responde 503 "Automação de HSM não configurada".
       # Ex.: https://n8n-prod.sebratel.net.br/webhook/massiva-hsm-cx
       N8N_MASSIVA_HSM_WEBHOOK_URL: ${N8N_MASSIVA_HSM_WEBHOOK_URL:-}
+      # Aviso por e-mail quando o Comitê aprova uma GMUD (pessoas cadastradas nas áreas marcadas).
+      # Sem N8N_GMUD_APPROVAL_WEBHOOK_URL o aprovar funciona, mas ninguém é avisado.
+      # Ex.: https://n8n-staging.sebratel.net.br/webhook/gmud-aprovacao
+      N8N_GMUD_APPROVAL_WEBHOOK_URL: ${N8N_GMUD_APPROVAL_WEBHOOK_URL:-}
+      # URL pública da plataforma (link da GMUD no e-mail). Ex.: https://splitters-monitoring-staging.sebratel.net.br
+      APP_BASE_URL: ${APP_BASE_URL:-}
       # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
