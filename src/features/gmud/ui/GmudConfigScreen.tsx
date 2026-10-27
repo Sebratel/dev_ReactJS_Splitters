@@ -14,7 +14,8 @@ import {
   removeTeamApprover,
   type TeamApprover,
 } from '@/features/gmud/api/gmudTeamApprovers'
-import { listSplittersUsers, type SplittersUserProfile } from '@/features/access/api/firestoreUsers'
+import { listSplittersUsers } from '@/features/access/api/firestoreUsers'
+import type { SplittersUserProfile } from '@/features/access/model/access.types'
 
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
