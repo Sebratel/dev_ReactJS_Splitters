@@ -191,6 +191,8 @@ export type GmudFormState = {
   ambienteOutro: string
   /** Observações livres — entram na máscara do protocolo no Elleven. */
   observacoes: string
+  /** ID da equipe responsável (de gmud_config_lists) — usada no fluxo de aprovação por e-mail (N8N). */
+  equipeResponsavelId: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -363,5 +365,6 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     listaClientesCor: '',
     ambienteOutro: '',
     observacoes: '',
+    equipeResponsavelId: null,
   }
 }

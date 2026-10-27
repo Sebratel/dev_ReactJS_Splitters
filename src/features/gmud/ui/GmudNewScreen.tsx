@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToastStore } from '@/shared/store/toastStore'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
@@ -327,7 +328,7 @@ function RedeExternaFields({
 // Seções específicas de Sistemas Internos
 // ---------------------------------------------------------------------------
 function SistemasInternosFields({
-  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, sistemasInternosOptions, listsLoading,
+  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, sistemasInternosOptions, equipesOptions, equipeResponsavelId, setEquipeResponsavelId, listsLoading,
 }: {
   si: GmudSistemasInternosData
   setSi: (updater: (prev: GmudSistemasInternosData) => GmudSistemasInternosData) => void
@@ -341,6 +342,9 @@ function SistemasInternosFields({
   setPlanoRollback: (v: string) => void
   areasOptions: GmudConfigItem[]
   sistemasInternosOptions: GmudConfigItem[]
+  equipesOptions: GmudConfigItem[]
+  equipeResponsavelId: number | null
+  setEquipeResponsavelId: (v: number | null) => void
   listsLoading: boolean
 }) {
   const s = <K extends keyof GmudSistemasInternosData>(key: K, value: GmudSistemasInternosData[K]) =>
@@ -372,6 +376,20 @@ function SistemasInternosFields({
             <option value="">Escolher…</option>
             {GMUD_NATUREZA_SI_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
+        </Field>
+        <Field label="Equipe responsável">
+          <select
+            className={FIELD}
+            value={equipeResponsavelId ?? ''}
+            onChange={(e) => setEquipeResponsavelId(e.target.value ? Number(e.target.value) : null)}
+            disabled={listsLoading}
+          >
+            <option value="">Escolher equipe…</option>
+            {equipesOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+            Equipe que receberá o e-mail de aprovação via N8N.
+          </span>
         </Field>
       </Section>
 
@@ -424,7 +442,7 @@ function SistemasInternosFields({
 // Seções específicas de Sistemas Externos
 // ---------------------------------------------------------------------------
 function SistemasExternosFields({
-  se, setSe, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, areasOptions, sistemasExternosOptions, listsLoading,
+  se, setSe, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, areasOptions, sistemasExternosOptions, equipesOptions, equipeResponsavelId, setEquipeResponsavelId, listsLoading,
 }: {
   se: GmudSistemasExternosData
   setSe: (updater: (prev: GmudSistemasExternosData) => GmudSistemasExternosData) => void
@@ -436,6 +454,9 @@ function SistemasExternosFields({
   setPlanoExecucao: (v: string) => void
   areasOptions: GmudConfigItem[]
   sistemasExternosOptions: GmudConfigItem[]
+  equipesOptions: GmudConfigItem[]
+  equipeResponsavelId: number | null
+  setEquipeResponsavelId: (v: number | null) => void
   listsLoading: boolean
 }) {
   const s = <K extends keyof GmudSistemasExternosData>(key: K, value: GmudSistemasExternosData[K]) =>
@@ -472,6 +493,20 @@ function SistemasExternosFields({
             onChange={(e) => s('chamadoFornecedor', e.target.value)}
             placeholder="Opcional — referência ao chamado no fornecedor"
           />
+        </Field>
+        <Field label="Equipe responsável">
+          <select
+            className={FIELD}
+            value={equipeResponsavelId ?? ''}
+            onChange={(e) => setEquipeResponsavelId(e.target.value ? Number(e.target.value) : null)}
+            disabled={listsLoading}
+          >
+            <option value="">Escolher equipe…</option>
+            {equipesOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+            Equipe que receberá o e-mail de aprovação via N8N.
+          </span>
         </Field>
       </Section>
 
@@ -522,6 +557,7 @@ function SistemasExternosFields({
 // ---------------------------------------------------------------------------
 export function GmudNewScreen() {
   const navigate = useNavigate()
+  const pushToast = useToastStore((s) => s.push)
   const profile = useAccessAuthStore((s) => s.profile)
   const [form, setForm] = useState<GmudFormState>(() =>
     emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
@@ -593,8 +629,9 @@ export function GmudNewScreen() {
       })
       return protocol
     },
-    onSuccess: () => {
+    onSuccess: (protocol) => {
       idempotencyKeyRef.current = null
+      pushToast(`GMUD ${protocol} registrada com sucesso!`, 'success')
       navigate('/gmud')
     },
   })
@@ -686,6 +723,9 @@ export function GmudNewScreen() {
             setPlanoRollback={(v) => set('planoRollback', v)}
             areasOptions={areasOptions}
             sistemasInternosOptions={sistemasInternosOptions}
+            equipesOptions={equipesOptions}
+            equipeResponsavelId={form.equipeResponsavelId}
+            setEquipeResponsavelId={(v) => set('equipeResponsavelId', v)}
             listsLoading={listsLoading}
           />
         )}
@@ -702,6 +742,9 @@ export function GmudNewScreen() {
             setPlanoExecucao={(v) => set('planoExecucao', v)}
             areasOptions={areasOptions}
             sistemasExternosOptions={sistemasExternosOptions}
+            equipesOptions={equipesOptions}
+            equipeResponsavelId={form.equipeResponsavelId}
+            setEquipeResponsavelId={(v) => set('equipeResponsavelId', v)}
             listsLoading={listsLoading}
           />
         )}
