@@ -35,6 +35,7 @@ function normalizeOpenPath(path: string): string {
  */
 export function useMassivaOpenReadiness(
   openingPreparation: MassivaOpeningPreparationView,
+  options?: { isSistema?: boolean },
 ): {
   readiness: MassivaOpenReadinessView
   draftFormEnabled: boolean
@@ -98,6 +99,7 @@ export function useMassivaOpenReadiness(
   useEffect(() => {
     if (!descriptionAutoSync) return
     if (openingPreparation.status !== 'prepared') return
+    if (options?.isSistema) return
 
     const requester =
       user?.name?.trim() || user?.email?.trim() || 'Nao informado'
@@ -130,6 +132,7 @@ export function useMassivaOpenReadiness(
     descriptionAutoSync,
     assignmentDescription,
     openingPreparation,
+    options?.isSistema,
     user?.name,
     user?.email,
     initialReport,

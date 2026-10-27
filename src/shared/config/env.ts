@@ -167,6 +167,12 @@ export const env = {
   /** POST de afetados no BFF (segunda etapa após abertura). */
   massivaAfetadosPath: massivaAfetadosPathResolved(),
   /**
+   * Código do ponto de acesso usado em chamados de sistema (sem rota de rede).
+   * Confirmar com a equipe qual authenticationAccessPointCode o Elleven aceita para incidentes
+   * de sistema interno/externo e definir aqui ou em VITE_MASSIVA_SISTEMA_AP_CODE.
+   */
+  massivaSistemaApCode: str(import.meta.env.VITE_MASSIVA_SISTEMA_AP_CODE, ''),
+  /**
    * Corpo do DELETE `finalizar-chamado-via-api`: o BFF espera os mesmos campos da integração Elleven
    * (strings), não só assignmentId + description.
    */

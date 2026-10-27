@@ -2,10 +2,6 @@ export type MassivaSubjectTipo = 'rede' | 'sistema'
 
 export type MassivaSubjectId =
   | 'registro-massivas'
-  | 'manutencao-programada'
-  | 'atualizacao-firmware'
-  | 'troca-equipamento'
-  | 'expansao-rede'
   | 'sistemas-internos'
   | 'sistemas-externos'
 
@@ -27,34 +23,6 @@ export const MASSIVA_SUBJECTS: MassivaSubject[] = [
     id: 'registro-massivas',
     label: 'Registro Massivas',
     description: 'Fibra cortada, CTO, splitter, queda de rede',
-    tipo: 'rede',
-    group: MASSIVA_SUBJECT_GROUPS.rede,
-  },
-  {
-    id: 'manutencao-programada',
-    label: 'Manutenção Programada',
-    description: 'Janela de manutenção agendada na infraestrutura',
-    tipo: 'rede',
-    group: MASSIVA_SUBJECT_GROUPS.rede,
-  },
-  {
-    id: 'atualizacao-firmware',
-    label: 'Atualização de Firmware',
-    description: 'Upgrade de equipamentos na rede (OLT, ONU)',
-    tipo: 'rede',
-    group: MASSIVA_SUBJECT_GROUPS.rede,
-  },
-  {
-    id: 'troca-equipamento',
-    label: 'Troca de Equipamento',
-    description: 'Substituição física de hardware em campo',
-    tipo: 'rede',
-    group: MASSIVA_SUBJECT_GROUPS.rede,
-  },
-  {
-    id: 'expansao-rede',
-    label: 'Expansão de Rede',
-    description: 'Obras de expansão e novos pontos de rede',
     tipo: 'rede',
     group: MASSIVA_SUBJECT_GROUPS.rede,
   },

@@ -26,6 +26,8 @@ type StepAberturaProps = {
   onRetryPersonId: () => void
   solicitationTypeLabel?: string
   hideNetworkFields?: boolean
+  sistemaOptions?: readonly string[]
+  sistemaTipo?: 'interno' | 'externo'
 }
 
 function Notice({
@@ -59,6 +61,8 @@ export function StepAbertura({
   onRetryPersonId,
   solicitationTypeLabel,
   hideNetworkFields,
+  sistemaOptions,
+  sistemaTipo,
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
@@ -364,6 +368,8 @@ export function StepAbertura({
         siteCandidates={siteCandidates}
         solicitationTypeLabel={solicitationTypeLabel}
         hideNetworkFields={hideNetworkFields}
+        sistemaOptions={sistemaOptions}
+        sistemaTipo={sistemaTipo}
       />
     </div>
   )

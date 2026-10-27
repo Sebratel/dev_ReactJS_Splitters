@@ -13,6 +13,11 @@ type MassivaOpenDraftState = {
   /** Quando true, a descrição é reescrita pelo modelo ao mudar topologia/campos. */
   descriptionAutoSync: boolean
 
+  /** Sistema afetado (para assuntos de tipo sistema). */
+  sistemaAfetado: string
+  /** Descrição do incidente no sistema (para assuntos de tipo sistema). */
+  sistemaDescricaoIncidente: string
+
   assignmentForecastDate: string
   assignmentForecastTime: string
 
@@ -62,6 +67,8 @@ type MassivaOpenDraftState = {
 
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
+  setSistemaAfetado: (value: string) => void
+  setSistemaDescricaoIncidente: (value: string) => void
   setAssignmentForecastDate: (value: string) => void
   setAssignmentForecastTime: (value: string) => void
   setEventStartDate: (value: string) => void
@@ -133,6 +140,8 @@ function buildInitialDraft() {
   return {
     assignmentDescription: '',
     descriptionAutoSync: true,
+    sistemaAfetado: '',
+    sistemaDescricaoIncidente: '',
     ...defaultForecastDates(),
     ...nowEventDates(),
     initialReport: '',
@@ -153,6 +162,8 @@ const initial = buildInitialDraft()
 const createInitialState = () => ({
   assignmentDescription: '',
   descriptionAutoSync: true,
+  sistemaAfetado: '',
+  sistemaDescricaoIncidente: '',
   assignmentForecastDate: initial.assignmentForecastDate,
   assignmentForecastTime: initial.assignmentForecastTime,
   eventStartDate: initial.eventStartDate,
@@ -178,6 +189,8 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setAssignmentDescription: (assignmentDescription) =>
         set({ assignmentDescription }),
       setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
+      setSistemaAfetado: (sistemaAfetado) => set({ sistemaAfetado }),
+      setSistemaDescricaoIncidente: (sistemaDescricaoIncidente) => set({ sistemaDescricaoIncidente }),
       setAssignmentForecastDate: (assignmentForecastDate) =>
         set({ assignmentForecastDate }),
       setAssignmentForecastTime: (assignmentForecastTime) =>
@@ -233,11 +246,13 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       reset: () => set(buildInitialDraft()),
     }),
     {
-      name: 'nexaview.massiva.open-draft.v3',
+      name: 'nexaview.massiva.open-draft.v4',
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         assignmentDescription: state.assignmentDescription,
         descriptionAutoSync: state.descriptionAutoSync,
+        sistemaAfetado: state.sistemaAfetado,
+        sistemaDescricaoIncidente: state.sistemaDescricaoIncidente,
         assignmentForecastDate: state.assignmentForecastDate,
         assignmentForecastTime: state.assignmentForecastTime,
         eventStartDate: state.eventStartDate,

@@ -1,4 +1,4 @@
-﻿import { type ReactNode } from 'react'
+﻿import { type ReactNode, useEffect } from 'react'
 import {
   CalendarClock,
   ChevronDown,
@@ -6,10 +6,13 @@ import {
   Clock,
   FileText,
   Lock,
+  Monitor,
   Search,
+  Server,
   Wand2,
 } from 'lucide-react'
 import { MASSIVA_SOLICITATION_TYPE_LABEL } from '@/features/massiva/lib/buildMassivaOpeningTechnicalDescription'
+import { buildMassivaSistemaDescription } from '@/features/massiva/lib/buildMassivaAssignmentDescriptionForRequest'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import {
   MASSIVA_INFRA_PROTOCOL_OPTIONS,
@@ -33,6 +36,10 @@ type MassivaOpenDraftFieldsProps = {
   solicitationTypeLabel?: string
   /** Oculta campos exclusivos de rede: "Quem identificou" e "Protocolo de infraestrutura". */
   hideNetworkFields?: boolean
+  /** Opções do dropdown "Sistema afetado" — quando fornecido, exibe a seção de sistema. */
+  sistemaOptions?: readonly string[]
+  /** Tipo do sistema: 'interno' (infra própria) ou 'externo' (fornecedor de terceiros). */
+  sistemaTipo?: 'interno' | 'externo'
 }
 
 function DraftSection({
@@ -115,6 +122,8 @@ export function MassivaOpenDraftFields({
   siteCandidates = [],
   solicitationTypeLabel = MASSIVA_SOLICITATION_TYPE_LABEL,
   hideNetworkFields = false,
+  sistemaOptions,
+  sistemaTipo,
 }: MassivaOpenDraftFieldsProps) {
   const enableDescriptionAutoSync = useMassivaOpenDraftStore((s) => s.enableDescriptionAutoSync)
 
@@ -149,6 +158,44 @@ export function MassivaOpenDraftFields({
   const setInfraSiteCode = useMassivaOpenDraftStore((s) => s.setInfraSiteCode)
   const infraManualField = infraProtocolOption(infraProtocolType)?.manualField ?? null
 
+  const sistemaAfetado = useMassivaOpenDraftStore((s) => s.sistemaAfetado)
+  const setSistemaAfetado = useMassivaOpenDraftStore((s) => s.setSistemaAfetado)
+  const sistemaDescricaoIncidente = useMassivaOpenDraftStore((s) => s.sistemaDescricaoIncidente)
+  const setSistemaDescricaoIncidente = useMassivaOpenDraftStore((s) => s.setSistemaDescricaoIncidente)
+  const setAssignmentDescription = useMassivaOpenDraftStore((s) => s.setAssignmentDescription)
+  const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
+
+  // Para assuntos de sistema: reconstrói a descrição automaticamente quando os campos mudam,
+  // mas só enquanto o auto-sync estiver ativo (usuário não editou manualmente).
+  useEffect(() => {
+    if (!sistemaOptions || !sistemaTipo || !descriptionAutoSync) return
+    const description = buildMassivaSistemaDescription({
+      sistemaTipo,
+      sistemaAfetado,
+      sistemaDescricaoIncidente,
+      eventStartDate,
+      eventStartTime,
+      eventIdentifiedDate,
+      eventIdentifiedTime,
+      assignmentForecastDate,
+      assignmentForecastTime,
+    })
+    setAssignmentDescription(description)
+  }, [
+    sistemaOptions,
+    sistemaTipo,
+    descriptionAutoSync,
+    sistemaAfetado,
+    sistemaDescricaoIncidente,
+    eventStartDate,
+    eventStartTime,
+    eventIdentifiedDate,
+    eventIdentifiedTime,
+    assignmentForecastDate,
+    assignmentForecastTime,
+    setAssignmentDescription,
+  ])
+
   return (
     <div className="mt-2">
       <div
@@ -175,6 +222,45 @@ export function MassivaOpenDraftFields({
         </header>
 
         <div className="space-y-3">
+          {sistemaOptions && sistemaTipo ? (
+            <DraftSection
+              title={sistemaTipo === 'interno' ? 'Sistema interno afetado' : 'Sistema de terceiros afetado'}
+              hint={sistemaTipo === 'interno' ? 'Informe qual sistema próprio está com incidente.' : 'Informe qual sistema de fornecedor está com incidente.'}
+              icon={sistemaTipo === 'interno' ? <Monitor className="size-3.5" /> : <Server className="size-3.5" />}
+              variant="accent"
+            >
+              <div>
+                <FieldLabel htmlFor="massiva-sistema-afetado">
+                  {sistemaTipo === 'interno' ? 'Sistema afetado' : 'Sistema / Fornecedor'}
+                </FieldLabel>
+                <select
+                  id="massiva-sistema-afetado"
+                  value={sistemaAfetado}
+                  onChange={(e) => setSistemaAfetado(e.target.value)}
+                  disabled={disabled}
+                  className={inputClassName}
+                >
+                  <option value="">Selecione o sistema…</option>
+                  {sistemaOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <FieldLabel htmlFor="massiva-sistema-descricao">Descrição do incidente</FieldLabel>
+                <textarea
+                  id="massiva-sistema-descricao"
+                  rows={4}
+                  value={sistemaDescricaoIncidente}
+                  onChange={(e) => setSistemaDescricaoIncidente(e.target.value)}
+                  disabled={disabled}
+                  placeholder="Descreva o que está acontecendo no sistema…"
+                  className={`${inputClassName} resize-y`}
+                />
+              </div>
+            </DraftSection>
+          ) : null}
+
           <DraftSection
             title="Identificação do evento"
             hint="Quando o time percebeu ou confirmou o incidente na rede."
@@ -297,26 +383,28 @@ export function MassivaOpenDraftFields({
             </div>
           </DraftSection>
 
-          <div className="rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest p-2.5 sm:p-3">
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <label
-                htmlFor="massiva-initial-report"
-                className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant"
-              >
-                Relato inicial
-              </label>
-              <span className="text-[10px] font-medium text-on-surface-variant/60">Opcional</span>
+          {!sistemaOptions && (
+            <div className="rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest p-2.5 sm:p-3">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <label
+                  htmlFor="massiva-initial-report"
+                  className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant"
+                >
+                  Relato inicial
+                </label>
+                <span className="text-[10px] font-medium text-on-surface-variant/60">Opcional</span>
+              </div>
+              <textarea
+                id="massiva-initial-report"
+                rows={2}
+                className={cn(inputClassName, 'mt-1 resize-y py-1.5 leading-snug min-h-[2.35rem]')}
+                value={initialReport}
+                onChange={(e) => setInitialReport(e.target.value)}
+                disabled={disabled}
+                placeholder="Resumo objetivo do que ocorreu (ex.: queda parcial, sintomas, escopo)."
+              />
             </div>
-            <textarea
-              id="massiva-initial-report"
-              rows={2}
-              className={cn(inputClassName, 'mt-1 resize-y py-1.5 leading-snug min-h-[2.35rem]')}
-              value={initialReport}
-              onChange={(e) => setInitialReport(e.target.value)}
-              disabled={disabled}
-              placeholder="Resumo objetivo do que ocorreu (ex.: queda parcial, sintomas, escopo)."
-            />
-          </div>
+          )}
 
           {/* Quem identificou o evento — seletor segmentado */}
           {!hideNetworkFields && <div className={cn('space-y-1.5 rounded-xl border border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest px-3 py-2.5', disabled && 'opacity-60')}>

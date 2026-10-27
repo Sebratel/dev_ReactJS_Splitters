@@ -5,11 +5,16 @@ import { useMassivaOpenReadiness } from '@/features/massiva/hooks/useMassivaOpen
 import { useMassivaOpenMutation } from '@/features/massiva/hooks/useMassivaOpenMutation'
 import { explainMassivaPostBlocked } from '@/features/massiva/lib/explainMassivaPostBlocked'
 import { MASSIVA_API_GATEWAY_DEFAULTS } from '@/features/massiva/model/massivaApiGatewayConstants'
+import { env } from '@/shared/config/env'
 import {
   findMassivaSubject,
   isMassivaSubjectId,
   type MassivaSubjectId,
 } from '@/features/massiva/model/massivaSubject'
+import {
+  GMUD_SISTEMAS_INTERNOS_OPTIONS,
+  GMUD_SISTEMAS_EXTERNOS_OPTIONS,
+} from '@/features/gmud/model/gmudForm'
 import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import { BottomActionBar } from '@/features/massiva/ui/BottomActionBar'
 import { MassivaSubjectSelector } from '@/features/massiva/ui/MassivaSubjectSelector'
@@ -27,11 +32,7 @@ import { StepValidacao } from '@/features/massiva/ui/StepValidacao'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
 
-/**
- * AP code placeholder para assuntos do tipo "sistema" (sem rota de rede).
- * TODO: confirmar com a equipe qual authenticationAccessPointCode usar para esses chamados.
- */
-const MASSIVA_SISTEMA_AP_CODE = ''
+const MASSIVA_SISTEMA_AP_CODE = env.massivaSistemaApCode
 
 function countConfiguredRoutes(
   connections: ReturnType<typeof useMassivaLocalPreview>['selection']['connections'],
@@ -127,6 +128,14 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
     if (!selectedSubject || selectedSubject.tipo !== 'sistema') {
       return { status: 'unavailable', reason: 'connections-loading' }
     }
+    if (MASSIVA_SISTEMA_AP_CODE.trim() === '') {
+      return {
+        status: 'invalid',
+        issues: [
+          'Código de ponto de acesso para chamados de sistema não configurado (VITE_MASSIVA_SISTEMA_AP_CODE). Contate o administrador.',
+        ],
+      }
+    }
     return {
       status: 'prepared',
       basis: {
@@ -143,28 +152,29 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
           assignmentTitle: selectedSubject.label,
         }],
         pendingBeforePost: ['personId', 'assignmentDescription', 'assignmentFinalDateLocal'],
-        affectedUsersQuantityFlutterParity: 0,
+        // O gateway rejeita affectedUsersQuantity <= 0; para chamados de sistema usamos 1 como mínimo.
+        affectedUsersQuantityFlutterParity: 1,
         routeCollectedClientCount: 0,
         routeUniqueAuthenticationIdCount: 0,
       },
     }
   }, [selectedSubject])
 
+  const isSistema = selectedSubject?.tipo === 'sistema'
+
   const effectiveOpeningPreparation =
-    selectedSubject?.tipo === 'sistema'
+    isSistema
       ? sistemaOpeningPreparation
       : localPreview.openingPreparation
 
   const { readiness, draftFormEnabled, refetchPersonId } =
-    useMassivaOpenReadiness(effectiveOpeningPreparation)
+    useMassivaOpenReadiness(effectiveOpeningPreparation, { isSistema })
   const openMutation = useMassivaOpenMutation(readiness)
 
   const configuredRoutes = countConfiguredRoutes(localPreview.selection.connections)
   const routesWithExplicitSplitters = countRoutesWithExplicitSplitters(
     localPreview.selection.connections,
   )
-
-  const isSistema = selectedSubject?.tipo === 'sistema'
 
   const steps = useMemo<MassivaStepItem[]>(() => {
     if (isSistema) {
@@ -446,8 +456,22 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         openingPreparation={isSistema ? sistemaOpeningPreparation : localPreview.openingPreparation}
         draftFormEnabled={draftFormEnabled}
         onRetryPersonId={refetchPersonId}
-        solicitationTypeLabel={selectedSubject?.label}
+        solicitationTypeLabel={isSistema ? undefined : selectedSubject?.label}
         hideNetworkFields={isSistema}
+        sistemaOptions={
+          selectedSubjectId === 'sistemas-internos'
+            ? GMUD_SISTEMAS_INTERNOS_OPTIONS
+            : selectedSubjectId === 'sistemas-externos'
+              ? GMUD_SISTEMAS_EXTERNOS_OPTIONS
+              : undefined
+        }
+        sistemaTipo={
+          selectedSubjectId === 'sistemas-internos'
+            ? 'interno'
+            : selectedSubjectId === 'sistemas-externos'
+              ? 'externo'
+              : undefined
+        }
       />
     )
   })()
