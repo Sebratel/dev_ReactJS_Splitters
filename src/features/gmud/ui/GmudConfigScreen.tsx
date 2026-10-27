@@ -20,11 +20,7 @@ import type { SplittersUserProfile } from '@/features/access/model/access.types'
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
     label: 'Setores / Áreas',
-    hint: 'Setores que aparecem nos campos "Áreas impactadas", "Áreas afetadas" e "Áreas a notificar".',
-  },
-  equipes: {
-    label: 'Equipes',
-    hint: 'Clique em uma equipe para gerenciar os aprovadores de e-mail (fluxo N8N).',
+    hint: 'Setores que aparecem nos campos "Áreas impactadas" e "Áreas afetadas". Clique em uma área para definir quem é avisado por e-mail quando uma GMUD que a marcou for aprovada.',
   },
   processos: {
     label: 'Processos de negócio',
@@ -45,17 +41,17 @@ const FIELD =
   'flex-1 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
 
 // ---------------------------------------------------------------------------
-// Modal de aprovadores de uma equipe
+// Modal de quem é avisado por uma área
 // ---------------------------------------------------------------------------
 function TeamApproversModal({
-  equipeItem,
+  areaItem,
   approvers,
   allUsers,
   usersLoading,
   refetch,
   onClose,
 }: {
-  equipeItem: GmudConfigItem
+  areaItem: GmudConfigItem
   approvers: TeamApprover[]
   allUsers: SplittersUserProfile[]
   usersLoading: boolean
@@ -80,7 +76,7 @@ function TeamApproversModal({
   const addMutation = useMutation({
     mutationFn: () => {
       const user = allUsers.find((u) => u.email === selectedEmail)
-      return addTeamApprover(equipeItem.id, selectedEmail, user?.displayName ?? null)
+      return addTeamApprover(areaItem.id, selectedEmail, user?.displayName ?? null)
     },
     onSuccess: () => {
       setSelectedEmail('')
@@ -111,8 +107,8 @@ function TeamApproversModal({
               <Mail size={15} className="text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm text-on-surface">Aprovadores — {equipeItem.label}</p>
-              <p className="text-xs text-on-surface-variant">E-mails notificados via N8N ao abrir uma GMUD</p>
+              <p className="font-semibold text-sm text-on-surface">Quem é avisado — {areaItem.label}</p>
+              <p className="text-xs text-on-surface-variant">E-mails avisados via N8N quando uma GMUD com esta área for aprovada</p>
             </div>
           </div>
           <button
@@ -250,7 +246,7 @@ function ListPanel({
   const [openApproversForId, setOpenApproversForId] = useState<number | null>(null)
   const qc = useQueryClient()
   const meta = LIST_META[listKey] ?? { label: listKey, hint: '' }
-  const isEquipes = listKey === 'equipes'
+  const hasApprovers = listKey === 'areas'
 
   const addMutation = useMutation({
     mutationFn: () => addGmudConfigItem(listKey, newLabel.trim()),
@@ -269,7 +265,7 @@ function ListPanel({
     },
   })
 
-  const openEquipeItem = openApproversForId != null
+  const openAreaItem = openApproversForId != null
     ? items.find((i) => i.id === openApproversForId) ?? null
     : null
 
@@ -289,12 +285,12 @@ function ListPanel({
               const count = approversMap?.[item.id]?.length ?? 0
               return (
                 <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  {isEquipes ? (
+                  {hasApprovers ? (
                     <button
                       type="button"
                       onClick={() => setOpenApproversForId(item.id)}
                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      title="Gerenciar aprovadores"
+                      title="Gerenciar quem é avisado"
                     >
                       <span className="text-sm text-on-surface">{item.label}</span>
                       {count > 0 ? (
@@ -303,7 +299,7 @@ function ListPanel({
                           {count}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-on-surface-variant/40 italic">sem aprovadores</span>
+                        <span className="text-[11px] text-on-surface-variant/40 italic">ninguém avisado</span>
                       )}
                     </button>
                   ) : (
@@ -361,10 +357,10 @@ function ListPanel({
         </div>
       </div>
 
-      {isEquipes && openEquipeItem && approversMap && allUsers ? (
+      {hasApprovers && openAreaItem && approversMap && allUsers ? (
         <TeamApproversModal
-          equipeItem={openEquipeItem}
-          approvers={approversMap[openEquipeItem.id] ?? []}
+          areaItem={openAreaItem}
+          approvers={approversMap[openAreaItem.id] ?? []}
           allUsers={allUsers}
           usersLoading={usersLoading ?? false}
           refetch={() => { refetch(); refetchApprovers?.() }}
@@ -404,7 +400,7 @@ export function GmudConfigScreen() {
       <AppPageHeader
         badge="Módulo GMUD"
         title="Configurações"
-        description="Gerencie as listas de opções do formulário de GMUD: setores, equipes, sistemas e processos."
+        description="Gerencie as listas de opções do formulário de GMUD: áreas, sistemas e processos."
         icon={Settings2}
         primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
       />
@@ -429,24 +425,17 @@ export function GmudConfigScreen() {
             listKey="areas"
             items={data?.areas ?? []}
             refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
           />
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ListPanel
-              listKey="equipes"
-              items={data?.equipes ?? []}
-              refetch={handleRefetch}
-              approversMap={approversMap}
-              allUsers={allUsers}
-              usersLoading={usersLoading}
-              refetchApprovers={refetchApprovers}
-            />
-            <ListPanel
-              listKey="processos"
-              items={data?.processos ?? []}
-              refetch={handleRefetch}
-            />
-          </div>
+          <ListPanel
+            listKey="processos"
+            items={data?.processos ?? []}
+            refetch={handleRefetch}
+          />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ListPanel

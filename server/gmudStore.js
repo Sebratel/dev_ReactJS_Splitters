@@ -1062,10 +1062,13 @@ export async function softDeleteGmudAttachment(attachmentId) {
   return { id, voalleProtocol: protocol, filenameStored };
 }
 
-// ─── Aprovadores de e-mail por equipe ───────────────────────────────────────
+// ─── Aprovadores de e-mail por área ─────────────────────────────────────────
+// Cada área (lista 'areas' de gmud_config_lists) tem pessoas a avisar por e-mail quando uma GMUD
+// que a marcou em "Áreas impactadas/afetadas" é aprovada. A coluna `equipe_id` guarda o ID da
+// ÁREA (nome mantido por compatibilidade com a tabela já criada).
 
 /**
- * Retorna todos os aprovadores agrupados por equipe: { [equipeId]: [{id, userEmail, userDisplayName}] }
+ * Retorna todos os aprovadores agrupados por área: { [areaId]: [{id, userEmail, userDisplayName}] }
  */
 export async function getAllTeamApprovers() {
   await ensureTable();
@@ -1086,31 +1089,47 @@ export async function getAllTeamApprovers() {
   return result;
 }
 
-/** Retorna os aprovadores de uma única equipe. */
-export async function getTeamApprovers(equipeId) {
+/**
+ * Quem avisar numa GMUD: junta as pessoas cadastradas nas áreas marcadas (pelo nome da área),
+ * sem repetir e-mail. Áreas sem cadastro simplesmente não contribuem.
+ */
+export async function getApproversForAreas(areaLabels) {
   await ensureTable();
+  const labels = [...new Set((Array.isArray(areaLabels) ? areaLabels : []).map(toCleanString).filter((l) => l !== ''))];
+  if (labels.length === 0) return [];
   const pool = getMysqlPool();
-  const id = normalizePositiveInt(equipeId);
-  if (!id) return [];
   const [rows] = await pool.query(
-    `SELECT id, user_email, user_display_name FROM ${TEAM_APPROVERS_TABLE} WHERE equipe_id = ? ORDER BY id`,
-    [id],
+    `SELECT a.user_email, a.user_display_name
+       FROM ${TEAM_APPROVERS_TABLE} a
+       JOIN ${CONFIG_TABLE} c ON c.id = a.equipe_id
+      WHERE c.list_key = 'areas' AND c.label IN (?)
+      ORDER BY a.id`,
+    [labels],
   );
-  return rows.map((r) => ({
-    id: Number(r.id),
-    userEmail: r.user_email,
-    userDisplayName: r.user_display_name ?? null,
-  }));
+  const seen = new Set();
+  const result = [];
+  for (const r of rows) {
+    const key = String(r.user_email).trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ userEmail: r.user_email, userDisplayName: r.user_display_name ?? null });
+  }
+  return result;
 }
 
 /**
- * Adiciona um aprovador a uma equipe. Idempotente por (equipeId, userEmail).
+ * Adiciona uma pessoa a uma área. Idempotente por (areaId, userEmail).
  */
-export async function addTeamApprover({ equipeId, userEmail, userDisplayName, createdBy }) {
+export async function addTeamApprover({ areaId, userEmail, userDisplayName, createdBy }) {
   await ensureTable();
   const pool = getMysqlPool();
-  const id = normalizePositiveInt(equipeId);
-  if (!id) throw buildError('ID de equipe inválido.', 400);
+  const id = normalizePositiveInt(areaId);
+  if (!id) throw buildError('ID de área inválido.', 400);
+  const [areaRows] = await pool.query(
+    `SELECT id FROM ${CONFIG_TABLE} WHERE id = ? AND list_key = 'areas' AND active = 1 LIMIT 1`,
+    [id],
+  );
+  if (areaRows.length === 0) throw buildError('Área não encontrada.', 404);
   const email = toCleanString(userEmail);
   if (email === '' || !email.includes('@')) throw buildError('E-mail inválido.', 400);
   if (email.length > 255) throw buildError('E-mail muito longo.', 400);
@@ -1120,12 +1139,12 @@ export async function addTeamApprover({ equipeId, userEmail, userDisplayName, cr
     `SELECT id FROM ${TEAM_APPROVERS_TABLE} WHERE equipe_id = ? AND user_email = ? LIMIT 1`,
     [id, email],
   );
-  if (existing.length > 0) throw buildError(`"${email}" já é aprovador desta equipe.`, 409);
+  if (existing.length > 0) throw buildError(`"${email}" já é avisado nesta área.`, 409);
   const [result] = await pool.query(
     `INSERT INTO ${TEAM_APPROVERS_TABLE} (equipe_id, user_email, user_display_name, created_by) VALUES (?, ?, ?, ?)`,
     [id, email, displayName, createdByClean],
   );
-  return { id: result.insertId, equipeId: id, userEmail: email, userDisplayName: displayName };
+  return { id: result.insertId, areaId: id, userEmail: email, userDisplayName: displayName };
 }
 
 /** Remove um aprovador por ID. */

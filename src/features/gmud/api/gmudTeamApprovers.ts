@@ -7,7 +7,7 @@ export type TeamApprover = {
   userDisplayName: string | null
 }
 
-/** Mapa de aprovadores por equipeId. */
+/** Mapa de pessoas avisadas por areaId (ID da área em gmud_config_lists). */
 export type TeamApproversMap = Record<number, TeamApprover[]>
 
 async function parse<T>(response: Response, fallback: string): Promise<T> {
@@ -27,16 +27,16 @@ export async function fetchTeamApprovers(): Promise<TeamApproversMap> {
 }
 
 export async function addTeamApprover(
-  equipeId: number,
+  areaId: number,
   userEmail: string,
   userDisplayName: string | null,
-): Promise<TeamApprover & { equipeId: number }> {
+): Promise<TeamApprover & { areaId: number }> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/team-approvers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ equipeId, userEmail, userDisplayName }),
+    body: JSON.stringify({ areaId, userEmail, userDisplayName }),
   })
-  return parse<TeamApprover & { equipeId: number }>(response, 'Falha ao adicionar aprovador.')
+  return parse<TeamApprover & { areaId: number }>(response, 'Falha ao adicionar aprovador.')
 }
 
 export async function removeTeamApprover(id: number): Promise<void> {

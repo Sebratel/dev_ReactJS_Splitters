@@ -111,7 +111,7 @@ import {
   getAllTeamApprovers,
   addTeamApprover,
   removeTeamApprover,
-  getTeamApprovers,
+  getApproversForAreas,
   listGmudUpcomingForHsm,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
@@ -4421,11 +4421,21 @@ app.get('/api/gmud/list', async (req, res) => {
 });
 
 /**
- * Notifica o N8N sobre uma nova GMUD aberta, enviando os dados e-mails dos aprovadores
- * da equipe responsável. Fire-and-forget — falha não impede a criação da GMUD.
+ * Áreas marcadas na GMUD (sistemas internos: areasImpactadas; externos: areasAfetadas).
+ * São as áreas cujas pessoas cadastradas recebem o aviso de aprovação.
+ */
+function gmudAreasFromCategoriaData(categoriaData) {
+  const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
+  const lists = [data.areasImpactadas, data.areasAfetadas].filter(Array.isArray);
+  return [...new Set(lists.flat().map((a) => String(a ?? '').trim()).filter((a) => a !== ''))];
+}
+
+/**
+ * Notifica o N8N quando o Comitê aprova a GMUD, com os e-mails das pessoas cadastradas nas
+ * áreas marcadas. Fire-and-forget — falha não impede a aprovação.
  * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL.
  */
-async function notifyGmudApprovalWebhook({ gmud, approvers }) {
+async function notifyGmudApprovalWebhook({ gmud, approvers, areas }) {
   const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
   if (webhookUrl === '' || !approvers || approvers.length === 0) return;
   const payload = {
@@ -4440,6 +4450,7 @@ async function notifyGmudApprovalWebhook({ gmud, approvers }) {
     horaInicio: gmud.horaInicio,
     dataFim: gmud.dataFim,
     horaFim: gmud.horaFim,
+    areasImpactadas: areas ?? [],
     approvers: approvers.map((a) => ({ email: a.userEmail, nome: a.userDisplayName ?? a.userEmail })),
     criadaEm: new Date().toISOString(),
     platformUrl: `${(process.env.APP_BASE_URL ?? '').trim() || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
@@ -4498,6 +4509,14 @@ app.post('/api/gmud/create', async (req, res) => {
     }
 
     const createdByEmail = actorEmail || String(body.solicitanteEmail ?? '');
+
+    const exigeArea = body.categoria === 'sistemas_internos' || body.categoria === 'sistemas_externos';
+    if (!existing && exigeArea && gmudAreasFromCategoriaData(body.categoriaData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selecione ao menos uma área impactada: são as áreas que serão avisadas quando a GMUD for aprovada.',
+      });
+    }
 
     const inicioJanela = `${String(body.dataInicio ?? '').slice(0, 10)} ${String(body.horaInicio ?? '00:00').slice(0, 5)}`;
     const fimJanela = `${String(body.dataFim ?? '').slice(0, 10)} ${String(body.horaFim ?? '00:00').slice(0, 5)}`;
@@ -4635,13 +4654,13 @@ app.get('/api/gmud/team-approvers', async (req, res) => {
   }
 });
 
-// POST /api/gmud/team-approvers — adiciona um aprovador a uma equipe.
+// POST /api/gmud/team-approvers — adiciona uma pessoa a ser avisada numa área.
 app.post('/api/gmud/team-approvers', async (req, res) => {
   try {
     const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
-    const { equipeId, userEmail, userDisplayName } = req.body ?? {};
+    const { areaId, userEmail, userDisplayName } = req.body ?? {};
     const createdBy = actor?.profile?.email || actor?.identity?.email || '';
-    const result = await addTeamApprover({ equipeId, userEmail, userDisplayName, createdBy });
+    const result = await addTeamApprover({ areaId, userEmail, userDisplayName, createdBy });
     return res.status(201).json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
@@ -4969,10 +4988,11 @@ app.post('/api/gmud/approval', async (req, res) => {
     // Disparo do webhook quando o Comitê APROVA a GMUD (fire-and-forget).
     if (String(body.statusComite ?? '').toLowerCase() === 'aprovada') {
       getGmudRequest(voalleProtocol).then(async (gmud) => {
-        if (!gmud || !gmud.equipeResponsavelId) return;
-        const approvers = await getTeamApprovers(gmud.equipeResponsavelId);
+        if (!gmud) return;
+        const areas = gmudAreasFromCategoriaData(gmud.categoriaData);
+        const approvers = await getApproversForAreas(areas);
         if (approvers.length > 0) {
-          await notifyGmudApprovalWebhook({ gmud, approvers });
+          await notifyGmudApprovalWebhook({ gmud, approvers, areas });
         }
       }).catch((err) => { logger.error('[gmud-approval] Erro no webhook:', err?.message); });
     }

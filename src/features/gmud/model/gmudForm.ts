@@ -191,8 +191,6 @@ export type GmudFormState = {
   ambienteOutro: string
   /** Observações livres — entram na máscara do protocolo no Elleven. */
   observacoes: string
-  /** ID da equipe responsável (de gmud_config_lists) — usada no fluxo de aprovação por e-mail (N8N). */
-  equipeResponsavelId: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +311,7 @@ export function validateGmudForm(
     req(sistema !== '', 'Sistema afetado')
     req(si.natureza !== '', 'Natureza da mudança')
     req(si.ambiente !== '', 'Ambiente')
+    req(si.areasImpactadas.length > 0, 'Áreas impactadas (quem será avisado)')
     req(form.descricao.trim() !== '', 'Objetivo / Descrição')
     req(form.impactoParada !== '', 'Haverá indisponibilidade?')
     req(form.planoExecucao.trim() !== '', 'Plano de execução')
@@ -326,6 +325,7 @@ export function validateGmudForm(
       : se.sistemaExterno.trim()
     req(sistema !== '', 'Sistema externo')
     req(se.natureza !== '', 'Natureza da mudança')
+    req(se.areasAfetadas.length > 0, 'Áreas afetadas (quem será avisado)')
     req(form.descricao.trim() !== '', 'Mudança prevista')
     req(form.impactoParada !== '', 'Haverá indisponibilidade?')
     req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução')
@@ -365,6 +365,5 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     listaClientesCor: '',
     ambienteOutro: '',
     observacoes: '',
-    equipeResponsavelId: null,
   }
 }

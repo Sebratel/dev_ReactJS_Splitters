@@ -328,7 +328,7 @@ function RedeExternaFields({
 // Seções específicas de Sistemas Internos
 // ---------------------------------------------------------------------------
 function SistemasInternosFields({
-  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, sistemasInternosOptions, equipesOptions, equipeResponsavelId, setEquipeResponsavelId, listsLoading,
+  si, setSi, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, planoRollback, setPlanoRollback, areasOptions, sistemasInternosOptions, listsLoading,
 }: {
   si: GmudSistemasInternosData
   setSi: (updater: (prev: GmudSistemasInternosData) => GmudSistemasInternosData) => void
@@ -342,9 +342,6 @@ function SistemasInternosFields({
   setPlanoRollback: (v: string) => void
   areasOptions: GmudConfigItem[]
   sistemasInternosOptions: GmudConfigItem[]
-  equipesOptions: GmudConfigItem[]
-  equipeResponsavelId: number | null
-  setEquipeResponsavelId: (v: number | null) => void
   listsLoading: boolean
 }) {
   const s = <K extends keyof GmudSistemasInternosData>(key: K, value: GmudSistemasInternosData[K]) =>
@@ -377,20 +374,6 @@ function SistemasInternosFields({
             {GMUD_NATUREZA_SI_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </Field>
-        <Field label="Equipe responsável">
-          <select
-            className={FIELD}
-            value={equipeResponsavelId ?? ''}
-            onChange={(e) => setEquipeResponsavelId(e.target.value ? Number(e.target.value) : null)}
-            disabled={listsLoading}
-          >
-            <option value="">Escolher equipe…</option>
-            {equipesOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
-            Equipe que receberá o e-mail de aprovação via N8N.
-          </span>
-        </Field>
       </Section>
 
       <Section title="Descrição">
@@ -400,13 +383,16 @@ function SistemasInternosFields({
       </Section>
 
       <Section title="Impacto">
-        <Field label="Áreas impactadas" full>
+        <Field label="Áreas impactadas" required full>
           <GmudMultiSelect
             options={areasOptions}
             value={si.areasImpactadas}
             onChange={(v) => s('areasImpactadas', v)}
             loading={listsLoading}
           />
+          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+            As pessoas cadastradas nas áreas marcadas serão avisadas por e-mail quando o Comitê aprovar a GMUD.
+          </span>
         </Field>
         <Field label="Haverá indisponibilidade?" required>
           <SimNaoSelect value={impactoParada} onChange={setImpactoParada} />
@@ -442,7 +428,7 @@ function SistemasInternosFields({
 // Seções específicas de Sistemas Externos
 // ---------------------------------------------------------------------------
 function SistemasExternosFields({
-  se, setSe, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, areasOptions, sistemasExternosOptions, equipesOptions, equipeResponsavelId, setEquipeResponsavelId, listsLoading,
+  se, setSe, impactoParada, setImpactoParada, descricao, setDescricao, planoExecucao, setPlanoExecucao, areasOptions, sistemasExternosOptions, listsLoading,
 }: {
   se: GmudSistemasExternosData
   setSe: (updater: (prev: GmudSistemasExternosData) => GmudSistemasExternosData) => void
@@ -454,9 +440,6 @@ function SistemasExternosFields({
   setPlanoExecucao: (v: string) => void
   areasOptions: GmudConfigItem[]
   sistemasExternosOptions: GmudConfigItem[]
-  equipesOptions: GmudConfigItem[]
-  equipeResponsavelId: number | null
-  setEquipeResponsavelId: (v: number | null) => void
   listsLoading: boolean
 }) {
   const s = <K extends keyof GmudSistemasExternosData>(key: K, value: GmudSistemasExternosData[K]) =>
@@ -494,20 +477,6 @@ function SistemasExternosFields({
             placeholder="Opcional — referência ao chamado no fornecedor"
           />
         </Field>
-        <Field label="Equipe responsável">
-          <select
-            className={FIELD}
-            value={equipeResponsavelId ?? ''}
-            onChange={(e) => setEquipeResponsavelId(e.target.value ? Number(e.target.value) : null)}
-            disabled={listsLoading}
-          >
-            <option value="">Escolher equipe…</option>
-            {equipesOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
-            Equipe que receberá o e-mail de aprovação via N8N.
-          </span>
-        </Field>
       </Section>
 
       <Section title="Mudança prevista">
@@ -517,13 +486,16 @@ function SistemasExternosFields({
       </Section>
 
       <Section title="Impacto">
-        <Field label="Áreas afetadas" full>
+        <Field label="Áreas afetadas" required full>
           <GmudMultiSelect
             options={areasOptions}
             value={se.areasAfetadas}
             onChange={(v) => s('areasAfetadas', v)}
             loading={listsLoading}
           />
+          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+            As pessoas cadastradas nas áreas marcadas serão avisadas por e-mail quando o Comitê aprovar a GMUD.
+          </span>
         </Field>
         <Field label="Haverá indisponibilidade?" required>
           <SimNaoSelect value={impactoParada} onChange={setImpactoParada} />
@@ -573,8 +545,6 @@ export function GmudNewScreen() {
     staleTime: 5 * 60 * 1000,
   })
   const areasOptions = configLists?.areas ?? []
-  const equipesOptions = configLists?.equipes ?? []
-  const processosOptions = configLists?.processos ?? []
   const sistemasInternosOptions = configLists?.sistemas_internos ?? []
   const sistemasExternosOptions = configLists?.sistemas_externos ?? []
 
@@ -723,9 +693,6 @@ export function GmudNewScreen() {
             setPlanoRollback={(v) => set('planoRollback', v)}
             areasOptions={areasOptions}
             sistemasInternosOptions={sistemasInternosOptions}
-            equipesOptions={equipesOptions}
-            equipeResponsavelId={form.equipeResponsavelId}
-            setEquipeResponsavelId={(v) => set('equipeResponsavelId', v)}
             listsLoading={listsLoading}
           />
         )}
@@ -742,9 +709,6 @@ export function GmudNewScreen() {
             setPlanoExecucao={(v) => set('planoExecucao', v)}
             areasOptions={areasOptions}
             sistemasExternosOptions={sistemasExternosOptions}
-            equipesOptions={equipesOptions}
-            equipeResponsavelId={form.equipeResponsavelId}
-            setEquipeResponsavelId={(v) => set('equipeResponsavelId', v)}
             listsLoading={listsLoading}
           />
         )}
