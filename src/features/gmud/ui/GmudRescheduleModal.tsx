@@ -8,6 +8,7 @@ import {
   isWindowValid,
   type GmudWindow,
 } from '@/features/gmud/lib/gmudSchedule'
+import { minDataProgramada } from '@/features/gmud/model/gmudForm'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 const FIELD =
@@ -47,7 +48,10 @@ export function GmudRescheduleModal({
   const changed = formatWindow(win) !== formatWindow(previous)
   const encerrada = Boolean(item.ellevenEncerradoEm)
   const report = buildRescheduleReport({ previous, next: win, user, motivo })
-  const canSubmit = canReschedule && !encerrada && changed && isWindowValid(win)
+  const programada = item.tipo === 'Programada'
+  const minimo = minDataProgramada()
+  const antesDoMinimo = programada && win.dataInicio !== previous.dataInicio && win.dataInicio < minimo
+  const canSubmit = canReschedule && !encerrada && changed && isWindowValid(win) && !antesDoMinimo
 
   const mutation = useMutation({
     mutationFn: async (): Promise<Outcome> => {
@@ -98,7 +102,7 @@ export function GmudRescheduleModal({
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs font-semibold text-on-surface-variant">
               Início
-              <input type="date" className={`${FIELD} mt-1`} value={win.dataInicio} onChange={(e) => set({ dataInicio: e.target.value })} disabled={!canReschedule} />
+              <input type="date" className={`${FIELD} mt-1`} value={win.dataInicio} min={programada ? minimo : undefined} onChange={(e) => set({ dataInicio: e.target.value })} disabled={!canReschedule} />
               <input type="time" className={`${FIELD} mt-1.5`} value={win.horaInicio} onChange={(e) => set({ horaInicio: e.target.value })} disabled={!canReschedule} />
             </label>
             <label className="text-xs font-semibold text-on-surface-variant">
@@ -108,6 +112,11 @@ export function GmudRescheduleModal({
             </label>
           </div>
           {!isWindowValid(win) ? <p className="text-xs text-red-600 dark:text-red-300">O fim da janela deve ser depois do início.</p> : null}
+          {antesDoMinimo ? (
+            <p className="text-xs text-red-600 dark:text-red-300">
+              GMUD Programada: o novo início deve ser a partir de {minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).
+            </p>
+          ) : null}
 
           <label className="block text-xs font-semibold text-on-surface-variant">
             Motivo (opcional, vai no relato)

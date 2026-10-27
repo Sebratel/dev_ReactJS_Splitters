@@ -79,6 +79,7 @@ import {
 } from './usageAnalyticsStore.js';
 import {
   createGmudRequest,
+  minDataProgramada,
   getGmudExtrasByProtocols,
   setGmudApproval,
   addMassivaLink,
@@ -4497,6 +4498,23 @@ app.post('/api/gmud/create', async (req, res) => {
     }
 
     const createdByEmail = actorEmail || String(body.solicitanteEmail ?? '');
+
+    const inicioJanela = `${String(body.dataInicio ?? '').slice(0, 10)} ${String(body.horaInicio ?? '00:00').slice(0, 5)}`;
+    const fimJanela = `${String(body.dataFim ?? '').slice(0, 10)} ${String(body.horaFim ?? '00:00').slice(0, 5)}`;
+    if (!existing && body.dataInicio && body.dataFim && fimJanela <= inicioJanela) {
+      return res.status(400).json({ success: false, message: 'O fim da janela deve ser depois do início.' });
+    }
+
+    if (!existing && String(body.tipo ?? '').trim() === 'Programada') {
+      const dataInicio = String(body.dataInicio ?? '').slice(0, 10);
+      const minimo = minDataProgramada();
+      if (dataInicio !== '' && dataInicio < minimo) {
+        return res.status(400).json({
+          success: false,
+          message: `GMUD Programada só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
+        });
+      }
+    }
 
     const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
     await logGmudEvent({

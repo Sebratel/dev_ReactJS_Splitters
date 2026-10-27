@@ -25,6 +25,7 @@ import {
   GMUD_TIPO_INDISPONIBILIDADE_OPTIONS,
   GMUD_TIPO_OPTIONS,
   validateGmudForm,
+  minDataProgramada,
   type GmudCategoria,
   type GmudFormState,
   type GmudRecursoPapel,
@@ -153,16 +154,22 @@ function JanelaDeMudanca({
   form: GmudFormState
   set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
 }) {
+  const minInicio = form.tipo === 'Programada' ? minDataProgramada() : undefined
   return (
     <Section title="Janela de mudança">
       <Field label="Data início" required>
-        <input type="date" className={FIELD} value={form.dataInicio} onChange={(e) => set('dataInicio', e.target.value)} />
+        <input type="date" className={FIELD} value={form.dataInicio} min={minInicio} onChange={(e) => set('dataInicio', e.target.value)} />
+        {minInicio ? (
+          <p className="mt-1 text-[11px] text-on-surface-variant">
+            Programada: a partir de {minInicio.split('-').reverse().join('/')} (apresentação na terça + 7 dias).
+          </p>
+        ) : null}
       </Field>
       <Field label="Horário início" required>
         <input type="time" className={FIELD} value={form.horaInicio} onChange={(e) => set('horaInicio', e.target.value)} />
       </Field>
       <Field label="Data fim" required>
-        <input type="date" className={FIELD} value={form.dataFim} onChange={(e) => set('dataFim', e.target.value)} />
+        <input type="date" className={FIELD} value={form.dataFim} min={form.dataInicio || undefined} onChange={(e) => set('dataFim', e.target.value)} />
       </Field>
       <Field label="Horário fim (deadline)" required>
         <input type="time" className={FIELD} value={form.horaFim} onChange={(e) => set('horaFim', e.target.value)} />
@@ -734,7 +741,7 @@ export function GmudNewScreen() {
 
         {missing.length > 0 ? (
           <div className="rounded-xl border border-amber-300/70 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-            <p className="font-semibold">Preencha os campos obrigatórios:</p>
+            <p className="font-semibold">Corrija antes de enviar:</p>
             <p className="mt-1">{missing.join(' · ')}</p>
           </div>
         ) : null}

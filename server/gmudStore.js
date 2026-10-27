@@ -312,6 +312,20 @@ function parseJsonColumn(value) {
 }
 
 /** Cria (ou atualiza, se o protocolo já existir) uma requisição de GMUD. */
+/**
+ * GMUDs são apresentadas toda terça e só executam 7 dias depois da apresentação (próxima terça
+ * estritamente depois de hoje, fuso de Brasília). Retorna `yyyy-MM-dd`. Espelha `minDataProgramada`
+ * em src/features/gmud/model/gmudForm.ts.
+ */
+export function minDataProgramada(now = new Date()) {
+  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now);
+  const [y, m, d] = hoje.split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d));
+  const diasAteTerca = ((2 - base.getUTCDay() + 7) % 7) || 7;
+  base.setUTCDate(base.getUTCDate() + diasAteTerca + 7);
+  return base.toISOString().slice(0, 10);
+}
+
 export async function createGmudRequest(input) {
   await ensureTable();
   const pool = getMysqlPool();
@@ -735,6 +749,15 @@ export async function rescheduleGmud(input) {
   if (current.elleven_encerrado_em) throw buildError('GMUD já encerrada no Elleven.', 409);
 
   const previous = mapGmudRow(current);
+  if (current.tipo === 'Programada' && next.dataInicio !== previous.dataInicio) {
+    const minimo = minDataProgramada();
+    if (next.dataInicio < minimo) {
+      throw buildError(
+        `GMUD Programada só pode ser reagendada para a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
+        400,
+      );
+    }
+  }
   await pool.query(
     `UPDATE ${TABLE} SET data_inicio = ?, hora_inicio = ?, data_fim = ?, hora_fim = ?
       WHERE voalle_protocol = ?`,

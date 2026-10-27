@@ -234,6 +234,29 @@ export function emptyGmudSistemasExternosData(): GmudSistemasExternosData {
 // VALIDAÇÃO — condicional por categoria
 // ---------------------------------------------------------------------------
 
+function toYmd(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * GMUDs são apresentadas toda terça-feira e só podem ser executadas 7 dias depois da apresentação.
+ * A apresentação é a próxima terça estritamente depois de hoje (aberta numa terça, vale a da semana seguinte).
+ * Retorna `yyyy-MM-dd`. Mesma regra em `minDataProgramada` de `server/gmudStore.js`.
+ */
+export function minDataProgramada(hoje: Date = new Date()): string {
+  const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+  const diasAteTerca = ((2 - d.getDay() + 7) % 7) || 7
+  d.setDate(d.getDate() + diasAteTerca + 7)
+  return toYmd(d)
+}
+
+function formatYmdBr(ymd: string): string {
+  const [y, m, d] = ymd.split('-')
+  return `${d}/${m}/${y}`
+}
+
 /** Valida campos obrigatórios por categoria. Retorna rótulos dos campos faltando. */
 export function validateGmudForm(
   form: GmudFormState,
@@ -249,6 +272,20 @@ export function validateGmudForm(
   req(form.titulo.trim() !== '', 'Título')
   req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)')
   req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)')
+
+  if (form.dataInicio !== '' && form.dataFim !== '') {
+    const inicio = `${form.dataInicio} ${form.horaInicio || '00:00'}`
+    const fim = `${form.dataFim} ${form.horaFim || '00:00'}`
+    req(fim > inicio, 'Fim da janela deve ser depois do início')
+  }
+
+  if (form.tipo === 'Programada' && form.dataInicio !== '') {
+    const minimo = minDataProgramada()
+    req(
+      form.dataInicio >= minimo,
+      `Data de início da GMUD Programada: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+    )
+  }
 
   if (form.categoria === 'rede_externa') {
     // Campos obrigatórios de Rede Externa (comportamento original preservado)
