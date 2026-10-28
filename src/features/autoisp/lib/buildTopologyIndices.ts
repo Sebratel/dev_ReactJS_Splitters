@@ -1,6 +1,7 @@
 import type { Splitter } from '@/features/splitters/model/splitter'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 import type { TopologyIndices, RouteCatalog, RouteByUsernameMap } from '@/features/autoisp/model/topology.types'
+import type { MassivaRouteRow } from '@/features/massiva/api/fetchMassivaRoutesFromLocalDb'
 
 /**
  * Constrói os índices de topologia a partir da lista FLAT de conexões.
@@ -59,6 +60,41 @@ export function buildTopologyIndicesFromConnections(
     routeByUsername,
     apTitleByCode,
   }
+}
+
+/**
+ * Índices do painel AutoISP sem a base inteira de conexões:
+ *  - `routeByUsername` vem da consulta por PPPoE (só os PPPoE dos eventos em tela);
+ *  - o catálogo AP -> slot -> porta -> splitters (fallback por ponlink) vem das rotas
+ *    distintas (`GET /api/massiva/routes`), que já alimentam o assistente de massiva.
+ * O que veio das conexões tem precedência (o título do AP inclui a OLT, como antes).
+ */
+export function buildTopologyIndicesFromLookup(
+  connections: SplitterCliente[],
+  routes: readonly MassivaRouteRow[],
+): TopologyIndices {
+  const indices = buildTopologyIndicesFromConnections(connections)
+
+  for (const route of routes) {
+    const apCode = route.apCode.trim()
+    const apTitle = route.apTitle.trim()
+    if (!apCode || !apTitle) continue
+
+    const catalog = indices.routeCatalog
+    if (!catalog[apCode]) catalog[apCode] = {}
+    if (!catalog[apCode][route.slot]) catalog[apCode][route.slot] = {}
+    if (!catalog[apCode][route.slot][route.port]) catalog[apCode][route.slot][route.port] = new Set()
+
+    const splitterCode = route.splitterCode.trim()
+    if (splitterCode) catalog[apCode][route.slot][route.port].add(splitterCode)
+
+    if (!indices.apTitleByCode[apCode]) {
+      const olt = route.oltTitle?.trim()
+      indices.apTitleByCode[apCode] = olt ? `${olt} / ${apTitle}` : apTitle
+    }
+  }
+
+  return indices
 }
 
 /**
