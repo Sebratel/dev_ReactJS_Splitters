@@ -29,6 +29,10 @@ const EVENT_LABEL: Record<string, { title: string; tone: TimelineTone }> = {
   fluxograma_criado: { title: 'Fluxograma gerado', tone: 'primary' },
   fluxograma_atualizado: { title: 'Fluxograma atualizado', tone: 'neutral' },
   fluxograma_removido: { title: 'Fluxograma removido', tone: 'warning' },
+  area_aprovada: { title: 'Área aprovou', tone: 'success' },
+  area_negada: { title: 'Área negou — GMUD negada', tone: 'danger' },
+  area_aprovada_comite: { title: 'Comitê aprovou em nome da área', tone: 'warning' },
+  cancelamento_elleven_falhou: { title: 'Cancelamento no Elleven não concluído', tone: 'danger' },
 }
 
 function isWindow(value: unknown): value is GmudWindow {
@@ -52,6 +56,12 @@ function detailFor(e: EventLike): string | null {
     const text = parts.filter(Boolean).join(' · ')
     return text || null
   }
+  if (e.type === 'area_aprovada' || e.type === 'area_negada') {
+    const parts = [p.area ? String(p.area) : null, e.type === 'area_negada' && p.motivo ? String(p.motivo) : null]
+    return parts.filter(Boolean).join(' — ') || null
+  }
+  if (e.type === 'area_aprovada_comite') return p.area ? String(p.area) : null
+  if (e.type === 'cancelamento_elleven_falhou') return p.motivo ? String(p.motivo) : 'Cancele o protocolo manualmente.'
   if (e.type === 'criada' && p.tipo) return String(p.tipo)
   if ((e.type === 'anexo_adicionado' || e.type === 'anexo_removido') && p.filename) {
     return String(p.filename)

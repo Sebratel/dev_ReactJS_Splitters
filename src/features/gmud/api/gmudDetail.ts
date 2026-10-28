@@ -1,6 +1,7 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { GmudPendingItem } from '@/features/gmud/api/gmudApprovals'
+import type { GmudAreaApproval } from '@/features/gmud/api/gmudAreaApprovals'
 
 export type GmudDetailVoalle = {
   protocol: number
@@ -42,6 +43,8 @@ export type GmudDetail = {
   request: GmudDetailRequest | null
   events: GmudEvent[]
   links: GmudDetailLink[]
+  /** Aprovação por área; vazio em GMUDs anteriores a esse fluxo e em Emergencial. */
+  areaApprovals: GmudAreaApproval[]
 }
 
 export async function fetchGmudDetail(protocol: number): Promise<GmudDetail> {
@@ -50,5 +53,6 @@ export async function fetchGmudDetail(protocol: number): Promise<GmudDetail> {
   if (!response.ok || !result?.success) {
     throw new Error((result && typeof result.message === 'string' && result.message) || 'Falha ao carregar a GMUD.')
   }
-  return result.data as GmudDetail
+  const data = result.data as GmudDetail
+  return { ...data, areaApprovals: data.areaApprovals ?? [] }
 }

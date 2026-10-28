@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToastStore } from '@/shared/store/toastStore'
+import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
@@ -203,10 +204,12 @@ function Observacoes({
 // Seções específicas de Rede Externa
 // ---------------------------------------------------------------------------
 function RedeExternaFields({
-  form, set,
+  form, set, areas,
 }: {
   form: GmudFormState
   set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
+  /** Linhas da matriz "Recursos administrativos": as áreas da configuração. */
+  areas: string[]
 }) {
   const toggleAmbiente = (opt: string) =>
     set(
@@ -281,7 +284,10 @@ function RedeExternaFields({
       </Section>
 
       <div className={CARD}>
-        <p className="mb-3 text-sm font-bold text-on-surface">Recursos administrativos</p>
+        <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
+        <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
+          Áreas marcadas como Executor ou Validador aprovam a GMUD antes do Comitê (basta uma pessoa por área). N/A não aprova.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -291,7 +297,7 @@ function RedeExternaFields({
               </tr>
             </thead>
             <tbody>
-              {GMUD_RECURSO_AREAS.map((area) => (
+              {(areas.length > 0 ? areas : [...GMUD_RECURSO_AREAS]).map((area) => (
                 <tr key={area} className="border-t border-neutral-200/60 dark:border-white/5">
                   <td className="py-2 pr-4 font-medium text-on-surface">{area}</td>
                   {GMUD_RECURSO_PAPEIS.map((p) => (
@@ -571,6 +577,19 @@ export function GmudNewScreen() {
             ? crypto.randomUUID()
             : `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
       }
+      // Toda área que precisa aprovar tem de ter quem aprove ANTES de abrir o protocolo no Elleven,
+      // para não deixar protocolo aberto sem como seguir.
+      const areasCheck = await checkApprovalAreas({
+        tipo: form.tipo,
+        categoria: form.categoria,
+        categoriaData: activeCategoriaData,
+        recursosAdministrativos: form.recursosAdministrativos,
+      })
+      if (areasCheck.semResponsavel.length > 0) {
+        throw new Error(
+          `Sem responsável cadastrado para aprovar: ${areasCheck.semResponsavel.join(', ')}. Peça ao administrador para cadastrar em GMUD > Configurações.`,
+        )
+      }
       const result = await openGmudInElleven({
         solicitanteEmail: form.solicitanteEmail,
         titulo: buildGmudTitle(
@@ -676,7 +695,7 @@ export function GmudNewScreen() {
 
         {/* Campos dinâmicos por categoria */}
         {form.categoria === 'rede_externa' && (
-          <RedeExternaFields form={form} set={set} />
+          <RedeExternaFields form={form} set={set} areas={areasOptions.map((a) => a.label)} />
         )}
 
         {form.categoria === 'sistemas_internos' && (

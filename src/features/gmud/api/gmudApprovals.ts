@@ -32,6 +32,8 @@ export type GmudPendingItem = {
   horaFim: string | null
   listaClientesCor: string | null
   statusComite: string | null
+  /** Aprovação por área: nao_aplicavel | pendente | aprovada | negada. Ausente em respostas antigas. */
+  statusAreas?: 'nao_aplicavel' | 'pendente' | 'aprovada' | 'negada'
   statusExec: string | null
   dataCab: string | null
   rnc: string | null

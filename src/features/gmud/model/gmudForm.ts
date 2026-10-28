@@ -298,7 +298,10 @@ export function validateGmudForm(
     req(form.impactoParada !== '', 'Impacto de parada?')
     req(form.planoExecucao.trim() !== '', 'Plano de execução')
     req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
-    req(Object.keys(form.recursosAdministrativos).length > 0, 'Recursos administrativos')
+    req(
+      Object.values(form.recursosAdministrativos).some((papel) => papel === 'executor' || papel === 'validador'),
+      'Recursos administrativos (ao menos uma área como Executor ou Validador)',
+    )
     req(form.planoRollback.trim() !== '', 'Plano de rollback')
     req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
   }

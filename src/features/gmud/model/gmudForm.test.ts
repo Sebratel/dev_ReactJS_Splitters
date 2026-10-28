@@ -92,3 +92,19 @@ describe('validateGmudForm — áreas a avisar', () => {
     expect(validateGmudForm(form, null, se)).not.toContain('Áreas afetadas (quem será avisado)')
   })
 })
+
+describe('validateGmudForm — rede externa (matriz de aprovação)', () => {
+  const msg = 'Recursos administrativos (ao menos uma área como Executor ou Validador)'
+  const rede = (recursos: GmudFormState['recursosAdministrativos']) =>
+    formBase({ categoria: 'rede_externa', recursosAdministrativos: recursos })
+
+  it('exige ao menos uma área como Executor ou Validador', () => {
+    expect(validateGmudForm(rede({}))).toContain(msg)
+    expect(validateGmudForm(rede({ 'Oper/Infra': 'na', 'T&TI/CGR': 'na' }))).toContain(msg)
+  })
+
+  it('aceita quando há Executor ou Validador', () => {
+    expect(validateGmudForm(rede({ 'Oper/Infra': 'executor' }))).not.toContain(msg)
+    expect(validateGmudForm(rede({ 'T&TI/CGR': 'validador', 'Oper/Infra': 'na' }))).not.toContain(msg)
+  })
+})

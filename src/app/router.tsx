@@ -57,6 +57,9 @@ const GmudNewPage = lazy(() =>
 const GmudIndicatorsPage = lazy(() =>
   import('@/pages/GmudIndicatorsPage').then((m) => ({ default: m.GmudIndicatorsPage })),
 )
+const GmudAreaApprovalPage = lazy(() =>
+  import('@/pages/GmudAreaApprovalPage').then((m) => ({ default: m.GmudAreaApprovalPage })),
+)
 const GmudDetailPage = lazy(() =>
   import('@/pages/GmudDetailPage').then((m) => ({ default: m.GmudDetailPage })),
 )
@@ -76,6 +79,11 @@ export const router = createBrowserRouter([
   {
     path: '/callback',
     element: <OidcCallbackPage />,
+  },
+  {
+    // Pública de propósito: a pessoa da área decide pelo link do e-mail, sem login.
+    path: '/gmud/aprovar-area',
+    element: <Page><GmudAreaApprovalPage /></Page>,
   },
   {
     // Painel de parede (CGR/COR) — rota isolada, fora do RootLayout/Sidebar de

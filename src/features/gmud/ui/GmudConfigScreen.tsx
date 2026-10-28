@@ -20,7 +20,7 @@ import type { SplittersUserProfile } from '@/features/access/model/access.types'
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
     label: 'Setores / Áreas',
-    hint: 'Setores que aparecem nos campos "Áreas impactadas" e "Áreas afetadas". Clique em uma área para definir quem é avisado por e-mail quando uma GMUD que a marcou for aprovada.',
+    hint: 'Setores que aparecem nos campos "Áreas impactadas" e "Áreas afetadas". Clique em uma área para definir quem aprova por ela: toda GMUD que marcar a área envia um e-mail com o link de aprovação (basta uma pessoa decidir).',
   },
   processos: {
     label: 'Processos de negócio',
@@ -107,8 +107,8 @@ function TeamApproversModal({
               <Mail size={15} className="text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm text-on-surface">Quem é avisado — {areaItem.label}</p>
-              <p className="text-xs text-on-surface-variant">E-mails avisados via N8N quando uma GMUD com esta área for aprovada</p>
+              <p className="font-semibold text-sm text-on-surface">Quem aprova — {areaItem.label}</p>
+              <p className="text-xs text-on-surface-variant">Recebem por e-mail o link para aprovar ou negar as GMUDs que marcarem esta área. Basta uma pessoa decidir.</p>
             </div>
           </div>
           <button
@@ -123,7 +123,7 @@ function TeamApproversModal({
         {/* Lista de aprovadores */}
         <div className="overflow-y-auto px-5 py-4 space-y-3">
           {approvers.length === 0 ? (
-            <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">Nenhum aprovador cadastrado.</p>
+            <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">Ninguém cadastrado: GMUDs com esta área não podem ser abertas.</p>
           ) : (
             <ul className="space-y-1.5">
               {approvers.map((a) => (
@@ -290,7 +290,7 @@ function ListPanel({
                       type="button"
                       onClick={() => setOpenApproversForId(item.id)}
                       className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      title="Gerenciar quem é avisado"
+                      title="Gerenciar quem aprova"
                     >
                       <span className="text-sm text-on-surface">{item.label}</span>
                       {count > 0 ? (
@@ -299,7 +299,7 @@ function ListPanel({
                           {count}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-on-surface-variant/40 italic">ninguém avisado</span>
+                        <span className="text-[11px] text-on-surface-variant/40 italic">sem aprovador</span>
                       )}
                     </button>
                   ) : (

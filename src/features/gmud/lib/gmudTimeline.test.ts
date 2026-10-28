@@ -77,3 +77,28 @@ describe('buildGmudTimeline', () => {
     expect(plataforma.at(-1)?.detail).toBe('Encerramento (GMUD concluída)')
   })
 })
+
+describe('buildGmudTimeline — aprovação por área', () => {
+  it('mostra decisão das áreas, aprovação do Comitê em nome da área e falha de cancelamento', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'area_aprovada', actor: 'Ana', payload: { area: 'Comercial' }, at: '2026-10-01T10:00:00Z' },
+        { type: 'area_aprovada_comite', actor: 'Comitê', payload: { area: 'RH' }, at: '2026-10-01T11:00:00Z' },
+        { type: 'area_negada', actor: 'Beto', payload: { area: 'Atendimento', motivo: 'Fora da janela' }, at: '2026-10-01T12:00:00Z' },
+        { type: 'cancelamento_elleven_falhou', actor: 'Beto', payload: { motivo: 'Gateway recusou (HTTP 502).' }, at: '2026-10-01T12:01:00Z' },
+      ],
+    })
+    expect(items.map((i) => [i.title, i.tone])).toEqual([
+      ['Área aprovou', 'success'],
+      ['Comitê aprovou em nome da área', 'warning'],
+      ['Área negou — GMUD negada', 'danger'],
+      ['Cancelamento no Elleven não concluído', 'danger'],
+    ])
+    expect(items[0].detail).toBe('Comercial')
+    expect(items[2].detail).toBe('Atendimento — Fora da janela')
+    expect(items[3].detail).toBe('Gateway recusou (HTTP 502).')
+  })
+})

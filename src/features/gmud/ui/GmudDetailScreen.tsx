@@ -16,6 +16,7 @@ import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
 import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard, GmudWindowHistoryCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
+import { GmudAreaApprovalsCard } from '@/features/gmud/ui/detail/GmudAreaApprovalsCard'
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
 import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
 import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
@@ -181,6 +182,8 @@ export function GmudDetailScreen() {
   const agendaItem = d ? toAgendaItem(d) : null
   const approved = d?.request?.statusComite === 'aprovada'
   const closed = Boolean(d?.request?.ellevenEncerradoEm || d?.voalle.conclusionDate)
+  const statusAreas = d?.request?.statusAreas ?? 'nao_aplicavel'
+  const aguardandoAreas = statusAreas === 'pendente'
 
   return (
     <div className="mx-auto min-w-0 max-w-[1280px] space-y-4">
@@ -205,7 +208,9 @@ export function GmudDetailScreen() {
               <button
                 type="button"
                 onClick={() => setModal('approve')}
-                className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90')}
+                disabled={aguardandoAreas}
+                title={aguardandoAreas ? 'Aguardando a aprovação das áreas (ou aprove em nome da área abaixo)' : undefined}
+                className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90 disabled:opacity-50')}
               >
                 <Gavel size={14} /> Avaliar
               </button>
@@ -318,6 +323,13 @@ export function GmudDetailScreen() {
             </div>
             <div className="space-y-4">
               <GmudDetailSummary detail={d} deadline={gmudDeadline(d.voalle)} />
+              <GmudAreaApprovalsCard
+                protocol={protocol}
+                areas={d.areaApprovals}
+                statusAreas={statusAreas}
+                canOverride={canApprove && !closed}
+                onChanged={() => void query.refetch()}
+              />
               <GmudWindowHistoryCard request={d.request} events={d.events} />
               <GmudTimelineCard items={timeline} />
             </div>
