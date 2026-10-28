@@ -74,6 +74,7 @@ import {
   summarizeUsage,
 } from './usageAnalyticsStore.js';
 import logger, { captureConsole } from './logger.js';
+import { ROTA_POR_PPPOE_SQL, parseRotaPorPppoeBody } from './lib/rotaPorPppoe.js';
 
 const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
@@ -1672,6 +1673,33 @@ function buildMassivaRouteFilterMap(routes) {
   }
   return { entries: [...map.values()], invalidIndexes };
 }
+
+/**
+ * POST /api/splitters/rotas-por-pppoe  — Body: { "pppoes": ["user1", "user2@dominio", ...] } (máx. 500)
+ * Mesma lógica do splitters-service: só topologia (sem dados do cliente); PPPoE sem rota não aparece.
+ */
+app.post('/api/splitters/rotas-por-pppoe', async (req, res) => {
+  try {
+    const parsed = parseRotaPorPppoeBody(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ success: false, error: parsed.error });
+    }
+    if (parsed.keys.length === 0) {
+      return res.json({ success: true, count: 0, data: [] });
+    }
+
+    const result = await queryWithTransientRetry(ROTA_POR_PPPOE_SQL, [parsed.keys], {
+      retries: 1,
+      delayMs: 180,
+    });
+    // Só contagens no log: PPPoE identifica cliente.
+    logger.info('rotas_por_pppoe', { chaves: parsed.keys.length, rotas: result.rows.length });
+    return res.json({ success: true, count: result.rows.length, data: result.rows });
+  } catch (error) {
+    console.error('Erro ao resolver rotas por PPPoE:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 app.post('/api/massiva/connections/batch', async (req, res) => {
   try {
