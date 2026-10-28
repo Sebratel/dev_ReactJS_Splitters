@@ -111,7 +111,12 @@ import {
   getAllTeamApprovers,
   addTeamApprover,
   removeTeamApprover,
-  getApproversForAreas,
+  resolveAreasWithApprovers,
+  createAreaApprovals,
+  getAreaApprovals,
+  lookupApprovalToken,
+  decideAreaApproval,
+  overrideAreaApproval,
   listGmudUpcomingForHsm,
 } from './gmudStore.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
@@ -121,6 +126,12 @@ import {
   assistGmudFlowchart,
   isPlanningAssistantConfigured as isGeminiConfigured,
 } from './gmudFlowchartAI.js';
+import {
+  buildApprovalUrl,
+  createRateLimiter,
+  deriveApprovalAreas,
+} from './lib/gmudAreaApproval.js';
+import { buildAreaDenialDescription, cancelGmudInElleven } from './lib/gmudEllevenCancel.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -4431,15 +4442,25 @@ function gmudAreasFromCategoriaData(categoriaData) {
 }
 
 /**
- * Notifica o N8N quando o Comitê aprova a GMUD, com os e-mails das pessoas cadastradas nas
- * áreas marcadas. Fire-and-forget — falha não impede a aprovação.
- * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL.
+ * Pede a aprovação das áreas: o N8N envia um e-mail a cada pessoa cadastrada nas áreas da GMUD,
+ * com o link individual para aprovar ou negar. Fire-and-forget — falha não impede o registro.
+ * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL (e APP_BASE_URL para montar os links).
+ * O payload carrega links com código de uso único: nunca logar o corpo enviado.
  */
-async function notifyGmudApprovalWebhook({ gmud, approvers, areas }) {
+async function notifyGmudAreaApprovalWebhook({ gmud, approvals }) {
   const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
-  if (webhookUrl === '' || !approvers || approvers.length === 0) return;
+  if (webhookUrl === '' || !approvals || approvals.length === 0) return;
+  const baseUrl = (process.env.APP_BASE_URL ?? '').trim();
+  const approvers = approvals.flatMap((a) =>
+    a.pessoas.map((p) => ({
+      email: p.email,
+      nome: p.nome,
+      area: a.areaLabel,
+      link: buildApprovalUrl(baseUrl, p.token),
+    })),
+  );
   const payload = {
-    evento: 'gmud_criada',
+    evento: 'gmud_aprovacao_areas',
     protocol: gmud.voalleProtocol,
     titulo: gmud.titulo,
     categoria: gmud.categoria,
@@ -4450,10 +4471,10 @@ async function notifyGmudApprovalWebhook({ gmud, approvers, areas }) {
     horaInicio: gmud.horaInicio,
     dataFim: gmud.dataFim,
     horaFim: gmud.horaFim,
-    areasImpactadas: areas ?? [],
-    approvers: approvers.map((a) => ({ email: a.userEmail, nome: a.userDisplayName ?? a.userEmail })),
+    areas: approvals.map((a) => a.areaLabel),
+    approvers,
     criadaEm: new Date().toISOString(),
-    platformUrl: `${(process.env.APP_BASE_URL ?? '').trim() || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
+    platformUrl: `${baseUrl.replace(/\/+$/, '') || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
   };
   try {
     const response = await fetch(webhookUrl, {
@@ -4463,10 +4484,9 @@ async function notifyGmudApprovalWebhook({ gmud, approvers, areas }) {
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
-      const bodyText = await response.text().catch(() => '(sem corpo)');
-      logger.error('[gmud-approval-webhook] Webhook respondeu com erro:', { status: response.status, body: bodyText });
+      logger.error('[gmud-approval-webhook] Webhook respondeu com erro:', { status: response.status });
     } else {
-      logger.info(`[gmud-approval-webhook] Notificação enviada (protocolo ${gmud.voalleProtocol}, ${approvers.length} aprovador(es)).`);
+      logger.info(`[gmud-approval-webhook] Pedido de aprovação enviado (protocolo ${gmud.voalleProtocol}, ${approvers.length} pessoa(s)).`);
     }
   } catch (err) {
     logger.warn('[gmud-approval-webhook] Falha ao notificar webhook:', { error: err?.message ?? err });
@@ -4535,6 +4555,29 @@ app.post('/api/gmud/create', async (req, res) => {
       }
     }
 
+    // Aprovação por área: toda área envolvida precisa ter quem aprove ANTES de registrar.
+    let areasToApprove = [];
+    if (!existing) {
+      const labels = deriveApprovalAreas({
+        tipo: body.tipo,
+        categoria: body.categoria,
+        categoriaData: body.categoriaData,
+        recursosAdministrativos: body.recursosAdministrativos,
+      });
+      if (labels.length > 0) {
+        areasToApprove = await resolveAreasWithApprovers(labels);
+        const semResponsavel = areasToApprove
+          .filter((a) => a.areaId === null || a.people.length === 0)
+          .map((a) => a.label);
+        if (semResponsavel.length > 0) {
+          return res.status(422).json({
+            success: false,
+            message: `Sem responsável cadastrado para aprovar: ${semResponsavel.join(', ')}. Peça ao administrador para cadastrar em GMUD > Configurações.`,
+          });
+        }
+      }
+    }
+
     const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
     await logGmudEvent({
       voalleProtocol,
@@ -4543,7 +4586,24 @@ app.post('/api/gmud/create', async (req, res) => {
       payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
     });
 
-    // Webhook de notificação é disparado na APROVAÇÃO do Comitê (ver /api/gmud/approval).
+    if (areasToApprove.length > 0) {
+      let approvals;
+      try {
+        approvals = await createAreaApprovals({
+          protocol: voalleProtocol,
+          areas: areasToApprove,
+          ttlDays: Number(process.env.GMUD_APPROVAL_TOKEN_TTL_DAYS) || 30,
+        });
+      } catch (approvalError) {
+        logger.error('[gmud-area-approval] Falha ao criar as aprovações das áreas:', { error: approvalError?.message });
+        return res.status(500).json({
+          success: false,
+          message: 'A GMUD foi registrada, mas não foi possível criar as aprovações das áreas. Ela ficou bloqueada; avise o suporte.',
+        });
+      }
+      const gmudRow = await getGmudRequest(voalleProtocol);
+      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals });
+    }
 
     return res.json({ success: true, data: result });
   } catch (error) {
@@ -4985,24 +5045,160 @@ app.post('/api/gmud/approval', async (req, res) => {
           : { dataCab: body.dataCab ?? null, rnc: body.rnc ?? null },
       });
     }
-    // Disparo do webhook quando o Comitê APROVA a GMUD (fire-and-forget).
-    if (String(body.statusComite ?? '').toLowerCase() === 'aprovada') {
-      getGmudRequest(voalleProtocol).then(async (gmud) => {
-        if (!gmud) return;
-        const areas = gmudAreasFromCategoriaData(gmud.categoriaData);
-        const approvers = await getApproversForAreas(areas);
-        if (approvers.length > 0) {
-          await notifyGmudApprovalWebhook({ gmud, approvers, areas });
-        }
-      }).catch((err) => { logger.error('[gmud-approval] Erro no webhook:', err?.message); });
-    }
-
     return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: safeErrorMessage(error, 'Falha ao registrar a aprovação.'),
+    });
+  }
+});
+
+// ─── Aprovação por área ──────────────────────────────────────────────────────
+// Cada área marcada na GMUD aprova antes do Comitê; basta uma pessoa da área. Se uma área nega,
+// a GMUD fica negada e o protocolo é cancelado no Elleven.
+
+/** Antes de abrir o protocolo no Elleven: confere se toda área da GMUD tem quem aprove. */
+app.post('/api/gmud/approval-areas/check', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para registrar GMUDs.');
+    const body = req.body ?? {};
+    const labels = deriveApprovalAreas({
+      tipo: body.tipo,
+      categoria: body.categoria,
+      categoriaData: body.categoriaData,
+      recursosAdministrativos: body.recursosAdministrativos,
+    });
+    const areas = await resolveAreasWithApprovers(labels);
+    const semResponsavel = areas.filter((a) => a.areaId === null || a.people.length === 0).map((a) => a.label);
+    return res.json({
+      success: true,
+      data: { areas: areas.map((a) => ({ label: a.label, pessoas: a.people.length })), semResponsavel },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao conferir as áreas da GMUD.'),
+    });
+  }
+});
+
+// Endpoints PÚBLICOS (sem login): quem tem o link individual decide. A segurança vem do código
+// aleatório de 256 bits (só o hash fica no banco), da confirmação por POST e do limite de tentativas.
+const areaApprovalLimiter = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 40 });
+function clientIpForLimit(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  return forwarded[forwarded.length - 1] || req.socket?.remoteAddress || 'unknown';
+}
+function publicApprovalError(res, error, fallback) {
+  const statusCode = Number(error?.statusCode ?? 500);
+  const status = Number.isFinite(statusCode) ? statusCode : 500;
+  return res.status(status).json({ success: false, message: status < 500 ? error.message : fallback });
+}
+
+app.post('/api/gmud/area-approval/info', async (req, res) => {
+  try {
+    if (!areaApprovalLimiter(clientIpForLimit(req))) {
+      return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+    const info = await lookupApprovalToken(String(req.body?.token ?? ''));
+    if (info.state === 'invalid') {
+      return res.status(404).json({ success: false, message: 'Link inválido ou expirado.' });
+    }
+    return res.json({
+      success: true,
+      data: {
+        state: info.state,
+        area: info.areaLabel,
+        approver: info.approverName,
+        gmud: info.gmud,
+        decision: info.decision ?? null,
+        decidedByName: info.decidedByName ?? null,
+        decidedAt: info.decidedAt ?? null,
+      },
+    });
+  } catch (error) {
+    return publicApprovalError(res, error, 'Falha ao consultar o pedido de aprovação.');
+  }
+});
+
+/** Negou: a GMUD fica negada e o protocolo é cancelado no Elleven (sem sessão, via gateway). */
+async function denyGmudAfterAreaDenial(result) {
+  const quem = `Área ${result.areaLabel} — ${result.decidedByName}`;
+  await setGmudApproval({ voalleProtocol: result.protocol, statusComite: 'negada', aprovadoPor: quem });
+  const cancel = await cancelGmudInElleven({
+    assignmentId: result.assignmentId,
+    description: buildAreaDenialDescription({ areaLabel: result.areaLabel, byName: result.decidedByName }),
+  });
+  if (cancel.ok) {
+    const closed = await setGmudApproval({ voalleProtocol: result.protocol, ellevenEncerrado: { status: 'negada' } });
+    for (const type of closed.changes ?? []) {
+      await logGmudEvent({ voalleProtocol: result.protocol, type, actor: quem, payload: { motivo: 'negada' } });
+    }
+    return true;
+  }
+  await logGmudEvent({
+    voalleProtocol: result.protocol,
+    type: 'cancelamento_elleven_falhou',
+    actor: quem,
+    payload: { motivo: cancel.reason ?? null },
+  });
+  logger.warn('[gmud-area-approval] GMUD negada, mas o cancelamento no Elleven não foi concluído.', {
+    protocol: result.protocol,
+    reason: cancel.reason,
+  });
+  return false;
+}
+
+app.post('/api/gmud/area-approval/decide', async (req, res) => {
+  try {
+    if (!areaApprovalLimiter(clientIpForLimit(req))) {
+      return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+    const { token, decision, motivo } = req.body ?? {};
+    const result = await decideAreaApproval({ token: String(token ?? ''), decision, motivo });
+    await logGmudEvent({
+      voalleProtocol: result.protocol,
+      type: result.decision === 'aprovada' ? 'area_aprovada' : 'area_negada',
+      actor: result.decidedByName,
+      payload: { area: result.areaLabel, motivo: result.motivo, email: result.decidedByEmail },
+    });
+    let canceladoNoElleven = null;
+    if (result.decision === 'negada') {
+      canceladoNoElleven = await denyGmudAfterAreaDenial(result);
+    }
+    return res.json({
+      success: true,
+      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven },
+    });
+  } catch (error) {
+    return publicApprovalError(res, error, 'Falha ao registrar a decisão.');
+  }
+});
+
+// O Comitê aprova em nome de uma área que não respondeu, para a GMUD não ficar parada.
+app.post('/api/gmud/:protocol/area-approvals/:areaId/override', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    const areaId = Number.parseInt(String(req.params.areaId ?? ''), 10);
+    const byName = gmudActorName(actor);
+    const byEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await overrideAreaApproval({ protocol, areaId, byName, byEmail });
+    await logGmudEvent({
+      voalleProtocol: protocol,
+      type: 'area_aprovada_comite',
+      actor: byName || byEmail,
+      payload: { area: result.areaLabel },
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao aprovar em nome da área.'),
     });
   }
 });
@@ -5180,12 +5376,13 @@ app.get('/api/gmud/:protocol/detail', async (req, res) => {
     }
     const [voalle] = await fetchVoalleGmudRows(protocol);
     if (!voalle) return res.status(404).json({ success: false, message: 'GMUD não encontrada no Voalle.' });
-    const [request, events, links] = await Promise.all([
+    const [request, events, links, areaApprovals] = await Promise.all([
       getGmudRequest(protocol),
       getGmudEvents(protocol),
       getLinksWithAffected([protocol]),
+      getAreaApprovals(protocol),
     ]);
-    return res.json({ success: true, data: { voalle, request, events, links } });
+    return res.json({ success: true, data: { voalle, request, events, links, areaApprovals } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({

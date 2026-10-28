@@ -1,5 +1,12 @@
 import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
+import {
+  AREA_STATUS,
+  computeAreasStatus,
+  generateApprovalToken,
+  hashApprovalToken,
+  isValidApprovalTokenShape,
+} from './lib/gmudAreaApproval.js';
 
 /**
  * GMUD — Gestão de Mudança de Rede.
@@ -22,6 +29,8 @@ const ATTACHMENTS_TABLE = 'gmud_attachments';
 const FLOWCHARTS_TABLE = 'gmud_flowcharts';
 /** Aprovadores de e-mail por equipe — recebem notificação N8N quando uma GMUD é aberta. */
 const TEAM_APPROVERS_TABLE = 'gmud_team_approvers';
+const AREA_APPROVALS_TABLE = 'gmud_area_approvals';
+const AREA_TOKENS_TABLE = 'gmud_area_approval_tokens';
 
 export const GMUD_EVENT_TYPES = new Set([
   'criada',
@@ -40,6 +49,10 @@ export const GMUD_EVENT_TYPES = new Set([
   'fluxograma_criado',
   'fluxograma_atualizado',
   'fluxograma_removido',
+  'area_aprovada',
+  'area_negada',
+  'area_aprovada_comite',
+  'cancelamento_elleven_falhou',
 ]);
 
 let dataPool = null;
@@ -222,6 +235,40 @@ async function ensureTable() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Aprovação por área: um pedido por (GMUD, área); basta uma pessoa da área decidir.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${AREA_APPROVALS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        voalle_protocol BIGINT UNSIGNED NOT NULL,
+        area_id BIGINT UNSIGNED NOT NULL,
+        area_label VARCHAR(191) NOT NULL,
+        status VARCHAR(12) NOT NULL DEFAULT 'pendente',
+        decided_by_email VARCHAR(255) NULL,
+        decided_by_name VARCHAR(255) NULL,
+        decided_at DATETIME NULL,
+        motivo VARCHAR(500) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_${AREA_APPROVALS_TABLE}_protocol_area (voalle_protocol, area_id),
+        INDEX idx_${AREA_APPROVALS_TABLE}_protocol (voalle_protocol)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Um código por pessoa/área. Só o hash SHA-256 é guardado; o código em claro vai só no link.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${AREA_TOKENS_TABLE} (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        approval_id BIGINT UNSIGNED NOT NULL,
+        user_email VARCHAR(255) NOT NULL,
+        user_display_name VARCHAR(255) NULL,
+        token_hash CHAR(64) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_${AREA_TOKENS_TABLE}_hash (token_hash),
+        INDEX idx_${AREA_TOKENS_TABLE}_approval (approval_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ${FLOWCHARTS_TABLE} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -274,6 +321,8 @@ async function ensureTable() {
     // Formulários dinâmicos (Massivas 3.4 fase 2): categoria da GMUD + dados específicos.
     await ensureColumn(pool, TABLE, 'categoria', "VARCHAR(32) NULL COMMENT 'rede_externa | sistemas_internos | sistemas_externos'");
     await ensureColumn(pool, TABLE, 'categoria_data', 'JSON NULL');
+    // GMUDs anteriores à aprovação por área ficam 'nao_aplicavel' e seguem direto ao Comitê.
+    await ensureColumn(pool, TABLE, 'status_areas', "VARCHAR(16) NOT NULL DEFAULT 'nao_aplicavel' COMMENT 'nao_aplicavel | pendente | aprovada | negada'");
     await ensureColumn(pool, TABLE, 'equipe_responsavel_id', 'BIGINT UNSIGNED NULL COMMENT \'ID da equipe responsável (gmud_config_lists) — usada no fluxo de aprovação por e-mail\'');
   })().catch((error) => {
     readyPromise = null;
@@ -412,10 +461,23 @@ export async function setGmudApproval(input) {
 
   // Estado anterior: para registrar só o que mudou (trilha) e carimbar a data da decisão.
   const [prevRows] = await pool.query(
-    `SELECT status_comite, status_exec, elleven_encerrado_em FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`,
+    `SELECT status_comite, status_exec, elleven_encerrado_em, status_areas FROM ${TABLE} WHERE voalle_protocol = ? LIMIT 1`,
     [protocol],
   );
   const prev = prevRows?.[0] ?? null;
+  // O Comitê só aprova depois que todas as áreas aprovaram (ou o Comitê aprova em nome da área).
+  if (statusComite === 'aprovada' && prev) {
+    if (prev.status_areas === AREA_STATUS.PENDENTE) {
+      const pendentes = await pendingAreaLabels(pool, protocol);
+      throw buildError(
+        `Aguardando aprovação das áreas: ${pendentes.join(', ') || 'áreas pendentes'}. O Comitê pode aprovar em nome da área no detalhe da GMUD.`,
+        409,
+      );
+    }
+    if (prev.status_areas === AREA_STATUS.NEGADA) {
+      throw buildError('Esta GMUD foi negada por uma das áreas e não pode ser aprovada.', 409);
+    }
+  }
   const prevComite = prev?.status_comite ?? null;
   const prevExec = prev?.status_exec ?? null;
   const changes = [];
@@ -613,6 +675,7 @@ function toTimeStr(value) {
 /** Mapeia uma linha do gmud_requests para o formato do app (camelCase, JSON parseado). */
 function mapGmudRow(r) {
   return {
+    statusAreas: r.status_areas ?? AREA_STATUS.NAO_APLICAVEL,
     voalleProtocol: r.voalle_protocol != null ? Number(r.voalle_protocol) : null,
     assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
     tipo: r.tipo ?? null,
@@ -657,7 +720,7 @@ export async function listPendingGmuds() {
   await ensureTable();
   const pool = getMysqlPool();
   const [rows] = await pool.query(
-    `SELECT * FROM ${TABLE} WHERE status_comite = 'pendente' ORDER BY created_at DESC LIMIT 200`,
+    `SELECT * FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada') ORDER BY created_at DESC LIMIT 200`,
   );
   return rows.map(mapGmudRow);
 }
@@ -667,7 +730,7 @@ export async function getPendingGmudCount() {
   await ensureTable();
   const pool = getMysqlPool();
   const [rows] = await pool.query(
-    `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente'`,
+    `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada')`,
   );
   return Number(rows?.[0]?.total ?? 0);
 }
@@ -1158,6 +1221,268 @@ export async function removeTeamApprover(approverRowId) {
   );
   if (result.affectedRows === 0) throw buildError('Aprovador não encontrado.', 404);
   return { id };
+}
+
+// ─── Aprovação por área ─────────────────────────────────────────────────────
+
+async function pendingAreaLabels(pool, protocol) {
+  const [rows] = await pool.query(
+    `SELECT area_label FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol = ? AND status = 'pendente' ORDER BY id`,
+    [protocol],
+  );
+  return rows.map((r) => r.area_label);
+}
+
+/** Recalcula e grava a situação geral das áreas da GMUD. */
+async function recomputeAreasStatus(pool, protocol) {
+  const [rows] = await pool.query(
+    `SELECT status FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol = ?`,
+    [protocol],
+  );
+  const status = computeAreasStatus(rows.map((r) => r.status));
+  await pool.query(`UPDATE ${TABLE} SET status_areas = ? WHERE voalle_protocol = ?`, [status, protocol]);
+  return status;
+}
+
+/**
+ * Resolve nomes de área para o cadastro (lista 'areas') e as pessoas que aprovam por elas.
+ * Área que não existe mais na lista volta com areaId nulo e sem pessoas.
+ */
+export async function resolveAreasWithApprovers(areaLabels) {
+  await ensureTable();
+  const labels = [...new Set((Array.isArray(areaLabels) ? areaLabels : []).map(toCleanString).filter((l) => l !== ''))];
+  if (labels.length === 0) return [];
+  const pool = getMysqlPool();
+  const [areaRows] = await pool.query(
+    `SELECT id, label FROM ${CONFIG_TABLE} WHERE list_key = 'areas' AND active = 1 AND label IN (?)`,
+    [labels],
+  );
+  const idByLabel = new Map(areaRows.map((r) => [String(r.label).toLowerCase(), Number(r.id)]));
+  const ids = [...idByLabel.values()];
+  let people = [];
+  if (ids.length > 0) {
+    [people] = await pool.query(
+      `SELECT equipe_id, user_email, user_display_name FROM ${TEAM_APPROVERS_TABLE} WHERE equipe_id IN (?) ORDER BY id`,
+      [ids],
+    );
+  }
+  return labels.map((label) => {
+    const areaId = idByLabel.get(label.toLowerCase()) ?? null;
+    return {
+      label,
+      areaId,
+      people: areaId === null
+        ? []
+        : people
+            .filter((p) => Number(p.equipe_id) === areaId)
+            .map((p) => ({ email: p.user_email, name: p.user_display_name ?? p.user_email })),
+    };
+  });
+}
+
+/**
+ * Cria o pedido de aprovação de cada área e um código por pessoa. Devolve os códigos em claro
+ * (só existem aqui, para montar os links do e-mail; no banco fica apenas o hash).
+ * A GMUD já nasce bloqueada ('pendente') — se algo falhar no meio, ela não segue ao Comitê.
+ */
+export async function createAreaApprovals({ protocol, areas, ttlDays = 30 }) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const proto = normalizePositiveInt(protocol);
+  if (!proto) throw buildError('Protocolo inválido.', 400);
+  if (!Array.isArray(areas) || areas.length === 0) return [];
+
+  await pool.query(`UPDATE ${TABLE} SET status_areas = 'pendente' WHERE voalle_protocol = ?`, [proto]);
+  const expiresAt = new Date(Date.now() + Math.max(1, Number(ttlDays) || 30) * 86_400_000);
+  const result = [];
+  for (const area of areas) {
+    await pool.query(
+      `INSERT INTO ${AREA_APPROVALS_TABLE} (voalle_protocol, area_id, area_label) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE area_label = VALUES(area_label)`,
+      [proto, area.areaId, area.label],
+    );
+    const [idRows] = await pool.query(
+      `SELECT id FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol = ? AND area_id = ? LIMIT 1`,
+      [proto, area.areaId],
+    );
+    const approvalId = Number(idRows[0].id);
+    const pessoas = [];
+    for (const person of area.people) {
+      const { token, hash } = generateApprovalToken();
+      await pool.query(
+        `INSERT INTO ${AREA_TOKENS_TABLE} (approval_id, user_email, user_display_name, token_hash, expires_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [approvalId, person.email, person.name ?? null, hash, expiresAt],
+      );
+      pessoas.push({ email: person.email, nome: person.name ?? person.email, token });
+    }
+    result.push({ areaId: area.areaId, areaLabel: area.label, pessoas });
+  }
+  return result;
+}
+
+/** Situação das áreas de uma GMUD, para o detalhe (sem códigos). */
+export async function getAreaApprovals(protocol) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const proto = normalizePositiveInt(protocol);
+  if (!proto) return [];
+  const [rows] = await pool.query(
+    `SELECT id, area_id, area_label, status, decided_by_email, decided_by_name, decided_at, motivo
+       FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol = ? ORDER BY id`,
+    [proto],
+  );
+  if (rows.length === 0) return [];
+  const [people] = await pool.query(
+    `SELECT approval_id, user_email, user_display_name FROM ${AREA_TOKENS_TABLE} WHERE approval_id IN (?) ORDER BY id`,
+    [rows.map((r) => Number(r.id))],
+  );
+  return rows.map((r) => ({
+    id: Number(r.id),
+    areaId: Number(r.area_id),
+    areaLabel: r.area_label,
+    status: r.status,
+    decidedByEmail: r.decided_by_email ?? null,
+    decidedByName: r.decided_by_name ?? null,
+    decidedAt: r.decided_at ? new Date(r.decided_at).toISOString() : null,
+    motivo: r.motivo ?? null,
+    pessoas: people
+      .filter((p) => Number(p.approval_id) === Number(r.id))
+      .map((p) => ({ email: p.user_email, nome: p.user_display_name ?? p.user_email })),
+  }));
+}
+
+const TRUNC = (value, max) => {
+  const text = toCleanString(value);
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+};
+
+/**
+ * Consulta um código de aprovação. state: invalid | pending | decided | expired | closed.
+ * Não expõe nada além do resumo mínimo da GMUD para quem tem o link.
+ */
+export async function lookupApprovalToken(token) {
+  if (!isValidApprovalTokenShape(token)) return { state: 'invalid' };
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT t.id AS token_id, t.approval_id, t.user_email, t.user_display_name, t.expires_at,
+            a.voalle_protocol, a.area_label, a.status, a.decided_by_name, a.decided_at, a.motivo,
+            g.titulo, g.tipo, g.categoria, g.descricao, g.pop_site, g.solicitante_nome,
+            g.data_inicio, g.hora_inicio, g.data_fim, g.hora_fim, g.status_comite, g.status_areas, g.assignment_id
+       FROM ${AREA_TOKENS_TABLE} t
+       JOIN ${AREA_APPROVALS_TABLE} a ON a.id = t.approval_id
+       LEFT JOIN ${TABLE} g ON g.voalle_protocol = a.voalle_protocol
+      WHERE t.token_hash = ? LIMIT 1`,
+    [hashApprovalToken(token)],
+  );
+  const r = rows?.[0];
+  if (!r) return { state: 'invalid' };
+
+  const base = {
+    tokenId: Number(r.token_id),
+    approvalId: Number(r.approval_id),
+    protocol: Number(r.voalle_protocol),
+    areaLabel: r.area_label,
+    approverEmail: r.user_email,
+    approverName: r.user_display_name ?? r.user_email,
+    assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+    gmud: {
+      protocolo: Number(r.voalle_protocol),
+      titulo: r.titulo ?? '',
+      tipo: r.tipo ?? '',
+      categoria: r.categoria ?? '',
+      descricao: TRUNC(r.descricao, 1500),
+      popSite: r.pop_site ?? '',
+      solicitante: r.solicitante_nome ?? '',
+      dataInicio: toDateStr(r.data_inicio) ?? '',
+      horaInicio: toTimeStr(r.hora_inicio) ?? '',
+      dataFim: toDateStr(r.data_fim) ?? '',
+      horaFim: toTimeStr(r.hora_fim) ?? '',
+    },
+  };
+  if (r.status !== AREA_STATUS.PENDENTE) {
+    return {
+      ...base,
+      state: 'decided',
+      decision: r.status,
+      decidedByName: r.decided_by_name ?? null,
+      decidedAt: r.decided_at ? new Date(r.decided_at).toISOString() : null,
+    };
+  }
+  if (r.status_areas === AREA_STATUS.NEGADA || r.status_comite === 'negada') return { ...base, state: 'closed' };
+  if (new Date(r.expires_at).getTime() < Date.now()) return { ...base, state: 'expired' };
+  return { ...base, state: 'pending' };
+}
+
+/**
+ * Registra a decisão de uma área por código. A primeira decisão vence (UPDATE condicional):
+ * dois cliques simultâneos não decidem duas vezes.
+ */
+export async function decideAreaApproval({ token, decision, motivo }) {
+  const info = await lookupApprovalToken(token);
+  if (info.state === 'invalid') throw buildError('Link inválido ou expirado.', 404);
+  if (info.state === 'decided') {
+    throw buildError(`Esta área já foi decidida${info.decidedByName ? ` por ${info.decidedByName}` : ''}.`, 409);
+  }
+  if (info.state === 'closed') throw buildError('Esta GMUD já foi negada por outra área.', 409);
+  if (info.state === 'expired') throw buildError('Link inválido ou expirado.', 410);
+
+  if (decision !== AREA_STATUS.APROVADA && decision !== AREA_STATUS.NEGADA) {
+    throw buildError('Decisão inválida.', 400);
+  }
+  const reason = TRUNC(motivo, 500);
+  if (decision === AREA_STATUS.NEGADA && reason.length < 3) {
+    throw buildError('Informe o motivo da negativa.', 400);
+  }
+
+  const pool = getMysqlPool();
+  const [upd] = await pool.query(
+    `UPDATE ${AREA_APPROVALS_TABLE}
+        SET status = ?, decided_by_email = ?, decided_by_name = ?, decided_at = NOW(), motivo = ?
+      WHERE id = ? AND status = 'pendente'`,
+    [decision, info.approverEmail, info.approverName, reason || null, info.approvalId],
+  );
+  if (upd.affectedRows !== 1) throw buildError('Esta área já foi decidida.', 409);
+  await pool.query(`UPDATE ${AREA_TOKENS_TABLE} SET used_at = NOW() WHERE id = ?`, [info.tokenId]);
+  const areasStatus = await recomputeAreasStatus(pool, info.protocol);
+
+  return {
+    protocol: info.protocol,
+    areaLabel: info.areaLabel,
+    decision,
+    motivo: reason || null,
+    areasStatus,
+    decidedByName: info.approverName,
+    decidedByEmail: info.approverEmail,
+    assignmentId: info.assignmentId,
+    titulo: info.gmud.titulo,
+  };
+}
+
+/** O Comitê aprova em nome de uma área que não respondeu, para a GMUD não ficar parada. */
+export async function overrideAreaApproval({ protocol, areaId, byName, byEmail }) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const proto = normalizePositiveInt(protocol);
+  const area = normalizePositiveInt(areaId);
+  if (!proto || !area) throw buildError('Protocolo ou área inválidos.', 400);
+  const [rows] = await pool.query(
+    `SELECT id, area_label, status FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol = ? AND area_id = ? LIMIT 1`,
+    [proto, area],
+  );
+  const row = rows?.[0];
+  if (!row) throw buildError('Aprovação da área não encontrada.', 404);
+  const [upd] = await pool.query(
+    `UPDATE ${AREA_APPROVALS_TABLE}
+        SET status = 'aprovada', decided_by_email = ?, decided_by_name = ?, decided_at = NOW(),
+            motivo = 'Aprovada pelo Comitê em nome da área'
+      WHERE id = ? AND status = 'pendente'`,
+    [toCleanString(byEmail) || null, toCleanString(byName) || null, row.id],
+  );
+  if (upd.affectedRows !== 1) throw buildError('Esta área já foi decidida.', 409);
+  const areasStatus = await recomputeAreasStatus(pool, proto);
+  return { protocol: proto, areaLabel: row.area_label, areasStatus };
 }
 
 // ─── Fluxogramas GMUD ───────────────────────────────────────────────────────
