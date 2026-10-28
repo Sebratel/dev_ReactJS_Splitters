@@ -72,12 +72,19 @@ services:
       # responde 503 "Automação de HSM não configurada".
       # Ex.: https://n8n-prod.sebratel.net.br/webhook/massiva-hsm-cx
       N8N_MASSIVA_HSM_WEBHOOK_URL: ${N8N_MASSIVA_HSM_WEBHOOK_URL:-}
-      # Aviso por e-mail quando o Comitê aprova uma GMUD (pessoas cadastradas nas áreas marcadas).
-      # Sem N8N_GMUD_APPROVAL_WEBHOOK_URL o aprovar funciona, mas ninguém é avisado.
+      # Aprovação por área: ao abrir a GMUD, o N8N envia a cada pessoa das áreas marcadas um e-mail
+      # com o link de aprovação. Sem N8N_GMUD_APPROVAL_WEBHOOK_URL a GMUD é registrada, mas ninguém é avisado.
       # Ex.: https://n8n-staging.sebratel.net.br/webhook/gmud-aprovacao
       N8N_GMUD_APPROVAL_WEBHOOK_URL: ${N8N_GMUD_APPROVAL_WEBHOOK_URL:-}
-      # URL pública da plataforma (link da GMUD no e-mail). Ex.: https://splitters-monitoring-staging.sebratel.net.br
+      # URL pública da plataforma (monta o link de aprovação). Ex.: https://splitters-monitoring-staging.sebratel.net.br
       APP_BASE_URL: ${APP_BASE_URL:-}
+      # Validade do link de aprovação, em dias (padrão 30).
+      GMUD_APPROVAL_TOKEN_TTL_DAYS: ${GMUD_APPROVAL_TOKEN_TTL_DAYS:-30}
+      # Cancelamento automático no Elleven quando uma área nega a GMUD (sem usuário logado, via Basic Auth
+      # do gateway). São as MESMAS variáveis do frontend; sem elas a GMUD fica negada e o Comitê cancela.
+      GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
+      GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
+      GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
       # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
