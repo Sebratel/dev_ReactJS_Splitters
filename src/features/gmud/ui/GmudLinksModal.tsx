@@ -10,6 +10,7 @@ import {
 import { setPendingGmudLink } from '@/features/gmud/lib/pendingGmudLink'
 import { isGmudDisponivel, type GmudListItem } from '@/features/gmud/model/gmud'
 import { GmudOpenMassivaPicker } from '@/features/gmud/ui/GmudOpenMassivaPicker'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 const FIELD =
   'w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
@@ -30,6 +31,7 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
   }
 
   const addMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível vincular a massiva'),
     mutationFn: (massivaProtocol: number) => linkMassivaToGmud(gmud.protocol, massivaProtocol),
     onSuccess: () => {
       setMassivaInput('')
@@ -37,6 +39,7 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
     },
   })
   const removeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível desvincular a massiva'),
     mutationFn: (massivaProtocol: number) => unlinkMassivaFromGmud(gmud.protocol, massivaProtocol),
     onSuccess: invalidate,
   })
@@ -125,11 +128,6 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
                 Vincular
               </button>
             </div>
-            {addMutation.isError ? (
-              <p className="mt-1 text-xs text-red-600 dark:text-red-300">
-                {addMutation.error instanceof Error ? addMutation.error.message : 'Falha ao vincular.'}
-              </p>
-            ) : null}
           </div>
 
           {/* Abrir nova vinculada */}

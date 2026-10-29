@@ -29,6 +29,7 @@ import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
 import { GmudEllevenStatusAlert } from '@/features/gmud/ui/GmudEllevenStatusAlert'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 /** Adapta o detalhe ao formato que os modais existentes (avaliar/vincular) já usam. */
 function toListItem(d: GmudDetail): GmudListItem {
@@ -133,6 +134,7 @@ export function GmudDetailScreen() {
   // Concluir (encerra no Elleven, status 4) ou Cancelar (status 8). Ambos exigem confirmação
   // e marcam o encerramento no nosso banco — o que torna a GMUD terminal (some os botões).
   const closeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível encerrar a GMUD'),
     mutationFn: async (mode: 'concluida' | 'cancelada') => {
       const data = query.data
       if (!data) return { aborted: true }
@@ -273,12 +275,6 @@ export function GmudDetailScreen() {
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
           </div>
-
-          {closeMutation.isError ? (
-            <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-              {closeMutation.error instanceof Error ? closeMutation.error.message : 'Falha ao encerrar a GMUD no Elleven.'}
-            </div>
-          ) : null}
 
           <GmudEllevenStatusAlert
             statusComite={d.request?.statusComite}

@@ -10,6 +10,7 @@ import {
 } from '@/features/gmud/lib/gmudSchedule'
 import { minDataProgramada } from '@/features/gmud/model/gmudForm'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 const FIELD =
   'w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
@@ -54,6 +55,7 @@ export function GmudRescheduleModal({
   const canSubmit = canReschedule && !encerrada && changed && isWindowValid(win) && !antesDoMinimo
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível reagendar a GMUD'),
     mutationFn: async (): Promise<Outcome> => {
       const saved = await rescheduleGmud({ voalleProtocol: item.voalleProtocol, ...win })
       const assignmentId = saved.assignmentId ?? item.assignmentId
@@ -130,9 +132,6 @@ export function GmudRescheduleModal({
 
           {encerrada ? <p className="text-xs text-amber-700 dark:text-amber-300">GMUD já encerrada no Elleven — não pode ser reagendada.</p> : null}
           {!canReschedule ? <p className="text-xs text-on-surface-variant">Só quem aprova GMUDs (Comitê) pode reagendar.</p> : null}
-          {mutation.isError ? (
-            <p className="text-xs text-red-600 dark:text-red-300">{mutation.error instanceof Error ? mutation.error.message : 'Falha ao reagendar.'}</p>
-          ) : null}
           {outcome?.kind === 'ok' ? <p className="text-xs text-emerald-700 dark:text-emerald-300">Reagendada e relato registrado no Elleven.</p> : null}
           {outcome?.kind === 'partial' ? (
             <p className="text-xs text-amber-700 dark:text-amber-300">Janela atualizada na plataforma, mas: {outcome.message}</p>

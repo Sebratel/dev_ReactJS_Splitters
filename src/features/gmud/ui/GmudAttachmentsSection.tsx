@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Image, Paperclip, Trash2, Upload, X } from 'lucide-react'
+import { FileText, Image, Paperclip, Trash2, Upload } from 'lucide-react'
 import {
   deleteGmudAttachment,
   fetchGmudAttachments,
@@ -11,6 +11,8 @@ import {
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
 
 const ALLOWED_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
 const MAX_MB = 10
@@ -85,7 +87,6 @@ export function GmudAttachmentsSection({ protocol, canUpload, canDelete }: Props
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
-  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const qKey = ['gmud', 'attachments', protocol]
 
@@ -100,14 +101,14 @@ export function GmudAttachmentsSection({ protocol, canUpload, canDelete }: Props
       uploadGmudAttachment(protocol, file, desc || undefined),
     onSuccess: () => {
       setDescription('')
-      setUploadError(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       qc.invalidateQueries({ queryKey: qKey })
     },
-    onError: (e: Error) => setUploadError(e.message),
+    onError: (error: Error) => showGmudError(error, 'Não foi possível enviar o anexo'),
   })
 
   const deleteMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o anexo'),
     mutationFn: (id: number) => deleteGmudAttachment(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qKey }),
   })
@@ -115,14 +116,13 @@ export function GmudAttachmentsSection({ protocol, canUpload, canDelete }: Props
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setUploadError(null)
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setUploadError('Tipo não permitido. Use PDF, PNG, JPG ou WEBP.')
+      showFeedbackDialog({ variant: 'warning', title: 'Tipo de arquivo não permitido', message: 'Use PDF, PNG, JPG ou WEBP.' })
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
     if (file.size > MAX_MB * 1024 * 1024) {
-      setUploadError(`Arquivo muito grande. Máximo: ${MAX_MB} MB.`)
+      showFeedbackDialog({ variant: 'warning', title: 'Arquivo muito grande', message: `O tamanho máximo é ${MAX_MB} MB por arquivo.` })
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
@@ -192,12 +192,6 @@ export function GmudAttachmentsSection({ protocol, canUpload, canDelete }: Props
             className="hidden"
             onChange={handleFileChange}
           />
-          {uploadError && (
-            <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950/30 dark:text-rose-400">
-              <X size={12} />
-              {uploadError}
-            </div>
-          )}
           <p className="text-[11px] text-on-surface-variant">
             PDF, PNG, JPG, WEBP · máximo {MAX_MB} MB por arquivo
           </p>

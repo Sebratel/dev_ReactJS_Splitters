@@ -12,6 +12,7 @@ import type { GmudPendingItem } from '@/features/gmud/api/gmudApprovals'
 import { GmudSistemasInternosCard, GmudSistemasExternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 const CARD =
   'rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
@@ -176,6 +177,7 @@ export function GmudApprovalQueue() {
   const currentUser = profile?.displayName || profile?.email || ''
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível registrar a decisão'),
     mutationFn: async ({ gmud, status }: { gmud: GmudPendingItem; status: GmudStatusComite }) => {
       const protocol = gmud.voalleProtocol
       if (protocol == null) throw new Error('GMUD sem protocolo.')
@@ -249,11 +251,6 @@ export function GmudApprovalQueue() {
 
   return (
     <div className="space-y-4">
-      {mutation.isError ? (
-        <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-          {mutation.error instanceof Error ? mutation.error.message : 'Falha ao registrar a decisão.'}
-        </div>
-      ) : null}
       {items.map((g) => (
         <PendingCard
           key={g.voalleProtocol ?? g.createdAt}

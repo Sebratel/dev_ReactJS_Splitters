@@ -4,6 +4,7 @@ import { Loader2, MessageSquarePlus, X } from 'lucide-react'
 import { sendGmudReport } from '@/features/gmud/api/gmudAgenda'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 /** Monta o corpo do relato com cabeçalho de autoria (quem/quando) + o texto do usuário. */
 function buildGmudReportDescription(text: string, user: string): string {
@@ -39,6 +40,7 @@ export function GmudReportModal({
   const currentUser = profile?.displayName || profile?.email || ''
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível enviar o relato'),
     mutationFn: async () => {
       if (assignmentId == null) {
         throw new Error('Não foi possível identificar o atendimento no Elleven (assignmentId) desta GMUD.')
@@ -90,11 +92,6 @@ export function GmudReportModal({
             <p className="text-xs text-amber-700 dark:text-amber-300">
               Sem atendimento identificado no Elleven — o relato não poderá ser enviado para este protocolo.
             </p>
-          ) : null}
-          {mutation.isError ? (
-            <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-800 dark:text-red-200">
-              {mutation.error instanceof Error ? mutation.error.message : 'Falha ao enviar o relato.'}
-            </div>
           ) : null}
         </div>
 

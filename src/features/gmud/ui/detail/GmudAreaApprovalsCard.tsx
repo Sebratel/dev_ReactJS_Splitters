@@ -4,6 +4,7 @@ import { overrideAreaApproval, type GmudAreaApproval, type GmudAreasStatus } fro
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: string; Icon: typeof Clock }> = {
   pendente: {
@@ -47,6 +48,7 @@ export function GmudAreaApprovalsCard({
   onChanged: () => void
 }) {
   const override = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível aprovar em nome da área'),
     mutationFn: (areaId: number) => overrideAreaApproval(protocol, areaId),
     onSuccess: onChanged,
   })
@@ -100,11 +102,6 @@ export function GmudAreaApprovalsCard({
         })}
       </ul>
 
-      {override.isError ? (
-        <p className="text-xs text-rose-600 dark:text-rose-300">
-          {override.error instanceof Error ? override.error.message : 'Falha ao aprovar em nome da área.'}
-        </p>
-      ) : null}
     </section>
   )
 }

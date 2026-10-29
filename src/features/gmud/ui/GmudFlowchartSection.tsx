@@ -41,6 +41,7 @@ import {
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 // ---------------------------------------------------------------------------
 // Mermaid CDN loader (carregado uma vez, reutilizado)
@@ -185,6 +186,7 @@ function AIGeneratePanel({
   const [open, setOpen] = useState(false)
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível gerar o fluxograma'),
     mutationFn: () => generateGmudFlowchartWithAI(protocol, description, gmudContext),
     onSuccess: ({ flowchart, warnings }) => {
       onGenerated(flowchart, warnings)
@@ -234,11 +236,6 @@ function AIGeneratePanel({
               {description.length}/8000 · A IA não inventa etapas — se faltar info, sinaliza no fluxograma.
             </p>
           </div>
-          {mutation.isError ? (
-            <p className="text-xs text-rose-600 dark:text-rose-300">
-              {mutation.error instanceof Error ? mutation.error.message : 'Falha ao gerar o fluxograma.'}
-            </p>
-          ) : null}
           <button
             type="button"
             disabled={mutation.isPending || description.trim().length < 20}
@@ -262,6 +259,7 @@ function AIAssistPanel({ protocol, description, gmudContext }: { protocol: numbe
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível usar o assistente'),
     mutationFn: (type: AssistType) => assistGmudFlowchart(protocol, type, description, gmudContext),
     onSuccess: ({ result: r }) => setResult(r),
   })
@@ -295,9 +293,6 @@ function AIAssistPanel({ protocol, description, gmudContext }: { protocol: numbe
           </button>
         ))}
       </div>
-      {mutation.isError ? (
-        <p className="text-xs text-rose-600 dark:text-rose-300">{mutation.error instanceof Error ? mutation.error.message : 'Falha.'}</p>
-      ) : null}
       {result ? (
         <div className="space-y-1">
           <AIBadge />
@@ -683,6 +678,7 @@ export function GmudFlowchartSection({
   const flowchart: GmudFlowchart | null = data ?? null
 
   const saveMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível salvar o fluxograma'),
     mutationFn: ({ source, origin }: { source: string; origin: 'manual' | 'imported' }) =>
       saveGmudFlowchart(protocol, source, { origin }),
     onSuccess: () => {
@@ -693,6 +689,7 @@ export function GmudFlowchartSection({
   })
 
   const deleteMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o fluxograma'),
     mutationFn: () => deleteGmudFlowchart(protocol),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'flowchart', protocol] })
@@ -864,9 +861,6 @@ export function GmudFlowchartSection({
           </div>
           <MermaidEditor value={editSource} onChange={setEditSource} />
           {editSource.trim() ? <MermaidPreview source={editSource} /> : null}
-          {saveMutation.isError ? (
-            <p className="text-xs text-rose-600 dark:text-rose-300">{saveMutation.error instanceof Error ? saveMutation.error.message : 'Falha ao salvar.'}</p>
-          ) : null}
         </div>
       ) : null}
 

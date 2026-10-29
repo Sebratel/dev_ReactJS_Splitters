@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useToastStore } from '@/shared/store/toastStore'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Zap } from 'lucide-react'
@@ -42,6 +41,8 @@ import {
 } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
 
 // ---------------------------------------------------------------------------
 // Design tokens
@@ -535,14 +536,12 @@ function SistemasExternosFields({
 // ---------------------------------------------------------------------------
 export function GmudNewScreen() {
   const navigate = useNavigate()
-  const pushToast = useToastStore((s) => s.push)
   const profile = useAccessAuthStore((s) => s.profile)
   const [form, setForm] = useState<GmudFormState>(() =>
     emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
   )
   const [siData, setSiData] = useState<GmudSistemasInternosData>(emptyGmudSistemasInternosData)
   const [seData, setSeData] = useState<GmudSistemasExternosData>(emptyGmudSistemasExternosData)
-  const [missing, setMissing] = useState<string[]>([])
   const idempotencyKeyRef = useRef<string | null>(null)
 
   const { data: configLists, isLoading: listsLoading } = useQuery({
@@ -570,6 +569,7 @@ export function GmudNewScreen() {
     : null
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível registrar a GMUD'),
     mutationFn: async () => {
       if (idempotencyKeyRef.current === null) {
         idempotencyKeyRef.current =
@@ -620,8 +620,16 @@ export function GmudNewScreen() {
     },
     onSuccess: (protocol) => {
       idempotencyKeyRef.current = null
-      pushToast(`GMUD ${protocol} registrada com sucesso!`, 'success')
       navigate('/gmud')
+      showFeedbackDialog({
+        variant: 'success',
+        title: `GMUD ${protocol} registrada`,
+        message:
+          form.tipo === 'Emergencial'
+            ? 'O protocolo foi aberto no Elleven e a GMUD segue direto para o Comitê.'
+            : 'O protocolo foi aberto no Elleven e registrado na plataforma. As áreas envolvidas vão receber por e-mail o pedido de aprovação.',
+        secondary: { label: 'Ver GMUD', onClick: () => navigate(`/gmud/${protocol}`) },
+      })
     },
   })
 
@@ -631,8 +639,16 @@ export function GmudNewScreen() {
       form.categoria === 'sistemas_internos' ? siData : null,
       form.categoria === 'sistemas_externos' ? seData : null,
     )
-    setMissing(miss)
-    if (miss.length === 0) mutation.mutate()
+    if (miss.length > 0) {
+      showFeedbackDialog({
+        variant: 'warning',
+        title: 'Corrija antes de enviar',
+        message: 'Ajuste os pontos abaixo e envie novamente.',
+        items: miss,
+      })
+      return
+    }
+    mutation.mutate()
   }
 
   const canSubmit = !mutation.isPending
@@ -764,19 +780,6 @@ export function GmudNewScreen() {
             (GMUD)" · Equipe CGR.
           </p>
         </div>
-
-        {missing.length > 0 ? (
-          <div className="rounded-xl border border-amber-300/70 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-            <p className="font-semibold">Corrija antes de enviar:</p>
-            <p className="mt-1">{missing.join(' · ')}</p>
-          </div>
-        ) : null}
-
-        {mutation.isError ? (
-          <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
-            {mutation.error instanceof Error ? mutation.error.message : 'Falha ao registrar a GMUD.'}
-          </div>
-        ) : null}
 
         <div className="flex items-center justify-end gap-3 pb-6">
           <button

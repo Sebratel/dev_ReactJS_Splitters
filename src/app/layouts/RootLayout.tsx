@@ -8,6 +8,7 @@ import { ErrorState } from '@/shared/ui/states/ErrorState'
 import { LoadingState } from '@/shared/ui/states/LoadingState'
 import { Sidebar } from './Sidebar'
 import { ToastStack } from '@/shared/ui/ToastStack'
+import { FeedbackDialogHost } from '@/shared/ui/FeedbackDialogHost'
 
 export function RootLayout() {
   const globalLoading = useAppUiStore((s) => s.globalLoading)
@@ -99,6 +100,7 @@ export function RootLayout() {
         </main>
       </div>
       <ToastStack />
+      <FeedbackDialogHost />
     </div>
   )
 }

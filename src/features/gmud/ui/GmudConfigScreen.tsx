@@ -16,6 +16,7 @@ import {
 } from '@/features/gmud/api/gmudTeamApprovers'
 import { listSplittersUsers } from '@/features/access/api/firestoreUsers'
 import type { SplittersUserProfile } from '@/features/access/model/access.types'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
@@ -74,6 +75,7 @@ function TeamApproversModal({
       })
 
   const addMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível adicionar o aprovador'),
     mutationFn: () => {
       const user = allUsers.find((u) => u.email === selectedEmail)
       return addTeamApprover(areaItem.id, selectedEmail, user?.displayName ?? null)
@@ -86,6 +88,7 @@ function TeamApproversModal({
   })
 
   const removeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o aprovador'),
     mutationFn: (id: number) => removeTeamApprover(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['gmud-team-approvers'] })
@@ -159,11 +162,6 @@ function TeamApproversModal({
           {/* Adicionar aprovador */}
           <div className="border-t border-neutral-200/60 dark:border-white/6 pt-3 space-y-2">
             <p className="text-xs font-semibold text-on-surface-variant">Adicionar aprovador</p>
-            {addMutation.isError ? (
-              <p className="text-xs text-error">
-                {addMutation.error instanceof Error ? addMutation.error.message : 'Erro ao adicionar.'}
-              </p>
-            ) : null}
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
@@ -249,6 +247,7 @@ function ListPanel({
   const hasApprovers = listKey === 'areas'
 
   const addMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível adicionar o item'),
     mutationFn: () => addGmudConfigItem(listKey, newLabel.trim()),
     onSuccess: () => {
       setNewLabel('')
@@ -258,6 +257,7 @@ function ListPanel({
   })
 
   const removeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o item'),
     mutationFn: (id: number) => removeGmudConfigItem(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['gmud-config-lists'] })
@@ -326,11 +326,6 @@ function ListPanel({
         </ul>
 
         <div className="border-t border-neutral-200/70 dark:border-white/8 px-4 py-3">
-          {addMutation.isError ? (
-            <p className="mb-2 text-xs text-error">
-              {addMutation.error instanceof Error ? addMutation.error.message : 'Erro ao adicionar.'}
-            </p>
-          ) : null}
           <form
             className="flex items-center gap-2"
             onSubmit={(e) => {

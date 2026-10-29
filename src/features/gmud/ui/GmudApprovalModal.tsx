@@ -7,6 +7,7 @@ import { sendGmudReport } from '@/features/gmud/api/gmudAgenda'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
 /** Relato da decisão do Comitê para registrar no protocolo do Elleven. */
 function buildComiteRelato(decisao: 'Aprovada' | 'Negada', user: string, dataCab: string, rnc: string, obs: string): string {
@@ -54,6 +55,7 @@ export function GmudApprovalModal({
   const jaEncerrado = Boolean(gmud.extra?.ellevenEncerradoEm)
 
   const mutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível salvar a decisão do Comitê'),
     mutationFn: async () => {
       // A avaliação do Comitê é um ato único (Aprovar/Negar). A conclusão e o cancelamento
       // têm botões próprios no detalhe. Aqui só "Negar" encerra o protocolo (cancelamento).
@@ -185,11 +187,6 @@ export function GmudApprovalModal({
             />
           </label>
 
-          {mutation.isError ? (
-            <div className="rounded-lg border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-800 dark:text-red-200">
-              {mutation.error instanceof Error ? mutation.error.message : 'Falha ao salvar.'}
-            </div>
-          ) : null}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-neutral-200/70 dark:border-white/10 p-4">
