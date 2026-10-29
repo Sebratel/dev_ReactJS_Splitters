@@ -179,7 +179,7 @@ services:
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
       # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados). Cada ambiente chama o gateway do PROPRIO
-      # ambiente: cada ambiente usa o gateway do PROPRIO ambiente (enderecos em .env.example).
+      # ambiente (enderecos em .env.example).
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
       # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh. Use o consumidor proprio deste sistema
       # NO MESMO AMBIENTE do GATEWAY_ORIGIN (senha no Passbolt, so no Environment da stack); nunca admin/admin.
