@@ -15,7 +15,6 @@ import {
   FileText,
   GitFork,
   Loader2,
-  Maximize2,
   Minus,
   Plus,
   RotateCcw,
@@ -354,23 +353,6 @@ function AttachmentSlideContent({ item }: { item: GmudAttachment }) {
   )
 }
 
-function scaleSvgToFill(container: HTMLDivElement) {
-  const svg = container.querySelector('svg')
-  if (!svg) return
-  // Garante viewBox antes de remover dimensões fixas
-  if (!svg.getAttribute('viewBox')) {
-    const w = svg.getAttribute('width') ?? svg.getBoundingClientRect().width
-    const h = svg.getAttribute('height') ?? svg.getBoundingClientRect().height
-    svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
-  }
-  // Remove px fixos para que width/height CSS controlem o tamanho
-  svg.removeAttribute('width')
-  svg.removeAttribute('height')
-  svg.style.width = '100%'
-  svg.style.height = 'auto'
-  svg.style.display = 'block'
-}
-
 const ZOOM_STEP = 0.15
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 5
@@ -677,13 +659,11 @@ export function GmudFlowchartSection({
   closed,
   gmudContext,
   description: gmudDescription,
-  gmudTitle,
 }: {
   protocol: number
   closed: boolean
   gmudContext?: string
   description?: string
-  gmudTitle?: string
 }) {
   const queryClient = useQueryClient()
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
@@ -730,7 +710,7 @@ export function GmudFlowchartSection({
     saveMutation.mutate({ source: editSource, origin: 'manual' })
   }
 
-  const handleAIGenerated = useCallback((f: GmudFlowchart, warnings: string[]) => {
+  const handleAIGenerated = useCallback((_flowchart: GmudFlowchart, warnings: string[]) => {
     setAiWarnings(warnings)
     void queryClient.invalidateQueries({ queryKey: ['gmud', 'flowchart', protocol] })
     void queryClient.invalidateQueries({ queryKey: ['gmud', 'detail', protocol] })

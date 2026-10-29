@@ -304,7 +304,6 @@ export function GmudDetailScreen() {
               <GmudFlowchartSection
                 protocol={protocol}
                 closed={closed}
-                gmudTitle={title}
                 description={d.request?.assunto ?? undefined}
                 gmudContext={
                   d.request
