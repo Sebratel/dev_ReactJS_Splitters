@@ -109,6 +109,9 @@ jobs:
       VITE_APM_ENVIRONMENT: ci
       BACKEND_PORT: '3004'
       FRONTEND_PORT: '3177'
+      # Sem GATEWAY_ORIGIN o entrypoint do frontend gera `proxy_pass` vazio e o nginx recusa subir.
+      # O smoke não chama o gateway; o endereço só precisa existir (gateway de staging).
+      GATEWAY_ORIGIN: https://api-gateway-bff-staging.sebratel.net.br
     steps:
       - uses: actions/checkout@v7
 
