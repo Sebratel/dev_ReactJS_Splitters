@@ -1,4 +1,4 @@
-name: nexaview
+name: dev_reactjs_splitters
 
 # Stack: backend + frontend (nginx:alpine) sem proxy de borda no compose.
 # O browser acede ao frontend em FRONTEND_PORT (predefinido 3177) e opcionalmente ao backend em BACKEND_PORT.
@@ -10,7 +10,6 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: react-backend-portainer
     mem_limit: 1.5g
     memswap_limit: 1.5g
     environment:
@@ -74,9 +73,9 @@ services:
       N8N_MASSIVA_HSM_WEBHOOK_URL: ${N8N_MASSIVA_HSM_WEBHOOK_URL:-}
       # Aprovação por área: ao abrir a GMUD, o N8N envia a cada pessoa das áreas marcadas um e-mail
       # com o link de aprovação. Sem N8N_GMUD_APPROVAL_WEBHOOK_URL a GMUD é registrada, mas ninguém é avisado.
-      # Ex.: https://n8n-staging.sebratel.net.br/webhook/gmud-aprovacao
+      # Ex.: https://n8n-<ambiente>.sebratel.net.br/webhook/gmud-aprovacao
       N8N_GMUD_APPROVAL_WEBHOOK_URL: ${N8N_GMUD_APPROVAL_WEBHOOK_URL:-}
-      # URL pública da plataforma (monta o link de aprovação). Ex.: https://splitters-monitoring-staging.sebratel.net.br
+      # URL pública da plataforma (monta o link de aprovação). Ex.: https://<dominio-do-ambiente>.sebratel.net.br
       APP_BASE_URL: ${APP_BASE_URL:-}
       # Validade do link de aprovação, em dias (padrão 30).
       GMUD_APPROVAL_TOKEN_TTL_DAYS: ${GMUD_APPROVAL_TOKEN_TTL_DAYS:-30}
@@ -173,7 +172,6 @@ services:
         - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
         - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
         - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
-    container_name: react-frontend-portainer
     mem_limit: 256m
     memswap_limit: 256m
     environment:
@@ -181,7 +179,7 @@ services:
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
       # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados). Cada ambiente chama o gateway do PROPRIO
-      # ambiente: staging -> https://api-gateway-bff-staging.sebratel.net.br; producao -> https://api-gateway-bff.sebratel.net.br.
+      # ambiente (enderecos em .env.example).
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
       # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh. Use o consumidor proprio deste sistema
       # NO MESMO AMBIENTE do GATEWAY_ORIGIN (senha no Passbolt, so no Environment da stack); nunca admin/admin.
