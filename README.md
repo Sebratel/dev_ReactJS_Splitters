@@ -21,6 +21,15 @@ O deploy é feito pelo **Portainer**, criando a stack a partir do Git e apontand
 - No stack, abra **Environment variables** e defina as chaves da secção *Docker* de [`.env.example`](.env.example) (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.). O compose passa-as como *build args* para o frontend.
 - Pode usar **Load variables from .env file** e colar o conteúdo de um `.env` completo (equivalente ao que usaria em `docker compose --env-file`).
 
+### Deploy automático (só staging)
+
+Um *push* na branch **`staging`** roda o CI (`.github/workflows/ci.yml`); com o CI inteiro verde, o job **`deploy-staging`** chama o *webhook* da stack no Portainer, que faz *pull* do Git e reconstrói as imagens. **Produção (`main`) continua manual.**
+
+- No Portainer, abra a stack de staging e ative o **webhook** da atualização a partir do Git; copie o endereço.
+- No GitHub, em *Settings → Secrets and variables → Actions*, crie o segredo **`PORTAINER_STAGING_WEBHOOK_URL`** com esse endereço. Sem o segredo o job só avisa e termina.
+- O runner do GitHub precisa alcançar o Portainer. Se ele só for acessível pela rede interna, use um *runner* auto-hospedado ou a verificação periódica do Git do próprio Portainer.
+- Cada deploy reconstrói backend e frontend; as tabelas novas do BFF são criadas na primeira chamada (migração idempotente em `ensureTable`).
+
 ### Build da imagem (`Dockerfile.frontend`)
 
 - A imagem corre **`vite build`** (bundle) e **não** `tsc -b`, para evitar falhas difíceis de reproduzir fora do Docker. O typecheck continua em **`npm run build`** e **`npm run typecheck`** antes de merge/deploy.

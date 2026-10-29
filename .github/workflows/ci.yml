@@ -168,3 +168,43 @@ jobs:
             exit 1
           fi
           echo "Tudo verde."
+
+  # Deploy automático SÓ da staging. Depois do CI inteiro verde, avisa o Portainer (webhook da
+  # stack), que faz pull do Git e reconstrói as imagens. Produção (main) segue manual.
+  # O endereço do webhook é o segredo PORTAINER_STAGING_WEBHOOK_URL; sem ele o job apenas avisa
+  # e termina, para não travar o CI. O endereço nunca é impresso (o GitHub mascara segredos).
+  deploy-staging:
+    name: Deploy staging (Portainer)
+    needs: [ci-ok]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    # Um deploy por vez e nunca cancelado no meio: o webhook já disparado reconstrói de qualquer jeito.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - name: Acionar o webhook da stack no Portainer
+        env:
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_STAGING_WEBHOOK_URL }}
+        run: |
+          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
+            echo "::warning::Segredo PORTAINER_STAGING_WEBHOOK_URL não configurado; deploy automático ignorado."
+            exit 0
+          fi
+          # Confere o status HTTP de propósito (sem depender do código de saída do curl com --retry)
+          # e não imprime o endereço nem o erro do curl, para o segredo não vazar em log.
+          for tentativa in 1 2 3; do
+            status=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$PORTAINER_WEBHOOK_URL") || true
+            case "$status" in
+              2??)
+                echo "Webhook do Portainer acionado (HTTP $status) para ${GITHUB_SHA::7}."
+                exit 0
+                ;;
+            esac
+            echo "Tentativa $tentativa falhou (HTTP ${status:-000})."
+            sleep 5
+          done
+          echo "::error::Não foi possível acionar o webhook do Portainer após 3 tentativas."
+          exit 1
