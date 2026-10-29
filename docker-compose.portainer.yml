@@ -180,9 +180,11 @@ services:
       # Proxy do BFF: o SPA chama `/api/...` e o nginx encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
-      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados).
+      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados). Cada ambiente chama o gateway do PROPRIO
+      # ambiente: staging -> https://api-gateway-bff-staging.sebratel.net.br; producao -> https://api-gateway-bff.sebratel.net.br.
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
-      # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh.
+      # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh. Use o consumidor proprio deste sistema
+      # NO MESMO AMBIENTE do GATEWAY_ORIGIN (senha no Passbolt, so no Environment da stack); nunca admin/admin.
       GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
       GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
       # Opcional: proxy `/__autoisp/...` (deixe vazio se não usado).
