@@ -5,7 +5,7 @@ name: CI
 # imagens e sobe a stack: um Dockerfile partido só se descobriria em produção.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
     branches: [main, staging]
   workflow_dispatch:
@@ -20,6 +20,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Regras de nome e de ambiente (nome da stack = repositorio em minusculas, sem container_name,
+  # servicos pelo papel, gateway do proprio ambiente). Ver cicd-deploy-backend/references/validacoes-ci.md.
+  validacoes:
+    name: Validacoes (nomes do compose e gateway por ambiente)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: pip install pyyaml
+
+      - name: Nomes do compose e gateway do ambiente
+        run: |
+          ambiente=staging
+          [ "${{ github.base_ref || github.ref_name }}" = "main" ] && ambiente=production
+          python3 .github/scripts/validate-compose.py --repo "${{ github.event.repository.name }}"             --env "$ambiente" --exceptions .github/compose-exceptions.txt docker-compose.portainer.yml
+
   web:
     name: Frontend — lint, tipos, testes, build
     runs-on: ubuntu-latest
@@ -156,13 +173,13 @@ jobs:
     # "CI" para não colidir com o nome do workflow — no ecrã do GitHub ficavam dois "CI".
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [web, bff, imagem]
+    needs: [validacoes, web, bff, imagem]
     if: always()
     timeout-minutes: 5
     steps:
       - name: Resultado agregado
         run: |
-          echo "web=${{ needs.web.result }} bff=${{ needs.bff.result }} imagem=${{ needs.imagem.result }}"
+          echo "validacoes=${{ needs.validacoes.result }} web=${{ needs.web.result }} bff=${{ needs.bff.result }} imagem=${{ needs.imagem.result }}"
           if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
             echo "::error::Pelo menos um job não passou."
             exit 1

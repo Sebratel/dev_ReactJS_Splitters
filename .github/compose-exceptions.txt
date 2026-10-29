@@ -1,0 +1,2 @@
+# Pendencias de migracao ja existentes (uma por linha): <arquivo>:<regra>[:<servico>]  # motivo
+# Vazio: nenhuma pendencia. Formato em cicd-deploy-backend/scripts/compose-exceptions.exemplo.txt
