@@ -5645,7 +5645,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
           ON client.id = contract.client_id
       INNER JOIN insignias insig
           ON insig.id = client.insignia_id
-      WHERE site.title = $1
+      WHERE UPPER(TRIM(site.title)) = UPPER(TRIM($1))
         AND LOWER(TRIM(COALESCE(insig.title, ''))) = ANY($2::text[])
         AND client.cell_phone_1 IS NOT NULL
         AND TRIM(client.cell_phone_1) != ''
@@ -5667,7 +5667,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
         base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]",
         base."PORTA[SPLT.PRIMARIO]"
       FROM (${SPLITTERS_BASE_QUERY}) base
-      WHERE base."SITE" = $1
+      WHERE UPPER(TRIM(base."SITE")) = UPPER(TRIM($1))
         AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $2
         AND base."ID CONEXAO[CLIENTE]" IS NOT NULL
         AND base."CORPORATIVO" IS TRUE
