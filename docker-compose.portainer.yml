@@ -75,6 +75,9 @@ services:
       # com o link de aprovação. Sem N8N_GMUD_APPROVAL_WEBHOOK_URL a GMUD é registrada, mas ninguém é avisado.
       # Ex.: https://n8n-<ambiente>.sebratel.net.br/webhook/gmud-aprovacao
       N8N_GMUD_APPROVAL_WEBHOOK_URL: ${N8N_GMUD_APPROVAL_WEBHOOK_URL:-}
+      # Segredo do N8N para chamar o backend (GET /api/gmud/corporate-hsm-preview, cabeçalho x-internal-secret).
+      # Sem ele o endpoint responde sempre 401. Defina um valor próprio por ambiente na stack.
+      N8N_INTERNAL_SECRET: ${N8N_INTERNAL_SECRET:-}
       # URL pública da plataforma (monta o link de aprovação). Ex.: https://<dominio-do-ambiente>.sebratel.net.br
       APP_BASE_URL: ${APP_BASE_URL:-}
       # Validade do link de aprovação, em dias (padrão 30).
