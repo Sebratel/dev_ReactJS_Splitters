@@ -48,12 +48,18 @@ else
   > "$AUTOISP_CONF"
 fi
 
-# ── 3. Substituir variáveis no template principal ─────────────────────────────
+# ── 3. Exigir GATEWAY_ORIGIN (sem ele o nginx.conf gerado é inválido) ────────
+if [ -z "$GATEWAY_ORIGIN" ]; then
+  echo "[entrypoint] ERRO: GATEWAY_ORIGIN não definido (ex.: https://host-do-gateway). Container não iniciado." >&2
+  exit 1
+fi
+
+# ── 4. Substituir variáveis no template principal ─────────────────────────────
 envsubst '${BACKEND_ORIGIN} ${GATEWAY_ORIGIN}' \
   < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 echo "[entrypoint] nginx.conf gerado — BACKEND: ${BACKEND_ORIGIN:-n/a} | GATEWAY: ${GATEWAY_ORIGIN:-n/a}"
 
-# ── 4. Validar config e iniciar nginx ─────────────────────────────────────────
+# ── 5. Validar config e iniciar nginx ─────────────────────────────────────────
 nginx -t
 exec nginx -g 'daemon off;'
