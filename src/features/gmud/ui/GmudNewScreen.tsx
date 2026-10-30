@@ -24,6 +24,7 @@ import {
   GMUD_RECURSO_PAPEIS,
   GMUD_SIM_NAO,
   GMUD_TIPO_INDISPONIBILIDADE_OPTIONS,
+  redeExternaCategoriaData,
   GMUD_TIPO_OPTIONS,
   validateGmudForm,
   minDataProgramada,
@@ -34,6 +35,8 @@ import {
   type GmudSistemasExternosData,
 } from '@/features/gmud/model/gmudForm'
 import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
+import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
+import { emptyEscopoRede, hasEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import {
   buildGmudDescription,
@@ -229,11 +232,20 @@ function RedeExternaFields({
           <textarea className={cn(FIELD, 'min-h-[90px]')} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
         </Field>
         <Field label="POP/Site" required>
-          <GmudPopSiteField className={FIELD} value={form.popSite} onChange={(v) => set('popSite', v)} />
+          <GmudPopSiteField
+            className={FIELD}
+            value={form.popSite}
+            onChange={(v) => {
+              set('popSite', v)
+              // O afunilamento pertence ao site escolhido: trocar o site descarta a escolha anterior.
+              if (hasEscopoRede(form.escopoRede)) set('escopoRede', emptyEscopoRede())
+            }}
+          />
         </Field>
         <Field label="Risco(s) da não implementação" required>
           <input className={FIELD} value={form.riscoNaoImplementacao} onChange={(e) => set('riscoNaoImplementacao', e.target.value)} />
         </Field>
+        <GmudEscopoRedeField popSite={form.popSite} value={form.escopoRede} onChange={(v) => set('escopoRede', v)} />
       </Section>
 
       <div className={CARD}>
@@ -270,6 +282,19 @@ function RedeExternaFields({
             {GMUD_SIM_NAO.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </Field>
+        {form.impactoParada === 'Sim' ? (
+          <>
+            <Field label="Indisponibilidade parcial ou total">
+              <select className={FIELD} value={form.tipoIndisponibilidade} onChange={(e) => set('tipoIndisponibilidade', e.target.value)}>
+                <option value="">Escolher…</option>
+                {GMUD_TIPO_INDISPONIBILIDADE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+            <Field label="Duração estimada">
+              <input className={FIELD} value={form.duracaoEstimada} onChange={(e) => set('duracaoEstimada', e.target.value)} placeholder="Ex.: 30 minutos, 2 horas" />
+            </Field>
+          </>
+        ) : null}
       </Section>
 
       <Section title="Execução">
@@ -287,7 +312,7 @@ function RedeExternaFields({
       <div className={CARD}>
         <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
         <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
-          Áreas marcadas como Executor ou Validador aprovam a GMUD antes do Comitê (basta uma pessoa por área). N/A não aprova.
+          Áreas marcadas como Executor ou Validador aprovam a GMUD (basta uma pessoa por área; com todas as áreas aprovadas, a GMUD fica aprovada). N/A não aprova.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -566,7 +591,7 @@ export function GmudNewScreen() {
   const activeCategoriaData =
     form.categoria === 'sistemas_internos' ? siData
     : form.categoria === 'sistemas_externos' ? seData
-    : null
+    : redeExternaCategoriaData(form)
 
   const mutation = useMutation({
     onError: (error) => showGmudError(error, 'Não foi possível registrar a GMUD'),
@@ -654,7 +679,7 @@ export function GmudNewScreen() {
   const canSubmit = !mutation.isPending
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1100px] space-y-4">
+    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
       <AppPageHeader
         badge="Gestão de Mudança de Rede"
         title="Abrir GMUD"
@@ -700,12 +725,13 @@ export function GmudNewScreen() {
       </div>
 
       <form
-        className="space-y-4"
+        className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]"
         onSubmit={(e) => {
           e.preventDefault()
           if (canSubmit) handleSubmit()
         }}
       >
+        <div className="min-w-0 space-y-4">
         {/* Campos comuns — Identificação + Solicitante */}
         <CamposComuns form={form} set={set} categoria={form.categoria} />
 
@@ -753,7 +779,10 @@ export function GmudNewScreen() {
 
         {/* Observações — comum a todas as categorias */}
         <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
+        </div>
 
+        {/* Coluna lateral: pré-visualização + envio (no celular fica abaixo do formulário) */}
+        <aside className="min-w-0 space-y-4 lg:sticky lg:top-20">
         {/* Pré-visualização da máscara */}
         <div className={CARD}>
           <p className="mb-2 text-sm font-bold text-on-surface">
@@ -768,7 +797,7 @@ export function GmudNewScreen() {
             )}
           </p>
           <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant/70">Descrição (máscara)</p>
-          <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-container-low p-3 font-mono text-xs leading-relaxed text-on-surface">
+          <pre className="mt-1 max-h-[45vh] overflow-auto whitespace-pre-wrap rounded-lg bg-surface-container-low p-3 font-mono text-xs leading-relaxed text-on-surface">
             {buildGmudDescription(
               form,
               form.categoria === 'sistemas_internos' ? siData : null,
@@ -781,7 +810,7 @@ export function GmudNewScreen() {
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pb-6">
+        <div className="flex flex-wrap items-center justify-end gap-3 pb-6">
           <button
             type="button"
             onClick={() => navigate('/gmud')}
@@ -802,6 +831,7 @@ export function GmudNewScreen() {
             {mutation.isPending ? 'Abrindo no Elleven…' : 'Abrir GMUD no Elleven'}
           </button>
         </div>
+        </aside>
       </form>
     </div>
   )

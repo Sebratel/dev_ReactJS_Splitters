@@ -33,6 +33,8 @@ export type AreaApprovalInfo = {
     categoria: string
     descricao: string
     popSite: string
+    /** Abrangência na rede já formatada (ponto de acesso · slot · PON · splitter); vazio = site inteiro. */
+    escopoRede?: string
     solicitante: string
     dataInicio: string
     horaInicio: string
@@ -46,6 +48,7 @@ export type AreaApprovalOutcome = {
   area: string
   areasStatus: GmudAreasStatus
   canceladoNoElleven: boolean | null
+  gmudAprovada?: boolean
 }
 
 async function parse<T>(response: Response, fallback: string): Promise<T> {

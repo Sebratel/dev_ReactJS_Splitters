@@ -84,6 +84,7 @@ function Summary({ info }: { info: AreaApprovalInfo }) {
         <Row label="Categoria" value={categoria} />
         <Row label="Janela de execução" value={janela} />
         <Row label="POP / Site" value={g.popSite} />
+        <Row label="Abrangência na rede" value={g.escopoRede ?? ''} />
         <Row label="Solicitante" value={g.solicitante} />
       </dl>
       {g.descricao.trim() !== '' ? (
@@ -100,7 +101,9 @@ function Outcome({ outcome }: { outcome: AreaApprovalOutcome }) {
   if (outcome.decision === 'aprovada') {
     return (
       <Notice tone="success" title="Aprovação registrada">
-        Obrigado. Quando todas as áreas aprovarem, a GMUD segue para o Comitê.
+        {outcome.gmudAprovada === true
+          ? 'Obrigado. Todas as áreas aprovaram: a GMUD está aprovada.'
+          : 'Obrigado. Quando todas as áreas aprovarem, a GMUD fica aprovada.'}
       </Notice>
     )
   }

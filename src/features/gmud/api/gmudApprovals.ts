@@ -1,6 +1,6 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
-import type { GmudRecursoPapel, GmudSistemasInternosData, GmudSistemasExternosData } from '@/features/gmud/model/gmudForm'
+import type { GmudRecursoPapel, GmudSistemasInternosData, GmudSistemasExternosData, GmudRedeExternaImpactoData } from '@/features/gmud/model/gmudForm'
 
 /** GMUD pendente de aprovação — escopo completo (do nosso banco) para o Comitê avaliar. */
 export type GmudPendingItem = {
@@ -10,8 +10,8 @@ export type GmudPendingItem = {
   assunto: string | null
   /** Categoria da GMUD: 'rede_externa' | 'sistemas_internos' | 'sistemas_externos'. Null = legado (RE). */
   categoria: string | null
-  /** Campos específicos por categoria. Null para Rede Externa e GMUDs legadas. */
-  categoriaData: GmudSistemasInternosData | GmudSistemasExternosData | null
+  /** Campos específicos por categoria. Na Rede Externa, só o impacto de parada (quando informado). */
+  categoriaData: GmudSistemasInternosData | GmudSistemasExternosData | GmudRedeExternaImpactoData | null
   titulo: string | null
   descricao: string | null
   popSite: string | null

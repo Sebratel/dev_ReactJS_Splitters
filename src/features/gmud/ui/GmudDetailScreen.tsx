@@ -20,8 +20,8 @@ import { GmudAreaApprovalsCard } from '@/features/gmud/ui/detail/GmudAreaApprova
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
 import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
 import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
-import { GmudSistemasExternosCard, GmudSistemasInternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
-import type { GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
+import { GmudRedeExternaImpactoCard, GmudSistemasExternosCard, GmudSistemasInternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
+import type { GmudRedeExternaImpactoData, GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import { updateGmudApproval } from '@/features/gmud/api/updateGmudApproval'
 import { gmudEncerrada, gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
@@ -188,7 +188,7 @@ export function GmudDetailScreen() {
   const aguardandoAreas = statusAreas === 'pendente'
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1280px] space-y-4">
+    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
       <AppPageHeader
         badge={`GMUD ${protocol}`}
         title={title}
@@ -286,6 +286,9 @@ export function GmudDetailScreen() {
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
               <GmudScopeCard request={d.request} voalleDescription={d.voalle.description} />
+              {(d.request?.categoria ?? 'rede_externa') === 'rede_externa' && d.request?.categoriaData ? (
+                <GmudRedeExternaImpactoCard data={d.request.categoriaData as GmudRedeExternaImpactoData} />
+              ) : null}
               {d.request?.categoria === 'sistemas_internos' && d.request.categoriaData ? (
                 <GmudSistemasInternosCard data={d.request.categoriaData as GmudSistemasInternosData} />
               ) : null}

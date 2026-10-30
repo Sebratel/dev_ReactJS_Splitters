@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
+import { formatEscopoRede, normalizeEscopoRede } from './lib/gmudEscopoRede.js';
 import {
   AREA_STATUS,
   computeAreasStatus,
@@ -479,6 +480,10 @@ export async function setGmudApproval(input) {
     }
   }
   const prevComite = prev?.status_comite ?? null;
+  // Aprovação automática pelas áreas: só vale enquanto o Comitê ainda está pendente (nunca reverte uma negativa).
+  if (input.somenteSePendente && prevComite !== 'pendente') {
+    return { voalleProtocol: protocol, changed: false, changes: [] };
+  }
   const prevExec = prev?.status_exec ?? null;
   const changes = [];
   if (statusComite !== null && statusComite !== prevComite) changes.push(`comite_${statusComite}`);
@@ -911,13 +916,23 @@ export async function getGmudExtrasByProtocols(protocols) {
   const [rows] = await pool.query(
     `SELECT voalle_protocol, assignment_id, tipo, assunto, categoria, pop_site, impacto_parada, comunica_cliente,
             status_comite, status_exec, rnc, data_cab, ambiente_afetado,
-            elleven_encerrado_em, elleven_encerrado_status
+            elleven_encerrado_em, elleven_encerrado_status, status_areas
        FROM ${TABLE} WHERE voalle_protocol IN (${placeholders})`,
     ids,
   );
+  const [areaRows] = await pool.query(
+    `SELECT voalle_protocol, COUNT(*) AS total, SUM(status = 'aprovada') AS aprovadas
+       FROM ${AREA_APPROVALS_TABLE} WHERE voalle_protocol IN (${placeholders}) GROUP BY voalle_protocol`,
+    ids,
+  );
+  const areaCounts = new Map(areaRows.map((a) => [Number(a.voalle_protocol), { total: Number(a.total), aprovadas: Number(a.aprovadas ?? 0) }]));
   const map = new Map();
   for (const r of rows) {
+    const counts = areaCounts.get(Number(r.voalle_protocol));
     map.set(Number(r.voalle_protocol), {
+      statusAreas: r.status_areas ?? AREA_STATUS.NAO_APLICAVEL,
+      areasTotal: counts?.total ?? 0,
+      areasAprovadas: counts?.aprovadas ?? 0,
       assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
       tipo: r.tipo ?? null,
       assunto: r.assunto ?? null,
@@ -1368,7 +1383,7 @@ export async function lookupApprovalToken(token) {
   const [rows] = await pool.query(
     `SELECT t.id AS token_id, t.approval_id, t.user_email, t.user_display_name, t.expires_at,
             a.voalle_protocol, a.area_label, a.status, a.decided_by_name, a.decided_at, a.motivo,
-            g.titulo, g.tipo, g.categoria, g.descricao, g.pop_site, g.solicitante_nome,
+            g.titulo, g.tipo, g.categoria, g.descricao, g.pop_site, g.categoria_data, g.solicitante_nome,
             g.data_inicio, g.hora_inicio, g.data_fim, g.hora_fim, g.status_comite, g.status_areas, g.assignment_id
        FROM ${AREA_TOKENS_TABLE} t
        JOIN ${AREA_APPROVALS_TABLE} a ON a.id = t.approval_id
@@ -1394,6 +1409,7 @@ export async function lookupApprovalToken(token) {
       categoria: r.categoria ?? '',
       descricao: TRUNC(r.descricao, 1500),
       popSite: r.pop_site ?? '',
+      escopoRede: formatEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
       solicitante: r.solicitante_nome ?? '',
       dataInicio: toDateStr(r.data_inicio) ?? '',
       horaInicio: toTimeStr(r.hora_inicio) ?? '',
@@ -1578,7 +1594,7 @@ export async function listGmudUpcomingForHsm(daysAhead = 7) {
   const pool = getMysqlPool();
   const days = Math.max(1, Math.min(30, Number(daysAhead) || 7));
   const [rows] = await pool.query(
-    `SELECT voalle_protocol, titulo, tipo, categoria, pop_site,
+    `SELECT voalle_protocol, titulo, tipo, categoria, pop_site, categoria_data,
             data_inicio, hora_inicio, data_fim, hora_fim
      FROM ${TABLE}
      WHERE status_comite = 'aprovada'
@@ -1593,6 +1609,8 @@ export async function listGmudUpcomingForHsm(daysAhead = 7) {
     tipo: r.tipo ?? '',
     categoria: r.categoria ?? '',
     popSite: (r.pop_site ?? '').trim(),
+    // Afunilamento por ponto de acesso/slot/PON/splitter (null = site inteiro).
+    escopoRede: normalizeEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
     dataInicio: r.data_inicio ? String(r.data_inicio).slice(0, 10) : '',
     horaInicio: r.hora_inicio ?? '',
     dataFim: r.data_fim ? String(r.data_fim).slice(0, 10) : '',

@@ -391,7 +391,7 @@ export function GmudConfigScreen() {
   const handleRefetch = () => { void refetch(); void refetchApprovers() }
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1200px] space-y-4">
+    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
       <AppPageHeader
         badge="Módulo GMUD"
         title="Configurações"

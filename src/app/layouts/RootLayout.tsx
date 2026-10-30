@@ -87,7 +87,7 @@ export function RootLayout() {
           </div>
         )}
 
-        <main className="min-h-0 flex-1 overflow-x-hidden px-4 pb-6 pt-[calc(3.5rem+env(safe-area-inset-top)+0.75rem)] sm:px-6 sm:pb-8 xl:px-10 xl:pb-10 xl:pt-[4.75rem]">
+        <main className="min-h-0 flex-1 overflow-x-clip px-4 pb-6 pt-[calc(3.5rem+env(safe-area-inset-top)+0.75rem)] sm:px-6 sm:pb-8 xl:px-10 xl:pb-10 xl:pt-[4.75rem]">
           {globalError && (
             <div className="mb-6 xl:mb-10">
               <ErrorState

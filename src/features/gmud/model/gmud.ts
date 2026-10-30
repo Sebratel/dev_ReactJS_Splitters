@@ -32,6 +32,10 @@ export type GmudExtra = {
   impactoParada: string | null
   comunicaCliente: string | null
   statusComite: string | null
+  /** Situação das áreas: 'nao_aplicavel' | 'pendente' | 'aprovada' | 'negada'. */
+  statusAreas?: string | null
+  areasTotal?: number
+  areasAprovadas?: number
   statusExec: string | null
   rnc: string | null
   dataCab: string | null

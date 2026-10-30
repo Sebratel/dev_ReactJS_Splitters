@@ -4,6 +4,7 @@ import type {
   GmudFormState,
   GmudSistemasInternosData,
   GmudSistemasExternosData,
+  GmudRedeExternaImpactoData,
 } from '@/features/gmud/model/gmudForm'
 
 export type CreateGmudResult = { id: number | null; voalleProtocol: number | null }
@@ -17,7 +18,7 @@ export async function createGmud(
   form: GmudFormState & {
     voalleProtocol: string
     assignmentId?: number | null
-    categoriaData?: GmudSistemasInternosData | GmudSistemasExternosData | null
+    categoriaData?: GmudSistemasInternosData | GmudSistemasExternosData | GmudRedeExternaImpactoData | null
   },
 ): Promise<CreateGmudResult> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/create`, {

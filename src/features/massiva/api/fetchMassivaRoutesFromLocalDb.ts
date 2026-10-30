@@ -4,6 +4,8 @@ import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 export type MassivaRouteRow = {
   apCode: string
   apTitle: string
+  /** POP/Site do ponto de acesso (usado pela GMUD para afunilar por site). */
+  siteTitle?: string | null
   oltCode: string | null
   oltTitle: string | null
   slot: number
@@ -40,6 +42,7 @@ export async function fetchMassivaRoutesFromLocalDb(): Promise<MassivaRouteRow[]
   return (result.data as Record<string, unknown>[]).map((row) => ({
     apCode: toText(row.apCode),
     apTitle: toText(row.apTitle),
+    siteTitle: toNullableText(row.siteTitle),
     oltCode: toNullableText(row.oltCode),
     oltTitle: toNullableText(row.oltTitle),
     slot: toInt(row.slot, 0),

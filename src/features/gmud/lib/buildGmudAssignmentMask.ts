@@ -5,6 +5,7 @@ import {
   type GmudSistemasInternosData,
   type GmudSistemasExternosData,
 } from '@/features/gmud/model/gmudForm'
+import { formatEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 
 /** 'yyyy-mm-dd' → 'dd/mm/yyyy'. */
 function fmtDate(iso: string): string {
@@ -72,9 +73,14 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   out.push(SEP)
   field(out, 'Assunto', form.assunto)
   field(out, 'POP/Site', form.popSite)
+  field(out, 'Abrangência na rede', formatEscopoRede(form.escopoRede))
   field(out, 'Janela de mudança', fmtJanela(form))
   field(out, 'Comunica cliente', form.comunicaCliente)
   field(out, 'Impacto de parada do serviço', form.impactoParada)
+  if (form.impactoParada === 'Sim') {
+    field(out, 'Indisponibilidade', form.tipoIndisponibilidade)
+    field(out, 'Duração estimada', form.duracaoEstimada)
+  }
   const amb = collectAmbienteAfetado(form)
   if (amb.length > 0) field(out, 'Ambiente afetado', amb.join('; '))
 

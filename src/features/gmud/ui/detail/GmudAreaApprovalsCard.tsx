@@ -25,8 +25,8 @@ const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: str
 }
 
 const SUMMARY: Record<Exclude<GmudAreasStatus, 'nao_aplicavel'>, string> = {
-  pendente: 'Aguardando as áreas. O Comitê só avalia depois que todas aprovarem.',
-  aprovada: 'Todas as áreas aprovaram. A GMUD segue para o Comitê.',
+  pendente: 'Aguardando as áreas. A GMUD é aprovada automaticamente quando todas aprovarem.',
+  aprovada: 'Todas as áreas aprovaram. A GMUD está aprovada.',
   negada: 'Uma área negou. A GMUD foi negada.',
 }
 

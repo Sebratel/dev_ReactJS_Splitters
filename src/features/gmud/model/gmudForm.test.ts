@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { buildGmudDescription } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import {
   emptyGmudForm,
   emptyGmudSistemasExternosData,
   emptyGmudSistemasInternosData,
   minDataProgramada,
+  redeExternaCategoriaData,
+  redeExternaImpactoData,
   validateGmudForm,
   type GmudFormState,
 } from '@/features/gmud/model/gmudForm'
+import { emptyEscopoRede, formatEscopoRede, normalizeEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 
 describe('minDataProgramada', () => {
   it('aberta de quarta a segunda: terça da apresentação + 7 dias', () => {
@@ -106,5 +110,68 @@ describe('validateGmudForm — rede externa (matriz de aprovação)', () => {
   it('aceita quando há Executor ou Validador', () => {
     expect(validateGmudForm(rede({ 'Oper/Infra': 'executor' }))).not.toContain(msg)
     expect(validateGmudForm(rede({ 'T&TI/CGR': 'validador', 'Oper/Infra': 'na' }))).not.toContain(msg)
+  })
+})
+
+describe('impacto de parada da Rede Externa', () => {
+  it('só grava tipo e duração quando há impacto e algo foi informado', () => {
+    const base = { tipoIndisponibilidade: 'Parcial', duracaoEstimada: ' 2 horas ' }
+    expect(redeExternaImpactoData({ ...base, impactoParada: 'Sim' })).toEqual({ tipoIndisponibilidade: 'Parcial', duracaoEstimada: '2 horas' })
+    expect(redeExternaImpactoData({ ...base, impactoParada: 'Não' })).toBeNull()
+    expect(redeExternaImpactoData({ tipoIndisponibilidade: '', duracaoEstimada: '', impactoParada: 'Sim' })).toBeNull()
+  })
+
+  it('entra na máscara do Elleven só quando há impacto', () => {
+    const form: GmudFormState = { ...emptyGmudForm(), impactoParada: 'Sim', tipoIndisponibilidade: 'Total', duracaoEstimada: '30 minutos' }
+    const comImpacto = buildGmudDescription(form)
+    expect(comImpacto).toContain('Indisponibilidade: Total')
+    expect(comImpacto).toContain('Duração estimada: 30 minutos')
+    expect(buildGmudDescription({ ...form, impactoParada: 'Não' })).not.toContain('Duração estimada')
+  })
+})
+
+describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', () => {
+  const semImpacto = { impactoParada: 'Não', tipoIndisponibilidade: '', duracaoEstimada: '' }
+  const escopo = {
+    apCode: 'AP-1',
+    apTitle: 'OLT 01',
+    slot: 2,
+    ports: [5, 4, 5],
+    splitters: [{ code: 'S1', title: 'SPL 1' }],
+  }
+
+  it('sem ponto de acesso não há afunilamento e nada é gravado', () => {
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRede: emptyEscopoRede() })).toBeNull()
+  })
+
+  it('grava o afunilamento limpo, mesmo sem impacto de parada', () => {
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRede: escopo })).toEqual({
+      tipoIndisponibilidade: '',
+      duracaoEstimada: '',
+      escopoRede: { apCode: 'AP-1', apTitle: 'OLT 01', slot: 2, ports: [4, 5], splitters: [{ code: 'S1', title: 'SPL 1' }] },
+    })
+  })
+
+  it('junta impacto de parada e afunilamento', () => {
+    const data = redeExternaCategoriaData({
+      impactoParada: 'Sim',
+      tipoIndisponibilidade: 'Parcial',
+      duracaoEstimada: '1 hora',
+      escopoRede: escopo,
+    })
+    expect(data).toMatchObject({ tipoIndisponibilidade: 'Parcial', duracaoEstimada: '1 hora' })
+    expect(data?.escopoRede?.apCode).toBe('AP-1')
+  })
+
+  it('PON só vale com slot escolhido', () => {
+    expect(normalizeEscopoRede({ ...escopo, slot: null })?.ports).toEqual([])
+  })
+
+  it('formata o texto da abrangência e entra na máscara do Elleven', () => {
+    expect(formatEscopoRede(escopo)).toBe('OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
+    expect(formatEscopoRede(emptyEscopoRede())).toBe('')
+    const form: GmudFormState = { ...emptyGmudForm(), escopoRede: escopo }
+    expect(buildGmudDescription(form)).toContain('Abrangência na rede: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
+    expect(buildGmudDescription(emptyGmudForm())).not.toContain('Abrangência na rede')
   })
 })

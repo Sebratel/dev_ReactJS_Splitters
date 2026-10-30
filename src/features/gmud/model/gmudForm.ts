@@ -1,3 +1,5 @@
+import { emptyEscopoRede, normalizeEscopoRede, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+
 /** Opções do formulário de GMUD (espelham o Google Form atual). */
 
 export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
@@ -106,6 +108,36 @@ export type GmudSistemasExternosData = {
   chamadoFornecedor: string
 }
 
+/** Impacto de parada e abrangência da Rede Externa — persistido como JSON em `categoria_data`. */
+export type GmudRedeExternaImpactoData = {
+  tipoIndisponibilidade: string
+  duracaoEstimada: string
+  /** Afunilamento opcional por ponto de acesso/slot/PON/splitter dentro do POP/Site. */
+  escopoRede?: GmudEscopoRede
+}
+
+/** Dados de impacto da Rede Externa para gravar; null quando não há impacto ou nada foi informado. */
+export function redeExternaImpactoData(form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada'>): GmudRedeExternaImpactoData | null {
+  if (form.impactoParada !== 'Sim') return null
+  const tipo = (form.tipoIndisponibilidade ?? '').trim()
+  const duracao = (form.duracaoEstimada ?? '').trim()
+  return tipo === '' && duracao === '' ? null : { tipoIndisponibilidade: tipo, duracaoEstimada: duracao }
+}
+
+/** `categoria_data` da Rede Externa: impacto de parada + afunilamento na rede; null quando não há nenhum. */
+export function redeExternaCategoriaData(
+  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRede'>,
+): GmudRedeExternaImpactoData | null {
+  const impacto = redeExternaImpactoData(form)
+  const escopo = normalizeEscopoRede(form.escopoRede)
+  if (!impacto && !escopo) return null
+  return {
+    tipoIndisponibilidade: impacto?.tipoIndisponibilidade ?? '',
+    duracaoEstimada: impacto?.duracaoEstimada ?? '',
+    ...(escopo ? { escopoRede: escopo } : {}),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CAMPOS COMPARTILHADOS (Rede Externa — preservados integralmente)
 // ---------------------------------------------------------------------------
@@ -171,6 +203,8 @@ export type GmudFormState = {
   titulo: string
   descricao: string
   popSite: string
+  /** Rede Externa: afunilamento opcional dentro do POP/Site (ponto de acesso, slot, PON, splitter). */
+  escopoRede: GmudEscopoRede
   solicitanteNome: string
   solicitanteEmail: string
   areaSolicitante: string
@@ -178,6 +212,10 @@ export type GmudFormState = {
   ambienteAfetado: string[]
   comunicaCliente: string
   impactoParada: string
+  /** Rede Externa, quando há impacto de parada: 'Parcial' | 'Total'. Persistido em `categoria_data`. */
+  tipoIndisponibilidade: string
+  /** Rede Externa, quando há impacto de parada: tempo estimado de indisponibilidade (texto livre). */
+  duracaoEstimada: string
   planoExecucao: string
   riscoExecucao: string
   recursosAdministrativos: Record<string, GmudRecursoPapel>
@@ -350,6 +388,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     titulo: '',
     descricao: '',
     popSite: '',
+    escopoRede: emptyEscopoRede(),
     solicitanteNome: prefillName,
     solicitanteEmail: prefillEmail,
     areaSolicitante: '',
@@ -357,6 +396,8 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     ambienteAfetado: [],
     comunicaCliente: '',
     impactoParada: '',
+    tipoIndisponibilidade: '',
+    duracaoEstimada: '',
     planoExecucao: '',
     riscoExecucao: '',
     recursosAdministrativos: {},

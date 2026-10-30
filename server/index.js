@@ -73,6 +73,7 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
+import { formatEscopoRede, rowMatchesEscopoRede } from './lib/gmudEscopoRede.js';
 import {
   recordUsageEvents,
   summarizeUsage,
@@ -1583,6 +1584,7 @@ app.get('/api/massiva/routes', async (req, res) => {
       SELECT DISTINCT
         COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") AS "apCode",
         base."PONTO DE ACESSO" AS "apTitle",
+        base."SITE" AS "siteTitle",
         base."CONCENTRADOR" AS "oltTitle",
         base."CONCENTRADOR_CODE" AS "oltCode",
         COALESCE(base."SLOT[SPLT.SECUNDARIO]", 0) AS "slot",
@@ -4465,6 +4467,8 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals }) {
     titulo: gmud.titulo,
     categoria: gmud.categoria,
     tipo: gmud.tipo,
+    popSite: gmud.popSite ?? '',
+    abrangenciaRede: formatEscopoRede(gmud.categoriaData?.escopoRede),
     solicitanteNome: gmud.solicitanteNome,
     solicitanteEmail: gmud.solicitanteEmail,
     dataInicio: gmud.dataInicio,
@@ -5152,6 +5156,29 @@ async function denyGmudAfterAreaDenial(result) {
   return false;
 }
 
+/** Todas as áreas aprovaram: a GMUD fica aprovada, sem etapa final do Comitê. */
+async function approveGmudWhenAreasDone(protocol, areasStatus) {
+  if (areasStatus !== 'aprovada') return false;
+  try {
+    const result = await setGmudApproval({
+      voalleProtocol: protocol,
+      statusComite: 'aprovada',
+      aprovadoPor: 'Aprovação das áreas',
+      somenteSePendente: true,
+    });
+    for (const type of result.changes ?? []) {
+      await logGmudEvent({ voalleProtocol: protocol, type, actor: 'Aprovação das áreas', payload: { automatica: true } });
+    }
+    return result.changed;
+  } catch (error) {
+    logger.error('[gmud-area-approval] Falha ao aprovar a GMUD após a aprovação de todas as áreas.', {
+      protocol,
+      error: error?.message,
+    });
+    return false;
+  }
+}
+
 app.post('/api/gmud/area-approval/decide', async (req, res) => {
   try {
     if (!areaApprovalLimiter(clientIpForLimit(req))) {
@@ -5169,9 +5196,10 @@ app.post('/api/gmud/area-approval/decide', async (req, res) => {
     if (result.decision === 'negada') {
       canceladoNoElleven = await denyGmudAfterAreaDenial(result);
     }
+    const gmudAprovada = await approveGmudWhenAreasDone(result.protocol, result.areasStatus);
     return res.json({
       success: true,
-      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven },
+      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven, gmudAprovada },
     });
   } catch (error) {
     return publicApprovalError(res, error, 'Falha ao registrar a decisão.');
@@ -5193,7 +5221,8 @@ app.post('/api/gmud/:protocol/area-approvals/:areaId/override', async (req, res)
       actor: byName || byEmail,
       payload: { area: result.areaLabel },
     });
-    return res.json({ success: true, data: result });
+    const gmudAprovada = await approveGmudWhenAreasDone(protocol, result.areasStatus);
+    return res.json({ success: true, data: { ...result, gmudAprovada } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
@@ -5622,21 +5651,60 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
         AND TRIM(client.cell_phone_1) != ''
     `;
 
+    // GMUD afunilada (ponto de acesso/slot/PON/splitter): mesma base de conexões da massiva, filtrada
+    // em memória com a regra de slot/PON dela. O AP vai no SQL; o restante, nas linhas do AP.
+    const scopedQuery = `
+      SELECT
+        base."NOME CLIENTE"                  AS nome,
+        base."CELULAR"                       AS telefone,
+        base."CONTRATO ID[CLIENTE]"::text    AS contrato,
+        base."USUÁRIO[CLIENTE]"              AS pppoe,
+        base."PONTO DE ACESSO CODE",
+        base."PONTO DE ACESSO",
+        base."CÓDIGO[SPLT.SECUNDARIO]",
+        base."SPLT.SECUNDARIO",
+        base."SLOT[SPLT.SECUNDARIO]",
+        base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]",
+        base."PORTA[SPLT.PRIMARIO]"
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE base."SITE" = $1
+        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $2
+        AND base."ID CONEXAO[CLIENTE]" IS NOT NULL
+        AND base."CORPORATIVO" IS TRUE
+        AND base."OCUPADO:[SPLT.SECUNDARIO]" IS TRUE
+        AND base."CELULAR" IS NOT NULL
+        AND TRIM(base."CELULAR") <> ''
+    `;
+
     const results = await Promise.all(
       gmudRows.map(async (gmud) => {
         let clientes = [];
         try {
-          const { rows } = await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
-          clientes = rows.map((r) => ({
-            nome: (r.nome ?? '').trim(),
-            telefone: (r.telefone ?? '').trim(),
-            contrato: (r.contrato ?? '').trim(),
-            pppoe: (r.pppoe ?? '').trim(),
-          }));
+          const escopo = gmud.escopoRede;
+          const { rows } = escopo
+            ? await pool.query(scopedQuery, [gmud.popSite, escopo.apCode])
+            : await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
+          const seen = new Set();
+          for (const r of escopo ? rows.filter((row) => rowMatchesEscopoRede(row, escopo)) : rows) {
+            const cliente = {
+              nome: (r.nome ?? '').trim(),
+              telefone: (r.telefone ?? '').trim(),
+              contrato: (r.contrato ?? '').trim(),
+              pppoe: (r.pppoe ?? '').trim(),
+            };
+            const key = `${cliente.nome}|${cliente.telefone}|${cliente.contrato}|${cliente.pppoe}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            clientes.push(cliente);
+          }
         } catch (err) {
           logger.error('[gmud-corporate-hsm] Falha ao buscar clientes do site:', { site: gmud.popSite, error: err.message });
         }
-        return { gmud, clienteCount: clientes.length, clientes };
+        return {
+          gmud: { ...gmud, escopoTexto: formatEscopoRede(gmud.escopoRede) },
+          clienteCount: clientes.length,
+          clientes,
+        };
       }),
     );
 

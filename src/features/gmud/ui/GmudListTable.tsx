@@ -89,7 +89,7 @@ export function GmudListTable({
             <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} />
             <SortHeader label="Prazo" column="prazo" sort={sort} onSort={onSort} />
             <SortHeader label="Voalle" column="status" sort={sort} onSort={onSort} />
-            <th className="px-4 py-2">Comitê</th>
+            <th className="px-4 py-2">Aprovação</th>
             <th className="px-4 py-2 text-right">Ações</th>
           </tr>
         </thead>
@@ -130,7 +130,14 @@ export function GmudListTable({
                 </td>
                 <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.status || '—'}</td>
                 <td className="px-4 py-2.5">
-                  {comite ? (
+                  {comite === 'pendente' && g.extra?.statusAreas === 'pendente' ? (
+                    <span
+                      className={cn(PILL, COMITE_STYLE.pendente)}
+                      title="A GMUD é aprovada automaticamente quando todas as áreas aprovarem."
+                    >
+                      Aguardando áreas ({g.extra.areasAprovadas ?? 0}/{g.extra.areasTotal ?? 0})
+                    </span>
+                  ) : comite ? (
                     <span className={cn(PILL, COMITE_STYLE[comite] ?? 'bg-surface-container-low text-on-surface-variant')}>
                       {GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite}
                     </span>

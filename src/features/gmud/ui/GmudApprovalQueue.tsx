@@ -7,9 +7,9 @@ import {
   type GmudStatusComite,
 } from '@/features/gmud/api/updateGmudApproval'
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
-import { GMUD_RECURSO_PAPEIS, type GmudSistemasInternosData, type GmudSistemasExternosData } from '@/features/gmud/model/gmudForm'
+import { GMUD_RECURSO_PAPEIS, type GmudRedeExternaImpactoData, type GmudSistemasInternosData, type GmudSistemasExternosData } from '@/features/gmud/model/gmudForm'
 import type { GmudPendingItem } from '@/features/gmud/api/gmudApprovals'
-import { GmudSistemasInternosCard, GmudSistemasExternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
+import { GmudRedeExternaImpactoCard, GmudSistemasInternosCard, GmudSistemasExternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
@@ -154,6 +154,11 @@ function PendingCard({
             </div>
           ) : null}
 
+          {(gmud.categoria ?? 'rede_externa') === 'rede_externa' && gmud.categoriaData ? (
+            <div className="sm:col-span-2 border-t border-neutral-200/60 dark:border-white/5 pt-3">
+              <GmudRedeExternaImpactoCard data={gmud.categoriaData as GmudRedeExternaImpactoData} />
+            </div>
+          ) : null}
           {gmud.categoria === 'sistemas_internos' && gmud.categoriaData ? (
             <div className="sm:col-span-2 border-t border-neutral-200/60 dark:border-white/5 pt-3">
               <GmudSistemasInternosCard data={gmud.categoriaData as GmudSistemasInternosData} />
