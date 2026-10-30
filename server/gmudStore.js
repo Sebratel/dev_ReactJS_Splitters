@@ -1611,9 +1611,9 @@ export async function listGmudUpcomingForHsm(daysAhead = 7) {
     popSite: (r.pop_site ?? '').trim(),
     // Afunilamento por ponto de acesso/slot/PON/splitter (null = site inteiro).
     escopoRede: normalizeEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
-    dataInicio: r.data_inicio ? String(r.data_inicio).slice(0, 10) : '',
+    dataInicio: toDateStr(r.data_inicio) ?? '',
     horaInicio: r.hora_inicio ?? '',
-    dataFim: r.data_fim ? String(r.data_fim).slice(0, 10) : '',
+    dataFim: toDateStr(r.data_fim) ?? '',
     horaFim: r.hora_fim ?? '',
   }));
 }
