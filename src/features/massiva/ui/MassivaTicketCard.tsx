@@ -65,6 +65,12 @@ export type MassivaLastAffectedVerification = {
   verifiedBy: string | null
 }
 
+/**
+ * Botão "Ver clientes que não subiram" (validação de sinal pós-massiva).
+ * Oculto temporariamente (hotfix); para reativar, basta voltar para `true`.
+ */
+const SIGNAL_CHECK_ENABLED = false
+
 type MassivaTicketCardProps = {
   ticket: MassivaTicket
   closeConfigured: boolean
@@ -702,15 +708,17 @@ export function MassivaTicketCard({
               >
                 <Wrench size={18} strokeWidth={2} />
               </button>
-              <button
-                type="button"
-                onClick={() => setSignalListOpen(true)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-rose-300/80 hover:text-rose-700 dark:hover:text-rose-200"
-                title="Ver clientes que não subiram (sinal por cliente)"
-                aria-label="Ver clientes que não subiram"
-              >
-                <Users size={18} strokeWidth={2} />
-              </button>
+              {SIGNAL_CHECK_ENABLED ? (
+                <button
+                  type="button"
+                  onClick={() => setSignalListOpen(true)}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest text-on-surface-variant shadow-sm transition hover:border-rose-300/80 hover:text-rose-700 dark:hover:text-rose-200"
+                  title="Ver clientes que não subiram (sinal por cliente)"
+                  aria-label="Ver clientes que não subiram"
+                >
+                  <Users size={18} strokeWidth={2} />
+                </button>
+              ) : null}
             </>
           ) : null}
           <button
