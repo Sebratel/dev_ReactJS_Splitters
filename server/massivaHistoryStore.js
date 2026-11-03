@@ -6,6 +6,7 @@ import {
 } from './mysqlBrazilDateTime.js';
 import { splitterLabelsMatchOptionalPonFilter } from './splitterTitleOltDerivation.js';
 import logger from './logger.js';
+import { withRowLock } from './rowLock.js';
 
 // Observabilidade aditiva: envolve cada função exportada da store com log de
 // duração/sucesso, sem alterar o valor retornado nem engolir erros (sempre
@@ -515,6 +516,12 @@ export function createMassivaHistoryStore(config) {
 
       if (protocol === null && assignmentId === null) continue;
 
+      // Trava por chave: sem isso, duas chamadas concorrentes para o mesmo
+      // protocolo/assignment (ex.: a gravação antecipada e a final chegando
+      // quase juntas) podem achar a linha inexistente nas duas e inserir
+      // duas vezes. Só serializa dentro deste processo — ver rowLock.js.
+      const lockKey = assignmentId !== null ? `assignment:${assignmentId}` : `protocol:${protocol}`;
+      await withRowLock(lockKey, async () => {
       const existingId = await findExistingHistoryId(protocol, assignmentId);
 
       if (existingId !== null) {
@@ -689,6 +696,7 @@ export function createMassivaHistoryStore(config) {
         );
         await attachSplitters(insertResult.insertId, splitterEntries);
       }
+      });
 
       insertedOrUpdated += 1;
     }
