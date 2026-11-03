@@ -223,6 +223,9 @@ export function createMassivaHistoryStore(config) {
       async getMttdMttrMonthlyKpis() {
         return [];
       },
+      async getStaleIncompleteHistory() {
+        return [];
+      },
       async end() {},
     };
   }
@@ -2422,6 +2425,49 @@ export function createMassivaHistoryStore(config) {
     }));
   }
 
+  /**
+   * Linhas gravadas só pela antecipação (ver registerOpenedHistoryEarly no front) cuja
+   * gravação final nunca chegou a rodar — `history_complete = 0` há mais tempo do que uma
+   * abertura normal levaria. Alimenta o job de reconciliação (ver index.js): candidatas a
+   * protocolo "fantasma" (Elleven fechou ou segue aberto, mas nosso histórico nunca completou).
+   * Linha legada (sem a coluna) nunca aparece aqui — era sempre gravada de uma vez só.
+   */
+  async function getStaleIncompleteHistory(thresholdHours = 1) {
+    await ensureReady();
+    if (!hasHistoryCompleteColumn) return [];
+
+    const hours = Number.isFinite(thresholdHours) && thresholdHours > 0 ? thresholdHours : 1;
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          id,
+          protocol,
+          assignment_id AS assignmentId,
+          access_point_code AS accessPointCode,
+          title,
+          status,
+          opened_at AS openedAt
+        FROM massiva_history
+        WHERE history_complete = 0
+          AND opened_at < (NOW() - INTERVAL ? HOUR)
+          AND status <> 'cancelada'
+        ORDER BY opened_at ASC
+        LIMIT 50
+      `,
+      [hours],
+    );
+
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      id: row.id,
+      protocol: row.protocol,
+      assignmentId: row.assignmentId,
+      accessPointCode: row.accessPointCode,
+      title: row.title,
+      status: row.status,
+      openedAt: serializeHistoryDate(row.openedAt),
+    }));
+  }
+
   async function end() {
     clearInterval(poolStatsIntervalHandle);
     await dataPool.end();
@@ -2459,6 +2505,7 @@ export function createMassivaHistoryStore(config) {
     diffNetworkReliefSnapshots,
     getHistoryList,
     getMttdMttrMonthlyKpis,
+    getStaleIncompleteHistory,
     end,
   };
 

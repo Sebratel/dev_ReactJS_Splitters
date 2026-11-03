@@ -7824,6 +7824,66 @@ async function startServer() {
   } else {
     logger.info('[network-relief-snapshot] Cron desativado (NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED=true).');
   }
+
+  // Reconciliação: acha linhas de massiva_history que só foram gravadas pela antecipação
+  // (ver registerOpenedHistoryEarly no front) e cuja gravação final nunca completou —
+  // "history_complete = 0" por tempo demais. Sinaliza nos logs e, se configurado, num
+  // webhook (reaproveita o padrão de webhook já usado em outras integrações do projeto).
+  // Resposta ao item 3 da revisão da PR #45 (gravação antecipada do histórico de massiva).
+  const reconciliationCronDisabled =
+    String(process.env.MASSIVA_RECONCILIATION_CRON_DISABLED ?? '').toLowerCase() === 'true';
+  const reconciliationCronExpr = (process.env.MASSIVA_RECONCILIATION_CRON ?? '*/15 * * * *').trim();
+  const reconciliationThresholdHours = (() => {
+    const n = Number.parseInt(process.env.MASSIVA_RECONCILIATION_THRESHOLD_HOURS ?? '1', 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  })();
+  const reconciliationWebhookUrl = String(process.env.MASSIVA_RECONCILIATION_WEBHOOK_URL ?? '').trim();
+
+  if (!massivaHistoryStore.configured) {
+    logger.info('[massiva-reconciliation] Cron não registrado (MySQL de massivas não configurado).');
+  } else if (!reconciliationCronDisabled) {
+    cron.schedule(
+      reconciliationCronExpr,
+      async () => {
+        try {
+          const stale = await massivaHistoryStore.getStaleIncompleteHistory(reconciliationThresholdHours);
+          if (stale.length === 0) return;
+
+          logger.warn(
+            `[massiva-reconciliation] ${stale.length} linha(s) de histórico incompletas há mais de ${reconciliationThresholdHours}h.`,
+            { items: stale },
+          );
+
+          if (reconciliationWebhookUrl !== '') {
+            const linhas = stale
+              .map((item) => `• ${item.protocol ?? item.assignmentId ?? item.id} — ${item.title || '(sem título)'} (aberta ${item.openedAt}, status ${item.status})`)
+              .join('\n');
+            try {
+              await fetch(reconciliationWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: `⚠️ ${stale.length} massiva(s) com histórico incompleto há mais de ${reconciliationThresholdHours}h — confira manualmente no Elleven:\n${linhas}`,
+                }),
+              });
+            } catch (webhookError) {
+              logger.error('[massiva-reconciliation] Falha ao postar alerta no webhook.', { error: webhookError });
+            }
+          }
+        } catch (error) {
+          logger.error('[massiva-reconciliation] Falha ao consultar histórico incompleto.', { error });
+        }
+      },
+      { timezone: 'America/Sao_Paulo' },
+    );
+    logger.info(
+      `[massiva-reconciliation] Cron ativo: "${reconciliationCronExpr}" America/Sao_Paulo (padrão a cada 15 min, limiar ${reconciliationThresholdHours}h)` +
+        (reconciliationWebhookUrl !== '' ? ', com webhook configurado' : ', sem webhook — só log') +
+        '. Desative com MASSIVA_RECONCILIATION_CRON_DISABLED=true.',
+    );
+  } else {
+    logger.info('[massiva-reconciliation] Cron desativado (MASSIVA_RECONCILIATION_CRON_DISABLED=true).');
+  }
 }
 
 process.on('uncaughtException', (error) => {
