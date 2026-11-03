@@ -2053,6 +2053,54 @@ app.post('/api/massiva/history/open', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Massiva — gravação antecipada chamada pelo GATEWAY (server-to-server), logo após o
+// Elleven confirmar a abertura do protocolo — independente do navegador do operador.
+// Fecha a janela que a gravação antecipada do front (openMassivaFromContext.ts) não cobre:
+// queda/timeout durante o próprio POST de abertura, antes de o navegador processar a
+// resposta. Protegido por segredo compartilhado (não é sessão de usuário — quem chama é o
+// gateway Java, não um browser logado). Resposta ao item 2 da revisão da PR #45.
+// Sempre complete:false e best-effort nos campos: a gravação do front (early + final)
+// continua rodando normalmente depois e enriquece/fecha a mesma linha via upsert.
+// ---------------------------------------------------------------------------
+app.post('/api/internal/massiva/history/open', async (req, res) => {
+  try {
+    const secret = (process.env.MASSIVA_GATEWAY_INTERNAL_SECRET ?? '').trim();
+    const provided = (req.headers['x-internal-secret'] ?? '').trim();
+    if (!secret || !provided || provided !== secret) {
+      return res.status(401).json({ success: false, message: 'Não autorizado.' });
+    }
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const payload = {
+      operatorEmail: String(req.body?.operatorEmail ?? '').trim(),
+      title: String(req.body?.title ?? '').trim(),
+      splitterEntries: [],
+      results: normalizeMassivaHistoryResults(req.body?.results),
+      affectedClients: req.body?.affectedClients ?? 0,
+      openedAt: req.body?.openedAt ?? null,
+      identifiedBy: req.body?.identifiedBy ?? null,
+      complete: false,
+    };
+
+    const result = await massivaHistoryStore.registerOpenBatch(payload);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao registrar histórico local (gravação do gateway):', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar histórico local da abertura (gateway).',
+      error: error.message,
+    });
+  }
+});
+
 app.post('/api/massiva/history/close', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
