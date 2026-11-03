@@ -270,6 +270,7 @@ export function createMassivaHistoryStore(config) {
   let hasClassificationAuditColumns = false;
   let hasAffectedVerificationColumns = false;
   let hasAffectedClientsTable = false;
+  let hasHistoryCompleteColumn = false;
 
   /**
    * Adiciona uma coluna idempotentemente via ALTER TABLE.
@@ -365,6 +366,18 @@ export function createMassivaHistoryStore(config) {
         hasAffectedVerificationColumns = Array.isArray(cols) && cols.length > 0;
       } catch {
         hasAffectedVerificationColumns = false;
+      }
+
+      // Migração idempotente: marca se a linha já está completa (infra + afetados + encerramento
+      // automático já resolvidos) ou se é só a gravação antecipada de um AP (ver
+      // `registerOpenedHistoryEarly` no front). NULL = linha legada, anterior a esta coluna —
+      // tratada como completa (era sempre gravada de uma vez só, no fim do fluxo).
+      await addColumnIfMissing('history_complete TINYINT(1) NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'history_complete'");
+        hasHistoryCompleteColumn = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasHistoryCompleteColumn = false;
       }
 
       // Migração idempotente: tabela de clientes afetados por massiva (log — 1 linha
@@ -482,6 +495,12 @@ export function createMassivaHistoryStore(config) {
     // Quem identificou o evento (tecnico/zabbix/int6) — mesmo valor em todas as linhas do lote.
     const identifiedBy = normalizeNullableText(input?.identifiedBy);
 
+    // Linha completa (gravação final) por padrão; só é `false` na gravação antecipada de 1 AP
+    // (ver `registerOpenedHistoryEarly` no front). Default `true` cobre qualquer chamador futuro
+    // que não envie o campo.
+    const complete = input?.complete !== false;
+    const completeValue = complete ? 1 : 0;
+
     let insertedOrUpdated = 0;
 
     for (const result of results) {
@@ -533,6 +552,18 @@ export function createMassivaHistoryStore(config) {
           : '';
         const identifiedByUpdateParam = hasIdentifiedByColumn ? [identifiedBy] : [];
 
+        // Completa é um trinco: linha legada (NULL) fica NULL (sempre foi completa); uma vez
+        // completa (1), nunca volta a parcial; só uma gravação com complete=true a destranca.
+        const historyCompleteSetClause = hasHistoryCompleteColumn
+          ? `,
+              history_complete = CASE
+                WHEN history_complete IS NULL THEN NULL
+                WHEN ? = 1 THEN 1
+                ELSE history_complete
+              END`
+          : '';
+        const historyCompleteUpdateParam = hasHistoryCompleteColumn ? [completeValue] : [];
+
         await dataPool.query(
           `
             UPDATE massiva_history
@@ -550,7 +581,7 @@ export function createMassivaHistoryStore(config) {
               closed_at = ?,
               auto_closed_without_clients = ?,
               close_description = COALESCE(?, close_description),
-              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}${identifiedBySetClause}
+              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}${identifiedBySetClause}${historyCompleteSetClause}
             WHERE id = ?
           `,
           [
@@ -574,6 +605,7 @@ export function createMassivaHistoryStore(config) {
             ...eventStartUpdateParam,
             ...infraUpdateParams,
             ...identifiedByUpdateParam,
+            ...historyCompleteUpdateParam,
             existingId,
           ],
         );
@@ -609,6 +641,11 @@ export function createMassivaHistoryStore(config) {
         const identifiedByInsertPlaceholder = hasIdentifiedByColumn ? ', ?' : '';
         const identifiedByInsertValue = hasIdentifiedByColumn ? [identifiedBy] : [];
 
+        // Completa: incluída no INSERT somente quando a coluna existir.
+        const historyCompleteInsertCol = hasHistoryCompleteColumn ? ', history_complete' : '';
+        const historyCompleteInsertPlaceholder = hasHistoryCompleteColumn ? ', ?' : '';
+        const historyCompleteInsertValue = hasHistoryCompleteColumn ? [completeValue] : [];
+
         const [insertResult] = await dataPool.query(
           `
             INSERT INTO massiva_history (
@@ -625,9 +662,9 @@ export function createMassivaHistoryStore(config) {
               closed_at,
               auto_closed_without_clients,
               close_description,
-              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}${identifiedByInsertCol}
+              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}${identifiedByInsertCol}${historyCompleteInsertCol}
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders}${identifiedByInsertPlaceholder})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders}${identifiedByInsertPlaceholder}${historyCompleteInsertPlaceholder})
           `,
           [
             protocol,
@@ -647,6 +684,7 @@ export function createMassivaHistoryStore(config) {
             ...eventStartInsertValue,
             ...infraInsertValues,
             ...identifiedByInsertValue,
+            ...historyCompleteInsertValue,
           ],
         );
         await attachSplitters(insertResult.insertId, splitterEntries);

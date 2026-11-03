@@ -2034,6 +2034,8 @@ app.post('/api/massiva/history/open', async (req, res) => {
       infraProtocol: req.body?.infraProtocol ?? null,
       infraAssignmentId: req.body?.infraAssignmentId ?? null,
       identifiedBy: req.body?.identifiedBy ?? null,
+      // Linha completa (gravação final) por padrão; `false` só na gravação antecipada de 1 AP.
+      complete: req.body?.complete !== false,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
