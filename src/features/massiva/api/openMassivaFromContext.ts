@@ -279,6 +279,30 @@ async function openInfraProtocolIfSelected(
 }
 
 /**
+ * Grava a linha do histórico local logo após o Elleven abrir o protocolo de um AP, antes dos
+ * afetados e da infra. Sem isso, qualquer interrupção entre a abertura e a gravação final (aba
+ * fechada, timeout do proxy, falha em outro AP) deixa o protocolo só no Elleven.
+ *
+ * O servidor faz upsert por assignment/protocolo, então a gravação final continua valendo e só
+ * completa a mesma linha (infra, afetados, encerramento automático). O estado aqui é sempre
+ * "aberta": só a gravação final marca "encerrada", depois que o Elleven confirma o encerramento.
+ * Best-effort: nunca lança, para não transformar um protocolo já aberto em falha do AP.
+ */
+async function registerOpenedHistoryEarly(
+  context: MassivaOpenFinalContext,
+  opened: MassivaOpenSingleResult,
+): Promise<void> {
+  try {
+    await registerOpenedMassivaHistoryInLocalDb(context, { results: [opened] })
+  } catch (error) {
+    console.warn(
+      `[Massiva] Falha na gravação antecipada do histórico (AP ${opened.accessPointCode}); será tentada de novo ao final.`,
+      error,
+    )
+  }
+}
+
+/**
  * Um POST por entrada em `context.plan.requests` — paridade sequência em `_openMassiva`.
  * Em seguida: POST de afetados (seleção da rota) ou encerramento automático se não houver clientes mapeáveis.
  */
@@ -318,6 +342,7 @@ export async function openMassivaFromContext(
       })
       const parsed = parseMassivaOpenHttpResult(data, req.authenticationAccessPointCode)
       successes.push(parsed)
+      await registerOpenedHistoryEarly(context, parsed)
     } catch (e) {
       console.error(`[Massiva] Falha no AP: ${req.authenticationAccessPointCode}`, e)
       failures.push({
