@@ -4449,9 +4449,9 @@ function gmudAreasFromCategoriaData(categoriaData) {
  * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL (e APP_BASE_URL para montar os links).
  * O payload carrega links com código de uso único: nunca logar o corpo enviado.
  */
-async function notifyGmudAreaApprovalWebhook({ gmud, approvals }) {
+async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
   const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
-  if (webhookUrl === '' || !approvals || approvals.length === 0) return;
+  if (webhookUrl === '') return;
   const baseUrl = (process.env.APP_BASE_URL ?? '').trim();
   const approvers = approvals.flatMap((a) =>
     a.pessoas.map((p) => ({
@@ -4461,6 +4461,13 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals }) {
       link: buildApprovalUrl(baseUrl, p.token),
     })),
   );
+  // Toda GMUD criada avisa no Chat e por e-mail. Sem aprovação de área (Emergencial, ou Rede Externa
+  // sem áreas), não há aprovador com link: o e-mail vira um aviso informativo (sem link) para estes
+  // destinatários, além do solicitante (adicionado no N8N). Lista separada por vírgula.
+  const avisoEmails = (process.env.GMUD_NOTIFY_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e !== '');
   const payload = {
     evento: 'gmud_aprovacao_areas',
     protocol: gmud.voalleProtocol,
@@ -4477,6 +4484,7 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals }) {
     horaFim: gmud.horaFim,
     areas: approvals.map((a) => a.areaLabel),
     approvers,
+    avisoEmails,
     criadaEm: new Date().toISOString(),
     platformUrl: `${baseUrl.replace(/\/+$/, '') || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
   };
@@ -4590,8 +4598,9 @@ app.post('/api/gmud/create', async (req, res) => {
       payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
     });
 
+    // Toda GMUD NOVA avisa (Chat + e-mail), com ou sem aprovação de área.
+    let approvals = [];
     if (areasToApprove.length > 0) {
-      let approvals;
       try {
         approvals = await createAreaApprovals({
           protocol: voalleProtocol,
@@ -4605,6 +4614,8 @@ app.post('/api/gmud/create', async (req, res) => {
           message: 'A GMUD foi registrada, mas não foi possível criar as aprovações das áreas. Ela ficou bloqueada; avise o suporte.',
         });
       }
+    }
+    if (!existing) {
       const gmudRow = await getGmudRequest(voalleProtocol);
       void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals });
     }
