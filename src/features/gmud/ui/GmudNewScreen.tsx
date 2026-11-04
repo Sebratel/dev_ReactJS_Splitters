@@ -205,6 +205,62 @@ function Observacoes({
 }
 
 // ---------------------------------------------------------------------------
+// Matriz "Recursos administrativos" — comum às 3 categorias
+// ---------------------------------------------------------------------------
+function RecursosAdministrativosCard({
+  form, set, areas,
+}: {
+  form: GmudFormState
+  set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
+  /** Linhas da matriz: as áreas da configuração. */
+  areas: string[]
+}) {
+  const setRecurso = (area: string, papel: GmudRecursoPapel) =>
+    set('recursosAdministrativos', { ...form.recursosAdministrativos, [area]: papel })
+  const complemento =
+    form.categoria === 'rede_externa'
+      ? ''
+      : ` Valem também as áreas ${form.categoria === 'sistemas_internos' ? 'impactadas' : 'afetadas'} marcadas acima.`
+
+  return (
+    <div className={CARD}>
+      <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
+      <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
+        Áreas marcadas como Executor, Validador ou Observador aprovam a GMUD (basta uma pessoa por área; com todas as áreas aprovadas, a GMUD fica aprovada). N/A não aprova.{complemento}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
+              <th className="py-2 pr-4">Área</th>
+              {GMUD_RECURSO_PAPEIS.map((p) => <th key={p.value} className="px-3 py-2 text-center">{p.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {(areas.length > 0 ? areas : [...GMUD_RECURSO_AREAS]).map((area) => (
+              <tr key={area} className="border-t border-neutral-200/60 dark:border-white/5">
+                <td className="py-2 pr-4 font-medium text-on-surface">{area}</td>
+                {GMUD_RECURSO_PAPEIS.map((p) => (
+                  <td key={p.value} className="px-3 py-2 text-center">
+                    <input
+                      type="radio"
+                      name={`recurso-${area}`}
+                      className="size-4 accent-primary"
+                      checked={(form.recursosAdministrativos[area] ?? 'na') === p.value}
+                      onChange={() => setRecurso(area, p.value)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Seções específicas de Rede Externa
 // ---------------------------------------------------------------------------
 function RedeExternaFields({
@@ -222,8 +278,6 @@ function RedeExternaFields({
         ? form.ambienteAfetado.filter((o) => o !== opt)
         : [...form.ambienteAfetado, opt],
     )
-  const setRecurso = (area: string, papel: GmudRecursoPapel) =>
-    set('recursosAdministrativos', { ...form.recursosAdministrativos, [area]: papel })
 
   return (
     <>
@@ -309,40 +363,7 @@ function RedeExternaFields({
         </Field>
       </Section>
 
-      <div className={CARD}>
-        <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
-        <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
-          Áreas marcadas como Executor ou Validador aprovam a GMUD (basta uma pessoa por área; com todas as áreas aprovadas, a GMUD fica aprovada). N/A não aprova.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-                <th className="py-2 pr-4">Área</th>
-                {GMUD_RECURSO_PAPEIS.map((p) => <th key={p.value} className="px-3 py-2 text-center">{p.label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {(areas.length > 0 ? areas : [...GMUD_RECURSO_AREAS]).map((area) => (
-                <tr key={area} className="border-t border-neutral-200/60 dark:border-white/5">
-                  <td className="py-2 pr-4 font-medium text-on-surface">{area}</td>
-                  {GMUD_RECURSO_PAPEIS.map((p) => (
-                    <td key={p.value} className="px-3 py-2 text-center">
-                      <input
-                        type="radio"
-                        name={`recurso-${area}`}
-                        className="size-4 accent-primary"
-                        checked={form.recursosAdministrativos[area] === p.value}
-                        onChange={() => setRecurso(area, p.value)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <RecursosAdministrativosCard form={form} set={set} areas={areas} />
 
       <Section title="Alinhamento">
         <Field label="Caso necessário informar clientes, a lista de clientes impactados foi enviada ao COR?" required full>
@@ -758,6 +779,10 @@ export function GmudNewScreen() {
           />
         )}
 
+        {form.categoria === 'sistemas_internos' && (
+          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} />
+        )}
+
         {form.categoria === 'sistemas_externos' && (
           <SistemasExternosFields
             se={seData}
@@ -772,6 +797,10 @@ export function GmudNewScreen() {
             sistemasExternosOptions={sistemasExternosOptions}
             listsLoading={listsLoading}
           />
+        )}
+
+        {form.categoria === 'sistemas_externos' && (
+          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} />
         )}
 
         {/* Janela de mudança — comum a todas */}

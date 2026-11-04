@@ -24,21 +24,27 @@ const cleanLabels = (list) => [
  * Áreas que precisam aprovar a GMUD.
  * - Emergencial: nenhuma (vai direto ao Comitê).
  * - Sistemas internos: "Áreas impactadas". Sistemas externos: "Áreas afetadas".
- * - Rede externa: áreas da matriz "Recursos administrativos" com papel Executor ou Validador.
+ * - Em TODAS as categorias: áreas da matriz "Recursos administrativos" com papel Executor,
+ *   Validador ou Observador (somam às impactadas/afetadas; N/A não aprova).
  */
+const PAPEIS_QUE_APROVAM = new Set(['executor', 'validador', 'observador']);
+
 export function deriveApprovalAreas({ tipo, categoria, categoriaData, recursosAdministrativos } = {}) {
   if (String(tipo ?? '').trim() === 'Emergencial') return [];
   const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
-  if (categoria === 'sistemas_internos') return cleanLabels(asList(data.areasImpactadas));
-  if (categoria === 'sistemas_externos') return cleanLabels(asList(data.areasAfetadas));
-  if (recursosAdministrativos && typeof recursosAdministrativos === 'object') {
-    return cleanLabels(
-      Object.entries(recursosAdministrativos)
-        .filter(([, papel]) => papel === 'executor' || papel === 'validador')
-        .map(([area]) => area),
-    );
-  }
-  return [];
+  const base =
+    categoria === 'sistemas_internos'
+      ? asList(data.areasImpactadas)
+      : categoria === 'sistemas_externos'
+        ? asList(data.areasAfetadas)
+        : [];
+  const matriz =
+    recursosAdministrativos && typeof recursosAdministrativos === 'object'
+      ? Object.entries(recursosAdministrativos)
+          .filter(([, papel]) => PAPEIS_QUE_APROVAM.has(papel))
+          .map(([area]) => area)
+      : [];
+  return cleanLabels([...base, ...matriz]);
 }
 
 /** Situação geral das áreas de uma GMUD a partir do status de cada uma. */

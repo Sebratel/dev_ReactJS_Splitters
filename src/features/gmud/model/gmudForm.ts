@@ -179,11 +179,12 @@ export const GMUD_RECURSO_AREAS = [
   'Dir/Projetos',
 ] as const
 
-export type GmudRecursoPapel = 'na' | 'executor' | 'validador'
+export type GmudRecursoPapel = 'na' | 'executor' | 'validador' | 'observador'
 export const GMUD_RECURSO_PAPEIS: { value: GmudRecursoPapel; label: string }[] = [
   { value: 'na', label: 'N/A' },
   { value: 'executor', label: 'Executor' },
   { value: 'validador', label: 'Validador' },
+  { value: 'observador', label: 'Observador' },
 ]
 
 // ---------------------------------------------------------------------------

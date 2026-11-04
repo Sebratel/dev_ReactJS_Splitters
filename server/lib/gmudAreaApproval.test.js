@@ -39,7 +39,7 @@ test('deriveApprovalAreas: sistemas externos usa áreas afetadas', () => {
   assert.deepEqual(areas, ['Atendimento']);
 });
 
-test('deriveApprovalAreas: rede externa usa só Executor e Validador da matriz', () => {
+test('deriveApprovalAreas: rede externa usa Executor, Validador e Observador da matriz', () => {
   const areas = deriveApprovalAreas({
     tipo: 'Programada',
     categoria: 'rede_externa',
@@ -50,6 +50,45 @@ test('deriveApprovalAreas: rede externa usa só Executor e Validador da matriz',
     },
   });
   assert.deepEqual(areas, ['Oper/Infra', 'T&TI/CGR']);
+});
+
+test('deriveApprovalAreas: Observador também aprova (e N/A não)', () => {
+  const areas = deriveApprovalAreas({
+    tipo: 'Programada',
+    categoria: 'rede_externa',
+    recursosAdministrativos: { 'Oper/Infra': 'observador', 'T&TI/COR': 'na' },
+  });
+  assert.deepEqual(areas, ['Oper/Infra']);
+});
+
+test('deriveApprovalAreas: sistemas internos soma áreas impactadas e matriz, sem duplicar', () => {
+  const areas = deriveApprovalAreas({
+    tipo: 'Programada',
+    categoria: 'sistemas_internos',
+    categoriaData: { areasImpactadas: ['Atendimento', 'Comercial'] },
+    recursosAdministrativos: { Comercial: 'validador', 'T&TI/CGR': 'observador', 'Oper/Infra': 'na' },
+  });
+  assert.deepEqual(areas, ['Atendimento', 'Comercial', 'T&TI/CGR']);
+});
+
+test('deriveApprovalAreas: sistemas externos soma áreas afetadas e matriz', () => {
+  const areas = deriveApprovalAreas({
+    tipo: 'Programada',
+    categoria: 'sistemas_externos',
+    categoriaData: { areasAfetadas: ['Atendimento'] },
+    recursosAdministrativos: { 'T&TI/CGR': 'executor' },
+  });
+  assert.deepEqual(areas, ['Atendimento', 'T&TI/CGR']);
+});
+
+test('deriveApprovalAreas: emergencial ignora a matriz', () => {
+  const areas = deriveApprovalAreas({
+    tipo: 'Emergencial',
+    categoria: 'sistemas_internos',
+    categoriaData: { areasImpactadas: ['Atendimento'] },
+    recursosAdministrativos: { 'T&TI/CGR': 'executor' },
+  });
+  assert.deepEqual(areas, []);
 });
 
 test('deriveApprovalAreas: sem dados devolve lista vazia', () => {

@@ -66,6 +66,21 @@ export function buildGmudTitle(form: GmudFormState, siData?: GmudSistemasInterno
 // Máscara — Rede Externa (comportamento original preservado)
 // ---------------------------------------------------------------------------
 
+/** Matriz "Recursos administrativos" (Executor/Validador/Observador); vale para as 3 categorias. */
+function pushRecursosAdministrativos(out: string[], form: GmudFormState) {
+  const recursos = Object.entries(form.recursosAdministrativos)
+    .filter(([, papel]) => papel && papel !== 'na')
+    .map(([area, papel]) => {
+      const label = GMUD_RECURSO_PAPEIS.find((p) => p.value === papel)?.label ?? papel
+      return `${area}: ${label}`
+    })
+  if (recursos.length > 0) {
+    out.push('')
+    out.push('>> RECURSOS ADMINISTRATIVOS')
+    out.push(recursos.join('  |  '))
+  }
+}
+
 function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   const out: string[] = []
 
@@ -100,17 +115,7 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
     riscos.forEach((r) => out.push(r))
   }
 
-  const recursos = Object.entries(form.recursosAdministrativos)
-    .filter(([, papel]) => papel && papel !== 'na')
-    .map(([area, papel]) => {
-      const label = GMUD_RECURSO_PAPEIS.find((p) => p.value === papel)?.label ?? papel
-      return `${area}: ${label}`
-    })
-  if (recursos.length > 0) {
-    out.push('')
-    out.push('>> RECURSOS ADMINISTRATIVOS')
-    out.push(recursos.join('  |  '))
-  }
+  pushRecursosAdministrativos(out, form)
 
   out.push('')
   out.push(SEP)
@@ -157,6 +162,7 @@ function buildGmudDescriptionSistemasInternos(form: GmudFormState, si: GmudSiste
   section(out, 'Plano de execução', form.planoExecucao)
   section(out, 'Plano de rollback', form.planoRollback)
   section(out, 'Observações', form.observacoes)
+  pushRecursosAdministrativos(out, form)
 
   out.push('')
   out.push(SEP)
@@ -202,6 +208,7 @@ function buildGmudDescriptionSistemasExternos(form: GmudFormState, se: GmudSiste
 
   section(out, 'Plano de contingência/execução', form.planoExecucao)
   section(out, 'Observações', form.observacoes)
+  pushRecursosAdministrativos(out, form)
 
   out.push('')
   out.push(SEP)
