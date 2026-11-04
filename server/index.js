@@ -131,6 +131,7 @@ import {
   buildApprovalUrl,
   createRateLimiter,
   deriveApprovalAreas,
+  deriveNotificationAreas,
 } from './lib/gmudAreaApproval.js';
 import { buildAreaDenialDescription, cancelGmudInElleven } from './lib/gmudEllevenCancel.js';
 import logger, { captureConsole } from './logger.js';
@@ -4449,7 +4450,7 @@ function gmudAreasFromCategoriaData(categoriaData) {
  * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL (e APP_BASE_URL para montar os links).
  * O payload carrega links com código de uso único: nunca logar o corpo enviado.
  */
-async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
+async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = [] }) {
   const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
   if (webhookUrl === '') return;
   const baseUrl = (process.env.APP_BASE_URL ?? '').trim();
@@ -4463,7 +4464,7 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
   );
   // Toda GMUD NOVA chama o webhook: o Chat avisa sempre; o e-mail com link de aprovação só sai para quem
   // foi marcado (áreas impactadas/afetadas, ou Executor/Validador/Observador na matriz). Sem aprovação
-  // por área (ex.: Emergencial), approvers vai vazio e só o Chat é postado.
+  // por área (Emergencial), approvers vai vazio e as áreas marcadas vão em `avisos` (e-mail sem link).
   const payload = {
     evento: 'gmud_aprovacao_areas',
     protocol: gmud.voalleProtocol,
@@ -4480,6 +4481,8 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
     horaFim: gmud.horaFim,
     areas: approvals.map((a) => a.areaLabel),
     approvers,
+    // Só na Emergencial: pessoas das áreas marcadas, avisadas por e-mail SEM link de aprovação.
+    avisos,
     criadaEm: new Date().toISOString(),
     platformUrl: `${baseUrl.replace(/\/+$/, '') || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
   };
@@ -4611,8 +4614,27 @@ app.post('/api/gmud/create', async (req, res) => {
       }
     }
     if (!existing) {
+      // Emergencial não passa por aprovação de área, mas as áreas marcadas (impactadas/afetadas e
+      // Executor/Validador/Observador) são avisadas por e-mail. Best-effort: área sem ninguém
+      // cadastrado só deixa de receber — nunca bloqueia a Emergencial.
+      let avisos = [];
+      if (String(body.tipo ?? '').trim() === 'Emergencial') {
+        try {
+          const labels = deriveNotificationAreas({
+            categoria: body.categoria,
+            categoriaData: body.categoriaData,
+            recursosAdministrativos: body.recursosAdministrativos,
+          });
+          const resolved = await resolveAreasWithApprovers(labels);
+          avisos = resolved.flatMap((a) =>
+            a.people.map((p) => ({ email: p.email, nome: p.name, area: a.label })),
+          );
+        } catch (avisoError) {
+          logger.warn('[gmud-approval-webhook] Falha ao resolver quem avisar na Emergencial:', { error: avisoError?.message });
+        }
+      }
       const gmudRow = await getGmudRequest(voalleProtocol);
-      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals });
+      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals, avisos });
     }
 
     return res.json({ success: true, data: result });

@@ -6,6 +6,7 @@ import {
   computeAreasStatus,
   createRateLimiter,
   deriveApprovalAreas,
+  deriveNotificationAreas,
   generateApprovalToken,
   hashApprovalToken,
   isValidApprovalTokenShape,
@@ -81,7 +82,7 @@ test('deriveApprovalAreas: sistemas externos soma áreas afetadas e matriz', () 
   assert.deepEqual(areas, ['Atendimento', 'T&TI/CGR']);
 });
 
-test('deriveApprovalAreas: emergencial ignora a matriz', () => {
+test('deriveApprovalAreas: emergencial não tem aprovação por área', () => {
   const areas = deriveApprovalAreas({
     tipo: 'Emergencial',
     categoria: 'sistemas_internos',
@@ -89,6 +90,15 @@ test('deriveApprovalAreas: emergencial ignora a matriz', () => {
     recursosAdministrativos: { 'T&TI/CGR': 'executor' },
   });
   assert.deepEqual(areas, []);
+});
+
+test('deriveNotificationAreas: emergencial avisa as áreas marcadas (impactadas + matriz)', () => {
+  const areas = deriveNotificationAreas({
+    tipo: 'Emergencial',
+    categoria: 'rede_externa',
+    recursosAdministrativos: { Financeiro: 'executor', Comercial: 'validador', RH: 'observador', TI: 'na' },
+  });
+  assert.deepEqual(areas, ['Financeiro', 'Comercial', 'RH']);
 });
 
 test('deriveApprovalAreas: sem dados devolve lista vazia', () => {

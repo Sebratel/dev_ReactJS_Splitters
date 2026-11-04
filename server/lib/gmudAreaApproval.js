@@ -29,8 +29,11 @@ const cleanLabels = (list) => [
  */
 const PAPEIS_QUE_APROVAM = new Set(['executor', 'validador', 'observador']);
 
-export function deriveApprovalAreas({ tipo, categoria, categoriaData, recursosAdministrativos } = {}) {
-  if (String(tipo ?? '').trim() === 'Emergencial') return [];
+/**
+ * Áreas marcadas na GMUD (impactadas/afetadas + Executor/Validador/Observador da matriz), de qualquer
+ * tipo. Na Emergencial elas não aprovam, mas são AVISADAS por e-mail (sem link).
+ */
+export function deriveNotificationAreas({ categoria, categoriaData, recursosAdministrativos } = {}) {
   const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
   const base =
     categoria === 'sistemas_internos'
@@ -45,6 +48,11 @@ export function deriveApprovalAreas({ tipo, categoria, categoriaData, recursosAd
           .map(([area]) => area)
       : [];
   return cleanLabels([...base, ...matriz]);
+}
+
+export function deriveApprovalAreas(input = {}) {
+  if (String(input?.tipo ?? '').trim() === 'Emergencial') return [];
+  return deriveNotificationAreas(input);
 }
 
 /** Situação geral das áreas de uma GMUD a partir do status de cada uma. */
