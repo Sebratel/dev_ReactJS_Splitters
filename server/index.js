@@ -4461,13 +4461,9 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
       link: buildApprovalUrl(baseUrl, p.token),
     })),
   );
-  // Toda GMUD criada avisa no Chat e por e-mail. Sem aprovação de área (Emergencial, ou Rede Externa
-  // sem áreas), não há aprovador com link: o e-mail vira um aviso informativo (sem link) para estes
-  // destinatários, além do solicitante (adicionado no N8N). Lista separada por vírgula.
-  const avisoEmails = (process.env.GMUD_NOTIFY_EMAILS ?? '')
-    .split(',')
-    .map((e) => e.trim())
-    .filter((e) => e !== '');
+  // Toda GMUD NOVA chama o webhook: o Chat avisa sempre; o e-mail com link de aprovação só sai para quem
+  // foi marcado (áreas impactadas/afetadas, ou Executor/Validador/Observador na matriz). Sem aprovação
+  // por área (ex.: Emergencial), approvers vai vazio e só o Chat é postado.
   const payload = {
     evento: 'gmud_aprovacao_areas',
     protocol: gmud.voalleProtocol,
@@ -4484,7 +4480,6 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [] }) {
     horaFim: gmud.horaFim,
     areas: approvals.map((a) => a.areaLabel),
     approvers,
-    avisoEmails,
     criadaEm: new Date().toISOString(),
     platformUrl: `${baseUrl.replace(/\/+$/, '') || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
   };
