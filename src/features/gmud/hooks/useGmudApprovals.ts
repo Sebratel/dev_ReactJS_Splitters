@@ -8,7 +8,10 @@ export function usePendingGmuds(enabled: boolean) {
     queryKey: ['gmud', 'pending'],
     queryFn: fetchPendingGmuds,
     enabled,
-    staleTime: 15_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   })
 }
 
@@ -19,7 +22,9 @@ export function useGmudPendingCount() {
     queryKey: ['gmud', 'pending-count'],
     queryFn: fetchPendingGmudCount,
     enabled: canApprove,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     refetchInterval: 60_000,
   })
   return canApprove ? (query.data ?? 0) : 0

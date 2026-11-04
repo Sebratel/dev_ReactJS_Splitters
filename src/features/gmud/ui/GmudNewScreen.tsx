@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -614,6 +614,7 @@ export function GmudNewScreen() {
     : form.categoria === 'sistemas_externos' ? seData
     : redeExternaCategoriaData(form)
 
+  const queryClient = useQueryClient()
   const mutation = useMutation({
     onError: (error) => showGmudError(error, 'Não foi possível registrar a GMUD'),
     mutationFn: async () => {
@@ -666,6 +667,8 @@ export function GmudNewScreen() {
     },
     onSuccess: (protocol) => {
       idempotencyKeyRef.current = null
+      // A lista e a agenda precisam mostrar a GMUD nova assim que a tela voltar.
+      void queryClient.invalidateQueries({ queryKey: ['gmud'] })
       navigate('/gmud')
       showFeedbackDialog({
         variant: 'success',

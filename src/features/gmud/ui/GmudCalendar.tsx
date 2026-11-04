@@ -46,7 +46,10 @@ export function GmudCalendar() {
   const agendaQuery = useQuery({
     queryKey: ['gmud', 'agenda', from, to],
     queryFn: () => fetchGmudAgenda(from, to),
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   })
   const items = agendaQuery.data ?? []
 

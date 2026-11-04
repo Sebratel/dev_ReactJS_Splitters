@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree, Maximize2, MessageSquarePlus } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -104,7 +104,15 @@ export function GmudDetailScreen() {
     queryKey: ['gmud', 'detail', protocol],
     queryFn: () => fetchGmudDetail(protocol),
     enabled: Number.isFinite(protocol) && protocol > 0,
+    refetchOnMount: 'always',
   })
+
+  // Cancelar/concluir/aprovar/reagendar muda a GMUD em vários lugares: invalida tudo de GMUD (detalhe,
+  // lista, agenda, fila e contador) para a lista não mostrar o status antigo ao voltar.
+  const queryClient = useQueryClient()
+  const refreshGmud = () => {
+    void queryClient.invalidateQueries({ queryKey: ['gmud'] })
+  }
 
   // Cache compartilhado com GmudFlowchartSection — sem requisição dupla
   const flowchartQuery = useQuery({
@@ -171,7 +179,7 @@ export function GmudDetailScreen() {
       return { aborted: false }
     },
     onSuccess: (r) => {
-      if (!r?.aborted) void query.refetch()
+      if (!r?.aborted) refreshGmud()
     },
   })
 
@@ -326,7 +334,7 @@ export function GmudDetailScreen() {
                 areas={d.areaApprovals}
                 statusAreas={statusAreas}
                 canOverride={canApprove && !closed}
-                onChanged={() => void query.refetch()}
+                onChanged={refreshGmud}
               />
               <GmudWindowHistoryCard request={d.request} events={d.events} />
               <GmudTimelineCard items={timeline} />
@@ -339,7 +347,7 @@ export function GmudDetailScreen() {
               onClose={() => setModal(null)}
               onSaved={() => {
                 setModal(null)
-                void query.refetch()
+                refreshGmud()
               }}
             />
           ) : null}
@@ -348,7 +356,7 @@ export function GmudDetailScreen() {
               gmud={listItem}
               onClose={() => {
                 setModal(null)
-                void query.refetch()
+                refreshGmud()
               }}
             />
           ) : null}
@@ -360,7 +368,7 @@ export function GmudDetailScreen() {
               onClose={() => setModal(null)}
               onSent={() => {
                 setModal(null)
-                void query.refetch()
+                refreshGmud()
               }}
             />
           ) : null}
@@ -375,7 +383,7 @@ export function GmudDetailScreen() {
               }}
               canReschedule={canApprove}
               onClose={() => setModal(null)}
-              onDone={() => void query.refetch()}
+              onDone={refreshGmud}
             />
           ) : null}
         </>

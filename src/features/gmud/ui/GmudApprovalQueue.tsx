@@ -228,7 +228,7 @@ export function GmudApprovalQueue() {
       if (result?.aborted) return
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'pending'] })
       void queryClient.invalidateQueries({ queryKey: ['gmud', 'pending-count'] })
-      void queryClient.invalidateQueries({ queryKey: ['gmud', 'list'] })
+      void queryClient.invalidateQueries({ queryKey: ['gmud'] })
     },
   })
 

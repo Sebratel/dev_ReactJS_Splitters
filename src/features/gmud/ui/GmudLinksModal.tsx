@@ -27,7 +27,7 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
 
   const invalidate = () => {
     void linksQuery.refetch()
-    void queryClient.invalidateQueries({ queryKey: ['gmud', 'list'] })
+    void queryClient.invalidateQueries({ queryKey: ['gmud'] })
   }
 
   const addMutation = useMutation({
