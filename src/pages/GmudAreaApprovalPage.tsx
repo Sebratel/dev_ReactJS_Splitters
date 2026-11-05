@@ -190,7 +190,7 @@ export function GmudAreaApprovalPage() {
     return (
       <Shell>
         <Summary info={info} />
-        <Notice tone="danger" title="Esta GMUD já foi negada">Outra área negou a GMUD; não há mais o que decidir.</Notice>
+        <Notice tone="danger" title="Esta GMUD não aceita mais decisão">Ela foi negada por outra área ou cancelada/encerrada; não há mais o que decidir.</Notice>
       </Shell>
     )
   }

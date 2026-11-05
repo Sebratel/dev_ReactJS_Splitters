@@ -720,12 +720,15 @@ function mapGmudRow(r) {
   };
 }
 
-/** Lista as GMUDs aguardando decisão do Comitê (status_comite = 'pendente'), escopo completo. */
+/**
+ * Lista as GMUDs aguardando decisão do Comitê (status_comite = 'pendente'), escopo completo.
+ * GMUD já encerrada no Elleven (cancelada, concluída ou negada) não é mais pendência.
+ */
 export async function listPendingGmuds() {
   await ensureTable();
   const pool = getMysqlPool();
   const [rows] = await pool.query(
-    `SELECT * FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada') ORDER BY created_at DESC LIMIT 200`,
+    `SELECT * FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada') AND elleven_encerrado_em IS NULL ORDER BY created_at DESC LIMIT 200`,
   );
   return rows.map(mapGmudRow);
 }
@@ -735,7 +738,7 @@ export async function getPendingGmudCount() {
   await ensureTable();
   const pool = getMysqlPool();
   const [rows] = await pool.query(
-    `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada')`,
+    `SELECT COUNT(*) AS total FROM ${TABLE} WHERE status_comite = 'pendente' AND status_areas IN ('nao_aplicavel', 'aprovada') AND elleven_encerrado_em IS NULL`,
   );
   return Number(rows?.[0]?.total ?? 0);
 }
@@ -1384,7 +1387,7 @@ export async function lookupApprovalToken(token) {
     `SELECT t.id AS token_id, t.approval_id, t.user_email, t.user_display_name, t.expires_at,
             a.voalle_protocol, a.area_label, a.status, a.decided_by_name, a.decided_at, a.motivo,
             g.titulo, g.tipo, g.categoria, g.descricao, g.pop_site, g.categoria_data, g.solicitante_nome,
-            g.data_inicio, g.hora_inicio, g.data_fim, g.hora_fim, g.status_comite, g.status_areas, g.assignment_id
+            g.data_inicio, g.hora_inicio, g.data_fim, g.hora_fim, g.status_comite, g.status_areas, g.assignment_id, g.elleven_encerrado_em
        FROM ${AREA_TOKENS_TABLE} t
        JOIN ${AREA_APPROVALS_TABLE} a ON a.id = t.approval_id
        LEFT JOIN ${TABLE} g ON g.voalle_protocol = a.voalle_protocol
@@ -1426,7 +1429,8 @@ export async function lookupApprovalToken(token) {
       decidedAt: r.decided_at ? new Date(r.decided_at).toISOString() : null,
     };
   }
-  if (r.status_areas === AREA_STATUS.NEGADA || r.status_comite === 'negada') return { ...base, state: 'closed' };
+  // GMUD negada ou já encerrada/cancelada no Elleven: o link não aceita mais decisão.
+  if (r.status_areas === AREA_STATUS.NEGADA || r.status_comite === 'negada' || r.elleven_encerrado_em) return { ...base, state: 'closed' };
   if (new Date(r.expires_at).getTime() < Date.now()) return { ...base, state: 'expired' };
   return { ...base, state: 'pending' };
 }
@@ -1441,7 +1445,7 @@ export async function decideAreaApproval({ token, decision, motivo }) {
   if (info.state === 'decided') {
     throw buildError(`Esta área já foi decidida${info.decidedByName ? ` por ${info.decidedByName}` : ''}.`, 409);
   }
-  if (info.state === 'closed') throw buildError('Esta GMUD já foi negada por outra área.', 409);
+  if (info.state === 'closed') throw buildError('Esta GMUD já foi encerrada ou negada e não aceita mais decisão.', 409);
   if (info.state === 'expired') throw buildError('Link inválido ou expirado.', 410);
 
   if (decision !== AREA_STATUS.APROVADA && decision !== AREA_STATUS.NEGADA) {
