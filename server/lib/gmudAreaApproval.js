@@ -50,6 +50,20 @@ export function deriveNotificationAreas({ categoria, categoriaData, recursosAdmi
   return cleanLabels([...base, ...matriz]);
 }
 
+/**
+ * Papel de cada área na matriz "Recursos administrativos" (executor, validador ou observador).
+ * Área marcada só como impactada/afetada não tem papel (string vazia). Comparação sem caixa/espaços.
+ */
+export function papelDaArea(recursosAdministrativos, areaLabel) {
+  if (!recursosAdministrativos || typeof recursosAdministrativos !== 'object') return '';
+  const alvo = String(areaLabel ?? '').trim().toLowerCase();
+  if (alvo === '') return '';
+  for (const [area, papel] of Object.entries(recursosAdministrativos)) {
+    if (String(area).trim().toLowerCase() === alvo && PAPEIS_QUE_APROVAM.has(papel)) return papel;
+  }
+  return '';
+}
+
 export function deriveApprovalAreas(input = {}) {
   if (String(input?.tipo ?? '').trim() === 'Emergencial') return [];
   return deriveNotificationAreas(input);

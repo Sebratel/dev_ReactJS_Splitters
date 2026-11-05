@@ -6,6 +6,7 @@ import {
   computeAreasStatus,
   createRateLimiter,
   deriveApprovalAreas,
+  papelDaArea,
   deriveNotificationAreas,
   generateApprovalToken,
   hashApprovalToken,
@@ -202,4 +203,14 @@ test('buildAreaDenialDescription cita a área e quem negou', () => {
   const texto = buildAreaDenialDescription({ areaLabel: 'Comercial', byName: 'Fulano', at: new Date(2026, 9, 28, 14, 5) });
   assert.match(texto, /área Comercial \(Fulano\)/);
   assert.match(texto, /28\/10\/2026 14:05/);
+});
+
+test('papelDaArea: papel da matriz sem diferenciar caixa; N/A e ausente viram vazio', () => {
+  const m = { Financeiro: 'executor', Comercial: 'validador', RH: 'observador', TI: 'na' };
+  assert.equal(papelDaArea(m, 'financeiro '), 'executor');
+  assert.equal(papelDaArea(m, 'Comercial'), 'validador');
+  assert.equal(papelDaArea(m, 'RH'), 'observador');
+  assert.equal(papelDaArea(m, 'TI'), '');
+  assert.equal(papelDaArea(m, 'Outra'), '');
+  assert.equal(papelDaArea(null, 'RH'), '');
 });

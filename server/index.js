@@ -131,6 +131,7 @@ import {
   buildApprovalUrl,
   createRateLimiter,
   deriveApprovalAreas,
+  papelDaArea,
   deriveNotificationAreas,
 } from './lib/gmudAreaApproval.js';
 import { buildAreaDenialDescription, cancelGmudInElleven } from './lib/gmudEllevenCancel.js';
@@ -4450,7 +4451,7 @@ function gmudAreasFromCategoriaData(categoriaData) {
  * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL (e APP_BASE_URL para montar os links).
  * O payload carrega links com código de uso único: nunca logar o corpo enviado.
  */
-async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = [] }) {
+async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = [], recursosAdministrativos = null }) {
   const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
   if (webhookUrl === '') return;
   const baseUrl = (process.env.APP_BASE_URL ?? '').trim();
@@ -4459,6 +4460,8 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = []
       email: p.email,
       nome: p.nome,
       area: a.areaLabel,
+      // Papel da área na matriz (executor/validador/observador); vazio = só marcada como impactada/afetada.
+      papel: papelDaArea(recursosAdministrativos, a.areaLabel),
       link: buildApprovalUrl(baseUrl, p.token),
     })),
   );
@@ -4627,14 +4630,14 @@ app.post('/api/gmud/create', async (req, res) => {
           });
           const resolved = await resolveAreasWithApprovers(labels);
           avisos = resolved.flatMap((a) =>
-            a.people.map((p) => ({ email: p.email, nome: p.name, area: a.label })),
+            a.people.map((p) => ({ email: p.email, nome: p.name, area: a.label, papel: papelDaArea(body.recursosAdministrativos, a.label) })),
           );
         } catch (avisoError) {
           logger.warn('[gmud-approval-webhook] Falha ao resolver quem avisar na Emergencial:', { error: avisoError?.message });
         }
       }
       const gmudRow = await getGmudRequest(voalleProtocol);
-      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals, avisos });
+      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals, avisos, recursosAdministrativos: body.recursosAdministrativos });
     }
 
     return res.json({ success: true, data: result });
