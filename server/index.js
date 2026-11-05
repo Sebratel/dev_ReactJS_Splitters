@@ -2036,6 +2036,8 @@ app.post('/api/massiva/history/open', async (req, res) => {
       infraProtocol: req.body?.infraProtocol ?? null,
       infraAssignmentId: req.body?.infraAssignmentId ?? null,
       identifiedBy: req.body?.identifiedBy ?? null,
+      // Linha completa (gravação final) por padrão; `false` só na gravação antecipada de 1 AP.
+      complete: req.body?.complete !== false,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
@@ -2048,6 +2050,54 @@ app.post('/api/massiva/history/open', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao registrar histórico local de abertura de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Massiva — gravação antecipada chamada pelo GATEWAY (server-to-server), logo após o
+// Elleven confirmar a abertura do protocolo — independente do navegador do operador.
+// Fecha a janela que a gravação antecipada do front (openMassivaFromContext.ts) não cobre:
+// queda/timeout durante o próprio POST de abertura, antes de o navegador processar a
+// resposta. Protegido por segredo compartilhado (não é sessão de usuário — quem chama é o
+// gateway Java, não um browser logado). Resposta ao item 2 da revisão da PR #45.
+// Sempre complete:false e best-effort nos campos: a gravação do front (early + final)
+// continua rodando normalmente depois e enriquece/fecha a mesma linha via upsert.
+// ---------------------------------------------------------------------------
+app.post('/api/internal/massiva/history/open', async (req, res) => {
+  try {
+    const secret = (process.env.MASSIVA_GATEWAY_INTERNAL_SECRET ?? '').trim();
+    const provided = (req.headers['x-internal-secret'] ?? '').trim();
+    if (!secret || !provided || provided !== secret) {
+      return res.status(401).json({ success: false, message: 'Não autorizado.' });
+    }
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const payload = {
+      operatorEmail: String(req.body?.operatorEmail ?? '').trim(),
+      title: String(req.body?.title ?? '').trim(),
+      splitterEntries: [],
+      results: normalizeMassivaHistoryResults(req.body?.results),
+      affectedClients: req.body?.affectedClients ?? 0,
+      openedAt: req.body?.openedAt ?? null,
+      identifiedBy: req.body?.identifiedBy ?? null,
+      complete: false,
+    };
+
+    const result = await massivaHistoryStore.registerOpenBatch(payload);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao registrar histórico local (gravação do gateway):', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar histórico local da abertura (gateway).',
       error: error.message,
     });
   }
@@ -7852,6 +7902,66 @@ async function startServer() {
     );
   } else {
     logger.info('[network-relief-snapshot] Cron desativado (NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED=true).');
+  }
+
+  // Reconciliação: acha linhas de massiva_history que só foram gravadas pela antecipação
+  // (ver registerOpenedHistoryEarly no front) e cuja gravação final nunca completou —
+  // "history_complete = 0" por tempo demais. Sinaliza nos logs e, se configurado, num
+  // webhook (reaproveita o padrão de webhook já usado em outras integrações do projeto).
+  // Resposta ao item 3 da revisão da PR #45 (gravação antecipada do histórico de massiva).
+  const reconciliationCronDisabled =
+    String(process.env.MASSIVA_RECONCILIATION_CRON_DISABLED ?? '').toLowerCase() === 'true';
+  const reconciliationCronExpr = (process.env.MASSIVA_RECONCILIATION_CRON ?? '*/15 * * * *').trim();
+  const reconciliationThresholdHours = (() => {
+    const n = Number.parseInt(process.env.MASSIVA_RECONCILIATION_THRESHOLD_HOURS ?? '1', 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  })();
+  const reconciliationWebhookUrl = String(process.env.MASSIVA_RECONCILIATION_WEBHOOK_URL ?? '').trim();
+
+  if (!massivaHistoryStore.configured) {
+    logger.info('[massiva-reconciliation] Cron não registrado (MySQL de massivas não configurado).');
+  } else if (!reconciliationCronDisabled) {
+    cron.schedule(
+      reconciliationCronExpr,
+      async () => {
+        try {
+          const stale = await massivaHistoryStore.getStaleIncompleteHistory(reconciliationThresholdHours);
+          if (stale.length === 0) return;
+
+          logger.warn(
+            `[massiva-reconciliation] ${stale.length} linha(s) de histórico incompletas há mais de ${reconciliationThresholdHours}h.`,
+            { items: stale },
+          );
+
+          if (reconciliationWebhookUrl !== '') {
+            const linhas = stale
+              .map((item) => `• ${item.protocol ?? item.assignmentId ?? item.id} — ${item.title || '(sem título)'} (aberta ${item.openedAt}, status ${item.status})`)
+              .join('\n');
+            try {
+              await fetch(reconciliationWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: `⚠️ ${stale.length} massiva(s) com histórico incompleto há mais de ${reconciliationThresholdHours}h — confira manualmente no Elleven:\n${linhas}`,
+                }),
+              });
+            } catch (webhookError) {
+              logger.error('[massiva-reconciliation] Falha ao postar alerta no webhook.', { error: webhookError });
+            }
+          }
+        } catch (error) {
+          logger.error('[massiva-reconciliation] Falha ao consultar histórico incompleto.', { error });
+        }
+      },
+      { timezone: 'America/Sao_Paulo' },
+    );
+    logger.info(
+      `[massiva-reconciliation] Cron ativo: "${reconciliationCronExpr}" America/Sao_Paulo (padrão a cada 15 min, limiar ${reconciliationThresholdHours}h)` +
+        (reconciliationWebhookUrl !== '' ? ', com webhook configurado' : ', sem webhook — só log') +
+        '. Desative com MASSIVA_RECONCILIATION_CRON_DISABLED=true.',
+    );
+  } else {
+    logger.info('[massiva-reconciliation] Cron desativado (MASSIVA_RECONCILIATION_CRON_DISABLED=true).');
   }
 }
 

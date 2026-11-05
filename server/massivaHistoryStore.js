@@ -6,6 +6,7 @@ import {
 } from './mysqlBrazilDateTime.js';
 import { splitterLabelsMatchOptionalPonFilter } from './splitterTitleOltDerivation.js';
 import logger from './logger.js';
+import { withRowLock } from './rowLock.js';
 
 // Observabilidade aditiva: envolve cada função exportada da store com log de
 // duração/sucesso, sem alterar o valor retornado nem engolir erros (sempre
@@ -222,6 +223,9 @@ export function createMassivaHistoryStore(config) {
       async getMttdMttrMonthlyKpis() {
         return [];
       },
+      async getStaleIncompleteHistory() {
+        return [];
+      },
       async end() {},
     };
   }
@@ -270,6 +274,7 @@ export function createMassivaHistoryStore(config) {
   let hasClassificationAuditColumns = false;
   let hasAffectedVerificationColumns = false;
   let hasAffectedClientsTable = false;
+  let hasHistoryCompleteColumn = false;
 
   /**
    * Adiciona uma coluna idempotentemente via ALTER TABLE.
@@ -365,6 +370,18 @@ export function createMassivaHistoryStore(config) {
         hasAffectedVerificationColumns = Array.isArray(cols) && cols.length > 0;
       } catch {
         hasAffectedVerificationColumns = false;
+      }
+
+      // Migração idempotente: marca se a linha já está completa (infra + afetados + encerramento
+      // automático já resolvidos) ou se é só a gravação antecipada de um AP (ver
+      // `registerOpenedHistoryEarly` no front). NULL = linha legada, anterior a esta coluna —
+      // tratada como completa (era sempre gravada de uma vez só, no fim do fluxo).
+      await addColumnIfMissing('history_complete TINYINT(1) NULL');
+      try {
+        const [cols] = await dataPool.query("SHOW COLUMNS FROM massiva_history LIKE 'history_complete'");
+        hasHistoryCompleteColumn = Array.isArray(cols) && cols.length > 0;
+      } catch {
+        hasHistoryCompleteColumn = false;
       }
 
       // Migração idempotente: tabela de clientes afetados por massiva (log — 1 linha
@@ -482,6 +499,12 @@ export function createMassivaHistoryStore(config) {
     // Quem identificou o evento (tecnico/zabbix/int6) — mesmo valor em todas as linhas do lote.
     const identifiedBy = normalizeNullableText(input?.identifiedBy);
 
+    // Linha completa (gravação final) por padrão; só é `false` na gravação antecipada de 1 AP
+    // (ver `registerOpenedHistoryEarly` no front). Default `true` cobre qualquer chamador futuro
+    // que não envie o campo.
+    const complete = input?.complete !== false;
+    const completeValue = complete ? 1 : 0;
+
     let insertedOrUpdated = 0;
 
     for (const result of results) {
@@ -496,6 +519,12 @@ export function createMassivaHistoryStore(config) {
 
       if (protocol === null && assignmentId === null) continue;
 
+      // Trava por chave: sem isso, duas chamadas concorrentes para o mesmo
+      // protocolo/assignment (ex.: a gravação antecipada e a final chegando
+      // quase juntas) podem achar a linha inexistente nas duas e inserir
+      // duas vezes. Só serializa dentro deste processo — ver rowLock.js.
+      const lockKey = assignmentId !== null ? `assignment:${assignmentId}` : `protocol:${protocol}`;
+      await withRowLock(lockKey, async () => {
       const existingId = await findExistingHistoryId(protocol, assignmentId);
 
       if (existingId !== null) {
@@ -533,6 +562,18 @@ export function createMassivaHistoryStore(config) {
           : '';
         const identifiedByUpdateParam = hasIdentifiedByColumn ? [identifiedBy] : [];
 
+        // Completa é um trinco: linha legada (NULL) fica NULL (sempre foi completa); uma vez
+        // completa (1), nunca volta a parcial; só uma gravação com complete=true a destranca.
+        const historyCompleteSetClause = hasHistoryCompleteColumn
+          ? `,
+              history_complete = CASE
+                WHEN history_complete IS NULL THEN NULL
+                WHEN ? = 1 THEN 1
+                ELSE history_complete
+              END`
+          : '';
+        const historyCompleteUpdateParam = hasHistoryCompleteColumn ? [completeValue] : [];
+
         await dataPool.query(
           `
             UPDATE massiva_history
@@ -550,7 +591,7 @@ export function createMassivaHistoryStore(config) {
               closed_at = ?,
               auto_closed_without_clients = ?,
               close_description = COALESCE(?, close_description),
-              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}${identifiedBySetClause}
+              source = 'nexaview-local'${classifSetClause}${eventStartSetClause}${infraSetClause}${identifiedBySetClause}${historyCompleteSetClause}
             WHERE id = ?
           `,
           [
@@ -574,6 +615,7 @@ export function createMassivaHistoryStore(config) {
             ...eventStartUpdateParam,
             ...infraUpdateParams,
             ...identifiedByUpdateParam,
+            ...historyCompleteUpdateParam,
             existingId,
           ],
         );
@@ -609,6 +651,11 @@ export function createMassivaHistoryStore(config) {
         const identifiedByInsertPlaceholder = hasIdentifiedByColumn ? ', ?' : '';
         const identifiedByInsertValue = hasIdentifiedByColumn ? [identifiedBy] : [];
 
+        // Completa: incluída no INSERT somente quando a coluna existir.
+        const historyCompleteInsertCol = hasHistoryCompleteColumn ? ', history_complete' : '';
+        const historyCompleteInsertPlaceholder = hasHistoryCompleteColumn ? ', ?' : '';
+        const historyCompleteInsertValue = hasHistoryCompleteColumn ? [completeValue] : [];
+
         const [insertResult] = await dataPool.query(
           `
             INSERT INTO massiva_history (
@@ -625,9 +672,9 @@ export function createMassivaHistoryStore(config) {
               closed_at,
               auto_closed_without_clients,
               close_description,
-              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}${identifiedByInsertCol}
+              source${classifInsertCols}${eventStartInsertCol}${infraInsertCols}${identifiedByInsertCol}${historyCompleteInsertCol}
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders}${identifiedByInsertPlaceholder})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'nexaview-local'${classifInsertPlaceholders}${eventStartInsertPlaceholder}${infraInsertPlaceholders}${identifiedByInsertPlaceholder}${historyCompleteInsertPlaceholder})
           `,
           [
             protocol,
@@ -647,10 +694,12 @@ export function createMassivaHistoryStore(config) {
             ...eventStartInsertValue,
             ...infraInsertValues,
             ...identifiedByInsertValue,
+            ...historyCompleteInsertValue,
           ],
         );
         await attachSplitters(insertResult.insertId, splitterEntries);
       }
+      });
 
       insertedOrUpdated += 1;
     }
@@ -2376,6 +2425,49 @@ export function createMassivaHistoryStore(config) {
     }));
   }
 
+  /**
+   * Linhas gravadas só pela antecipação (ver registerOpenedHistoryEarly no front) cuja
+   * gravação final nunca chegou a rodar — `history_complete = 0` há mais tempo do que uma
+   * abertura normal levaria. Alimenta o job de reconciliação (ver index.js): candidatas a
+   * protocolo "fantasma" (Elleven fechou ou segue aberto, mas nosso histórico nunca completou).
+   * Linha legada (sem a coluna) nunca aparece aqui — era sempre gravada de uma vez só.
+   */
+  async function getStaleIncompleteHistory(thresholdHours = 1) {
+    await ensureReady();
+    if (!hasHistoryCompleteColumn) return [];
+
+    const hours = Number.isFinite(thresholdHours) && thresholdHours > 0 ? thresholdHours : 1;
+    const [rows] = await dataPool.query(
+      `
+        SELECT
+          id,
+          protocol,
+          assignment_id AS assignmentId,
+          access_point_code AS accessPointCode,
+          title,
+          status,
+          opened_at AS openedAt
+        FROM massiva_history
+        WHERE history_complete = 0
+          AND opened_at < (NOW() - INTERVAL ? HOUR)
+          AND status <> 'cancelada'
+        ORDER BY opened_at ASC
+        LIMIT 50
+      `,
+      [hours],
+    );
+
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      id: row.id,
+      protocol: row.protocol,
+      assignmentId: row.assignmentId,
+      accessPointCode: row.accessPointCode,
+      title: row.title,
+      status: row.status,
+      openedAt: serializeHistoryDate(row.openedAt),
+    }));
+  }
+
   async function end() {
     clearInterval(poolStatsIntervalHandle);
     await dataPool.end();
@@ -2413,6 +2505,7 @@ export function createMassivaHistoryStore(config) {
     diffNetworkReliefSnapshots,
     getHistoryList,
     getMttdMttrMonthlyKpis,
+    getStaleIncompleteHistory,
     end,
   };
 
