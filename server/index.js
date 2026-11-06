@@ -135,6 +135,12 @@ import {
   deriveNotificationAreas,
 } from './lib/gmudAreaApproval.js';
 import { buildAreaDenialDescription, cancelGmudInElleven } from './lib/gmudEllevenCancel.js';
+import {
+  MASSIVA_FINALIZE_MODES,
+  cleanupMassivaAffected,
+  finalizeMassivaInElleven,
+  nowBrazilIsoLike,
+} from './lib/massivaEllevenClose.js';
 import logger, { captureConsole } from './logger.js';
 
 const { Pool } = pkg;
@@ -2576,6 +2582,82 @@ app.post('/api/massiva/history/update-expected-close', async (req, res) => {
       success: false,
       message: 'Erro interno ao atualizar previsão de encerramento local de massiva.',
       error: error.message,
+    });
+  }
+});
+
+/**
+ * Encerra ou cancela uma massiva de ponta a ponta no backend: Elleven (via gateway) -> limpeza dos afetados ->
+ * histórico local. Tudo numa só requisição que segue rodando mesmo se o navegador desconectar, então a aba
+ * fechar no meio não deixa mais o Elleven encerrado e o histórico local "aberta".
+ * Sem GATEWAY_* no backend responde 503 { code: 'gateway_not_configured' } e o frontend cai no fluxo antigo.
+ */
+app.post('/api/massiva/finalize', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    const mode = String(req.body?.mode ?? '').trim();
+    if (mode !== MASSIVA_FINALIZE_MODES.ENCERRAR && mode !== MASSIVA_FINALIZE_MODES.CANCELAR) {
+      return res.status(400).json({ success: false, message: 'Modo inválido (use encerrar ou cancelar).' });
+    }
+    const protocol = Number(req.body?.protocol);
+    const assignmentId = Number(req.body?.assignmentId);
+    const description = String(req.body?.description ?? '').trim();
+    if (!Number.isInteger(protocol) || protocol <= 0 || !Number.isInteger(assignmentId) || assignmentId <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo ou assignmentId inválidos.' });
+    }
+    if (description.length < 3 || description.length > 4000) {
+      return res.status(400).json({ success: false, message: 'Informe a descrição (3 a 4000 caracteres).' });
+    }
+
+    // 1) Elleven. Se falhar, nada local é alterado.
+    const elleven = await finalizeMassivaInElleven({ assignmentId, description, mode });
+    if (!elleven.ok) {
+      if (elleven.notConfigured) {
+        return res.status(503).json({ success: false, code: 'gateway_not_configured', message: elleven.reason });
+      }
+      logger.error('[massiva-finalize] Elleven não finalizou o protocolo.', { protocol, mode, reason: elleven.reason });
+      return res.status(502).json({ success: false, message: elleven.reason });
+    }
+
+    // 2) Limpeza dos afetados no gateway (auxiliar; falha não desfaz o encerramento).
+    await cleanupMassivaAffected({ protocol });
+
+    // 3) Histórico local. Elleven já finalizou: falha aqui vira aviso, não erro.
+    const closedBy = gmudActorName(actor);
+    let localHistoryWarning;
+    try {
+      if (!massivaHistoryStore.configured) {
+        localHistoryWarning = 'Histórico local de massivas não configurado no MySQL.';
+      } else {
+        const base = { protocol, assignmentId, closeDescription: description, closedAt: nowBrazilIsoLike(), closedBy };
+        const saved =
+          mode === MASSIVA_FINALIZE_MODES.CANCELAR
+            ? await massivaHistoryStore.registerCancel(base)
+            : await massivaHistoryStore.registerClose({
+                ...base,
+                tipoIncidente: req.body?.tipoIncidente ?? null,
+                impacto: req.body?.impacto ?? null,
+                area: req.body?.area ?? null,
+                tecnologia: req.body?.tecnologia ?? null,
+                classificacao: req.body?.classificacao ?? null,
+                cnl: req.body?.cnl ?? null,
+              });
+        if (!saved || Number(saved.updated ?? 0) === 0) {
+          localHistoryWarning = 'Finalizada no Elleven, mas não há registro local desse protocolo para atualizar.';
+        }
+      }
+    } catch (localError) {
+      logger.error('[massiva-finalize] Falha ao gravar o histórico local.', { protocol, mode, error: localError?.message });
+      localHistoryWarning = `Finalizada no Elleven, mas o registro local falhou: ${localError?.message ?? 'erro desconhecido'}.`;
+    }
+
+    return res.json({ success: true, data: { ok: true, ...(localHistoryWarning ? { localHistoryWarning } : {}) } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao finalizar a massiva.'),
     });
   }
 });

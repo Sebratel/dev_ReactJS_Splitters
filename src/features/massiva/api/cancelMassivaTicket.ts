@@ -1,3 +1,4 @@
+import { finalizeMassivaOnServer } from '@/features/massiva/api/finalizeMassivaOnServer'
 import { registerCancelledMassivaHistoryInLocalDb } from '@/features/massiva/api/registerCancelledMassivaHistoryInLocalDb'
 import { bffClient } from '@/shared/api/bffClient'
 import { env } from '@/shared/config/env'
@@ -39,6 +40,20 @@ function affectedUsersCleanupBasePath(): string {
  * Depois limpa afetados e grava o cancelamento no histórico local como `cancelada`.
  */
 export async function cancelMassivaTicket(input: CancelMassivaInput): Promise<CancelMassivaResult> {
+  // Caminho preferido: o backend faz tudo (Elleven, afetados e histórico local) numa só requisição.
+  const onServer = await finalizeMassivaOnServer({
+    mode: 'cancelar',
+    protocol: input.protocol,
+    assignmentId: input.assignmentId,
+    description: input.cancelDescription,
+  })
+  if (onServer.handled) {
+    return onServer.localHistoryWarning !== undefined
+      ? { ok: true, localHistoryWarning: onServer.localHistoryWarning }
+      : { ok: true }
+  }
+
+  // Fallback (backend sem gateway configurado): fluxo antigo, feito pelo navegador.
   const closePath = normalizePath(env.massivaClosePath)
   if (closePath === '') {
     throw new Error('Defina VITE_MASSIVA_CLOSE_PATH para cancelar massivas.')
