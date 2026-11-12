@@ -11,6 +11,12 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import { createMassivaConferenciaStore } from './massivaConferenciaStore.js';
+import {
+  buildConferenciaStatus,
+  createConferenciaService,
+  startConferenciaScheduler,
+} from './lib/massivaConferenciaElleven.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -749,6 +755,21 @@ const massivaHistoryStore = createMassivaHistoryStore({
   user: process.env.MASSIVA_MYSQL_USER,
   password: process.env.MASSIVA_MYSQL_PASSWORD,
   database: process.env.MASSIVA_MYSQL_DATABASE,
+});
+
+// Conferência com o Elleven: cria no histórico local as massivas que existem no Elleven e faltam aqui.
+// Desligada por padrão (MASSIVA_CONFERENCIA_ENABLED=true liga). Ver lib/massivaConferenciaElleven.js.
+const massivaConferenciaStore = createMassivaConferenciaStore({
+  host: process.env.MASSIVA_MYSQL_HOST,
+  port: process.env.MASSIVA_MYSQL_PORT,
+  user: process.env.MASSIVA_MYSQL_USER,
+  password: process.env.MASSIVA_MYSQL_PASSWORD,
+  database: process.env.MASSIVA_MYSQL_DATABASE,
+});
+const massivaConferenciaService = createConferenciaService({
+  store: massivaConferenciaStore,
+  env: process.env,
+  logger,
 });
 
 function normalizeMassivaHistorySplitterEntries(entries) {
@@ -2876,6 +2897,26 @@ app.get('/api/massiva/history/open-filter-splitter-codes', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao resolver splitters para filtro de massiva aberta.',
+      error: error.message,
+    });
+  }
+});
+
+// Estado da Conferência com o Elleven (leitura, para a tela de qualidade das massivas).
+app.get('/api/massiva/conferencia/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const data = await buildConferenciaStatus({
+      service: massivaConferenciaService,
+      store: massivaConferenciaStore,
+      env: process.env,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: 'Erro ao consultar a conferência com o Elleven.',
       error: error.message,
     });
   }
@@ -7772,6 +7813,13 @@ async function startServer() {
   } else {
     logger.warn('Histórico local de massivas (MySQL) desativado: configure MASSIVA_MYSQL_* no .env.local.');
   }
+
+  startConferenciaScheduler({
+    service: massivaConferenciaService,
+    store: massivaConferenciaStore,
+    env: process.env,
+    logger,
+  });
 
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';
   const kpiCronExpr = (process.env.DASHBOARD_KPI_CRON ?? '0 6 * * *').trim();
