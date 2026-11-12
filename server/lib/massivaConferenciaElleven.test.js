@@ -102,7 +102,7 @@ describe('datas e configuração', () => {
 
   it('readConferenciaConfig: padrões e limites', () => {
     const d = readConferenciaConfig({});
-    assert.deepEqual({ ...d }, { enabled: false, dryRun: false, intervalMinutes: 5, janelaDias: 30, carenciaMinutos: 10, alertUrl: '' });
+    assert.deepEqual({ ...d }, { enabled: false, dryRun: false, intervalMinutes: 5, janelaDias: 7, carenciaMinutos: 10, alertUrl: '' });
     const c = readConferenciaConfig({
       MASSIVA_CONFERENCIA_ENABLED: 'TRUE',
       MASSIVA_CONFERENCIA_DRY_RUN: 'true',
@@ -199,6 +199,24 @@ describe('planConferencia', () => {
   it('ignora protocolo repetido na lista', () => {
     const plano = planConferencia({ ellevenItems: [item(8), item(8)], localProtocols: local(), now: NOW });
     assert.equal(plano.criar.length, 1);
+  });
+
+  it('janela padrão é de 7 dias (6 dias dentro, 8 dias fora)', () => {
+    const dentro = item(11, { criacao: '2026-11-06T12:00:00' });
+    const fora = item(12, { criacao: '2026-11-04T12:00:00', finalizado: '2026-11-04T15:00:00', status: 'Cancelado' });
+    const plano = planConferencia({ ellevenItems: [dentro, fora], localProtocols: local(), now: NOW });
+    assert.deepEqual(plano.criar.map((r) => r.protocol), [11]);
+    assert.equal(plano.foraDaJanela, 1);
+  });
+
+  it('devolve também a lista de quem está fora da janela (sem dado de cliente)', () => {
+    const fora = item(13, { criacao: '2026-10-28T10:43:00', finalizado: '2026-10-28T11:00:00', status: 'Cancelado' });
+    const ja = item(14, { criacao: '2026-10-28T10:43:00' });
+    const plano = planConferencia({ ellevenItems: [fora, ja], localProtocols: local(14), now: NOW });
+    assert.equal(plano.foraDaJanela, 1);
+    assert.deepEqual(plano.foraDaJanelaLista, [
+      { protocolo: 13, assignmentId: 1_000_013, statusElleven: 'cancelada', abertura: '2026-10-28 10:43:00', pontoDeAcesso: 'OLT 03 - SLEFT' },
+    ]);
   });
 });
 
@@ -473,6 +491,57 @@ describe('contrato de GET /api/massiva/conferencia/status', () => {
     assert.equal(s.ultimaExecucao.ok, true);
     assert.equal(s.ultimaExecucao.elleven.total, 25);
     assert.ok(s.ultimaExecucao.divergencias.abertaLocalFinalizadaElleven);
+  });
+
+  it('traz as listas semRegistro e foraDaJanela com total real e teto de 50', async () => {
+    const store = fakeStore();
+    const dentro = Array.from({ length: 60 }, (_, i) => item(200 + i));
+    const fora = Array.from({ length: 55 }, (_, i) => item(400 + i, { criacao: '2026-09-01T10:00:00', finalizado: '2026-09-01T11:00:00', status: 'Encerrado' }));
+    const env = { ...ENV, MASSIVA_CONFERENCIA_DRY_RUN: 'true' };
+    const { service } = newService({ store, items: [...dentro, ...fora], env });
+    await service.runOnce();
+    const s = await buildConferenciaStatus({ service, store, env });
+    const u = s.ultimaExecucao;
+    assert.equal(u.semRegistro.total, 60);
+    assert.equal(u.semRegistro.itens.length, 50);
+    assert.equal(u.foraDaJanela.total, 55);
+    assert.equal(u.foraDaJanela.itens.length, 50);
+    assert.deepEqual(u.semRegistro.itens[0], {
+      protocolo: 200, assignmentId: 1_000_200, statusElleven: 'aberta', abertura: '2026-11-12 08:00:00', pontoDeAcesso: 'OLT 03 - SLEFT', desfecho: 'seria_criada',
+    });
+    assert.equal(u.foraDaJanela.itens[0].statusElleven, 'encerrada');
+    assert.equal(u.foraDaJanela.itens[0].desfecho, 'fora_da_janela');
+    assert.equal(store.inserts.length, 0, 'dry-run não grava');
+    assert.equal(JSON.stringify(u).includes('Registro Incidente'), false, 'sem título do incidente');
+  });
+
+  it('modo real: desfecho por item (criada, falhou, ja_existia) e fora da janela nunca é criado', async () => {
+    const store = fakeStore({ failFor: new Set([502]) });
+    const velho = item(900, { criacao: '2026-10-01T10:00:00' });
+    const semId = item(503, { id: null });
+    const { service } = newService({ store, items: [item(501), item(502), semId, velho] });
+    // 501 já existe no banco no momento da gravação (corrida): store devolve duplicate
+    const insert = store.insertRecovered;
+    store.insertRecovered = async (row) => (row.protocol === 501 ? { duplicate: true } : insert(row));
+    const r = await service.runOnce();
+    const porProtocolo = Object.fromEntries(r.semRegistro.map((i) => [i.protocolo, i.desfecho]));
+    assert.deepEqual(porProtocolo, { 501: 'ja_existia', 502: 'falhou', 503: 'sem_assignment' });
+    assert.deepEqual(r.foraDaJanela.map((i) => i.protocolo), [900]);
+    assert.equal(store.byProtocol.has(900), false);
+
+    const store2 = fakeStore();
+    const { service: s2 } = newService({ store: store2, items: [item(510)] });
+    const r2 = await s2.runOnce();
+    assert.equal(r2.semRegistro[0].desfecho, 'criada');
+  });
+
+  it('nada faltando: listas vazias com total 0', async () => {
+    const store = fakeStore({ rows: [{ protocol: 1, assignment_id: 1_000_001, status: 'aberta' }] });
+    const { service } = newService({ store, items: [item(1)] });
+    await service.runOnce();
+    const s = await buildConferenciaStatus({ service, store, env: ENV });
+    assert.deepEqual(s.ultimaExecucao.semRegistro, { total: 0, itens: [] });
+    assert.deepEqual(s.ultimaExecucao.foraDaJanela, { total: 0, itens: [] });
   });
 
   it('sem execução ainda: ultimaExecucao nula; sem MySQL: recuperadas nula', async () => {

@@ -8,6 +8,35 @@
 /** Valor de `massiva_history.source` das linhas criadas pela conferência. */
 export const MASSIVA_SOURCE_CONFERENCIA_ELLEVEN = 'conferencia-elleven'
 
+/** Situação do protocolo no Elleven. */
+export type MassivaConferenciaStatusElleven = 'aberta' | 'encerrada' | 'cancelada'
+
+/** O que a conferência fez (ou fará) com o protocolo. */
+export type MassivaConferenciaDesfecho =
+  | 'seria_criada'
+  | 'criada'
+  | 'falhou'
+  | 'ja_existia'
+  | 'sem_assignment'
+  | 'fora_da_janela'
+
+/** Protocolo listado na tela (sem dado de cliente). */
+export type MassivaConferenciaProtocolo = {
+  protocolo: number
+  assignmentId: number | null
+  statusElleven: MassivaConferenciaStatusElleven
+  /** Horário de parede de Brasília, como veio do backend ("AAAA-MM-DD HH:mm:ss" ou ISO sem fuso). */
+  abertura: string | null
+  pontoDeAcesso: string
+  desfecho: MassivaConferenciaDesfecho | null
+}
+
+/** Lista cortada pelo backend (até 50 itens) com o total real. */
+export type MassivaConferenciaProtocolos = {
+  total: number
+  itens: MassivaConferenciaProtocolo[]
+}
+
 export type MassivaConferenciaResumo = {
   ok: boolean
   /** Execução ignorada porque a anterior ainda estava em andamento. */
@@ -20,6 +49,10 @@ export type MassivaConferenciaResumo = {
   ellevenAbertos: number
   /** Protocolos do Elleven que não tinham linha na plataforma nessa verificação. */
   semRegistro: number
+  /** Protocolos faltando dentro da janela. Null quando o backend é antigo e não envia a lista. */
+  protocolosSemRegistro: MassivaConferenciaProtocolos | null
+  /** Protocolos do Elleven sem registro, mais antigos que a janela (não serão criados). Null se backend antigo. */
+  protocolosForaDaJanela: MassivaConferenciaProtocolos | null
   criadas: number
   falhas: number
   conflitos: number
@@ -64,6 +97,48 @@ function toNullableText(value: unknown): string | null {
   return t === '' ? null : t
 }
 
+const STATUS_ELLEVEN: readonly MassivaConferenciaStatusElleven[] = ['aberta', 'encerrada', 'cancelada']
+const DESFECHOS: readonly MassivaConferenciaDesfecho[] = [
+  'seria_criada',
+  'criada',
+  'falhou',
+  'ja_existia',
+  'sem_assignment',
+  'fora_da_janela',
+]
+
+function parseProtocolo(raw: unknown): MassivaConferenciaProtocolo | null {
+  const r = asObject(raw)
+  const protocolo = toCount(r.protocolo)
+  if (protocolo === 0) return null
+  const status = String(r.statusElleven ?? '').trim().toLowerCase() as MassivaConferenciaStatusElleven
+  const desfecho = String(r.desfecho ?? '').trim() as MassivaConferenciaDesfecho
+  return {
+    protocolo,
+    assignmentId: toCount(r.assignmentId) || null,
+    statusElleven: STATUS_ELLEVEN.includes(status) ? status : 'aberta',
+    abertura: toNullableText(r.abertura),
+    pontoDeAcesso: toNullableText(r.pontoDeAcesso) ?? '',
+    desfecho: DESFECHOS.includes(desfecho) ? desfecho : null,
+  }
+}
+
+/** Lê { total, itens }. Qualquer outra forma (backend antigo, campo ausente) vira null. */
+function parseProtocolos(raw: unknown): MassivaConferenciaProtocolos | null {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const r = asObject(raw)
+  if (!Array.isArray(r.itens)) return null
+  const itens = r.itens.map(parseProtocolo).filter((p): p is MassivaConferenciaProtocolo => p !== null)
+  return { total: Math.max(toCount(r.total), itens.length), itens }
+}
+
+/** "2026-10-28 10:43:00" / "2026-10-28T10:43:00" -> "28/10 10:43" (sem converter fuso; é horário de Brasília). */
+export function formatAberturaConferencia(value: string | null): string {
+  if (value == null) return '—'
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+  return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : value
+}
+
 function parseResumo(raw: unknown): MassivaConferenciaResumo | null {
   if (raw == null || typeof raw !== 'object') return null
   const r = asObject(raw)
@@ -86,6 +161,8 @@ function parseResumo(raw: unknown): MassivaConferenciaResumo | null {
     ellevenTotal: toCount(elleven.total),
     ellevenAbertos: toCount(elleven.abertos),
     semRegistro: dryRun ? Math.max(criariamTotal, planoCriar) : planoCriar,
+    protocolosSemRegistro: parseProtocolos(r.semRegistro),
+    protocolosForaDaJanela: parseProtocolos(r.foraDaJanela),
     criadas: toCount(r.criadasTotal),
     falhas: toCount(r.falhasTotal),
     conflitos: toCount(r.conflitosTotal),
@@ -103,7 +180,7 @@ export function parseMassivaConferenciaStatus(raw: unknown): MassivaConferenciaS
     habilitada: r.habilitada === true,
     dryRun: r.dryRun === true,
     intervaloMinutos: Number.isFinite(intervalo) && intervalo >= 1 ? Math.trunc(intervalo) : 5,
-    janelaDias: Number.isFinite(janela) && janela >= 1 ? Math.trunc(janela) : 30,
+    janelaDias: Number.isFinite(janela) && janela >= 1 ? Math.trunc(janela) : 7,
     gatewayConfigurado: r.gatewayConfigurado === true,
     emExecucao: r.emExecucao === true,
     ultimaExecucao: parseResumo(r.ultimaExecucao),

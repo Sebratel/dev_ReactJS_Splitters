@@ -1,12 +1,19 @@
-import type { ReactNode } from 'react'
-import { AlertCircle, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { AlertCircle, AlertTriangle, CheckCircle2, Copy, RefreshCw, X } from 'lucide-react'
 import { useMassivaConferenciaStatus } from '@/features/massiva/hooks/useMassivaConferenciaStatus'
 import {
   evaluateConferenciaHealth,
   formatConferenciaRelative,
   type ConferenciaTone,
 } from '@/features/massiva/lib/massivaConferenciaHealth'
-import type { MassivaConferenciaStatus } from '@/features/massiva/model/massivaConferenciaStatus'
+import {
+  formatAberturaConferencia,
+  type MassivaConferenciaDesfecho,
+  type MassivaConferenciaProtocolo,
+  type MassivaConferenciaProtocolos,
+  type MassivaConferenciaStatus,
+  type MassivaConferenciaStatusElleven,
+} from '@/features/massiva/model/massivaConferenciaStatus'
 import { formatBrazilDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
@@ -46,13 +53,14 @@ const TILE_TONE: Record<TileTone, { box: string; label: string; value: string; s
   },
 }
 
-function Tile(props: { label: string; value: string; sub?: string; tone?: TileTone; testId: string }) {
+function Tile(props: { label: string; value: string; sub?: string; tone?: TileTone; testId: string; action?: ReactNode }) {
   const t = TILE_TONE[props.tone ?? 'neutral']
   return (
     <div className={cn('rounded-lg border px-3 py-2.5', t.box)} data-testid={props.testId}>
       <p className={cn('text-[10px] font-semibold uppercase tracking-wide', t.label)}>{props.label}</p>
       <p className={cn('mt-1 text-xl font-bold tabular-nums', t.value)}>{props.value}</p>
       {props.sub ? <p className={cn('mt-0.5 text-[10px] leading-snug', t.sub)}>{props.sub}</p> : null}
+      {props.action ? <div className="mt-1.5">{props.action}</div> : null}
     </div>
   )
 }
@@ -64,6 +72,181 @@ function Skeleton() {
         <div key={i} className="h-[76px] animate-pulse rounded-lg bg-neutral-100 dark:bg-white/5" />
       ))}
     </div>
+  )
+}
+
+type PainelId = 'semRegistro' | 'foraDaJanela'
+
+const STATUS_ELLEVEN_LABEL: Record<MassivaConferenciaStatusElleven, string> = {
+  aberta: 'Aberta',
+  encerrada: 'Encerrada',
+  cancelada: 'Cancelada',
+}
+
+const STATUS_ELLEVEN_TONE: Record<MassivaConferenciaStatusElleven, string> = {
+  aberta: 'border-sky-300/80 bg-sky-50 text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/40 dark:text-sky-200',
+  encerrada:
+    'border-emerald-300/80 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200',
+  cancelada:
+    'border-neutral-300/80 bg-neutral-100 text-neutral-700 dark:border-white/15 dark:bg-white/10 dark:text-neutral-200',
+}
+
+const DESFECHO_LABEL: Record<MassivaConferenciaDesfecho, string> = {
+  seria_criada: 'Seria criada',
+  criada: 'Criada',
+  falhou: 'Falhou',
+  ja_existia: 'Já existia',
+  sem_assignment: 'Não criada (sem assignment)',
+  fora_da_janela: 'Fora da janela, não será criada',
+}
+
+const DESFECHO_TONE: Record<MassivaConferenciaDesfecho, string> = {
+  seria_criada: 'text-amber-800 dark:text-amber-200',
+  criada: 'text-emerald-800 dark:text-emerald-200',
+  falhou: 'text-rose-800 dark:text-rose-200',
+  ja_existia: 'text-on-surface-variant',
+  sem_assignment: 'text-rose-800 dark:text-rose-200',
+  fora_da_janela: 'text-on-surface-variant',
+}
+
+/** Copia texto: Clipboard API quando existe; senão, textarea + execCommand (HTTP sem contexto seguro). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // cai no plano B
+  }
+  try {
+    const area = document.createElement('textarea')
+    area.value = text
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(area)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+function ProtocolosLink(props: { label: string; onClick: () => void; testId: string; expanded: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      aria-expanded={props.expanded}
+      data-testid={props.testId}
+      className="rounded-md border border-current/30 px-2 py-0.5 text-[11px] font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      {props.label}
+    </button>
+  )
+}
+
+function ProtocolosPanel(props: {
+  title: string
+  description: string
+  lista: MassivaConferenciaProtocolos
+  onClose: () => void
+}) {
+  const [copied, setCopied] = useState<'ok' | 'erro' | null>(null)
+  const { lista } = props
+  const restantes = Math.max(0, lista.total - lista.itens.length)
+
+  async function handleCopy() {
+    const ok = await copyText(lista.itens.map((i) => i.protocolo).join('\n'))
+    setCopied(ok ? 'ok' : 'erro')
+    window.setTimeout(() => setCopied(null), 2500)
+  }
+
+  return (
+    <section
+      className="rounded-lg border border-neutral-200/80 bg-surface-container-low/40 dark:border-white/10"
+      aria-label={props.title}
+      data-testid="conferencia-painel"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-neutral-200/80 px-3 py-2 dark:border-white/10">
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold text-on-surface">{props.title}</h3>
+          <p className="mt-0.5 text-[11px] leading-snug text-on-surface-variant">{props.description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            disabled={lista.itens.length === 0}
+            data-testid="conferencia-copiar"
+            className="inline-flex items-center gap-1 rounded-md border border-neutral-300/80 px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/15"
+          >
+            <Copy className="h-3 w-3" aria-hidden />
+            {copied === 'ok' ? 'Copiado!' : copied === 'erro' ? 'Não foi possível copiar' : 'Copiar protocolos'}
+          </button>
+          <button
+            type="button"
+            onClick={props.onClose}
+            data-testid="conferencia-fechar"
+            className="inline-flex items-center gap-1 rounded-md border border-neutral-300/80 px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container dark:border-white/15"
+          >
+            <X className="h-3 w-3" aria-hidden />
+            Fechar
+          </button>
+        </div>
+      </div>
+
+      {lista.itens.length === 0 ? (
+        <p className="px-3 py-4 text-sm text-on-surface-variant" data-testid="conferencia-painel-vazio">
+          Nada faltando.
+        </p>
+      ) : (
+        <div className="max-h-72 overflow-auto">
+          <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+            <thead className="sticky top-0 bg-surface-container-low text-[10px] uppercase tracking-wide text-on-surface-variant">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-semibold">Protocolo</th>
+                <th scope="col" className="px-3 py-2 font-semibold">No Elleven</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Abertura</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Ponto de acesso</th>
+                <th scope="col" className="px-3 py-2 font-semibold">O que a conferência faz</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.itens.map((i: MassivaConferenciaProtocolo) => (
+                <tr key={i.protocolo} className="border-t border-neutral-200/70 dark:border-white/10" data-testid="conferencia-protocolo-linha">
+                  <td className="px-3 py-1.5 font-semibold tabular-nums text-on-surface">{i.protocolo}</td>
+                  <td className="px-3 py-1.5">
+                    <span
+                      className={cn(
+                        'inline-block whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                        STATUS_ELLEVEN_TONE[i.statusElleven],
+                      )}
+                    >
+                      {STATUS_ELLEVEN_LABEL[i.statusElleven]}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 tabular-nums text-on-surface">{formatAberturaConferencia(i.abertura)}</td>
+                  <td className="px-3 py-1.5 text-on-surface">{i.pontoDeAcesso || '—'}</td>
+                  <td className={cn('px-3 py-1.5 font-medium', i.desfecho ? DESFECHO_TONE[i.desfecho] : 'text-on-surface-variant')}>
+                    {i.desfecho ? DESFECHO_LABEL[i.desfecho] : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {restantes > 0 ? (
+        <p className="border-t border-neutral-200/70 px-3 py-2 text-[11px] text-on-surface-variant dark:border-white/10" data-testid="conferencia-painel-mais">
+          e mais {restantes.toLocaleString('pt-BR')}
+        </p>
+      ) : null}
+    </section>
   )
 }
 
@@ -87,6 +270,8 @@ export function MassivaConferenciaCardView({
 }: MassivaConferenciaCardViewProps) {
   const health = status ? evaluateConferenciaHealth(status, nowMs) : null
   const ultima = status?.ultimaExecucao ?? null
+  const [painel, setPainel] = useState<PainelId | null>(null)
+  const alternarPainel = (id: PainelId) => setPainel((atual) => (atual === id ? null : id))
 
   let state: string
   let body: ReactNode
@@ -130,6 +315,25 @@ export function MassivaConferenciaCardView({
       minute: '2-digit',
       second: '2-digit',
     })
+    const listaSem = ultima.protocolosSemRegistro
+    const listaFora = ultima.protocolosForaDaJanela
+    const painelAtivo =
+      painel === 'semRegistro' && listaSem
+        ? {
+            lista: listaSem,
+            title: 'Protocolos sem registro na plataforma',
+            description: relatando
+              ? 'Estão no Elleven, passaram da carência e não existem na plataforma. Modo só relatório: nada foi criado.'
+              : 'Estão no Elleven, passaram da carência e não existiam na plataforma. A coluna da direita mostra o que a conferência fez.',
+          }
+        : painel === 'foraDaJanela' && listaFora
+          ? {
+              lista: listaFora,
+              title: `Protocolos fora da janela de ${status.janelaDias} ${plural(status.janelaDias, 'dia', 'dias')}`,
+              description:
+                'Estão no Elleven, não existem na plataforma e são mais antigos que a janela da conferência. Não serão criados automaticamente.',
+            }
+          : null
     body = (
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -160,6 +364,16 @@ export function MassivaConferenciaCardView({
                   ? `${ultima.criadas.toLocaleString('pt-BR')} ${plural(ultima.criadas, 'registrada', 'registradas')} agora`
                   : 'Nada faltando.'
             }
+            action={
+              listaSem ? (
+                <ProtocolosLink
+                  testId="conferencia-ver-sem-registro"
+                  label={`Ver protocolos (${listaSem.total.toLocaleString('pt-BR')})`}
+                  expanded={painel === 'semRegistro'}
+                  onClick={() => alternarPainel('semRegistro')}
+                />
+              ) : null
+            }
           />
           <Tile
             testId="conferencia-recuperadas"
@@ -187,6 +401,38 @@ export function MassivaConferenciaCardView({
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>{health.reason}</span>
           </div>
+        ) : null}
+
+        {listaFora && listaFora.total > 0 ? (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-neutral-200/70 bg-surface-container-low/60 px-3 py-2 text-[11px] leading-snug text-on-surface-variant dark:border-white/10"
+            data-testid="conferencia-fora-da-janela"
+          >
+            <span>
+              Fora da janela de {status.janelaDias} {plural(status.janelaDias, 'dia', 'dias')}:{' '}
+              <strong className="tabular-nums text-on-surface">{listaFora.total.toLocaleString('pt-BR')}</strong>{' '}
+              {plural(
+                listaFora.total,
+                'protocolo antigo está só no Elleven e não será criado.',
+                'protocolos antigos estão só no Elleven e não serão criados.',
+              )}
+            </span>
+            <ProtocolosLink
+              testId="conferencia-ver-fora-da-janela"
+              label={`Ver protocolos fora da janela (${listaFora.total.toLocaleString('pt-BR')})`}
+              expanded={painel === 'foraDaJanela'}
+              onClick={() => alternarPainel('foraDaJanela')}
+            />
+          </div>
+        ) : null}
+
+        {painelAtivo ? (
+          <ProtocolosPanel
+            title={painelAtivo.title}
+            description={painelAtivo.description}
+            lista={painelAtivo.lista}
+            onClose={() => setPainel(null)}
+          />
         ) : null}
 
         {ultima.divergAbertaLocalFinalizadaElleven > 0 || ultima.divergFechadaLocalAbertaElleven > 0 ? (

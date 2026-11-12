@@ -32,7 +32,7 @@
  *  - MASSIVA_CONFERENCIA_ENABLED=true            liga o agendamento (padrão: desligado)
  *  - MASSIVA_CONFERENCIA_DRY_RUN=true            só relata, não grava nada
  *  - MASSIVA_CONFERENCIA_INTERVAL_MINUTES=5      intervalo entre execuções (1..1440)
- *  - MASSIVA_CONFERENCIA_JANELA_DIAS=30          só considera protocolos criados nos últimos N dias
+ *  - MASSIVA_CONFERENCIA_JANELA_DIAS=7           só considera protocolos criados nos últimos N dias
  *  - MASSIVA_CONFERENCIA_CARENCIA_MINUTOS=10     ignora protocolos criados há menos que isso
  *  - MASSIVA_CONFERENCIA_ALERT_WEBHOOK_URL=      webhook (N8N) que recebe o alerta em JSON; vazio = só log
  *  - MASSIVA_CONFERENCIA_LIST_PATH=              sobrescreve o caminho da lista no gateway
@@ -64,7 +64,7 @@ export function readConferenciaConfig(env = process.env) {
     enabled: String(env.MASSIVA_CONFERENCIA_ENABLED ?? '').trim().toLowerCase() === 'true',
     dryRun: String(env.MASSIVA_CONFERENCIA_DRY_RUN ?? '').trim().toLowerCase() === 'true',
     intervalMinutes: intEnv(env.MASSIVA_CONFERENCIA_INTERVAL_MINUTES, 5, 1, 1440),
-    janelaDias: intEnv(env.MASSIVA_CONFERENCIA_JANELA_DIAS, 30, 1, 365),
+    janelaDias: intEnv(env.MASSIVA_CONFERENCIA_JANELA_DIAS, 7, 1, 365),
     carenciaMinutos: intEnv(env.MASSIVA_CONFERENCIA_CARENCIA_MINUTOS, 10, 0, 1440),
     alertUrl: String(env.MASSIVA_CONFERENCIA_ALERT_WEBHOOK_URL ?? '').trim(),
   };
@@ -189,14 +189,39 @@ export function mapEllevenItemToRow(item) {
 }
 
 /**
+ * Item "enxuto" para listar na tela (sem dado de cliente): protocolo, assignment, situação no Elleven,
+ * abertura (horário de parede de Brasília, "AAAA-MM-DD HH:mm:ss") e ponto de acesso.
+ */
+function itemDeProtocolo(row, desfecho) {
+  const item = {
+    protocolo: row.protocol,
+    assignmentId: row.assignmentId,
+    statusElleven: row.status,
+    abertura: row.openedAt,
+    pontoDeAcesso: row.title,
+  };
+  if (desfecho !== undefined) item.desfecho = desfecho;
+  return item;
+}
+
+/**
  * Decide o que criar. `localProtocols` = Set de protocolos que já têm linha local (qualquer status).
  * Só cria o que está dentro da janela e já passou da carência.
  */
-export function planConferencia({ ellevenItems, localProtocols, now = new Date(), janelaDias = 30, carenciaMinutos = 10 }) {
+export function planConferencia({ ellevenItems, localProtocols, now = new Date(), janelaDias = 7, carenciaMinutos = 10 }) {
   const nowMs = now.getTime();
   const inicioJanelaMs = nowMs - janelaDias * 86_400_000;
   const limiteCarenciaMs = nowMs - carenciaMinutos * 60_000;
-  const plano = { criar: [], semAssignment: [], jaExistem: 0, foraDaJanela: 0, naCarencia: 0, invalidas: 0 };
+  const plano = {
+    criar: [],
+    semAssignment: [],
+    semAssignmentItens: [],
+    jaExistem: 0,
+    foraDaJanela: 0,
+    foraDaJanelaLista: [],
+    naCarencia: 0,
+    invalidas: 0,
+  };
   const vistos = new Set();
 
   for (const item of Array.isArray(ellevenItems) ? ellevenItems : []) {
@@ -214,6 +239,7 @@ export function planConferencia({ ellevenItems, localProtocols, now = new Date()
     const criadoMs = naiveToEpochMs(row.openedAt);
     if (!Number.isFinite(criadoMs) || criadoMs < inicioJanelaMs) {
       plano.foraDaJanela += 1;
+      plano.foraDaJanelaLista.push(itemDeProtocolo(row));
       continue;
     }
     if (criadoMs > limiteCarenciaMs) {
@@ -222,6 +248,7 @@ export function planConferencia({ ellevenItems, localProtocols, now = new Date()
     }
     if (row.assignmentId === null) {
       plano.semAssignment.push({ protocolo: row.protocol });
+      plano.semAssignmentItens.push(itemDeProtocolo(row));
       continue;
     }
     plano.criar.push(row);
@@ -230,7 +257,7 @@ export function planConferencia({ ellevenItems, localProtocols, now = new Date()
 }
 
 /** Divergências de status (somente leitura) entre o Elleven e o que há no banco. */
-export function computeDivergencias({ ellevenItems, localStatus, now = new Date(), janelaDias = 30 }) {
+export function computeDivergencias({ ellevenItems, localStatus, now = new Date(), janelaDias = 7 }) {
   const inicioJanelaMs = now.getTime() - janelaDias * 86_400_000;
   const abertaLocalFinalizadaElleven = [];
   const fechadaLocalAbertaElleven = [];
@@ -397,6 +424,8 @@ export function createConferenciaService({
       falhas: [],
       conflitos: [],
       jaExistiam: 0,
+      semRegistro: [],
+      foraDaJanela: [],
       divergencias: { abertaLocalFinalizadaElleven: [], fechadaLocalAbertaElleven: [] },
     };
     const fim = (extra) => {
@@ -443,19 +472,34 @@ export function createConferenciaService({
     const conflitos = [];
     let jaExistiam = 0;
     const refOf = (row) => ({ protocolo: row.protocol, assignmentId: row.assignmentId, status: row.status, pontoDeAcesso: row.title });
+    // Lista "sem registro na plataforma" (dentro da janela e já passada a carência), com o desfecho de cada um.
+    const semRegistro = [];
 
-    if (!dryRun) {
+    if (dryRun) {
+      for (const row of plano.criar) semRegistro.push(itemDeProtocolo(row, 'seria_criada'));
+    } else {
       for (const row of plano.criar) {
         try {
           const r = await store.insertRecovered(row);
-          if (r?.inserted) criadas.push(refOf(row));
-          else if (r?.conflict) conflitos.push({ ...refOf(row), erro: String(r.conflict) });
-          else jaExistiam += 1;
+          if (r?.inserted) {
+            criadas.push(refOf(row));
+            semRegistro.push(itemDeProtocolo(row, 'criada'));
+          } else if (r?.conflict) {
+            conflitos.push({ ...refOf(row), erro: String(r.conflict) });
+            semRegistro.push(itemDeProtocolo(row, 'falhou'));
+          } else {
+            jaExistiam += 1;
+            semRegistro.push(itemDeProtocolo(row, 'ja_existia'));
+          }
         } catch (error) {
           falhas.push({ ...refOf(row), erro: String(error?.message ?? error).slice(0, 300) });
+          semRegistro.push(itemDeProtocolo(row, 'falhou'));
         }
       }
     }
+    // Sem assignment no Elleven não dá para gravar (a plataforma exige): aparece na lista como não criada.
+    for (const item of plano.semAssignmentItens) semRegistro.push({ ...item, desfecho: 'sem_assignment' });
+    const foraDaJanela = plano.foraDaJanelaLista.map((i) => ({ ...i, desfecho: 'fora_da_janela' }));
 
     return fim({
       ok: true,
@@ -466,6 +510,8 @@ export function createConferenciaService({
       falhas,
       conflitos,
       jaExistiam,
+      semRegistro,
+      foraDaJanela,
       divergencias,
     });
   }
@@ -491,6 +537,8 @@ export function createConferenciaService({
         falhas: [],
         conflitos: [],
         jaExistiam: 0,
+        semRegistro: [],
+        foraDaJanela: [],
         divergencias: { abertaLocalFinalizadaElleven: [], fechadaLocalAbertaElleven: [] },
       };
     }
@@ -588,6 +636,13 @@ export function startConferenciaScheduler({
 // ---------------------------------------------------------------------------------------------
 
 const MAX_ITENS_NO_STATUS = 10;
+/** Teto das listas de protocolos (sem registro / fora da janela) devolvidas pelo status. */
+export const MAX_PROTOCOLOS_NA_LISTA = 50;
+
+function listaDeProtocolos(list) {
+  const todos = Array.isArray(list) ? list : [];
+  return { total: todos.length, itens: todos.slice(0, MAX_PROTOCOLOS_NA_LISTA) };
+}
 
 function resumirResultado(r) {
   if (!r) return null;
@@ -608,6 +663,8 @@ function resumirResultado(r) {
     falhasTotal: r.falhas?.length ?? 0,
     falhas: corta(r.falhas),
     conflitosTotal: r.conflitos?.length ?? 0,
+    semRegistro: listaDeProtocolos(r.semRegistro),
+    foraDaJanela: listaDeProtocolos(r.foraDaJanela),
     divergencias: {
       abertaLocalFinalizadaElleven: {
         total: r.divergencias?.abertaLocalFinalizadaElleven?.length ?? 0,
