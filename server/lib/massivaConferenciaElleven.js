@@ -70,7 +70,7 @@ export function readConferenciaConfig(env = process.env) {
   };
 }
 
-function gatewayConfig(env) {
+export function gatewayConfig(env) {
   const origin = String(env.GATEWAY_ORIGIN ?? '').trim().replace(/\/+$/, '');
   const user = String(env.GATEWAY_BASIC_AUTH_USER ?? '').trim();
   const password = String(env.GATEWAY_BASIC_AUTH_PASSWORD ?? '');

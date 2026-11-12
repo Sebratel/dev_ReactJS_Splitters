@@ -19,6 +19,10 @@ import {
 } from './lib/massivaConferenciaElleven.js';
 import { createMassivaClientConflictsStore } from './massivaClientConflictsStore.js';
 import { MAX_CONTRACT_IDS, normalizeContractIds } from './lib/massivaClientConflicts.js';
+import { createGmudClientSyncStore } from './gmudClientSyncStore.js';
+import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib/gmudClientSyncService.js';
+import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
+import { createGmudClientsSource } from './lib/gmudClientsSource.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -81,7 +85,7 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
-import { formatEscopoRede, rowMatchesEscopoRede } from './lib/gmudEscopoRede.js';
+import { formatEscopoRede, normalizeEscopoRede, rowMatchesEscopoRede } from './lib/gmudEscopoRede.js';
 import {
   recordUsageEvents,
   summarizeUsage,
@@ -130,6 +134,7 @@ import {
   getGmudCommittee,
   isGmudCommitteeMember,
   assertGmudCommitteeMember,
+  listGmudsForClientSync,
 } from './gmudStore.js';
 import { changesCommitteeDecision, isCommitteeMember, isGmudAprovadaFinal } from './lib/gmudCommittee.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
@@ -5861,6 +5866,54 @@ app.delete('/api/gmud/link', async (req, res) => {
 // Retorna GMUDs aprovadas cuja data_inicio = hoje + daysAhead (padrão 7) com
 // seus clientes corporativos no site (pop_site) para disparo de HSM.
 // ---------------------------------------------------------------------------
+// ─── Clientes da GMUD em assignment_clients (gatilho do aviso ao cliente) ───────────────────────────
+// Desligado por padrão (GMUD_CLIENTES_SYNC_ENABLED=true liga; começa em simulação, GMUD_CLIENTES_SYNC_DRY_RUN=false grava).
+let gmudClientSyncParts = null;
+function getGmudClientSync() {
+  if (gmudClientSyncParts) return gmudClientSyncParts;
+  const store = createGmudClientSyncStore({
+    host: process.env.MASSIVA_MYSQL_HOST,
+    port: process.env.MASSIVA_MYSQL_PORT,
+    user: process.env.MASSIVA_MYSQL_USER,
+    password: process.env.MASSIVA_MYSQL_PASSWORD,
+    database: process.env.MASSIVA_MYSQL_DATABASE,
+  });
+  const gateway = createGmudGatewayClient({ env: process.env });
+  const service = createGmudClientSyncService({
+    store,
+    gateway,
+    env: process.env,
+    logger,
+    gmudSource: {
+      listCandidates: (nowNaive) => listGmudsForClientSync(nowNaive),
+      getByProtocol: (protocol) => getGmudRequest(protocol),
+    },
+    clientsSource: createGmudClientsSource({
+      pool,
+      baseQuery: SPLITTERS_BASE_QUERY,
+      normalizeEscopoRede,
+      rowMatchesEscopoRede,
+    }),
+  });
+  gmudClientSyncParts = { store, gateway, service };
+  return gmudClientSyncParts;
+}
+
+// Estado do job: configuração, última execução, erros e quantos clientes de GMUD estão ativos.
+app.get('/api/gmud/clientes-sync/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const status = await getGmudClientSync().service.getStatus();
+    return res.json({ success: true, data: status });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o estado dos clientes da GMUD.'),
+    });
+  }
+});
+
 app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
   try {
     const secret = (process.env.N8N_INTERNAL_SECRET ?? '').trim();
@@ -8011,6 +8064,11 @@ async function startServer() {
     env: process.env,
     logger,
   });
+
+  {
+    const { service, store, gateway } = getGmudClientSync();
+    startGmudClientSyncScheduler({ service, store, gateway, env: process.env, logger });
+  }
 
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';
   const kpiCronExpr = (process.env.DASHBOARD_KPI_CRON ?? '0 6 * * *').trim();

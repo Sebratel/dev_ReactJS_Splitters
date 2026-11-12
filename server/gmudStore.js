@@ -669,6 +669,31 @@ export async function getGmudRequest(protocol) {
   return rows?.[0] ? mapGmudRow(rows[0]) : null;
 }
 
+/**
+ * GMUDs de rede externa liberadas (Comitê e áreas aprovaram), ainda abertas e cuja janela cobre o dia de
+ * `nowNaive` ('YYYY-MM-DD HH:mm:ss'). O horário exato é conferido em lib/gmudClientSync.js.
+ * Usada pelo job que põe os clientes da GMUD em assignment_clients no início previsto.
+ */
+export async function listGmudsForClientSync(nowNaive) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const day = String(nowNaive ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE}
+      WHERE ${APROVADA_FINAL_SQL}
+        AND (categoria IS NULL OR categoria = 'rede_externa')
+        AND elleven_encerrado_em IS NULL
+        AND COALESCE(status_exec, '') <> 'concluida'
+        AND data_inicio IS NOT NULL
+        AND data_inicio <= ?
+        AND COALESCE(data_fim, data_inicio) >= ?
+      LIMIT 500`,
+    [day, day],
+  );
+  return rows.map(mapGmudRow);
+}
+
 function toDateStr(value) {
   if (value == null) return null;
   if (value instanceof Date) return value.toISOString().slice(0, 10);
