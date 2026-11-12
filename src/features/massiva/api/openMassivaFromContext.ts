@@ -1,4 +1,5 @@
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
+import { excludeClientsInOtherEvents } from '@/features/massiva/api/excludeClientsInOtherEvents'
 import {
   buildMassivaAfetadosRequestBody,
   collectMapeableAfetadosClientes,
@@ -286,7 +287,10 @@ export async function openMassivaFromContext(
   inputContext: MassivaOpenFinalContext,
   signal?: AbortSignal,
 ): Promise<MassivaOpenMutationSuccessPayload> {
-  const context = await withFullCollectedClientes(inputContext)
+  const fullContext = await withFullCollectedClientes(inputContext)
+  // Cliente que já está em outro evento aberto não entra de novo (não duplica): fica de fora deste.
+  const exclusion = await excludeClientsInOtherEvents(fullContext, signal)
+  const context = exclusion.context
   const path = context.massivaOpenPath.trim()
   if (path === '') {
     throw new Error('Path de abertura vazio no contexto.')
@@ -335,6 +339,25 @@ export async function openMassivaFromContext(
   const primary = pickPrimaryOpenResult(successes)
   const ids = primary != null ? resolveProtocolAndAssignment(primary) : null
   const mapeableCount = collectMapeableAfetadosClientes(context.basis.collectedClientes).length
+
+  if (mapeableCount === 0 && exclusion.excludedCount > 0) {
+    // Todos os clientes da seleção já estão em outro evento aberto: este evento abre, mas sem
+    // afetados próprios — e NÃO é encerrado automaticamente (a queda é real, só o aviso ao cliente
+    // já está coberto pelo outro evento).
+    let payload: MassivaOpenMutationSuccessPayload = {
+      ...base,
+      excludedClientsCount: exclusion.excludedCount,
+      excludedClientsEventProtocols: exclusion.eventProtocols,
+      followUpWarning: `Todos os ${exclusion.excludedCount} clientes da seleção já fazem parte de outro evento aberto (protocolo ${exclusion.eventProtocols.join(', ')}). Esta massiva foi aberta sem clientes próprios.`,
+    }
+    try {
+      await registerOpenedMassivaHistoryInLocalDb(context, payload)
+    } catch (localError) {
+      console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
+      payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+    }
+    return payload
+  }
 
   if (mapeableCount === 0) {
     if (ids != null && closePathConfigured()) {
@@ -438,6 +461,12 @@ export async function openMassivaFromContext(
   let payload: MassivaOpenMutationSuccessPayload = {
     ...base,
     afetadosPostedCount,
+    ...(exclusion.excludedCount > 0
+      ? {
+          excludedClientsCount: exclusion.excludedCount,
+          excludedClientsEventProtocols: exclusion.eventProtocols,
+        }
+      : {}),
   }
 
   if (afetadosWarnings.length > 0) {

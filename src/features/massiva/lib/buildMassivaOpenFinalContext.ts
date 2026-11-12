@@ -21,6 +21,8 @@ export function buildMassivaOpenFinalContext(params: {
   descriptionAutoSyncEnabled: boolean
   /** Ex.: quantidade ONUs/circuitos do AutoISP ao aplicar evento na abertura. */
   affectedUsersQuantityOverride?: number | null
+  /** O operador escolheu incluir clientes que já estão em outro evento aberto. */
+  includeConflictingClients?: boolean
 }): MassivaOpenFinalContext {
   const override = params.affectedUsersQuantityOverride
   const affectedUsersQuantityFlutterParity =
@@ -47,5 +49,6 @@ export function buildMassivaOpenFinalContext(params: {
       : `/${params.massivaAfetadosPath.trim()}`,
     affectedUsersQuantityFlutterParity,
     descriptionAutoSyncEnabled: params.descriptionAutoSyncEnabled,
+    ...(params.includeConflictingClients === true ? { includeConflictingClients: true } : {}),
   }
 }

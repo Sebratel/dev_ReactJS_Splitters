@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import { createMassivaClientConflictsStore } from './massivaClientConflictsStore.js';
+import { MAX_CONTRACT_IDS, normalizeContractIds } from './lib/massivaClientConflicts.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -744,6 +746,15 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
 }
 
 const massivaHistoryStore = createMassivaHistoryStore({
+  host: process.env.MASSIVA_MYSQL_HOST,
+  port: process.env.MASSIVA_MYSQL_PORT,
+  user: process.env.MASSIVA_MYSQL_USER,
+  password: process.env.MASSIVA_MYSQL_PASSWORD,
+  database: process.env.MASSIVA_MYSQL_DATABASE,
+});
+
+// Só leitura: quais clientes já estão em outro evento aberto (aviso ao abrir nova massiva).
+const massivaClientConflictsStore = createMassivaClientConflictsStore({
   host: process.env.MASSIVA_MYSQL_HOST,
   port: process.env.MASSIVA_MYSQL_PORT,
   user: process.env.MASSIVA_MYSQL_USER,
@@ -2000,6 +2011,30 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
   } catch (error) {
     console.error('Erro ao sumarizar conexões (batch-summary) para Massiva:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Quais destes contratos já fazem parte de OUTRO evento aberto? Não bloqueia nada: o front avisa o
+// operador e deixa esses clientes de fora do novo evento (um cliente não entra em dois eventos).
+app.post('/api/massiva/clientes-em-evento', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const requested = req.body?.contractIds;
+    if (Array.isArray(requested) && requested.length > MAX_CONTRACT_IDS) {
+      return res.status(400).json({ success: false, message: `Máximo de ${MAX_CONTRACT_IDS} contratos por consulta.` });
+    }
+    const contractIds = normalizeContractIds(requested);
+    if (contractIds.length === 0) {
+      return res.json({ success: true, data: { events: [], contractIds: [] } });
+    }
+    const data = await massivaClientConflictsStore.findOpenEventConflicts(contractIds);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao consultar clientes em outro evento.',
+    });
   }
 });
 
