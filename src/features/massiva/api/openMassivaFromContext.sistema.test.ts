@@ -7,7 +7,14 @@ const registerHistory = vi.fn()
 
 // A exclusão de clientes que já estão em outro evento consulta o BFF; aqui nada é excluído.
 vi.mock('@/features/massiva/api/excludeClientsInOtherEvents', () => ({
-  excludeClientsInOtherEvents: async (context: unknown) => ({ context, excludedCount: 0, eventProtocols: [] }),
+  excludeClientsInOtherEvents: async (context: unknown) => ({
+    context, excludedCount: 0, eventProtocols: [], excludedClientes: [], blockedBy: new Map(),
+  }),
+}))
+// Registrar quem ficou de fora fala com o BFF; aqui ninguém ficou de fora.
+vi.mock('@/features/massiva/api/recordExcludedClients', () => ({
+  recordExcludedClients: vi.fn(async () => {}),
+  parseSkippedContractIds: () => [],
 }))
 vi.mock('@/shared/api/bffClient', () => ({ bffClient: { request: (...a: unknown[]) => request(...a) } }))
 vi.mock('@/features/massiva/api/closeMassivaTicket', () => ({

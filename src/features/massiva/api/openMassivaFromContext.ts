@@ -1,5 +1,10 @@
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
-import { excludeClientsInOtherEvents } from '@/features/massiva/api/excludeClientsInOtherEvents'
+import { excludeClientsInOtherEvents, type ClientExclusionResult } from '@/features/massiva/api/excludeClientsInOtherEvents'
+import {
+  parseSkippedContractIds,
+  recordExcludedClients,
+  type ExcludedClientInput,
+} from '@/features/massiva/api/recordExcludedClients'
 import {
   buildMassivaAfetadosRequestBody,
   collectMapeableAfetadosClientes,
@@ -333,6 +338,44 @@ async function registerOpenedHistoryEarly(
 }
 
 /**
+ * Registra os clientes que ficaram de fora deste AP por já estarem em outro evento: os que o próprio front
+ * deixou de fora (conhecem o evento que os segurou) e os que o gateway recusou na hora de gravar (sem o evento).
+ * Melhor esforço: nunca lança.
+ */
+async function recordExcludedForAp(
+  context: MassivaOpenFinalContext,
+  exclusion: ClientExclusionResult,
+  accessPointCode: string,
+  ids: { protocol: number; assignmentId: number },
+  gatewaySkipped: readonly number[],
+  sentEntities: readonly UsuarioAfetadoEntity[] = [],
+): Promise<void> {
+  const clients: ExcludedClientInput[] = []
+  const seen = new Set<number>()
+  for (const c of clientesForAccessPoint(exclusion.excludedClientes, accessPointCode)) {
+    const contractId = c.contract?.id
+    if (contractId == null || seen.has(contractId)) continue
+    seen.add(contractId)
+    const blocker = exclusion.blockedBy.get(contractId)
+    clients.push({ contractId, pppoe: c.user.trim(), corporate: c.isCorporate === true, blockedByProtocol: blocker?.protocol ?? null, blockedByType: blocker?.type ?? null })
+  }
+  for (const contractId of gatewaySkipped) {
+    if (seen.has(contractId)) continue
+    seen.add(contractId)
+    const sent = sentEntities.find((e) => e.contractId === contractId)
+    clients.push({ contractId, pppoe: sent?.pppoe ?? '', corporate: false })
+  }
+  if (clients.length === 0) return
+  await recordExcludedClients({
+    protocol: ids.protocol,
+    assignmentId: ids.assignmentId,
+    reason: context.assignmentDescription,
+    finishDate: context.assignmentFinalDateLocal,
+    clients,
+  })
+}
+
+/**
  * Um POST por entrada em `context.plan.requests` — paridade sequência em `_openMassiva`.
  * Em seguida: POST de afetados (seleção da rota) ou encerramento automático se não houver clientes mapeáveis.
  */
@@ -416,6 +459,10 @@ export async function openMassivaFromContext(
     // Todos os clientes da seleção já estão em outro evento aberto: este evento abre, mas sem
     // afetados próprios — e NÃO é encerrado automaticamente (a queda é real, só o aviso ao cliente
     // já está coberto pelo outro evento).
+    for (const opened of successes) {
+      const opIds = resolveProtocolAndAssignment(opened)
+      if (opIds != null) await recordExcludedForAp(context, exclusion, opened.accessPointCode, opIds, [])
+    }
     let payload: MassivaOpenMutationSuccessPayload = {
       ...base,
       excludedClientsCount: exclusion.excludedCount,
@@ -507,19 +554,24 @@ export async function openMassivaFromContext(
       scopedClientes,
     )
 
+    let gatewaySkipped: number[] = []
     try {
-      await bffClient.request({
+      const afetadosResponse: unknown = await bffClient.request({
         path: afetadosPath,
         method: 'POST',
         body: afetadosBody,
         signal,
       })
-      afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
+      gatewaySkipped = parseSkippedContractIds(afetadosResponse)
+      afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length - gatewaySkipped.length
     } catch (afetadosError) {
       const msg = describeAfetadosFailure(afetadosError)
       console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
       afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
     }
+
+    // Quem ficou de fora (já em outro evento): vira histórico deste evento e fila de reinclusão.
+    await recordExcludedForAp(context, exclusion, opened.accessPointCode, ids, gatewaySkipped, afetadosBody.usuarioAfetadoEntities)
 
     // Cópia local (nosso MySQL) da mesma lista de afetados, independente do gateway —
     // viabiliza a verificação "ainda sem sinal?" pós-encerramento sem depender do DELETE

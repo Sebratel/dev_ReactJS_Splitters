@@ -48,3 +48,12 @@ test('groupConflictsByEvent sem linhas devolve vazio', () => {
   assert.deepEqual(groupConflictsByEvent([]), { events: [], contractIds: [] });
   assert.deepEqual(groupConflictsByEvent(undefined), { events: [], contractIds: [] });
 });
+
+test('groupConflictsByEvent identifica o evento de GMUD pela origem da linha', () => {
+  const { events } = groupConflictsByEvent([
+    { contract_id: 1, user_pppoe: 'a', protocol: 1000, origin: 'GMUD' },
+    { contract_id: 2, user_pppoe: 'b', protocol: 1888, origin: 'MASSIVA' },
+    { contract_id: 3, user_pppoe: 'c', protocol: 1889 },
+  ]);
+  assert.deepEqual(events.map((e) => [e.protocol, e.origin]), [[1000, 'gmud'], [1888, 'massiva'], [1889, 'massiva']]);
+});

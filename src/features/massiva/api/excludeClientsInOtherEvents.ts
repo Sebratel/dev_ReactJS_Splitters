@@ -5,6 +5,7 @@ import {
   partitionClientesByConflicts,
 } from '@/features/massiva/lib/excludeConflictingClients'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
+import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
 
 export type ClientExclusionResult = {
   context: MassivaOpenFinalContext
@@ -12,6 +13,10 @@ export type ClientExclusionResult = {
   excludedCount: number
   /** Protocolos dos outros eventos onde esses clientes já estavam. */
   eventProtocols: number[]
+  /** Os clientes deixados de fora (objetos completos, para registrar por ponto de acesso). */
+  excludedClientes: SplitterCliente[]
+  /** Contrato -> evento onde ele já estava. */
+  blockedBy: Map<number, { protocol: number; type: 'massiva' | 'gmud' }>
 }
 
 /**
@@ -25,7 +30,7 @@ export async function excludeClientsInOtherEvents(
   context: MassivaOpenFinalContext,
   signal?: AbortSignal,
 ): Promise<ClientExclusionResult> {
-  const unchanged: ClientExclusionResult = { context, excludedCount: 0, eventProtocols: [] }
+  const unchanged: ClientExclusionResult = { context, excludedCount: 0, eventProtocols: [], excludedClientes: [], blockedBy: new Map() }
   if (context.includeConflictingClients === true) return unchanged
 
   const contractIds = [
@@ -43,7 +48,11 @@ export async function excludeClientsInOtherEvents(
   if (conflicts.contractIds.length === 0) return unchanged
 
   const conflictSet = buildConflictContractSet(conflicts.contractIds)
-  const { kept } = partitionClientesByConflicts(context.basis.collectedClientes, conflictSet)
+  const { kept, excluded } = partitionClientesByConflicts(context.basis.collectedClientes, conflictSet)
+  const blockedBy = new Map<number, { protocol: number; type: 'massiva' | 'gmud' }>()
+  for (const ev of conflicts.events) {
+    for (const c of ev.clients) if (!blockedBy.has(c.contractId)) blockedBy.set(c.contractId, { protocol: ev.protocol, type: ev.origin })
+  }
   const excludedCount = contractIds.filter((id) => conflictSet.has(id)).length
   if (excludedCount === 0) return unchanged
 
@@ -51,5 +60,7 @@ export async function excludeClientsInOtherEvents(
     context: { ...context, basis: { ...context.basis, collectedClientes: kept } },
     excludedCount,
     eventProtocols: conflicts.events.map((e) => e.protocol),
+    excludedClientes: excluded,
+    blockedBy,
   }
 }

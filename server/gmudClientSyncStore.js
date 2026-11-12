@@ -23,6 +23,7 @@ export function createGmudClientSyncStore(config, { poolFactory = mysql.createPo
       async markIncluded() {},
       async markRemoved() {},
       async markWindowEnd() {},
+      async markReincluded() {},
       async recordError() {},
       async counts() { return { incluidas: 0, clientesAtivos: 0 }; },
       async listActiveClients() { return []; },
@@ -97,6 +98,20 @@ export function createGmudClientSyncStore(config, { poolFactory = mysql.createPo
       await pool.query(
         'UPDATE gmud_affected_clients SET removed_at = ? WHERE gmud_protocol = ? AND removed_at IS NULL',
         [nowNaive, protocol],
+      );
+    },
+
+    /** Clientes que estavam de fora ('ja_em_outro_evento') voltaram a ser sinalizados pela GMUD. */
+    async markReincluded({ protocol, contractIds }) {
+      const ids = (contractIds ?? []).map(Number).filter((n) => n > 0);
+      if (ids.length === 0) return;
+      await pool.query(
+        "UPDATE gmud_affected_clients SET status = 'incluido' WHERE gmud_protocol = ? AND contract_id IN (?) AND status = 'ja_em_outro_evento' AND removed_at IS NULL",
+        [protocol, ids],
+      );
+      await pool.query(
+        'UPDATE gmud_client_sync SET clients_sent = clients_sent + ?, clients_skipped = GREATEST(clients_skipped - ?, 0) WHERE gmud_protocol = ?',
+        [ids.length, ids.length, protocol],
       );
     },
 

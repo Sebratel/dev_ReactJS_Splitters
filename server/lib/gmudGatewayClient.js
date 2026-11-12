@@ -61,7 +61,7 @@ export function createGmudGatewayClient({ env = process.env, fetchImpl = fetch, 
      * devolve esses contratos em `skippedContractIds`. Se algum lote falhar, remove o que já entrou
      * (sem unique no banco, tentar de novo duplicaria) e devolve { ok:false }.
      */
-    async addClients({ protocol, assignmentId, reason, finishDateNaive, createdNaive, clients }) {
+    async addClients({ protocol, assignmentId, reason, finishDateNaive, createdNaive, clients, origin = 'GMUD', createdBy = 'gmud' }) {
       const finishDate = toLocalDateTimeIso(finishDateNaive);
       const created = toLocalDateTimeIso(createdNaive);
       const skipped = new Set();
@@ -77,8 +77,8 @@ export function createGmudGatewayClient({ env = process.env, fetchImpl = fetch, 
               contractId: c.contractId,
               finishDate,
               created,
-              createdBy: 'gmud',
-              origin: 'GMUD',
+              createdBy,
+              origin,
             })),
           });
           if (!response.ok || json?.success === false) {

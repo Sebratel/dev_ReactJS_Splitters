@@ -24,6 +24,9 @@ import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib
 import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
+import { createEventSuppressedStore } from './eventSuppressedStore.js';
+import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
+import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -5869,6 +5872,20 @@ app.delete('/api/gmud/link', async (req, res) => {
 // ---------------------------------------------------------------------------
 // ─── Clientes da GMUD em assignment_clients (gatilho do aviso ao cliente) ───────────────────────────
 // Desligado por padrão (GMUD_CLIENTES_SYNC_ENABLED=true liga; começa em simulação, GMUD_CLIENTES_SYNC_DRY_RUN=false grava).
+let eventSuppressedStore = null;
+function getEventSuppressedStore() {
+  if (!eventSuppressedStore) {
+    eventSuppressedStore = createEventSuppressedStore({
+      host: process.env.MASSIVA_MYSQL_HOST,
+      port: process.env.MASSIVA_MYSQL_PORT,
+      user: process.env.MASSIVA_MYSQL_USER,
+      password: process.env.MASSIVA_MYSQL_PASSWORD,
+      database: process.env.MASSIVA_MYSQL_DATABASE,
+    });
+  }
+  return eventSuppressedStore;
+}
+
 let gmudClientSyncParts = null;
 function getGmudClientSync() {
   if (gmudClientSyncParts) return gmudClientSyncParts;
@@ -5889,6 +5906,7 @@ function getGmudClientSync() {
   const service = createGmudClientSyncService({
     store,
     gateway,
+    suppressed: getEventSuppressedStore(),
     env: process.env,
     logger,
     gmudSource: {
@@ -5900,6 +5918,123 @@ function getGmudClientSync() {
   gmudClientSyncParts = { store, gateway, service, clientsSource };
   return gmudClientSyncParts;
 }
+
+// ─── Reinclusão: cliente que ficou de fora de um evento volta quando o outro evento fecha ────────────────
+// Desligada por padrão (EVENT_REINCLUSION_ENABLED=true liga; começa em simulação, EVENT_REINCLUSION_DRY_RUN=false grava).
+let eventReinclusionParts = null;
+function getEventReinclusion() {
+  if (eventReinclusionParts) return eventReinclusionParts;
+  const suppressed = getEventSuppressedStore();
+  const { store: gmudSyncStore, gateway } = getGmudClientSync();
+  const service = createEventReinclusionService({
+    store: suppressed,
+    conflictsStore: massivaClientConflictsStore,
+    gateway,
+    env: process.env,
+    logger,
+    eventInfo: {
+      async get(group) {
+        if (group.eventType === 'gmud') {
+          const states = await gmudSyncStore.listStates();
+          const st = states.get(group.eventProtocol);
+          const gmud = await getGmudRequest(group.eventProtocol);
+          return {
+            open: st?.status === GMUD_SYNC_STATUS.INCLUIDA,
+            assignmentId: gmud?.assignmentId ?? null,
+            finishDateNaive: st?.windowEnd ?? null,
+          };
+        }
+        const [info, finish] = await Promise.all([
+          suppressed.getMassivaEventInfo([group.eventProtocol]),
+          suppressed.getAssignmentFinishDates([group.eventProtocol]),
+        ]);
+        const i = info.get(group.eventProtocol);
+        return {
+          open: i?.open === true,
+          assignmentId: i?.assignmentId ?? group.rows.find((r) => r.assignmentId)?.assignmentId ?? null,
+          finishDateNaive: finish.get(group.eventProtocol) ?? null,
+        };
+      },
+    },
+    followUp: {
+      // Massiva: o cliente reincluído também entra na cópia local da lista de afetados (verificação de sinal).
+      massiva: (x) => massivaHistoryStore.registerAffectedClients(x),
+      gmud: (x) => gmudSyncStore.markReincluded(x),
+    },
+  });
+  eventReinclusionParts = { suppressed, gateway, service };
+  return eventReinclusionParts;
+}
+
+// Registra os clientes que ficaram de fora de uma MASSIVA por já estarem em outro evento (histórico + fila de reinclusão).
+app.post('/api/massiva/clientes-excluidos', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const body = req.body ?? {};
+    const eventProtocol = Number.parseInt(String(body.protocol ?? ''), 10);
+    if (!Number.isFinite(eventProtocol) || eventProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const clients = (Array.isArray(body.clients) ? body.clients : []).slice(0, 20000);
+    const suppressed = getEventSuppressedStore();
+    if (!(await suppressed.isReady())) return res.json({ success: true, data: { inserted: 0, skipped: 'tabela_ausente' } });
+    const result = await suppressed.add({
+      eventType: 'massiva',
+      eventProtocol,
+      assignmentId: Number.parseInt(String(body.assignmentId ?? ''), 10) || null,
+      reason: String(body.reason ?? '').slice(0, 2000) || null,
+      finishDateNaive: /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(String(body.finishDate ?? '')) ? String(body.finishDate).replace('T', ' ').slice(0, 19) : null,
+      nowNaive: brazilNowNaive(),
+      clients: clients.map((c) => ({
+        contractId: Number(c?.contractId),
+        pppoe: c?.pppoe,
+        corporate: c?.corporate === true,
+        blockedByProtocol: Number(c?.blockedByProtocol) > 0 ? Number(c.blockedByProtocol) : null,
+        blockedByType: c?.blockedByType === 'gmud' || c?.blockedByType === 'massiva' ? c.blockedByType : null,
+      })),
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao registrar os clientes excluídos.'),
+    });
+  }
+});
+
+// Quem ficou de fora deste evento ("já estava em outro evento") e se já foi reincluído.
+app.get('/api/eventos/:tipo/:protocolo/clientes-excluidos', async (req, res) => {
+  try {
+    const tipo = String(req.params.tipo ?? '');
+    if (tipo !== 'massiva' && tipo !== 'gmud') return res.status(400).json({ success: false, message: 'Tipo de evento inválido.' });
+    await requireSplittersPermission(req, tipo === 'gmud' ? 'canViewGmud' : 'canViewMassiva', 'Voce nao tem permissao para ver estes clientes.');
+    const protocolo = Number.parseInt(String(req.params.protocolo ?? ''), 10);
+    if (!Number.isFinite(protocolo) || protocolo <= 0) return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    const suppressed = getEventSuppressedStore();
+    const items = (await suppressed.isReady()) ? await suppressed.listForEvent(tipo, protocolo) : [];
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar os clientes excluídos do evento.'),
+    });
+  }
+});
+
+app.get('/api/eventos/reinclusao/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    return res.json({ success: true, data: await getEventReinclusion().service.getStatus() });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o estado da reinclusão.'),
+    });
+  }
+});
 
 // Clientes hoje sinalizados por alguma GMUD (para as telas mostrarem "GMUD" em vez de massiva).
 app.get('/api/gmud-clientes/ativos', async (_req, res) => {
@@ -8120,6 +8255,11 @@ async function startServer() {
   {
     const { service, store, gateway } = getGmudClientSync();
     startGmudClientSyncScheduler({ service, store, gateway, env: process.env, logger });
+  }
+
+  {
+    const { suppressed, gateway, service } = getEventReinclusion();
+    startEventReinclusionScheduler({ service, store: suppressed, gateway, env: process.env, logger });
   }
 
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';

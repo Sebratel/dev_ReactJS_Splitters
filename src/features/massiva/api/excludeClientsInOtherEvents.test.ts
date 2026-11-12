@@ -35,6 +35,20 @@ describe('excludeClientsInOtherEvents', () => {
     expect(r.context.basis.collectedClientes.map((c) => c.user)).toEqual(['ana'])
   })
 
+  it('devolve quem ficou de fora e em qual evento ele já estava', async () => {
+    fetchConflicts.mockResolvedValue({
+      events: [
+        { origin: 'gmud', protocol: 1000, title: '', openedAt: null, finishDate: null, clients: [{ contractId: 11, pppoe: 'beto' }] },
+        { origin: 'massiva', protocol: 1888, title: 'x', openedAt: null, finishDate: null, clients: [{ contractId: 12, pppoe: 'cris' }, { contractId: 11, pppoe: 'beto' }] },
+      ],
+      contractIds: [11, 12],
+    })
+    const r = await excludeClientsInOtherEvents(ctx())
+    expect(r.excludedClientes.map((c) => c.user)).toEqual(['beto', 'cris'])
+    expect(r.blockedBy.get(11)).toEqual({ protocol: 1000, type: 'gmud' })
+    expect(r.blockedBy.get(12)).toEqual({ protocol: 1888, type: 'massiva' })
+  })
+
   it('sem conflito mantém tudo', async () => {
     fetchConflicts.mockResolvedValue({ events: [], contractIds: [] })
     const input = ctx()

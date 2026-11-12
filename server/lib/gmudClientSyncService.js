@@ -15,7 +15,7 @@ import {
 const LOG = '[gmud-clientes]';
 const MAX_ERRORS_KEPT = 20;
 
-export function createGmudClientSyncService({ store, gmudSource, clientsSource, gateway, env = process.env, logger, nowFn = () => new Date() }) {
+export function createGmudClientSyncService({ store, gmudSource, clientsSource, gateway, suppressed, env = process.env, logger, nowFn = () => new Date() }) {
   const state = {
     running: false,
     lastRunAt: null,
@@ -104,6 +104,18 @@ export function createGmudClientSyncService({ store, gmudSource, clientsSource, 
           skippedContractIds = res.skippedContractIds ?? [];
         }
         await store.markIncluded({ protocol, windowEnd, clients, skippedContractIds, nowNaive });
+        if (skippedContractIds.length > 0 && suppressed) {
+          // Ficaram de fora por ja estarem em outro evento: entram na fila de reinclusao (quando o outro fechar).
+          try {
+            const skippedSet = new Set(skippedContractIds);
+            await suppressed.add({
+              eventType: 'gmud', eventProtocol: protocol, assignmentId: gmud.assignmentId, reason: buildClientReason(gmud),
+              finishDateNaive: windowEnd, nowNaive, clients: clients.filter((c) => skippedSet.has(c.contractId)),
+            });
+          } catch (error) {
+            pushError(protocol, `Incluida, mas nao foi possivel registrar quem ficou de fora: ${error?.message ?? error}`);
+          }
+        }
         state.totals.incluidas += 1;
         state.totals.clientesIncluidos += clients.length - skippedContractIds.length;
         state.totals.clientesDeFora += skippedContractIds.length;

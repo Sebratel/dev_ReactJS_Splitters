@@ -42,7 +42,7 @@ export function groupConflictsByEvent(rows) {
     let ev = byProtocol.get(protocol);
     if (!ev) {
       ev = {
-        origin: 'massiva',
+        origin: String(r?.origin ?? '').toUpperCase() === 'GMUD' ? 'gmud' : 'massiva',
         protocol,
         title: String(r?.title ?? '').trim(),
         openedAt: toIso(r?.opened_at),
