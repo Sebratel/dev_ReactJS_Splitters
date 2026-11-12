@@ -1,15 +1,16 @@
 import { emptyEscopoRede, normalizeEscopoRede, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { parseRepeticao, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
 
 /** Opções do formulário de GMUD (espelham o Google Form atual). */
 
-export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
+export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial', 'Pré-aprovada'] as const
 
 /**
- * Terceira categoria discutida em 12/11/2026. Ainda sem regras nem formulário definidos: aparece
- * no seletor só como "Em breve" (desabilitada). Não faz parte de GMUD_TIPO_OPTIONS de propósito,
- * para nenhuma validação ou lista a tratar como tipo utilizável.
+ * Pré-aprovada: mesmo formulário da Rede Externa, sem aprovação (do Comitê nem das áreas) — o protocolo já nasce
+ * liberado. Pode ser aberta repetida (a cada N dias, M vezes): cada ocorrência vira uma GMUD independente.
+ * Só para Rede Externa.
  */
-export const GMUD_TIPO_EM_BREVE = 'Pré-aprovada' as const
+export const GMUD_TIPO_PRE_APROVADA = 'Pré-aprovada' as const
 
 // ---------------------------------------------------------------------------
 // CATEGORIA (área afetada) — selector principal do formulário dinâmico
@@ -121,6 +122,8 @@ export type GmudRedeExternaImpactoData = {
   duracaoEstimada: string
   /** Afunilamento opcional por ponto de acesso/slot/PON/splitter dentro do POP/Site. */
   escopoRede?: GmudEscopoRede
+  /** Pré-aprovada repetida: ligação informativa entre as ocorrências da série. */
+  serie?: GmudSerie
 }
 
 /** Dados de impacto da Rede Externa para gravar; null quando não há impacto ou nada foi informado. */
@@ -203,6 +206,10 @@ export type GmudFormState = {
   categoria: GmudCategoria
   voalleProtocol: string
   tipo: string
+  /** Pré-aprovada: quantos protocolos abrir (1 = sem repetição). Texto, como o campo da tela. */
+  repeticaoVezes: string
+  /** Pré-aprovada: intervalo em dias entre as ocorrências. */
+  repeticaoIntervaloDias: string
   /**
    * Para Rede Externa: natureza da mudança (persiste no DB como `assunto` para retrocompat).
    * Para Sistemas Internos/Externos: vazio (natureza fica em categoriaData.natureza).
@@ -325,11 +332,19 @@ export function validateGmudForm(
     req(fim > inicio, 'Fim da janela deve ser depois do início')
   }
 
-  if (form.tipo === 'Programada' && form.dataInicio !== '') {
+  if ((form.tipo === 'Programada' || form.tipo === GMUD_TIPO_PRE_APROVADA) && form.dataInicio !== '') {
     const minimo = minDataProgramada()
     req(
       form.dataInicio >= minimo,
-      `Data de início da GMUD Programada: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+      `Data de início da GMUD ${form.tipo}: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+    )
+  }
+
+  if (form.tipo === GMUD_TIPO_PRE_APROVADA) {
+    req(form.categoria === 'rede_externa', 'GMUD Pré-aprovada só está disponível para Rede Externa')
+    req(
+      parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) !== null,
+      'Repetição: quantidade de 1 a 12 e, repetindo, intervalo de 1 a 365 dias',
     )
   }
 
@@ -392,6 +407,8 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     categoria: 'rede_externa',
     voalleProtocol: '',
     tipo: '',
+    repeticaoVezes: '1',
+    repeticaoIntervaloDias: '15',
     assunto: '',
     titulo: '',
     descricao: '',

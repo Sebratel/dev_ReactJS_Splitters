@@ -8,6 +8,7 @@ import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDispl
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { cn } from '@/shared/lib/utils'
+import { describeSerie, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
 
 const TONE: Record<GmudDeadlineTone, string> = {
   overdue: 'text-rose-600 dark:text-rose-300',
@@ -106,7 +107,14 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
               ? <Row label="Categoria">{r.categoria === 'sistemas_internos' ? 'Sistemas internos' : 'Sistemas externos'}</Row>
               : null}
             <Row label="Assunto">{r.assunto || '—'}</Row>
-            <Row label="Comitê">{comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—'}</Row>
+            <Row label="Comitê">
+              {r.tipo === 'Pré-aprovada' && comite === 'aprovada'
+                ? 'Pré-aprovada (sem aprovação)'
+                : comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—'}
+            </Row>
+            {describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie) ? (
+              <Row label="Série">{describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie)}</Row>
+            ) : null}
             {r.decididoEm ? (
               <Row label="Decisão">
                 {fmt(r.decididoEm)}

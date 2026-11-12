@@ -43,6 +43,7 @@ const AREA_TOKENS_TABLE = 'gmud_area_approval_tokens';
 
 export const GMUD_EVENT_TYPES = new Set([
   'criada',
+  'pre_aprovada',
   'comite_aprovada',
   'comite_negada',
   'comite_pendente',

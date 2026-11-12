@@ -140,7 +140,9 @@ export function GmudListTable({
                     </span>
                   ) : comite ? (
                     <span className={cn(PILL, COMITE_STYLE[comite] ?? 'bg-surface-container-low text-on-surface-variant')}>
-                      {GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite}
+                      {g.extra?.tipo === 'Pré-aprovada' && comite === 'aprovada'
+                        ? 'Pré-aprovada'
+                        : GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite}
                     </span>
                   ) : (
                     <span className="text-xs text-on-surface-variant/60">—</span>

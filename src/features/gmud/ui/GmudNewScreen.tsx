@@ -26,7 +26,7 @@ import {
   GMUD_TIPO_INDISPONIBILIDADE_OPTIONS,
   redeExternaCategoriaData,
   GMUD_TIPO_OPTIONS,
-  GMUD_TIPO_EM_BREVE,
+  GMUD_TIPO_PRE_APROVADA,
   validateGmudForm,
   minDataProgramada,
   type GmudCategoria,
@@ -35,6 +35,15 @@ import {
   type GmudSistemasInternosData,
   type GmudSistemasExternosData,
 } from '@/features/gmud/model/gmudForm'
+import {
+  GMUD_REPETICAO_MAX_INTERVALO_DIAS,
+  GMUD_REPETICAO_MAX_VEZES,
+  buildGmudOccurrences,
+  buildOccurrenceTitle,
+  newSerieId,
+  parseRepeticao,
+} from '@/features/gmud/lib/gmudRecurrence'
+import { openGmudOccurrences } from '@/features/gmud/lib/openGmudOccurrences'
 import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
 import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
 import { emptyEscopoRede, hasEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
@@ -97,6 +106,54 @@ function SimNaoSelect({ value, onChange }: { value: string; onChange: (v: string
 // ---------------------------------------------------------------------------
 // Seção: campos comuns (todas as categorias)
 // ---------------------------------------------------------------------------
+/** Pré-aprovada: não passa por aprovação e pode repetir (a cada N dias, M vezes). */
+function PreAprovadaRepeticao({
+  form, set,
+}: {
+  form: GmudFormState
+  set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
+}) {
+  const rep = parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias)
+  const ocorrencias =
+    rep && rep.vezes > 1 && form.dataInicio !== ''
+      ? buildGmudOccurrences({ dataInicio: form.dataInicio, dataFim: form.dataFim || form.dataInicio, vezes: rep.vezes, intervaloDias: rep.intervaloDias })
+      : []
+  const br = (ymd: string) => ymd.split('-').reverse().slice(0, 2).join('/')
+  return (
+    <div className="col-span-full rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-xs text-on-surface-variant">
+      <p>
+        <span className="font-semibold text-on-surface">Pré-aprovada:</span> não passa por aprovação (nem das áreas, nem do
+        Comitê). O protocolo já nasce liberado.
+      </p>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="font-semibold text-on-surface">Quantos protocolos abrir</span>
+          <input
+            type="number" min={1} max={GMUD_REPETICAO_MAX_VEZES} className={FIELD}
+            value={form.repeticaoVezes} onChange={(e) => set('repeticaoVezes', e.target.value)}
+          />
+          <span className="mt-1 block text-[11px]">1 = sem repetição. Máximo {GMUD_REPETICAO_MAX_VEZES}.</span>
+        </label>
+        <label className="block">
+          <span className="font-semibold text-on-surface">Repetir a cada (dias)</span>
+          <input
+            type="number" min={1} max={GMUD_REPETICAO_MAX_INTERVALO_DIAS} className={FIELD}
+            value={form.repeticaoIntervaloDias} onChange={(e) => set('repeticaoIntervaloDias', e.target.value)}
+            disabled={(rep?.vezes ?? Number(form.repeticaoVezes)) <= 1}
+          />
+          <span className="mt-1 block text-[11px]">Mesmo horário de início e fim em todas.</span>
+        </label>
+      </div>
+      {ocorrencias.length > 0 ? (
+        <p className="mt-3">
+          Serão abertos <span className="font-semibold text-on-surface">{ocorrencias.length} protocolos</span> agora, cada um
+          com a sua data: {ocorrencias.map((o) => br(o.dataInicio)).join(', ')}.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function CamposComuns({
   form, set, categoria,
 }: {
@@ -114,10 +171,17 @@ function CamposComuns({
       <Field label="Tipo da GMUD" required>
         <select className={FIELD} value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
           <option value="">Escolher…</option>
-          {GMUD_TIPO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          <option value="" disabled>{GMUD_TIPO_EM_BREVE} (em breve)</option>
+          {GMUD_TIPO_OPTIONS.map((o) => {
+            const bloqueada = o === GMUD_TIPO_PRE_APROVADA && categoria !== 'rede_externa'
+            return (
+              <option key={o} value={o} disabled={bloqueada}>
+                {o}{bloqueada ? ' (só Rede Externa)' : ''}
+              </option>
+            )
+          })}
         </select>
       </Field>
+      {form.tipo === GMUD_TIPO_PRE_APROVADA ? <PreAprovadaRepeticao form={form} set={set} /> : null}
       {categoria === 'rede_externa' ? (
         <Field label="Natureza da mudança" required>
           <select className={FIELD} value={form.assunto} onChange={(e) => set('assunto', e.target.value)}>
@@ -162,14 +226,14 @@ function JanelaDeMudanca({
   form: GmudFormState
   set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
 }) {
-  const minInicio = form.tipo === 'Programada' ? minDataProgramada() : undefined
+  const minInicio = form.tipo === 'Programada' || form.tipo === GMUD_TIPO_PRE_APROVADA ? minDataProgramada() : undefined
   return (
     <Section title="Janela de mudança">
       <Field label="Data início" required>
         <input type="date" className={FIELD} value={form.dataInicio} min={minInicio} onChange={(e) => set('dataInicio', e.target.value)} />
         {minInicio ? (
           <p className="mt-1 text-[11px] text-on-surface-variant">
-            Programada: a partir de {minInicio.split('-').reverse().join('/')} (apresentação na terça + 7 dias).
+            {form.tipo}: a partir de {minInicio.split('-').reverse().join('/')} (apresentação na terça + 7 dias).
           </p>
         ) : null}
       </Field>
@@ -616,6 +680,7 @@ export function GmudNewScreen() {
     : form.categoria === 'sistemas_externos' ? seData
     : redeExternaCategoriaData(form)
 
+  const serieIdRef = useRef<string | null>(null)
   const queryClient = useQueryClient()
   const mutation = useMutation({
     onError: (error) => showGmudError(error, 'Não foi possível registrar a GMUD'),
@@ -639,47 +704,82 @@ export function GmudNewScreen() {
           `Sem responsável cadastrado para aprovar: ${areasCheck.semResponsavel.join(', ')}. Peça ao administrador para cadastrar em GMUD > Configurações.`,
         )
       }
-      const result = await openGmudInElleven({
-        solicitanteEmail: form.solicitanteEmail,
-        titulo: buildGmudTitle(
-          form,
-          form.categoria === 'sistemas_internos' ? siData : null,
-          form.categoria === 'sistemas_externos' ? seData : null,
-        ),
-        descricao: buildGmudDescription(
-          form,
-          form.categoria === 'sistemas_internos' ? siData : null,
-          form.categoria === 'sistemas_externos' ? seData : null,
-        ),
-        finalDateLocal: `${form.dataFim}T${form.horaFim}:00`,
-        idempotencyKey: idempotencyKeyRef.current,
+      // Pré-aprovada pode repetir (a cada N dias, M vezes): cada ocorrência é um protocolo próprio, aberto agora,
+      // com a mesma máscara e a janela deslocada. A ligação entre elas (categoriaData.serie) é só informativa.
+      const rep = form.tipo === GMUD_TIPO_PRE_APROVADA ? parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) : null
+      const occurrences =
+        rep && rep.vezes > 1
+          ? buildGmudOccurrences({ dataInicio: form.dataInicio, dataFim: form.dataFim, vezes: rep.vezes, intervaloDias: rep.intervaloDias })
+          : [{ indice: 1, total: 1, dataInicio: form.dataInicio, dataFim: form.dataFim }]
+      if (occurrences.length > 1 && serieIdRef.current === null) serieIdRef.current = newSerieId()
+      return openGmudOccurrences({
+        occurrences,
+        idempotencyKeyBase: idempotencyKeyRef.current,
+        openOne: async (occ, idempotencyKey) => {
+          const occForm = { ...form, dataInicio: occ.dataInicio, dataFim: occ.dataFim }
+          const result = await openGmudInElleven({
+            solicitanteEmail: occForm.solicitanteEmail,
+            titulo: buildOccurrenceTitle(
+              buildGmudTitle(
+                occForm,
+                occForm.categoria === 'sistemas_internos' ? siData : null,
+                occForm.categoria === 'sistemas_externos' ? seData : null,
+              ),
+              occ.indice,
+              occ.total,
+            ),
+            descricao: buildGmudDescription(
+              occForm,
+              occForm.categoria === 'sistemas_internos' ? siData : null,
+              occForm.categoria === 'sistemas_externos' ? seData : null,
+            ),
+            finalDateLocal: `${occ.dataFim}T${occForm.horaFim}:00`,
+            idempotencyKey: idempotencyKey ?? undefined,
+          })
+          if (result.protocol == null) {
+            throw new Error('O Elleven não retornou o número do protocolo da GMUD.')
+          }
+          return { protocol: String(result.protocol), assignmentId: result.assignmentId }
+        },
+        registerOne: async (occ, opened) => {
+          const occForm = { ...form, dataInicio: occ.dataInicio, dataFim: occ.dataFim }
+          const base = activeCategoriaData
+          const categoriaData = occurrences.length > 1 && serieIdRef.current !== null && rep
+            ? {
+                ...(base ?? { tipoIndisponibilidade: '', duracaoEstimada: '' }),
+                serie: { id: serieIdRef.current, indice: occ.indice, total: occ.total, intervaloDias: rep.intervaloDias },
+              }
+            : base
+          await createGmud({
+            ...occForm,
+            voalleProtocol: opened.protocol,
+            assignmentId: opened.assignmentId,
+            ambienteAfetado: collectAmbienteAfetado(occForm),
+            categoriaData,
+          })
+        },
       })
-      if (result.protocol == null) {
-        throw new Error('O Elleven não retornou o número do protocolo da GMUD.')
-      }
-      const protocol = String(result.protocol)
-      await createGmud({
-        ...form,
-        voalleProtocol: protocol,
-        assignmentId: result.assignmentId,
-        ambienteAfetado: collectAmbienteAfetado(form),
-        categoriaData: activeCategoriaData,
-      })
-      return protocol
     },
-    onSuccess: (protocol) => {
+    onSuccess: (protocols) => {
       idempotencyKeyRef.current = null
+      serieIdRef.current = null
       // A lista e a agenda precisam mostrar a GMUD nova assim que a tela voltar.
       void queryClient.invalidateQueries({ queryKey: ['gmud'] })
       navigate('/gmud')
+      const first = protocols[0]
+      const preAprovada = form.tipo === GMUD_TIPO_PRE_APROVADA
       showFeedbackDialog({
         variant: 'success',
-        title: `GMUD ${protocol} registrada`,
+        title: protocols.length > 1 ? `${protocols.length} GMUDs registradas` : `GMUD ${first} registrada`,
         message:
-          form.tipo === 'Emergencial'
-            ? 'O protocolo foi aberto no Elleven e a GMUD segue direto para o Comitê.'
-            : 'O protocolo foi aberto no Elleven e registrado na plataforma. As áreas envolvidas vão receber por e-mail o pedido de aprovação.',
-        secondary: { label: 'Ver GMUD', onClick: () => navigate(`/gmud/${protocol}`) },
+          preAprovada
+            ? protocols.length > 1
+              ? `Foram abertos os protocolos ${protocols.join(', ')} no Elleven. A GMUD Pré-aprovada não passa por aprovação: todos já estão liberados.`
+              : 'O protocolo foi aberto no Elleven. A GMUD Pré-aprovada não passa por aprovação: já está liberada.'
+            : form.tipo === 'Emergencial'
+              ? 'O protocolo foi aberto no Elleven e a GMUD segue direto para o Comitê.'
+              : 'O protocolo foi aberto no Elleven e registrado na plataforma. As áreas envolvidas vão receber por e-mail o pedido de aprovação.',
+        secondary: { label: 'Ver GMUD', onClick: () => navigate(`/gmud/${first}`) },
       })
     },
   })

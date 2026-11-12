@@ -25,6 +25,7 @@ import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
+import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
 import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
 import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
@@ -4792,13 +4793,16 @@ app.post('/api/gmud/create', async (req, res) => {
       return res.status(400).json({ success: false, message: 'O fim da janela deve ser depois do início.' });
     }
 
-    if (!existing && String(body.tipo ?? '').trim() === 'Programada') {
+    const preAprovadaError = preAprovadaCreateError({ tipo: body.tipo, categoria: body.categoria });
+    if (preAprovadaError) return res.status(400).json({ success: false, message: preAprovadaError });
+
+    if (!existing && (String(body.tipo ?? '').trim() === 'Programada' || isPreAprovada(body.tipo))) {
       const dataInicio = String(body.dataInicio ?? '').slice(0, 10);
       const minimo = minDataProgramada();
       if (dataInicio !== '' && dataInicio < minimo) {
         return res.status(400).json({
           success: false,
-          message: `GMUD Programada só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
+          message: `GMUD ${isPreAprovada(body.tipo) ? 'Pré-aprovada' : 'Programada'} só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
         });
       }
     }
@@ -4834,6 +4838,18 @@ app.post('/api/gmud/create', async (req, res) => {
       payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
     });
 
+    // Pré-aprovada: não passa por aprovação. Já nasce liberada (agenda, vínculo de massivas, clientes em alerta).
+    // Só na criação: reenviar ou editar uma GMUD existente nunca a aprova por esse caminho.
+    if (!existing && isPreAprovada(body.tipo)) {
+      await setGmudApproval({ voalleProtocol, statusComite: 'aprovada', aprovadoPor: 'Pré-aprovada' });
+      await logGmudEvent({
+        voalleProtocol,
+        type: 'pre_aprovada',
+        actor: gmudActorName(actor) || createdByEmail,
+        payload: { serie: body.categoriaData?.serie ?? null },
+      });
+    }
+
     // Toda GMUD NOVA avisa (Chat + e-mail), com ou sem aprovação de área.
     let approvals = [];
     if (areasToApprove.length > 0) {
@@ -4856,7 +4872,7 @@ app.post('/api/gmud/create', async (req, res) => {
       // Executor/Validador/Observador) são avisadas por e-mail. Best-effort: área sem ninguém
       // cadastrado só deixa de receber — nunca bloqueia a Emergencial.
       let avisos = [];
-      if (String(body.tipo ?? '').trim() === 'Emergencial') {
+      if (String(body.tipo ?? '').trim() === 'Emergencial' || isPreAprovada(body.tipo)) {
         try {
           const labels = deriveNotificationAreas({
             categoria: body.categoria,
