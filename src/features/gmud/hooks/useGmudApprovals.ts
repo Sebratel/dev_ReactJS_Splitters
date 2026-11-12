@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchPendingGmuds, fetchPendingGmudCount } from '@/features/gmud/api/gmudApprovals'
+import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
 
 /** Fila de GMUDs pendentes de aprovação (só para quem aprova). */
 export function usePendingGmuds(enabled: boolean) {
@@ -15,9 +16,11 @@ export function usePendingGmuds(enabled: boolean) {
   })
 }
 
-/** Contador de GMUDs pendentes — para o badge do menu. Só busca se o usuário puder aprovar. */
+/** Contador de GMUDs pendentes — para o badge do menu. Só busca se o usuário for do Comitê. */
 export function useGmudPendingCount() {
-  const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
+  const canViewGmud = useAccessAuthStore((s) => s.hasPermission('canViewGmud'))
+  const isCommitteeMember = useIsGmudCommitteeMember()
+  const canApprove = canViewGmud && isCommitteeMember
   const query = useQuery({
     queryKey: ['gmud', 'pending-count'],
     queryFn: fetchPendingGmudCount,

@@ -9,6 +9,7 @@ import { GmudApprovalQueue } from '@/features/gmud/ui/GmudApprovalQueue'
 import { GmudCalendar } from '@/features/gmud/ui/GmudCalendar'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
+import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
 import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
 import type { GmudListFilter, GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
@@ -46,7 +47,8 @@ export function GmudScreen() {
     )
     setPage(0)
   }
-  const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
+  // "Aprovar" (avaliar e fila de pendentes) é do Comitê: só quem está na lista de membros.
+  const canApprove = useIsGmudCommitteeMember()
   const canConfigure = useAccessAuthStore((s) => s.hasPermission('canConfigureGmud') || s.hasPermission('isAdmin'))
   const pendingCount = useGmudPendingCount()
 

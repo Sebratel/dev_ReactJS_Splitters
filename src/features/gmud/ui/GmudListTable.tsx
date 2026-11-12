@@ -130,12 +130,13 @@ export function GmudListTable({
                 </td>
                 <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.status || '—'}</td>
                 <td className="px-4 py-2.5">
-                  {comite === 'pendente' && g.extra?.statusAreas === 'pendente' ? (
+                  {(comite === 'pendente' || comite === 'aprovada') && g.extra?.statusAreas === 'pendente' ? (
                     <span
                       className={cn(PILL, COMITE_STYLE.pendente)}
-                      title="A GMUD é aprovada automaticamente quando todas as áreas aprovarem."
+                      title="O Comitê e as áreas decidem em paralelo; a GMUD só é liberada quando ambos aprovarem."
                     >
-                      Aguardando áreas ({g.extra.areasAprovadas ?? 0}/{g.extra.areasTotal ?? 0})
+                      {comite === 'aprovada' ? 'Comitê aprovou · aguardando áreas' : 'Aguardando Comitê e áreas'}{' '}
+                      ({g.extra.areasAprovadas ?? 0}/{g.extra.areasTotal ?? 0})
                     </span>
                   ) : comite ? (
                     <span className={cn(PILL, COMITE_STYLE[comite] ?? 'bg-surface-container-low text-on-surface-variant')}>

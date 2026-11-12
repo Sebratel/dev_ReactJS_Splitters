@@ -1,4 +1,4 @@
-import type { GmudListItem } from '@/features/gmud/model/gmud'
+import { isGmudDisponivel, type GmudListItem } from '@/features/gmud/model/gmud'
 
 /**
  * Regras de ciclo de vida da GMUD para habilitar/esconder as ações da tela.
@@ -33,9 +33,9 @@ export function gmudPodeAvaliar(g: Pick<GmudListItem, 'extra' | 'conclusionDate'
   return g.extra != null && !gmudComiteDecidido(g) && !gmudEncerrada(g)
 }
 
-/** Mostra o botão "Concluir": aprovada e protocolo aberto. */
+/** Mostra o botão "Concluir": aprovada pelo Comitê e pelas áreas, e protocolo aberto. */
 export function gmudPodeConcluir(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>): boolean {
-  return g.extra?.statusComite === 'aprovada' && !gmudEncerrada(g)
+  return isGmudDisponivel(g.extra?.statusComite, g.extra?.statusAreas) && !gmudEncerrada(g)
 }
 
 /** Mostra o botão "Cancelar": GMUD da plataforma com protocolo aberto (inclusive pendente). */

@@ -97,7 +97,7 @@ import {
   getMassivaLinkCounts,
   listPendingGmuds,
   getPendingGmudCount,
-  getGmudApprovalStatus,
+  getGmudApprovalState,
   listScheduledGmuds,
   rescheduleGmud,
   logGmudEvent,
@@ -127,7 +127,11 @@ import {
   decideAreaApproval,
   overrideAreaApproval,
   listGmudUpcomingForHsm,
+  getGmudCommittee,
+  isGmudCommitteeMember,
+  assertGmudCommitteeMember,
 } from './gmudStore.js';
+import { changesCommitteeDecision, isCommitteeMember, isGmudAprovadaFinal } from './lib/gmudCommittee.js';
 import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
 import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
 import {
@@ -4858,10 +4862,16 @@ app.post('/api/gmud/create', async (req, res) => {
   }
 });
 
-// Fila de aprovação: GMUDs pendentes de decisão do Comitê (escopo completo). Só p/ aprovadores.
+/** E-mail de quem está agindo (perfil ou identidade da sessão). */
+function gmudActorEmail(actor) {
+  return actor?.profile?.email || actor?.identity?.email || '';
+}
+
+// Fila de aprovação: GMUDs pendentes de decisão do Comitê (escopo completo). Só p/ membros do Comitê.
 app.get('/api/gmud/pending', async (req, res) => {
   try {
-    await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    await assertGmudCommitteeMember(gmudActorEmail(actor));
     const items = await listPendingGmuds();
     return res.json({ success: true, data: { items, total: items.length } });
   } catch (error) {
@@ -4873,17 +4883,41 @@ app.get('/api/gmud/pending', async (req, res) => {
   }
 });
 
-// Contador de GMUDs pendentes (badge do menu). Só p/ aprovadores.
+// Contador de GMUDs pendentes (badge do menu). Só conta para membros do Comitê (demais recebem 0).
 app.get('/api/gmud/pending-count', async (req, res) => {
   try {
-    await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
-    const count = await getPendingGmudCount();
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const isMember = await isGmudCommitteeMember(gmudActorEmail(actor));
+    const count = isMember ? await getPendingGmudCount() : 0;
     return res.json({ success: true, data: { count } });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: safeErrorMessage(error, 'Falha ao contar GMUDs pendentes.'),
+    });
+  }
+});
+
+// Comitê da GMUD: id do item fixo (para gerir membros em Configurações), se quem pergunta é
+// membro e quantos membros existem. Os e-mails dos membros só saem em /api/gmud/team-approvers (canConfigureGmud).
+app.get('/api/gmud/committee', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const { itemId, members } = await getGmudCommittee();
+    return res.json({
+      success: true,
+      data: {
+        itemId,
+        membersCount: members.length,
+        isMember: isCommitteeMember(members, gmudActorEmail(actor)),
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar o Comitê.'),
     });
   }
 });
@@ -5258,8 +5292,17 @@ app.delete('/api/gmud/attachments/:id', async (req, res) => {
 // Decisão do Comitê + status de execução de uma GMUD (só no nosso banco; não reflete no Elleven).
 app.post('/api/gmud/approval', async (req, res) => {
   try {
-    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
     const body = req.body ?? {};
+    // Decidir (aprovar/negar/reabrir) é do Comitê: basta estar na lista de membros (Configurações
+    // da GMUD) e ver o módulo. Lista vazia = ninguém decide. Status de execução, CAB, RNC e
+    // encerramento no Elleven seguem com canApproveGmud.
+    let actor;
+    if (changesCommitteeDecision(body.statusComite)) {
+      actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+      await assertGmudCommitteeMember(gmudActorEmail(actor));
+    } else {
+      actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    }
     const voalleProtocol = Number.parseInt(String(body.voalleProtocol ?? ''), 10);
     if (!Number.isFinite(voalleProtocol) || voalleProtocol <= 0) {
       return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
@@ -5395,28 +5438,8 @@ async function denyGmudAfterAreaDenial(result) {
   return false;
 }
 
-/** Todas as áreas aprovaram: a GMUD fica aprovada, sem etapa final do Comitê. */
-async function approveGmudWhenAreasDone(protocol, areasStatus) {
-  if (areasStatus !== 'aprovada') return false;
-  try {
-    const result = await setGmudApproval({
-      voalleProtocol: protocol,
-      statusComite: 'aprovada',
-      aprovadoPor: 'Aprovação das áreas',
-      somenteSePendente: true,
-    });
-    for (const type of result.changes ?? []) {
-      await logGmudEvent({ voalleProtocol: protocol, type, actor: 'Aprovação das áreas', payload: { automatica: true } });
-    }
-    return result.changed;
-  } catch (error) {
-    logger.error('[gmud-area-approval] Falha ao aprovar a GMUD após a aprovação de todas as áreas.', {
-      protocol,
-      error: error?.message,
-    });
-    return false;
-  }
-}
+// A aprovação das áreas NÃO aprova a GMUD: com todas as áreas aprovadas ela segue pendente da
+// aprovação final do Comitê (fila do Comitê). Só a negativa de uma área age sozinha (nega e cancela).
 
 app.post('/api/gmud/area-approval/decide', async (req, res) => {
   try {
@@ -5435,10 +5458,9 @@ app.post('/api/gmud/area-approval/decide', async (req, res) => {
     if (result.decision === 'negada') {
       canceladoNoElleven = await denyGmudAfterAreaDenial(result);
     }
-    const gmudAprovada = await approveGmudWhenAreasDone(result.protocol, result.areasStatus);
     return res.json({
       success: true,
-      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven, gmudAprovada },
+      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven },
     });
   } catch (error) {
     return publicApprovalError(res, error, 'Falha ao registrar a decisão.');
@@ -5448,7 +5470,8 @@ app.post('/api/gmud/area-approval/decide', async (req, res) => {
 // O Comitê aprova em nome de uma área que não respondeu, para a GMUD não ficar parada.
 app.post('/api/gmud/:protocol/area-approvals/:areaId/override', async (req, res) => {
   try {
-    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    await assertGmudCommitteeMember(gmudActorEmail(actor));
     const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
     const areaId = Number.parseInt(String(req.params.areaId ?? ''), 10);
     const byName = gmudActorName(actor);
@@ -5460,8 +5483,7 @@ app.post('/api/gmud/:protocol/area-approvals/:areaId/override', async (req, res)
       actor: byName || byEmail,
       payload: { area: result.areaLabel },
     });
-    const gmudAprovada = await approveGmudWhenAreasDone(protocol, result.areasStatus);
-    return res.json({ success: true, data: { ...result, gmudAprovada } });
+    return res.json({ success: true, data: result });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
@@ -5784,14 +5806,16 @@ app.post('/api/gmud/link', async (req, res) => {
     if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
       return res.status(400).json({ success: false, message: 'Informe o protocolo da GMUD e da massiva.' });
     }
-    // Guard de "disponibilização": só vincula massiva a GMUD APROVADA pelo Comitê.
+    // Guard de "disponibilização": só vincula massiva a GMUD aprovada pelo Comitê E pelas áreas.
     // Pendente/negada (ou sem registro local) é bloqueada — backstop do bloqueio do front.
-    const statusComite = await getGmudApprovalStatus(gmudProtocol);
-    if (statusComite !== 'aprovada') {
+    const approvalState = await getGmudApprovalState(gmudProtocol);
+    if (!isGmudAprovadaFinal(approvalState?.statusComite, approvalState?.statusAreas)) {
       const motivo =
-        statusComite === 'negada'
-          ? 'A GMUD foi negada pelo Comitê.'
-          : 'A GMUD ainda não foi aprovada pelo Comitê.';
+        approvalState?.statusComite === 'negada' || approvalState?.statusAreas === 'negada'
+          ? 'A GMUD foi negada.'
+          : approvalState?.statusComite === 'aprovada'
+            ? 'A GMUD ainda aguarda a aprovação das áreas.'
+            : 'A GMUD ainda não foi aprovada pelo Comitê.';
       return res.status(409).json({
         success: false,
         message: `${motivo} O vínculo de massivas libera somente após a aprovação.`,

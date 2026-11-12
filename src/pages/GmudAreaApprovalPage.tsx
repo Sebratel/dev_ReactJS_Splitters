@@ -101,9 +101,9 @@ function Outcome({ outcome }: { outcome: AreaApprovalOutcome }) {
   if (outcome.decision === 'aprovada') {
     return (
       <Notice tone="success" title="Aprovação registrada">
-        {outcome.gmudAprovada === true
-          ? 'Obrigado. Todas as áreas aprovaram: a GMUD está aprovada.'
-          : 'Obrigado. Quando todas as áreas aprovarem, a GMUD fica aprovada.'}
+        {outcome.areasStatus === 'aprovada'
+          ? 'Obrigado. Todas as áreas aprovaram: a GMUD segue para a aprovação final do Comitê.'
+          : 'Obrigado. Quando todas as áreas aprovarem, a GMUD segue para a aprovação final do Comitê.'}
       </Notice>
     )
   }
