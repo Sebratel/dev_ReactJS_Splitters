@@ -23,6 +23,7 @@ import { createGmudClientSyncStore } from './gmudClientSyncStore.js';
 import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib/gmudClientSyncService.js';
 import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
+import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -5879,6 +5880,12 @@ function getGmudClientSync() {
     database: process.env.MASSIVA_MYSQL_DATABASE,
   });
   const gateway = createGmudGatewayClient({ env: process.env });
+  const clientsSource = createGmudClientsSource({
+    pool,
+    baseQuery: SPLITTERS_BASE_QUERY,
+    normalizeEscopoRede,
+    rowMatchesEscopoRede,
+  });
   const service = createGmudClientSyncService({
     store,
     gateway,
@@ -5888,16 +5895,61 @@ function getGmudClientSync() {
       listCandidates: (nowNaive) => listGmudsForClientSync(nowNaive),
       getByProtocol: (protocol) => getGmudRequest(protocol),
     },
-    clientsSource: createGmudClientsSource({
-      pool,
-      baseQuery: SPLITTERS_BASE_QUERY,
-      normalizeEscopoRede,
-      rowMatchesEscopoRede,
-    }),
+    clientsSource,
   });
-  gmudClientSyncParts = { store, gateway, service };
+  gmudClientSyncParts = { store, gateway, service, clientsSource };
   return gmudClientSyncParts;
 }
+
+// Clientes hoje sinalizados por alguma GMUD (para as telas mostrarem "GMUD" em vez de massiva).
+app.get('/api/gmud-clientes/ativos', async (_req, res) => {
+  try {
+    const { store } = getGmudClientSync();
+    const items = (await store.isReady()) ? await store.listActiveClients() : [];
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: safeErrorMessage(error, 'Falha ao consultar os clientes de GMUD.') });
+  }
+});
+
+// Impacto de uma GMUD em clientes: do histórico (se já foi incluída) ou estimado pelo escopo (cache de 5 min).
+const gmudImpactEstimateCache = new Map();
+app.get('/api/gmud/:protocol/clientes-impactados', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    const { store, clientsSource } = getGmudClientSync();
+    const gmud = await getGmudRequest(protocol);
+    if (!gmud) return res.status(404).json({ success: false, message: 'GMUD não registrada na plataforma.' });
+    if (!isGmudNetwork(gmud)) return res.json({ success: true, data: { applicable: false } });
+
+    const summary = (await store.isReady()) ? await store.getClientSummary(protocol) : null;
+    if (summary) return res.json({ success: true, data: { applicable: true, source: 'historico', ...summary } });
+
+    const cached = gmudImpactEstimateCache.get(protocol);
+    if (cached && Date.now() - cached.at < 5 * 60_000) return res.json({ success: true, data: cached.data });
+    const found = await clientsSource.listClients(gmud);
+    if (!found.ok) return res.json({ success: true, data: { applicable: true, source: 'estimativa', erro: found.reason } });
+    const data = {
+      applicable: true,
+      source: 'estimativa',
+      status: 'nao_incluida',
+      total: found.clients.length,
+      corporativos: found.clients.filter((c) => c.corporate).length,
+      deForaPorOutroEvento: 0,
+      windowEnd: null,
+    };
+    gmudImpactEstimateCache.set(protocol, { at: Date.now(), data });
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao calcular os clientes impactados da GMUD.'),
+    });
+  }
+});
 
 // Estado do job: configuração, última execução, erros e quantos clientes de GMUD estão ativos.
 app.get('/api/gmud/clientes-sync/status', async (req, res) => {

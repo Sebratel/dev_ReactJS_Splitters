@@ -17,6 +17,7 @@ import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
 import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard, GmudWindowHistoryCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
 import { GmudAreaApprovalsCard } from '@/features/gmud/ui/detail/GmudAreaApprovalsCard'
+import { GmudClientImpactCard } from '@/features/gmud/ui/detail/GmudClientImpactCard'
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
 import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
 import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
@@ -339,6 +340,7 @@ export function GmudDetailScreen() {
                 canOverride={isCommitteeMember && !closed}
                 onChanged={refreshGmud}
               />
+              <GmudClientImpactCard protocol={protocol} />
               <GmudWindowHistoryCard request={d.request} events={d.events} />
               <GmudTimelineCard items={timeline} />
             </div>

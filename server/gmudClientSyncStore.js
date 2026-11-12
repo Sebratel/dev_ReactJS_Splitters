@@ -25,6 +25,8 @@ export function createGmudClientSyncStore(config, { poolFactory = mysql.createPo
       async markWindowEnd() {},
       async recordError() {},
       async counts() { return { incluidas: 0, clientesAtivos: 0 }; },
+      async listActiveClients() { return []; },
+      async getClientSummary() { return null; },
     };
   }
 
@@ -109,6 +111,51 @@ export function createGmudClientSyncStore(config, { poolFactory = mysql.createPo
          ON DUPLICATE KEY UPDATE last_error = VALUES(last_error)`,
         [protocol, SYNC_STATUS.REMOVIDA, text(message).slice(0, 500)],
       );
+    },
+
+    /** Clientes hoje sinalizados por GMUD (para identificar "GMUD" nas telas): [{ contractId, protocol, corporate, includedAt, windowEnd }]. */
+    async listActiveClients() {
+      const [rows] = await pool.query(
+        `SELECT c.contract_id, c.corporate_client, c.included_at, s.gmud_protocol, s.window_end
+           FROM gmud_affected_clients c
+           JOIN gmud_client_sync s ON s.gmud_protocol = c.gmud_protocol
+          WHERE c.removed_at IS NULL AND c.status = 'incluido' AND s.status = 'incluida'`,
+      );
+      return rows.map((r) => ({
+        contractId: Number(r.contract_id),
+        protocol: Number(r.gmud_protocol),
+        corporate: Number(r.corporate_client) === 1,
+        includedAt: r.included_at ? toNaive(r.included_at) : null,
+        windowEnd: r.window_end ? toNaive(r.window_end) : null,
+      }));
+    },
+
+    /** Resumo da última inclusão da GMUD, ou null se ela nunca foi incluída. */
+    async getClientSummary(protocol) {
+      const [syncRows] = await pool.query(
+        `SELECT status, included_at, removed_at, removed_reason, window_end, clients_total, clients_sent, clients_skipped
+           FROM gmud_client_sync WHERE gmud_protocol = ? AND included_at IS NOT NULL`,
+        [protocol],
+      );
+      const s = syncRows?.[0];
+      if (!s) return null;
+      const [corp] = await pool.query(
+        `SELECT COALESCE(SUM(corporate_client), 0) AS corporativos
+           FROM gmud_affected_clients
+          WHERE gmud_protocol = ? AND included_at = (SELECT MAX(included_at) FROM gmud_affected_clients WHERE gmud_protocol = ?)`,
+        [protocol, protocol],
+      );
+      return {
+        status: s.status,
+        total: Number(s.clients_total),
+        incluidos: Number(s.clients_sent),
+        deForaPorOutroEvento: Number(s.clients_skipped),
+        corporativos: Number(corp?.[0]?.corporativos ?? 0),
+        includedAt: s.included_at ? toNaive(s.included_at) : null,
+        removedAt: s.removed_at ? toNaive(s.removed_at) : null,
+        removedReason: s.removed_reason ?? null,
+        windowEnd: s.window_end ? toNaive(s.window_end) : null,
+      };
     },
 
     async counts() {

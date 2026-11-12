@@ -5,7 +5,8 @@ import type {
   SplitterPortState,
 } from '@/features/splitters/model/splitterCliente'
 import type { GeogridReservaRow } from '@/features/splitters/model/geogridReservaRow'
-import { User, ArrowRight, Hash, Lock, Building2 } from 'lucide-react'
+import { User, ArrowRight, Hash, Lock, Building2, Wrench } from 'lucide-react'
+import { useGmudActiveClients } from '@/features/gmud/hooks/useGmudClients'
 import { cn } from '@/shared/lib/utils'
 import { useOnuDiagnosticsBatch } from '@/features/onu/hooks/useOnuDiagnostic'
 import { useProjectedSignalsBatch } from '@/features/onu/hooks/useProjectedSignalsBatch'
@@ -92,6 +93,8 @@ export function SplitterClientesList({
   portStates = [],
 }: SplitterClientesListProps) {
   const [corporateOnly, setCorporateOnly] = useState(false)
+  // Clientes sinalizados por uma GMUD (não por massiva): aparecem identificados como GMUD.
+  const gmudByContract = useGmudActiveClients()
   const ports = Array.from({ length: capacity }, (_, i) => i + 1)
 
   const clientsByPort = clientes.reduce((acc, c) => {
@@ -107,6 +110,10 @@ export function SplitterClientesList({
     return acc
   }, {} as Record<number, SplitterPortState>)
 
+  const gmudCount = useMemo(
+    () => clientes.filter((c) => c.contract != null && gmudByContract.has(c.contract.id)).length,
+    [clientes, gmudByContract],
+  )
   const corporateCount = useMemo(
     () => clientes.filter((c) => c.isCorporate).length,
     [clientes],
@@ -172,6 +179,11 @@ export function SplitterClientesList({
           <div className="rounded-md border border-primary/25 bg-primary/[0.07] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-sm">
             <span className="tabular-nums">{capacity - clientes.length}</span> livres
           </div>
+          {gmudCount > 0 ? (
+            <div className="rounded-md border border-sky-200 dark:border-sky-800/50 bg-sky-50/90 dark:bg-sky-950/40 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+              <span className="tabular-nums">{gmudCount}</span> em GMUD
+            </div>
+          ) : null}
           {corporateCount > 0 ? (
             <div className="rounded-md border border-violet-200 dark:border-violet-800/50 bg-violet-50/90 dark:bg-violet-950/40 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-violet-900 dark:text-violet-200 shadow-sm">
               <span className="tabular-nums">{corporateCount}</span> corporativos
@@ -295,6 +307,15 @@ export function SplitterClientesList({
                       compact
                     />
                     {hasBlock && blocked ? <PortBlockIndicator block={blocked} /> : null}
+                    {c.contract != null && gmudByContract.has(c.contract.id) ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200"
+                        title={`Sinalizado pela GMUD ${gmudByContract.get(c.contract.id)?.protocol}`}
+                      >
+                        <Wrench size={11} strokeWidth={2} />
+                        GMUD {gmudByContract.get(c.contract.id)?.protocol}
+                      </span>
+                    ) : null}
                     {c.isCorporate ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 dark:border-violet-800/50 bg-violet-50 dark:bg-violet-950/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-200">
                         <Building2 size={11} strokeWidth={2} />
