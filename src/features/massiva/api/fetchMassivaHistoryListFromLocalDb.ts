@@ -17,6 +17,11 @@ export type MassivaHistoryListRow = {
   closeDescription: string | null
   /** Autor do encerramento (usuário da plataforma). */
   closedBy: string | null
+  /**
+   * Origem da linha em `massiva_history.source` ('nexaview-local' = gravada pela plataforma;
+   * 'conferencia-elleven' = recuperada pela conferência com o Elleven). Ausente em respostas antigas.
+   */
+  source?: string | null
   /** Início do evento (base para cálculo de MTTD). Null se não informado na abertura. */
   eventStartAt: Date | null
   /**
@@ -119,6 +124,9 @@ export async function fetchMassivaHistoryListFromLocalDb(input: {
       : null,
     closedBy: row.closedBy != null && String(row.closedBy).trim() !== ''
       ? String(row.closedBy).trim()
+      : null,
+    source: row.source != null && String(row.source).trim() !== ''
+      ? String(row.source).trim()
       : null,
     eventStartAt: toNullableDate(row.eventStartAt),
     mttdMinutes: row.mttdMinutes != null && Number.isFinite(Number(row.mttdMinutes))

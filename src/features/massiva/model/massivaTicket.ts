@@ -78,6 +78,12 @@ export type MassivaTicket = {
    * o payload ao vivo do Elleven não expõe. Null/ausente quando não informado ou massiva antiga.
    */
   identifiedBy?: 'tecnico' | 'zabbix' | 'int6' | 'gmud' | null
+  /**
+   * Linha criada pela "Conferência com o Elleven" (`massiva_history.source = 'conferencia-elleven'`):
+   * a massiva existia só no Elleven e foi registrada automaticamente. Só existe na origem local;
+   * nesse caso operador e clientes afetados podem estar em branco. Ausente nas demais.
+   */
+  recoveredFromElleven?: boolean
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

@@ -2240,6 +2240,7 @@ export function createMassivaHistoryStore(config) {
           h.expected_close_at AS expectedCloseAt,
           h.closed_at AS closedAt,
           h.close_description AS closeDescription,
+          h.source AS source,
           ${hasClosedByColumn ? 'h.closed_by AS closedBy,' : ''}
           ${hasClassificationColumns ? `h.tipo_incidente AS tipoIncidente,
           h.impacto AS impacto,
@@ -2291,6 +2292,8 @@ export function createMassivaHistoryStore(config) {
       expectedCloseAt: serializeHistoryDate(row.expectedCloseAt),
       closedAt: serializeHistoryDate(row.closedAt),
       closeDescription: normalizeNullableText(row.closeDescription),
+      /** Origem da linha ('nexaview-local' = gravada pela plataforma; 'conferencia-elleven' = recuperada pela conferência). */
+      source: normalizeNullableText(row.source),
       closedBy: normalizeNullableText(row.closedBy),
       tipoIncidente: normalizeNullableText(row.tipoIncidente),
       impacto: normalizeNullableText(row.impacto),
