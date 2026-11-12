@@ -398,7 +398,9 @@ export async function openMassivaFromContext(
     // afetados e sem encerramento automático); o operador encerra pelo fluxo normal.
     let payload: MassivaOpenMutationSuccessPayload = base
     try {
-      await registerOpenedMassivaHistoryInLocalDb(context, payload)
+      // `complete: true`: não há afetados a gravar, então a linha já nasce completa (a reconciliação
+      // de history_complete=0 não deve tentar "completar" uma massiva de sistema).
+      await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
     } catch (localError) {
       console.warn('[Massiva] Falha ao registrar histórico local após abertura de sistema.', localError)
       payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
