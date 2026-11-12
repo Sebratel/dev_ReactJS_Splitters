@@ -143,6 +143,9 @@ export function createMassivaHistoryStore(config) {
       async registerCancel() {
         return { configured: false, updated: 0 };
       },
+      async getInfraLinkByProtocol() {
+        return null;
+      },
       async updateClassification() {
         return { configured: false, updated: 0 };
       },
@@ -772,6 +775,25 @@ export function createMassivaHistoryStore(config) {
    */
   async function registerCancel(input) {
     return registerClose({ ...input, targetStatus: 'cancelada' });
+  }
+
+  /**
+   * Protocolo de infraestrutura aberto junto com a massiva (se houver): { infraProtocol, infraAssignmentId }.
+   * Null quando a massiva não tem protocolo de infra ou as colunas ainda não existem.
+   */
+  async function getInfraLinkByProtocol(protocolInput) {
+    await ensureReady();
+    if (!hasInfraProtocolColumns) return null;
+    const protocol = normalizePositiveInt(protocolInput);
+    if (protocol === null) return null;
+    const [rows] = await dataPool.query(
+      'SELECT infra_protocol, infra_assignment_id FROM massiva_history WHERE protocol = ? LIMIT 1',
+      [protocol],
+    );
+    const r = rows?.[0];
+    const infraAssignmentId = normalizePositiveInt(r?.infra_assignment_id);
+    if (infraAssignmentId === null) return null;
+    return { infraProtocol: normalizePositiveInt(r?.infra_protocol), infraAssignmentId };
   }
 
   /**
@@ -2483,6 +2505,7 @@ export function createMassivaHistoryStore(config) {
     registerOpenBatch,
     registerClose,
     registerCancel,
+    getInfraLinkByProtocol,
     updateClassification,
     registerAffectedClients,
     getAffectedClientsPppoeList,

@@ -110,3 +110,30 @@ export async function cleanupMassivaAffected({ protocol }, { env = process.env, 
     return { ok: false };
   }
 }
+
+/**
+ * Cancelar a massiva cancela também o protocolo de infraestrutura aberto junto com ela (se houver).
+ * Chamada DEPOIS de a massiva ser cancelada no Elleven: qualquer falha aqui vira aviso, nunca erro.
+ * Retorna null (sem infra) ou { protocol, ok, reason? }.
+ *  - getLink(protocol): { infraProtocol, infraAssignmentId } | null (do histórico local);
+ *  - finalize({ assignmentId, description, mode }): mesma função usada para cancelar a massiva.
+ */
+export async function cancelLinkedInfraProtocol({ protocol, description }, { getLink, finalize, logger } = {}) {
+  try {
+    const link = await getLink(protocol);
+    if (!link || !(Number(link.infraAssignmentId) > 0)) return null;
+    const result = await finalize({
+      assignmentId: link.infraAssignmentId,
+      description: `Cancelado junto com a massiva ${protocol}: ${description}`.slice(0, 4000),
+      mode: MASSIVA_FINALIZE_MODES.CANCELAR,
+    });
+    if (!result.ok) {
+      logger?.warn?.('[massiva-finalize] Massiva cancelada, mas o protocolo de infra não.', { protocol, infra: link.infraProtocol, reason: result.reason });
+      return { protocol: link.infraProtocol ?? null, ok: false, reason: result.reason };
+    }
+    return { protocol: link.infraProtocol ?? null, ok: true };
+  } catch (error) {
+    logger?.warn?.('[massiva-finalize] Falha ao cancelar o protocolo de infra.', { protocol, error: error?.message });
+    return { protocol: null, ok: false, reason: error?.message ?? 'erro desconhecido' };
+  }
+}

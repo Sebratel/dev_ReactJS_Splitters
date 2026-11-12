@@ -14,9 +14,12 @@ type FinalizeMassivaInput = {
   cnl?: string | null
 }
 
+/** Cancelar a massiva também cancela o protocolo de infra aberto junto (quando existe). */
+export type InfraCancelResult = { protocol: number | null; ok: boolean; reason?: string }
+
 export type FinalizeMassivaOnServerResult =
   /** O backend encerrou/cancelou de ponta a ponta (Elleven, afetados e histórico local). */
-  | { handled: true; localHistoryWarning?: string }
+  | { handled: true; localHistoryWarning?: string; infraCancel?: InfraCancelResult }
   /** O backend não tem o gateway configurado: use o fluxo antigo, feito pelo navegador. */
   | { handled: false }
 
@@ -44,7 +47,7 @@ export async function finalizeMassivaOnServer(
     success?: boolean
     code?: string
     message?: string
-    data?: { localHistoryWarning?: string }
+    data?: { localHistoryWarning?: string; infraCancel?: InfraCancelResult }
   } | null
 
   if (response.status === 503 && parsed?.code === 'gateway_not_configured') {
@@ -53,5 +56,9 @@ export async function finalizeMassivaOnServer(
   if (!response.ok || !parsed?.success) {
     throw new Error(parsed?.message ?? `Erro ao finalizar a massiva: ${response.status}`)
   }
-  return { handled: true, localHistoryWarning: parsed.data?.localHistoryWarning }
+  return {
+    handled: true,
+    localHistoryWarning: parsed.data?.localHistoryWarning,
+    ...(parsed.data?.infraCancel ? { infraCancel: parsed.data.infraCancel } : {}),
+  }
 }

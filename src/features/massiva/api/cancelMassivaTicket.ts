@@ -9,6 +9,9 @@ type CancelMassivaInput = {
   cancelDescription: string
   /** Usuário logado que está cancelando (registrado como autor no histórico local). */
   cancelledBy?: string
+  /** Protocolo de infra aberto junto com a massiva: é cancelado também (o backend o localiza sozinho; no fluxo pelo navegador usa este id). */
+  infraProtocol?: number | null
+  infraAssignmentId?: number | null
 }
 
 export type CancelMassivaResult = {
@@ -20,6 +23,19 @@ export type CancelMassivaResult = {
    * até o próximo ciclo de sincronização.
    */
   localHistoryWarning?: string
+  /** Protocolo de infra cancelado junto com a massiva (quando havia um). */
+  infraCancelledProtocol?: number | null
+}
+
+/** Texto de aviso quando a massiva foi cancelada mas o protocolo de infra não. */
+export function buildInfraCancelWarning(infraProtocol: number | null | undefined, reason?: string): string {
+  const which = infraProtocol ? ` ${infraProtocol}` : ''
+  return `A massiva foi cancelada, mas o protocolo de infra${which} não foi cancelado automaticamente${reason ? ` (${reason})` : ''}. Cancele-o manualmente.`
+}
+
+function joinWarnings(...parts: Array<string | undefined>): string | undefined {
+  const text = parts.filter((p): p is string => Boolean(p)).join('\n')
+  return text === '' ? undefined : text
 }
 
 function normalizePath(path: string): string {
@@ -48,9 +64,16 @@ export async function cancelMassivaTicket(input: CancelMassivaInput): Promise<Ca
     description: input.cancelDescription,
   })
   if (onServer.handled) {
-    return onServer.localHistoryWarning !== undefined
-      ? { ok: true, localHistoryWarning: onServer.localHistoryWarning }
-      : { ok: true }
+    const infra = onServer.infraCancel
+    const warning = joinWarnings(
+      onServer.localHistoryWarning,
+      infra && !infra.ok ? buildInfraCancelWarning(infra.protocol, infra.reason) : undefined,
+    )
+    return {
+      ok: true,
+      ...(warning !== undefined ? { localHistoryWarning: warning } : {}),
+      ...(infra?.ok ? { infraCancelledProtocol: infra.protocol } : {}),
+    }
   }
 
   // Fallback (backend sem gateway configurado): fluxo antigo, feito pelo navegador.
@@ -85,6 +108,30 @@ export async function cancelMassivaTicket(input: CancelMassivaInput): Promise<Ca
     }
   }
 
+  // Protocolo de infra aberto junto: cancela também. A massiva já foi cancelada; falha aqui vira aviso.
+  let infraWarning: string | undefined
+  let infraCancelledProtocol: number | null | undefined
+  if (input.infraAssignmentId != null && input.infraAssignmentId > 0) {
+    try {
+      await bffClient.request({
+        path: closePath,
+        method: 'DELETE',
+        body: {
+          assignmentId: String(input.infraAssignmentId),
+          incidentStatusId: env.massivaCancelIncidentStatusId,
+          description: `Cancelado junto com a massiva ${input.protocol}: ${input.cancelDescription}`,
+          progress: env.massivaCloseProgress,
+          priority: env.massivaClosePriority,
+          notificationTarget: env.massivaCloseNotificationTarget,
+          privateReport: env.massivaClosePrivateReport,
+        },
+      })
+      infraCancelledProtocol = input.infraProtocol ?? null
+    } catch (infraError) {
+      infraWarning = buildInfraCancelWarning(input.infraProtocol, infraError instanceof Error ? infraError.message : undefined)
+    }
+  }
+
   try {
     await registerCancelledMassivaHistoryInLocalDb({
       protocol: input.protocol,
@@ -92,7 +139,11 @@ export async function cancelMassivaTicket(input: CancelMassivaInput): Promise<Ca
       cancelDescription: input.cancelDescription,
       cancelledBy: input.cancelledBy,
     })
-    return { ok: true }
+    return {
+      ok: true,
+      ...(infraWarning !== undefined ? { localHistoryWarning: infraWarning } : {}),
+      ...(infraCancelledProtocol !== undefined ? { infraCancelledProtocol } : {}),
+    }
   } catch (localError) {
     const msg =
       localError instanceof Error
@@ -101,7 +152,11 @@ export async function cancelMassivaTicket(input: CancelMassivaInput): Promise<Ca
     console.warn('[Massiva] Falha ao registrar cancelamento no histórico local.', localError)
     return {
       ok: true,
-      localHistoryWarning: `Cancelado no Elleven, mas o registro local falhou: ${msg}. O histórico pode demorar a refletir.`,
+      localHistoryWarning: joinWarnings(
+        `Cancelado no Elleven, mas o registro local falhou: ${msg}. O histórico pode demorar a refletir.`,
+        infraWarning,
+      ),
+      ...(infraCancelledProtocol !== undefined ? { infraCancelledProtocol } : {}),
     }
   }
 }

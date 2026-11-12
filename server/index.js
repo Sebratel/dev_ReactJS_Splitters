@@ -161,6 +161,7 @@ import {
   cleanupMassivaAffected,
   finalizeMassivaInElleven,
   nowBrazilIsoLike,
+  cancelLinkedInfraProtocol,
 } from './lib/massivaEllevenClose.js';
 import logger, { captureConsole } from './logger.js';
 
@@ -2742,6 +2743,16 @@ app.post('/api/massiva/finalize', async (req, res) => {
     // 2) Limpeza dos afetados no gateway (auxiliar; falha não desfaz o encerramento).
     await cleanupMassivaAffected({ protocol });
 
+    // 2b) Cancelar a massiva cancela também o protocolo de infra aberto junto com ela (se houver). A massiva já foi
+    // cancelada: falha aqui vira aviso, não erro.
+    const infraCancel =
+      mode === MASSIVA_FINALIZE_MODES.CANCELAR && massivaHistoryStore.configured
+        ? await cancelLinkedInfraProtocol(
+            { protocol, description },
+            { getLink: (p) => massivaHistoryStore.getInfraLinkByProtocol(p), finalize: finalizeMassivaInElleven, logger },
+          )
+        : null;
+
     // 3) Histórico local. Elleven já finalizou: falha aqui vira aviso, não erro.
     const closedBy = gmudActorName(actor);
     let localHistoryWarning;
@@ -2771,7 +2782,10 @@ app.post('/api/massiva/finalize', async (req, res) => {
       localHistoryWarning = `Finalizada no Elleven, mas o registro local falhou: ${localError?.message ?? 'erro desconhecido'}.`;
     }
 
-    return res.json({ success: true, data: { ok: true, ...(localHistoryWarning ? { localHistoryWarning } : {}) } });
+    return res.json({
+      success: true,
+      data: { ok: true, ...(localHistoryWarning ? { localHistoryWarning } : {}), ...(infraCancel ? { infraCancel } : {}) },
+    });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
