@@ -17,6 +17,11 @@ export type UsuarioAfetadoEntity = {
 export type MassivaAfetadosRequestBody = {
   usuarioAfetadoEntities: UsuarioAfetadoEntity[]
   assignmentId: number
+  /**
+   * O operador escolheu gravar também clientes que já estão em outro evento aberto. Ausente = o gateway
+   * deixa esses clientes de fora (não duplica).
+   */
+  includeConflicting?: boolean
 }
 
 const REASON_MAX_LEN = 2000
@@ -125,5 +130,6 @@ export function buildMassivaAfetadosRequestBody(
   return {
     usuarioAfetadoEntities: entities,
     assignmentId,
+    ...(context.includeConflictingClients === true ? { includeConflicting: true } : {}),
   }
 }
