@@ -18,6 +18,8 @@ import { listSplittersUsers } from '@/features/access/api/firestoreUsers'
 import type { SplittersUserProfile } from '@/features/access/model/access.types'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { GMUD_COMMITTEE_QUERY_KEY } from '@/features/gmud/hooks/useGmudCommittee'
+import { requesterInitials } from '@/features/gmud/lib/gmudRequester'
+import { cn } from '@/shared/lib/utils'
 
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
@@ -26,7 +28,7 @@ const LIST_META: Record<string, { label: string; hint: string }> = {
   },
   comite: {
     label: 'Comitê',
-    hint: 'Quem toma a decisão final (aprovar ou negar) das GMUDs. Clique em "Comitê" para escolher os membros; basta um deles decidir. A aprovação das áreas não substitui a do Comitê. Sem membros, nenhuma GMUD pode ser aprovada.',
+    hint: 'Quem toma a decisão final (aprovar ou negar) das GMUDs. Use "Gerenciar membros" para escolher quem decide; basta um deles. A aprovação das áreas não substitui a do Comitê. Sem membros, nenhuma GMUD pode ser aprovada.',
   },
   processos: {
     label: 'Processos de negócio',
@@ -261,6 +263,7 @@ function ListPanel({
   refetchApprovers?: () => void
 }) {
   const [newLabel, setNewLabel] = useState('')
+  const [filtro, setFiltro] = useState('')
   const [openApproversForId, setOpenApproversForId] = useState<number | null>(null)
   const qc = useQueryClient()
   const meta = LIST_META[listKey] ?? { label: listKey, hint: '' }
@@ -298,63 +301,130 @@ function ListPanel({
           {meta.hint ? <p className="mt-0.5 text-xs text-on-surface-variant">{meta.hint}</p> : null}
         </div>
 
-        <ul className="divide-y divide-neutral-200/60 dark:divide-white/5">
-          {items.length === 0 ? (
-            <li className="px-4 py-4 text-sm text-on-surface-variant/60 italic">Nenhum item cadastrado.</li>
-          ) : (
-            items.map((item) => {
-              const count = approversMap?.[item.id]?.length ?? 0
+        {items.length === 0 ? (
+          <p className="px-4 py-4 text-sm italic text-on-surface-variant/60">Nenhum item cadastrado.</p>
+        ) : isCommittee ? (
+          <div className="space-y-2 px-4 py-3">
+            {items.map((item) => {
+              const members = approversMap?.[item.id] ?? []
               return (
-                <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  {hasApprovers ? (
-                    <button
-                      type="button"
-                      onClick={() => setOpenApproversForId(item.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      title="Gerenciar quem aprova"
-                    >
-                      <span className="text-sm text-on-surface">{item.label}</span>
-                      {count > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                          <Users size={10} />
-                          {count}
-                        </span>
-                      ) : (
-                        isCommittee ? (
-                          <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                            sem membros: ninguém pode aprovar ou negar GMUDs
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400" title="GMUDs que marcarem esta área não poderão ser registradas até cadastrar um aprovador">
-                            sem aprovador: bloqueia GMUDs que marcarem esta área
-                          </span>
-                        )
-                      )}
-                    </button>
-                  ) : (
-                    <span className="text-sm text-on-surface">{item.label}</span>
-                  )}
-                  {!isCommittee ? (
+                <div key={item.id} className="flex flex-wrap items-center gap-3">
+                  <div className="flex -space-x-2" aria-hidden>
+                    {members.slice(0, 5).map((m) => (
+                      <span
+                        key={m.id}
+                        title={m.userDisplayName ?? m.userEmail}
+                        className="inline-flex size-8 items-center justify-center rounded-full bg-surface-container-low text-[11px] font-bold text-on-surface ring-2 ring-surface-container-lowest"
+                      >
+                        {requesterInitials(m.userDisplayName ?? m.userEmail.split('@')[0])}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="min-w-0 flex-1 text-sm">
+                    {members.length > 0 ? (
+                      <>
+                        <p className="font-semibold text-on-surface">
+                          {members.length} membro{members.length === 1 ? '' : 's'}
+                        </p>
+                        <p className="truncate text-xs text-on-surface-variant">
+                          {members.map((m) => m.userDisplayName ?? m.userEmail).join(', ')}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                        Sem membros: ninguém pode aprovar ou negar GMUDs
+                      </p>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (window.confirm(`Remover "${item.label}" da lista "${meta.label}"?`)) {
-                        removeMutation.mutate(item.id)
-                      }
-                    }}
-                    disabled={removeMutation.isPending}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 dark:ring-white/10 transition hover:text-error hover:ring-error/40 disabled:opacity-40"
-                    title="Remover este item"
+                    onClick={() => setOpenApproversForId(item.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
                   >
-                    {removeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                    Remover
+                    <Users size={13} /> Gerenciar membros
                   </button>
-                  ) : null}
-                </li>
+                </div>
               )
-            })
-          )}
-        </ul>
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3 p-4">
+            {items.length > 8 ? (
+              <input
+                className={FIELD}
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                placeholder="Filtrar…"
+                aria-label={`Filtrar ${meta.label}`}
+              />
+            ) : null}
+            <ul className={hasApprovers ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-wrap gap-2'}>
+              {items
+                .filter((i) => filtro.trim() === '' || i.label.toLocaleLowerCase('pt-BR').includes(filtro.trim().toLocaleLowerCase('pt-BR')))
+                .map((item) => {
+                  const count = approversMap?.[item.id]?.length ?? 0
+                  const semAprovador = hasApprovers && count === 0
+                  const remover = (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Remover "${item.label}" da lista "${meta.label}"?`)) {
+                          removeMutation.mutate(item.id)
+                        }
+                      }}
+                      disabled={removeMutation.isPending}
+                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition hover:bg-surface-container-low hover:text-error disabled:opacity-40"
+                      title={`Remover ${item.label}`}
+                      aria-label={`Remover ${item.label}`}
+                    >
+                      {removeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  )
+                  return hasApprovers ? (
+                    <li
+                      key={item.id}
+                      className={cn(
+                        'flex items-center gap-1 rounded-xl border px-3 py-2',
+                        semAprovador
+                          ? 'border-amber-300/70 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/20'
+                          : 'border-neutral-200/80 dark:border-white/10',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setOpenApproversForId(item.id)}
+                        className="min-w-0 flex-1 text-left"
+                        title="Gerenciar quem aprova"
+                      >
+                        <span className="block truncate text-sm font-medium text-on-surface">{item.label}</span>
+                        {semAprovador ? (
+                          <span
+                            className="block text-[11px] font-semibold text-amber-700 dark:text-amber-300"
+                            title="GMUDs que marcarem esta área não poderão ser registradas até cadastrar um aprovador"
+                          >
+                            Sem aprovador: bloqueia GMUDs que marcarem a área
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant">
+                            <Users size={10} /> {count} aprovador{count === 1 ? '' : 'es'}
+                          </span>
+                        )}
+                      </button>
+                      {remover}
+                    </li>
+                  ) : (
+                    <li
+                      key={item.id}
+                      className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 py-0.5 pl-3 pr-1 text-sm text-on-surface dark:border-white/10"
+                    >
+                      {item.label}
+                      {remover}
+                    </li>
+                  )
+                })}
+            </ul>
+          </div>
+        )}
 
         {!isCommittee ? (
         <div className="border-t border-neutral-200/70 dark:border-white/8 px-4 py-3">

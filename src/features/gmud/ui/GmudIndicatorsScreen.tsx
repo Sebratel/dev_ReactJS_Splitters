@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlarmClock, BarChart3, CheckCircle2, Download, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
+import { AlarmClock, AlertTriangle, BarChart3, CheckCircle2, Download, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
 import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
 import { cn } from '@/shared/lib/utils'
 import { fetchGmudIndicators, gmudIndicatorsExportUrl, type GmudCategoria, type GmudIndicators } from '@/features/gmud/api/gmudIndicators'
@@ -35,22 +35,26 @@ function periodRange(key: PeriodKey, now = new Date()): { from: string; to: stri
 }
 
 /** Frase-resumo gerada dos números (o "recado" principal da tela). */
-function buildHeadline(data: GmudIndicators): string | null {
+function buildHeadline(data: GmudIndicators): { text: string; rising: boolean } | null {
   const m = data.voalle.period.monthly
   if (m.length < 2) return null
   const first = m[0].backlog
   const last = m[m.length - 1].backlog
   const { opened, closed } = data.voalle.period
   if (last > first) {
-    return `O backlog de GMUDs em aberto subiu de ${first} para ${last} no período: entraram ${opened} e só ${closed} foram encerradas no Voalle. A maior parte são protocolos antigos que nunca foram encerrados no Elleven, mesmo com a mudança já executada.`
+    return {
+      rising: true,
+      text: `O backlog de GMUDs em aberto subiu de ${first} para ${last} no período: entraram ${opened} e só ${closed} foram encerradas no Voalle. A maior parte são protocolos antigos que nunca foram encerrados no Elleven, mesmo com a mudança já executada.`,
+    }
   }
-  if (last < first) return `O backlog caiu de ${first} para ${last} no período (${opened} abertas, ${closed} encerradas).`
-  return `Backlog estável em ${last} GMUDs no período (${opened} abertas, ${closed} encerradas).`
+  if (last < first) return { rising: false, text: `O backlog caiu de ${first} para ${last} no período (${opened} abertas, ${closed} encerradas).` }
+  return { rising: false, text: `Backlog estável em ${last} GMUDs no período (${opened} abertas, ${closed} encerradas).` }
 }
 
 export function GmudIndicatorsScreen() {
   const [period, setPeriod] = useState<PeriodKey>('12m')
   const [categoria, setCategoria] = useState<GmudCategoria | ''>('')
+  const [aba, setAba] = useState<'voalle' | 'plataforma'>('voalle')
   const range = useMemo(() => periodRange(period), [period])
   const categoriaFilter = categoria || null
   const query = useQuery({
@@ -154,25 +158,56 @@ export function GmudIndicatorsScreen() {
           </div>
 
           {headline ? (
-            <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-on-surface">
-              <span className="font-semibold text-primary">Destaque · </span>
-              {headline}
+            <div
+              className={cn(
+                'flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm text-on-surface',
+                headline.rising
+                  ? 'border-rose-300/70 bg-rose-50 dark:border-rose-800/50 dark:bg-rose-950/30'
+                  : 'border-neutral-200/90 bg-surface-container-lowest dark:border-white/10',
+              )}
+            >
+              {headline.rising ? <AlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" aria-hidden /> : null}
+              <p>{headline.text}</p>
             </div>
           ) : null}
 
-          <SectionTitle
-            eyebrow="Histórico Voalle"
-            title="Fluxo e backlog dos protocolos"
-            description="Todas as GMUDs do Elleven desde 2020: entrada, saída, prazos e quem solicita."
-          />
-          <GmudHistorySection data={data.voalle} />
+          <div role="tablist" aria-label="Seção dos indicadores" className="flex w-fit rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+            {([['voalle', 'Histórico Voalle'], ['plataforma', 'Plataforma']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={aba === key}
+                onClick={() => setAba(key)}
+                className={cn(
+                  'rounded-md px-4 py-1.5 text-xs font-semibold transition',
+                  aba === key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-          <SectionTitle
-            eyebrow="Plataforma"
-            title="Comitê, perfil das mudanças e impacto"
-            description="Dados que só existem para GMUDs abertas por aqui: tipo, assunto, ambiente, aprovação, reagendamentos e massivas vinculadas."
-          />
-          <GmudPlatformSection data={data.platform} error={data.platformError} />
+          {aba === 'voalle' ? (
+            <>
+              <SectionTitle
+                eyebrow="Histórico Voalle"
+                title="Fluxo e backlog dos protocolos"
+                description="Todas as GMUDs do Elleven desde 2020: entrada, saída, prazos e quem solicita."
+              />
+              <GmudHistorySection data={data.voalle} />
+            </>
+          ) : (
+            <>
+              <SectionTitle
+                eyebrow="Plataforma"
+                title="Comitê, perfil das mudanças e impacto"
+                description="Dados que só existem para GMUDs abertas por aqui: tipo, assunto, ambiente, aprovação, reagendamentos e massivas vinculadas."
+              />
+              <GmudPlatformSection data={data.platform} error={data.platformError} />
+            </>
+          )}
 
           <p className="pb-2 text-right text-[11px] text-on-surface-variant">
             Atualizado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
