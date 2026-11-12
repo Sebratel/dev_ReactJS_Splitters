@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
-import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
@@ -78,27 +78,6 @@ export function GmudScreen() {
   const headerTrailing = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <Link
-          to="/gmud/nova"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90"
-        >
-          <Plus size={15} /> Nova GMUD
-        </Link>
-        <Link
-          to="/gmud/indicadores"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
-        >
-          <BarChart3 size={15} /> Indicadores
-        </Link>
-        {canConfigure ? (
-          <Link
-            to="/gmud/configuracoes"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
-            title="Configurações do módulo GMUD"
-          >
-            <Settings2 size={15} /> Configurações
-          </Link>
-        ) : null}
         <div className="relative">
           <Search
             size={14}
@@ -122,6 +101,30 @@ export function GmudScreen() {
         >
           <RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />
         </button>
+        <Link
+          to="/gmud/indicadores"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
+          aria-label="Indicadores"
+          title="Indicadores"
+        >
+          <BarChart3 size={16} />
+        </Link>
+        {canConfigure ? (
+          <Link
+            to="/gmud/configuracoes"
+            className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
+            aria-label="Configurações do módulo GMUD"
+            title="Configurações do módulo GMUD"
+          >
+            <Settings2 size={16} />
+          </Link>
+        ) : null}
+        <Link
+          to="/gmud/nova"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90"
+        >
+          <Plus size={15} /> Nova GMUD
+        </Link>
       </div>
     ),
     [searchInput, isFetching, refetch],
@@ -129,13 +132,11 @@ export function GmudScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <AppPageHeader
-        badge="Gestão de Mudança de Rede"
+      <GmudPageHeader
         title="GMUD"
-        description="Requisição, acompanhamento e aprovação de mudanças de rede — integrado ao Elleven."
+        subtitle="Mudanças de rede, do pedido à aprovação — integrado ao Elleven"
         icon={ClipboardList}
-        primaryAction={{ to: '/', label: 'Voltar ao painel' }}
-        trailing={headerTrailing}
+        actions={headerTrailing}
       />
 
       <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">

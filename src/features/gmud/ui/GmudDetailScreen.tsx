@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, CalendarClock, CheckCircle2, ClipboardList, Gavel, Link2, ListTree, Maximize2, MessageSquarePlus } from 'lucide-react'
-import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { fetchGmudDetail, type GmudDetail } from '@/features/gmud/api/gmudDetail'
 import type { GmudAgendaItem } from '@/features/gmud/api/gmudAgenda'
@@ -202,12 +202,11 @@ export function GmudDetailScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <AppPageHeader
-        badge={`GMUD ${protocol}`}
+      <GmudPageHeader
         title={title}
-        description={d ? `${d.voalle.requester || 'Solicitante não informado'} · ${d.request ? 'Aberta pela plataforma' : 'Legado (Voalle)'}` : 'Carregando…'}
+        subtitle={d ? `GMUD ${protocol} · ${d.voalle.requester || 'Solicitante não informado'} · ${d.request ? 'Aberta pela plataforma' : 'Legado (Voalle)'}` : `GMUD ${protocol} · Carregando…`}
         icon={ClipboardList}
-        primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
+        backTo={{ to: '/gmud', label: 'GMUD' }}
       />
 
       {query.isLoading ? (

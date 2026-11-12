@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlarmClock, BarChart3, CheckCircle2, Download, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
-import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
 import { cn } from '@/shared/lib/utils'
 import { fetchGmudIndicators, gmudIndicatorsExportUrl, type GmudCategoria, type GmudIndicators } from '@/features/gmud/api/gmudIndicators'
 import { localDayKey } from '@/features/gmud/lib/gmudSchedule'
@@ -64,13 +64,12 @@ export function GmudIndicatorsScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <AppPageHeader
-        badge="Gestão de Mudança de Rede"
+      <GmudPageHeader
         title="Indicadores de GMUD"
-        description="Volume, backlog, prazos, Comitê, perfil das mudanças e impacto na rede."
+        subtitle="Volume, backlog, prazos, Comitê, perfil das mudanças e impacto na rede"
         icon={BarChart3}
-        primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
-        trailing={
+        backTo={{ to: '/gmud', label: 'GMUD' }}
+        actions={
           <button
             type="button"
             onClick={() => void query.refetch()}
