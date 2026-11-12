@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -75,9 +75,14 @@ const CATEGORIA_COLORS: Record<GmudCategoria, string> = {
 // ---------------------------------------------------------------------------
 // Componentes internos
 // ---------------------------------------------------------------------------
+/** Âncora estável de uma seção (índice lateral). */
+function sectionId(title: string): string {
+  return 'gmud-sec-' + title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
 function Section({ title, children, hint }: { title: string; children: React.ReactNode; hint?: string }) {
   return (
-    <div className={CARD}>
+    <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section={title} id={sectionId(title)}>
       <p className="mb-3 text-sm font-bold text-on-surface">{title}</p>
       {hint ? <p className="mb-3 text-xs text-on-surface-variant">{hint}</p> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
@@ -154,6 +159,12 @@ function PreAprovadaRepeticao({
   )
 }
 
+const TIPO_DESCRICAO: Record<string, string> = {
+  Programada: 'Passa pelas áreas e pelo Comitê',
+  Emergencial: 'Vai direto ao Comitê',
+  'Pré-aprovada': 'Sem aprovação · pode repetir',
+}
+
 function CamposComuns({
   form, set, categoria,
 }: {
@@ -168,19 +179,36 @@ function CamposComuns({
 
   return (
     <Section title="Identificação">
-      <Field label="Tipo da GMUD" required>
-        <select className={FIELD} value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
-          <option value="">Escolher…</option>
+      <div className="sm:col-span-2">
+        <span className={LABEL}>Tipo da GMUD *</span>
+        <div role="radiogroup" aria-label="Tipo da GMUD" className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {GMUD_TIPO_OPTIONS.map((o) => {
             const bloqueada = o === GMUD_TIPO_PRE_APROVADA && categoria !== 'rede_externa'
+            const ativo = form.tipo === o
             return (
-              <option key={o} value={o} disabled={bloqueada}>
-                {o}{bloqueada ? ' (só Rede Externa)' : ''}
-              </option>
+              <button
+                key={o}
+                type="button"
+                role="radio"
+                aria-checked={ativo}
+                disabled={bloqueada}
+                onClick={() => set('tipo', o)}
+                className={cn(
+                  'rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50',
+                  ativo
+                    ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                    : 'border-neutral-200/80 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/10',
+                )}
+              >
+                <span className="block text-sm font-semibold text-on-surface">{o}</span>
+                <span className="mt-0.5 block text-[11px] text-on-surface-variant">
+                  {bloqueada ? 'Só para Rede Externa' : (TIPO_DESCRICAO[o] ?? '')}
+                </span>
+              </button>
             )
           })}
-        </select>
-      </Field>
+        </div>
+      </div>
       {form.tipo === GMUD_TIPO_PRE_APROVADA ? <PreAprovadaRepeticao form={form} set={set} /> : null}
       {categoria === 'rede_externa' ? (
         <Field label="Natureza da mudança" required>
@@ -274,54 +302,86 @@ function Observacoes({
 // Matriz "Recursos administrativos" — comum às 3 categorias
 // ---------------------------------------------------------------------------
 function RecursosAdministrativosCard({
-  form, set, areas,
+  form, set, areas, destacar = [],
 }: {
   form: GmudFormState
   set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
   /** Linhas da matriz: as áreas da configuração. */
   areas: string[]
+  /** Áreas já marcadas como impactadas/afetadas: aparecem mesmo em N/A. */
+  destacar?: string[]
 }) {
+  // Rede externa não tem lista de áreas marcadas acima: a matriz é o único lugar para escolher.
+  const [todas, setTodas] = useState(form.categoria === 'rede_externa')
   const setRecurso = (area: string, papel: GmudRecursoPapel) =>
     set('recursosAdministrativos', { ...form.recursosAdministrativos, [area]: papel })
   const complemento =
     form.categoria === 'rede_externa'
       ? ''
       : ` Valem também as áreas ${form.categoria === 'sistemas_internos' ? 'impactadas' : 'afetadas'} marcadas acima.`
+  const lista = areas.length > 0 ? areas : [...GMUD_RECURSO_AREAS]
+  const emUso = (area: string) => (form.recursosAdministrativos[area] ?? 'na') !== 'na' || destacar.includes(area)
+  const visiveis = todas ? lista : lista.filter(emUso)
+  const escondidas = lista.length - visiveis.length
+  const aprovam = lista.filter((a) => (form.recursosAdministrativos[a] ?? 'na') !== 'na').length
 
   return (
-    <div className={CARD}>
-      <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
+    <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section="Recursos administrativos" id={sectionId('Recursos administrativos')}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
+        <span className="rounded-full bg-surface-container-low px-2 py-0.5 text-[11px] font-semibold text-on-surface-variant">
+          {aprovam === 0 ? 'Nenhuma área aprova' : `${aprovam} área${aprovam === 1 ? '' : 's'} aprova${aprovam === 1 ? '' : 'm'}`}
+        </span>
+      </div>
       <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
-        Áreas marcadas como Executor, Validador ou Observador aprovam a GMUD (basta uma pessoa por área; com todas as áreas aprovadas, a GMUD fica aprovada). N/A não aprova.{complemento}
+        {form.tipo === 'Pré-aprovada' || form.tipo === 'Emergencial'
+          ? `${form.tipo === 'Emergencial' ? 'Emergencial vai direto ao Comitê' : 'Pré-aprovada não passa por aprovação'}: as áreas marcadas como Executor, Validador ou Observador só são avisadas por e-mail.${complemento}`
+          : `Áreas marcadas como Executor, Validador ou Observador aprovam a GMUD (basta uma pessoa por área; com todas as áreas e o Comitê aprovando, a GMUD é liberada). N/A não aprova.${complemento}`}
       </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
-              <th className="py-2 pr-4">Área</th>
-              {GMUD_RECURSO_PAPEIS.map((p) => <th key={p.value} className="px-3 py-2 text-center">{p.label}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {(areas.length > 0 ? areas : [...GMUD_RECURSO_AREAS]).map((area) => (
-              <tr key={area} className="border-t border-neutral-200/60 dark:border-white/5">
-                <td className="py-2 pr-4 font-medium text-on-surface">{area}</td>
+      <ul className="divide-y divide-neutral-200/60 dark:divide-white/5">
+        {visiveis.map((area) => {
+          const atual = form.recursosAdministrativos[area] ?? 'na'
+          return (
+            <li key={area} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="text-sm font-medium text-on-surface">{area}</span>
+              <div role="radiogroup" aria-label={`Papel de ${area}`} className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
                 {GMUD_RECURSO_PAPEIS.map((p) => (
-                  <td key={p.value} className="px-3 py-2 text-center">
+                  <label
+                    key={p.value}
+                    className={cn(
+                      'cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold transition focus-within:ring-2 focus-within:ring-primary/50',
+                      atual === p.value
+                        ? p.value === 'na'
+                          ? 'bg-surface-container-lowest text-on-surface shadow-sm ring-1 ring-neutral-300 dark:ring-white/20'
+                          : 'bg-primary text-white shadow-sm'
+                        : 'text-on-surface-variant hover:text-on-surface',
+                    )}
+                  >
                     <input
                       type="radio"
                       name={`recurso-${area}`}
-                      className="size-4 accent-primary"
-                      checked={(form.recursosAdministrativos[area] ?? 'na') === p.value}
+                      className="sr-only"
+                      checked={atual === p.value}
                       onChange={() => setRecurso(area, p.value)}
                     />
-                  </td>
+                    {p.label}
+                  </label>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </li>
+          )
+        })}
+        {visiveis.length === 0 ? <li className="py-2 text-xs text-on-surface-variant">Nenhuma área em uso. Mostre todas para escolher.</li> : null}
+      </ul>
+      {escondidas > 0 || todas ? (
+        <button
+          type="button"
+          onClick={() => setTodas((v) => !v)}
+          className="mt-2 text-xs font-semibold text-primary hover:underline"
+        >
+          {todas ? 'Mostrar só as áreas em uso' : `Mostrar todas as áreas (+${escondidas} em N/A)`}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -368,15 +428,31 @@ function RedeExternaFields({
         <GmudEscopoRedeField popSite={form.popSite} value={form.escopoRede} onChange={(v) => set('escopoRede', v)} />
       </Section>
 
-      <div className={CARD}>
-        <p className="mb-3 text-sm font-bold text-on-surface">Ambiente afetado *</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {GMUD_AMBIENTE_OPTIONS.map((opt) => (
-            <label key={opt} className="flex items-center gap-2 text-sm text-on-surface">
-              <input type="checkbox" className="size-4 accent-primary" checked={form.ambienteAfetado.includes(opt)} onChange={() => toggleAmbiente(opt)} />
-              {opt}
-            </label>
-          ))}
+      <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section="Ambiente afetado" id={sectionId('Ambiente afetado')}>
+        <p className="mb-1 text-sm font-bold text-on-surface">Ambiente afetado *</p>
+        <p className="mb-3 text-xs text-on-surface-variant">
+          {form.ambienteAfetado.length === 0 ? 'Marque ao menos um.' : `${form.ambienteAfetado.length} selecionado${form.ambienteAfetado.length === 1 ? '' : 's'}`}
+        </p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Ambiente afetado">
+          {GMUD_AMBIENTE_OPTIONS.map((opt) => {
+            const ativo = form.ambienteAfetado.includes(opt)
+            return (
+              <button
+                key={opt}
+                type="button"
+                aria-pressed={ativo}
+                onClick={() => toggleAmbiente(opt)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
+                  ativo
+                    ? 'bg-primary text-white ring-primary'
+                    : 'text-on-surface-variant ring-neutral-200/80 hover:bg-surface-container-low dark:ring-white/10',
+                )}
+              >
+                {opt}
+              </button>
+            )
+          })}
         </div>
         <label className="mt-3 block">
           <span className={LABEL}>Outro (especificar)</span>
@@ -803,6 +879,18 @@ export function GmudNewScreen() {
   }
 
   const canSubmit = !mutation.isPending
+  const pendencias = validateGmudForm(
+    form,
+    form.categoria === 'sistemas_internos' ? siData : null,
+    form.categoria === 'sistemas_externos' ? seData : null,
+  )
+  const formRef = useRef<HTMLDivElement>(null)
+  const [secoes, setSecoes] = useState<string[]>([])
+  useEffect(() => {
+    const els = formRef.current?.querySelectorAll<HTMLElement>('[data-gmud-section]')
+    const titulos = Array.from(els ?? []).map((e) => e.dataset.gmudSection ?? '').filter((t) => t !== '')
+    setSecoes((prev) => (prev.length === titulos.length && prev.every((t, i) => t === titulos[i]) ? prev : titulos))
+  }, [form.categoria, form.tipo, form.impactoParada, listsLoading])
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
@@ -856,7 +944,7 @@ export function GmudNewScreen() {
           if (canSubmit) handleSubmit()
         }}
       >
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4" ref={formRef}>
         {/* Campos comuns — Identificação + Solicitante */}
         <CamposComuns form={form} set={set} categoria={form.categoria} />
 
@@ -884,7 +972,7 @@ export function GmudNewScreen() {
         )}
 
         {form.categoria === 'sistemas_internos' && (
-          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} />
+          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} destacar={siData.areasImpactadas} />
         )}
 
         {form.categoria === 'sistemas_externos' && (
@@ -904,7 +992,7 @@ export function GmudNewScreen() {
         )}
 
         {form.categoria === 'sistemas_externos' && (
-          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} />
+          <RecursosAdministrativosCard form={form} set={set} areas={areasOptions.map((a) => a.label)} destacar={seData.areasAfetadas} />
         )}
 
         {/* Janela de mudança — comum a todas */}
@@ -916,6 +1004,46 @@ export function GmudNewScreen() {
 
         {/* Coluna lateral: pré-visualização + envio (no celular fica abaixo do formulário) */}
         <aside className="min-w-0 space-y-4 lg:sticky lg:top-20">
+        <div className={CARD}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-bold text-on-surface">Progresso</p>
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-bold',
+                pendencias.length === 0
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+              )}
+            >
+              {pendencias.length === 0 ? 'Pronto para abrir' : `${pendencias.length} pendência${pendencias.length === 1 ? '' : 's'}`}
+            </span>
+          </div>
+          {pendencias.length > 0 ? (
+            <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-on-surface-variant">
+              {pendencias.map((m) => (
+                <li key={m} className="flex gap-1.5"><span aria-hidden>•</span><span>{m}</span></li>
+              ))}
+            </ul>
+          ) : null}
+          {secoes.length > 0 ? (
+            <nav aria-label="Seções do formulário" className="mt-3 flex flex-wrap gap-1.5 border-t border-neutral-200/60 pt-3 dark:border-white/5">
+              {secoes.map((t) => (
+                <a
+                  key={t}
+                  href={`#${sectionId(t)}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant ring-1 ring-neutral-200/80 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
+                >
+                  {t}
+                </a>
+              ))}
+            </nav>
+          ) : null}
+        </div>
+
         {/* Pré-visualização da máscara */}
         <div className={CARD}>
           <p className="mb-2 text-sm font-bold text-on-surface">
