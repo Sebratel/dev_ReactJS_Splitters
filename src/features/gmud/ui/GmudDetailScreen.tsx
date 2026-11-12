@@ -17,6 +17,9 @@ import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
 import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard, GmudWindowHistoryCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
 import { GmudAreaApprovalsCard } from '@/features/gmud/ui/detail/GmudAreaApprovalsCard'
+import { GmudStatusTrail } from '@/features/gmud/ui/detail/GmudStatusTrail'
+import { buildStatusTrail, closedPendingNotice } from '@/features/gmud/lib/gmudStatusTrail'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { GmudClientImpactCard } from '@/features/gmud/ui/detail/GmudClientImpactCard'
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
 import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
@@ -199,6 +202,29 @@ export function GmudDetailScreen() {
   const closed = Boolean(d?.request?.ellevenEncerradoEm || d?.voalle.conclusionDate)
   const statusAreas = d?.request?.statusAreas ?? 'nao_aplicavel'
   const aguardandoAreas = statusAreas === 'pendente'
+  const trailSteps = d?.request
+    ? buildStatusTrail({
+        tipo: d.request.tipo,
+        statusAreas: d.request.statusAreas,
+        statusComite: d.request.statusComite,
+        statusExec: d.request.statusExec,
+        closed,
+        encerradaStatus: d.request.ellevenEncerradoStatus,
+        createdLabel: d.request.createdAt ? formatBrazilDateTimeShortDisplay(d.request.createdAt, '').slice(0, 5) : '',
+        windowLabel: d.request.dataInicio
+          ? `${d.request.dataInicio.split('-').reverse().slice(0, 2).join('/')}${d.request.horaInicio ? ` ${d.request.horaInicio}` : ''}`
+          : '',
+      })
+    : null
+  const trailNotice = d?.request
+    ? closedPendingNotice({
+        closed,
+        statusComite: d.request.statusComite,
+        statusAreas: d.request.statusAreas,
+        encerradaStatus: d.request.ellevenEncerradoStatus,
+        closedAtLabel: formatBrazilDateTimeShortDisplay(d.request.ellevenEncerradoEm ?? d.voalle.conclusionDate, '').slice(0, 10),
+      })
+    : null
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
@@ -287,6 +313,8 @@ export function GmudDetailScreen() {
             </span>
           </div>
 
+          {trailSteps ? <GmudStatusTrail steps={trailSteps} notice={trailNotice} /> : null}
+
           <GmudEllevenStatusAlert
             statusComite={d.request?.statusComite}
             dataFim={d.request?.dataFim || d.request?.dataInicio}
@@ -337,6 +365,7 @@ export function GmudDetailScreen() {
                 areas={d.areaApprovals}
                 statusAreas={statusAreas}
                 statusComite={d.request?.statusComite}
+                committee={d.request && d.request.tipo !== 'Pré-aprovada' ? { decididoEm: d.request.decididoEm, aprovadoPor: d.request.aprovadoPor } : null}
                 closed={closed}
                 canOverride={isCommitteeMember && !closed}
                 onChanged={refreshGmud}
