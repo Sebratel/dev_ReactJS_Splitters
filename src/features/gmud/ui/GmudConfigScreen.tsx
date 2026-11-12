@@ -17,11 +17,16 @@ import {
 import { listSplittersUsers } from '@/features/access/api/firestoreUsers'
 import type { SplittersUserProfile } from '@/features/access/model/access.types'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { GMUD_COMMITTEE_QUERY_KEY } from '@/features/gmud/hooks/useGmudCommittee'
 
 const LIST_META: Record<string, { label: string; hint: string }> = {
   areas: {
     label: 'Setores / Áreas',
     hint: 'Setores que aparecem nos campos "Áreas impactadas" e "Áreas afetadas". Clique em uma área para definir quem aprova por ela: toda GMUD que marcar a área envia um e-mail com o link de aprovação (basta uma pessoa decidir).',
+  },
+  comite: {
+    label: 'Comitê',
+    hint: 'Quem toma a decisão final (aprovar ou negar) das GMUDs. Clique em "Comitê" para escolher os membros; basta um deles decidir. A aprovação das áreas não substitui a do Comitê. Sem membros, nenhuma GMUD pode ser aprovada.',
   },
   processos: {
     label: 'Processos de negócio',
@@ -49,6 +54,7 @@ function TeamApproversModal({
   approvers,
   allUsers,
   usersLoading,
+  isCommittee = false,
   refetch,
   onClose,
 }: {
@@ -56,6 +62,8 @@ function TeamApproversModal({
   approvers: TeamApprover[]
   allUsers: SplittersUserProfile[]
   usersLoading: boolean
+  /** Modal dos membros do Comitê (textos próprios), em vez de aprovadores de uma área. */
+  isCommittee?: boolean
   refetch: () => void
   onClose: () => void
 }) {
@@ -110,8 +118,14 @@ function TeamApproversModal({
               <Mail size={15} className="text-primary" />
             </div>
             <div>
-              <p className="font-semibold text-sm text-on-surface">Quem aprova — {areaItem.label}</p>
-              <p className="text-xs text-on-surface-variant">Recebem por e-mail o link para aprovar ou negar as GMUDs que marcarem esta área. Basta uma pessoa decidir.</p>
+              <p className="font-semibold text-sm text-on-surface">
+                {isCommittee ? 'Membros do Comitê' : `Quem aprova — ${areaItem.label}`}
+              </p>
+              <p className="text-xs text-on-surface-variant">
+                {isCommittee
+                  ? 'Tomam a decisão final das GMUDs (aprovar ou negar) na plataforma. Basta um membro decidir. Sem membros, ninguém consegue aprovar.'
+                  : 'Recebem por e-mail o link para aprovar ou negar as GMUDs que marcarem esta área. Basta uma pessoa decidir.'}
+              </p>
             </div>
           </div>
           <button
@@ -126,7 +140,11 @@ function TeamApproversModal({
         {/* Lista de aprovadores */}
         <div className="overflow-y-auto px-5 py-4 space-y-3">
           {approvers.length === 0 ? (
-            <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">Ninguém cadastrado: GMUDs com esta área não podem ser abertas.</p>
+            <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">
+              {isCommittee
+                ? 'Ninguém cadastrado: nenhuma GMUD pode ser aprovada ou negada até haver membros.'
+                : 'Ninguém cadastrado: GMUDs com esta área não podem ser abertas.'}
+            </p>
           ) : (
             <ul className="space-y-1.5">
               {approvers.map((a) => (
@@ -161,7 +179,9 @@ function TeamApproversModal({
 
           {/* Adicionar aprovador */}
           <div className="border-t border-neutral-200/60 dark:border-white/6 pt-3 space-y-2">
-            <p className="text-xs font-semibold text-on-surface-variant">Adicionar aprovador</p>
+            <p className="text-xs font-semibold text-on-surface-variant">
+              {isCommittee ? 'Adicionar membro' : 'Adicionar aprovador'}
+            </p>
             <form
               className="flex flex-col gap-2"
               onSubmit={(e) => {
@@ -244,7 +264,8 @@ function ListPanel({
   const [openApproversForId, setOpenApproversForId] = useState<number | null>(null)
   const qc = useQueryClient()
   const meta = LIST_META[listKey] ?? { label: listKey, hint: '' }
-  const hasApprovers = listKey === 'areas'
+  const isCommittee = listKey === 'comite'
+  const hasApprovers = listKey === 'areas' || isCommittee
 
   const addMutation = useMutation({
     onError: (error) => showGmudError(error, 'Não foi possível adicionar o item'),
@@ -299,12 +320,19 @@ function ListPanel({
                           {count}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-on-surface-variant/40 italic">sem aprovador</span>
+                        isCommittee ? (
+                          <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                            sem membros: ninguém pode aprovar ou negar GMUDs
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-on-surface-variant/40 italic">sem aprovador</span>
+                        )
                       )}
                     </button>
                   ) : (
                     <span className="text-sm text-on-surface">{item.label}</span>
                   )}
+                  {!isCommittee ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -319,12 +347,14 @@ function ListPanel({
                     {removeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                     Remover
                   </button>
+                  ) : null}
                 </li>
               )
             })
           )}
         </ul>
 
+        {!isCommittee ? (
         <div className="border-t border-neutral-200/70 dark:border-white/8 px-4 py-3">
           <form
             className="flex items-center gap-2"
@@ -350,6 +380,7 @@ function ListPanel({
             </button>
           </form>
         </div>
+        ) : null}
       </div>
 
       {hasApprovers && openAreaItem && approversMap && allUsers ? (
@@ -358,7 +389,12 @@ function ListPanel({
           approvers={approversMap[openAreaItem.id] ?? []}
           allUsers={allUsers}
           usersLoading={usersLoading ?? false}
-          refetch={() => { refetch(); refetchApprovers?.() }}
+          isCommittee={isCommittee}
+          refetch={() => {
+            refetch()
+            refetchApprovers?.()
+            void qc.invalidateQueries({ queryKey: GMUD_COMMITTEE_QUERY_KEY })
+          }}
           onClose={() => setOpenApproversForId(null)}
         />
       ) : null}
@@ -416,6 +452,16 @@ export function GmudConfigScreen() {
         </div>
       ) : (
         <div className="pb-8 space-y-4">
+          <ListPanel
+            listKey="comite"
+            items={data?.comite ?? []}
+            refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
+          />
+
           <ListPanel
             listKey="areas"
             items={data?.areas ?? []}

@@ -66,6 +66,11 @@ export type GmudListResult = {
  * pelo Comitê. Pendente ou negada não é disponibilizada. Centraliza a decisão em um único
  * lugar para o front e espelha o guard do BFF.
  */
-export function isGmudDisponivel(statusComite: string | null | undefined): boolean {
-  return statusComite === 'aprovada'
+export function isGmudDisponivel(
+  statusComite: string | null | undefined,
+  statusAreas?: string | null,
+): boolean {
+  if (statusComite !== 'aprovada') return false
+  // O Comitê e as áreas decidem em paralelo: só vale quando as áreas também aprovaram (ou não se aplicam).
+  return statusAreas == null || statusAreas === 'aprovada' || statusAreas === 'nao_aplicavel'
 }

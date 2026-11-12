@@ -48,7 +48,6 @@ export type AreaApprovalOutcome = {
   area: string
   areasStatus: GmudAreasStatus
   canceladoNoElleven: boolean | null
-  gmudAprovada?: boolean
 }
 
 async function parse<T>(response: Response, fallback: string): Promise<T> {

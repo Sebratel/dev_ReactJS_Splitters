@@ -8,6 +8,8 @@ export type GmudConfigLists = {
   processos: GmudConfigItem[]
   sistemas_internos: GmudConfigItem[]
   sistemas_externos: GmudConfigItem[]
+  /** Item fixo "Comitê" (os membros ficam em team-approvers, presos a este item). */
+  comite: GmudConfigItem[]
   [key: string]: GmudConfigItem[]
 }
 
