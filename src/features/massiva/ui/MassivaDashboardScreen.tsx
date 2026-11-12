@@ -30,6 +30,8 @@ import {
 import { fetchMassivaHistoryListFromLocalDb } from '@/features/massiva/api/fetchMassivaHistoryListFromLocalDb'
 import { fetchMassivaHistoryMttdMttrKpis } from '@/features/massiva/api/fetchMassivaHistoryMttdMttrKpis'
 import { massivaKeys } from '@/features/massiva/model/massivaKeys'
+import { MASSIVA_SOURCE_CONFERENCIA_ELLEVEN } from '@/features/massiva/model/massivaConferenciaStatus'
+import { MassivaConferenciaCard } from '@/features/massiva/ui/MassivaConferenciaCard'
 import {
   formatMonthLabel,
   listRecentMonths,
@@ -87,6 +89,8 @@ function formatMonthShort(month: string): string {
 }
 
 function displayOperador(email: string): string {
+  // Linhas recuperadas pela conferência com o Elleven não têm operador.
+  if (email.trim() === '') return '—'
   const at = email.indexOf('@')
   return at > 0 ? email.slice(0, at) : email
 }
@@ -947,6 +951,14 @@ export function MassivaDashboardScreen() {
                     >
                       <td className="px-4 py-2.5 font-mono font-semibold text-on-surface sm:px-5">
                         {row.protocol ?? '—'}
+                        {row.source === MASSIVA_SOURCE_CONFERENCIA_ELLEVEN ? (
+                          <span
+                            className="ml-1.5 inline-flex align-middle text-violet-600 dark:text-violet-300"
+                            title="Recuperada do Elleven: estava só no Elleven e foi registrada automaticamente pela conferência."
+                          >
+                            <RefreshCw className="h-3 w-3" aria-label="Recuperada do Elleven" />
+                          </span>
+                        ) : null}
                       </td>
                       <td className="max-w-[160px] truncate px-2 py-2.5 text-on-surface-variant">
                         {apCodeToTitle.get(row.accessPointCode) ?? row.accessPointCode}
@@ -1473,6 +1485,9 @@ export function MassivaDashboardScreen() {
       {/* ════════════════════════════════════════════════════════════════ */}
       {dashboardTab === 'qualidade' && (
         <>
+          {/* Conferência com o Elleven (integração; não depende dos filtros de período) */}
+          <MassivaConferenciaCard />
+
           {/* Origem do evento (identified_by) */}
           <div className={CARD_SECTION_CLS}>
             <div className={SECTION_HEADER_CLS}>
