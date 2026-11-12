@@ -250,6 +250,7 @@ export function useMassivaOpenReadiness(
       massivaAfetadosPath: afetadosPath,
       descriptionAutoSyncEnabled: descriptionAutoSync,
       affectedUsersQuantityOverride: affectedUsersQuantityAutoIspOverride,
+      skipAutoCloseWithoutClients: options?.isSistema === true,
     })
 
     return { status: 'ready-to-open', context }
@@ -271,6 +272,7 @@ export function useMassivaOpenReadiness(
     assignmentForecastTime,
     affectedUsersQuantityAutoIspOverride,
     eventIdentifiedBy,
+    options?.isSistema,
   ])
 
   const refetchPersonId = () => {
