@@ -393,6 +393,19 @@ export async function openMassivaFromContext(
   const ids = primary != null ? resolveProtocolAndAssignment(primary) : null
   const mapeableCount = collectMapeableAfetadosClientes(context.basis.collectedClientes).length
 
+  if (mapeableCount === 0 && context.skipAutoCloseWithoutClients === true) {
+    // Assunto de sistema: não há clientes por natureza. O protocolo fica ABERTO (sem POST de
+    // afetados e sem encerramento automático); o operador encerra pelo fluxo normal.
+    let payload: MassivaOpenMutationSuccessPayload = base
+    try {
+      await registerOpenedMassivaHistoryInLocalDb(context, payload)
+    } catch (localError) {
+      console.warn('[Massiva] Falha ao registrar histórico local após abertura de sistema.', localError)
+      payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+    }
+    return payload
+  }
+
   if (mapeableCount === 0) {
     if (ids != null && closePathConfigured()) {
       try {

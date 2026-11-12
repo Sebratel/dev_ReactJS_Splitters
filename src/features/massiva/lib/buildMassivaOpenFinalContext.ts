@@ -21,6 +21,8 @@ export function buildMassivaOpenFinalContext(params: {
   descriptionAutoSyncEnabled: boolean
   /** Ex.: quantidade ONUs/circuitos do AutoISP ao aplicar evento na abertura. */
   affectedUsersQuantityOverride?: number | null
+  /** Assunto de sistema: não encerrar automaticamente por falta de clientes. */
+  skipAutoCloseWithoutClients?: boolean
 }): MassivaOpenFinalContext {
   const override = params.affectedUsersQuantityOverride
   const affectedUsersQuantityFlutterParity =
@@ -47,5 +49,6 @@ export function buildMassivaOpenFinalContext(params: {
       : `/${params.massivaAfetadosPath.trim()}`,
     affectedUsersQuantityFlutterParity,
     descriptionAutoSyncEnabled: params.descriptionAutoSyncEnabled,
+    ...(params.skipAutoCloseWithoutClients === true ? { skipAutoCloseWithoutClients: true } : {}),
   }
 }
