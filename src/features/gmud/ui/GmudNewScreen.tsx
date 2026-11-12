@@ -26,6 +26,7 @@ import {
   GMUD_TIPO_INDISPONIBILIDADE_OPTIONS,
   redeExternaCategoriaData,
   GMUD_TIPO_OPTIONS,
+  GMUD_TIPO_EM_BREVE,
   validateGmudForm,
   minDataProgramada,
   type GmudCategoria,
@@ -114,6 +115,7 @@ function CamposComuns({
         <select className={FIELD} value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
           <option value="">Escolher…</option>
           {GMUD_TIPO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          <option value="" disabled>{GMUD_TIPO_EM_BREVE} (em breve)</option>
         </select>
       </Field>
       {categoria === 'rede_externa' ? (

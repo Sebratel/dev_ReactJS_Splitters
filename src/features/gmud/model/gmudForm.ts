@@ -4,6 +4,13 @@ import { emptyEscopoRede, normalizeEscopoRede, type GmudEscopoRede } from '@/fea
 
 export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
 
+/**
+ * Terceira categoria discutida em 12/11/2026. Ainda sem regras nem formulário definidos: aparece
+ * no seletor só como "Em breve" (desabilitada). Não faz parte de GMUD_TIPO_OPTIONS de propósito,
+ * para nenhuma validação ou lista a tratar como tipo utilizável.
+ */
+export const GMUD_TIPO_EM_BREVE = 'Pré-aprovada' as const
+
 // ---------------------------------------------------------------------------
 // CATEGORIA (área afetada) — selector principal do formulário dinâmico
 // ---------------------------------------------------------------------------
