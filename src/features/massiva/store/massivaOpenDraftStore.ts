@@ -18,6 +18,12 @@ type MassivaOpenDraftState = {
   /** Descrição do incidente no sistema (para assuntos de tipo sistema). */
   sistemaDescricaoIncidente: string
 
+  /**
+   * Clientes que já estão em OUTRO evento aberto ficam de fora do novo (padrão). Marcado, o operador
+   * escolhe incluí-los mesmo assim (ex.: o outro evento é um protocolo esquecido). Não persistido.
+   */
+  includeConflictingClients: boolean
+
   assignmentForecastDate: string
   assignmentForecastTime: string
 
@@ -69,6 +75,7 @@ type MassivaOpenDraftState = {
   setDescriptionAutoSync: (value: boolean) => void
   setSistemaAfetado: (value: string) => void
   setSistemaDescricaoIncidente: (value: string) => void
+  setIncludeConflictingClients: (value: boolean) => void
   setAssignmentForecastDate: (value: string) => void
   setAssignmentForecastTime: (value: string) => void
   setEventStartDate: (value: string) => void
@@ -164,6 +171,7 @@ const createInitialState = () => ({
   descriptionAutoSync: true,
   sistemaAfetado: '',
   sistemaDescricaoIncidente: '',
+  includeConflictingClients: false,
   assignmentForecastDate: initial.assignmentForecastDate,
   assignmentForecastTime: initial.assignmentForecastTime,
   eventStartDate: initial.eventStartDate,
@@ -191,6 +199,7 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
       setSistemaAfetado: (sistemaAfetado) => set({ sistemaAfetado }),
       setSistemaDescricaoIncidente: (sistemaDescricaoIncidente) => set({ sistemaDescricaoIncidente }),
+      setIncludeConflictingClients: (includeConflictingClients) => set({ includeConflictingClients }),
       setAssignmentForecastDate: (assignmentForecastDate) =>
         set({ assignmentForecastDate }),
       setAssignmentForecastTime: (assignmentForecastTime) =>

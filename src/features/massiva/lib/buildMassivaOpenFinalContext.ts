@@ -23,6 +23,8 @@ export function buildMassivaOpenFinalContext(params: {
   affectedUsersQuantityOverride?: number | null
   /** Assunto de sistema: não encerrar automaticamente por falta de clientes. */
   skipAutoCloseWithoutClients?: boolean
+  /** O operador escolheu incluir clientes que já estão em outro evento aberto. */
+  includeConflictingClients?: boolean
 }): MassivaOpenFinalContext {
   const override = params.affectedUsersQuantityOverride
   const affectedUsersQuantityFlutterParity =
@@ -50,5 +52,6 @@ export function buildMassivaOpenFinalContext(params: {
     affectedUsersQuantityFlutterParity,
     descriptionAutoSyncEnabled: params.descriptionAutoSyncEnabled,
     ...(params.skipAutoCloseWithoutClients === true ? { skipAutoCloseWithoutClients: true } : {}),
+    ...(params.includeConflictingClients === true ? { includeConflictingClients: true } : {}),
   }
 }

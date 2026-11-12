@@ -11,6 +11,10 @@ const closeTicket = vi.fn<(input: unknown) => Promise<unknown>>()
 const registerAffectedCopy = vi.fn<(input: unknown) => Promise<void>>()
 let mapeaveis: unknown[] = []
 
+// A exclusão de clientes que já estão em outro evento consulta o BFF; aqui nada é excluído.
+vi.mock('@/features/massiva/api/excludeClientsInOtherEvents', () => ({
+  excludeClientsInOtherEvents: async (context: unknown) => ({ context, excludedCount: 0, eventProtocols: [] }),
+}))
 vi.mock('@/shared/api/bffClient', () => ({
   bffClient: { request: (input: { path: string; body?: unknown }) => bffRequest(input) },
 }))

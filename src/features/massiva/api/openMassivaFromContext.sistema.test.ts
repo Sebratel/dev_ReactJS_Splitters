@@ -5,6 +5,10 @@ const request = vi.fn()
 const closeMassivaTicket = vi.fn()
 const registerHistory = vi.fn()
 
+// A exclusão de clientes que já estão em outro evento consulta o BFF; aqui nada é excluído.
+vi.mock('@/features/massiva/api/excludeClientsInOtherEvents', () => ({
+  excludeClientsInOtherEvents: async (context: unknown) => ({ context, excludedCount: 0, eventProtocols: [] }),
+}))
 vi.mock('@/shared/api/bffClient', () => ({ bffClient: { request: (...a: unknown[]) => request(...a) } }))
 vi.mock('@/features/massiva/api/closeMassivaTicket', () => ({
   closeMassivaTicket: (...a: unknown[]) => closeMassivaTicket(...a),
@@ -75,7 +79,9 @@ describe('openMassivaFromContext sem clientes na seleção', () => {
     expect(result.followUpWarning).toBeUndefined()
     // só o POST de abertura: nenhum POST de afetados
     expect(request).toHaveBeenCalledTimes(1)
-    expect(registerHistory).toHaveBeenCalledTimes(1)
+    // gravação antecipada (complete:false) + gravação final já completa (sem afetados a gravar)
+    expect(registerHistory).toHaveBeenCalledTimes(2)
+    expect(registerHistory.mock.calls[1]?.[2]).toEqual({ complete: true })
     expect(result.results[0]?.protocol).toBe(1888200)
   })
 })

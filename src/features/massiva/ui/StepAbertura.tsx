@@ -14,6 +14,8 @@ import type {
 } from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { MassivaOpenDraftFields } from '@/features/massiva/ui/MassivaOpenDraftFields'
+import { MassivaClientConflictsAlert } from '@/features/massiva/ui/MassivaClientConflictsAlert'
+import { useMassivaClientConflicts } from '@/features/massiva/hooks/useMassivaClientConflicts'
 import { isGoogleIdentityConfigured } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -93,6 +95,12 @@ export function StepAbertura({
     staleTime: 60_000,
   })
   const fullConnections = fullConnectionsQuery.data ?? []
+
+  // Clientes da seleção que já estão em OUTRO evento aberto: avisa (não bloqueia) e, por padrão,
+  // eles ficam de fora desta massiva.
+  const includeConflictingClients = useMassivaOpenDraftStore((s) => s.includeConflictingClients)
+  const setIncludeConflictingClients = useMassivaOpenDraftStore((s) => s.setIncludeConflictingClients)
+  const { conflicts: clientConflicts } = useMassivaClientConflicts(fullConnections, hideNetworkFields !== true)
 
   // Assinatura da seleção (AP/slot/porta/splitters). Quando muda de fato, reseta os
   // campos da abertura (relato, quem identificou, protocolo de infra) para o padrão —
@@ -271,6 +279,15 @@ export function StepAbertura({
           tone="warning"
           title="Validação obrigatória"
           description="Conclua rota e validação antes de preencher a abertura final."
+        />
+      ) : null}
+
+      {hideNetworkFields !== true ? (
+        <MassivaClientConflictsAlert
+          conflicts={clientConflicts}
+          includeAnyway={includeConflictingClients}
+          onIncludeAnywayChange={setIncludeConflictingClients}
+          disabled={!draftFormEnabled}
         />
       ) : null}
 
