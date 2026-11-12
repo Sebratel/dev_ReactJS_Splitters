@@ -31,7 +31,7 @@ import {
 } from '@/features/massiva/model/massivaOpenMutation'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { bffClient } from '@/shared/api/bffClient'
-import { ApiError } from '@/shared/api/apiError'
+import { ApiError, NetworkError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
@@ -91,6 +91,27 @@ function describeAfetadosFailure(error: unknown): string {
     }
   }
   return formatQueryError(error)
+}
+
+/**
+ * Timeout da gravação antecipada do histórico (ver `registerOpenedHistoryEarly`). Curto de
+ * propósito: essa chamada é feita em série dentro do loop de abertura dos APs — sem um limite
+ * próprio, um MySQL/BFF travado prende a abertura inteira (ela já é best-effort e nunca lança,
+ * mas sem timeout ficaria pendurada até o timeout genérico de 30s do `fetchWithSessionAuth`).
+ */
+const EARLY_HISTORY_TIMEOUT_MS = 5_000
+
+/**
+ * Timeout/queda no POST de abertura é um resultado AMBÍGUO: o Elleven pode ter recebido e criado
+ * o protocolo mesmo sem o navegador confirmar (proxy/gateway caiu na volta, ou a conexão caiu
+ * antes da resposta chegar). Diferente de um 4xx de validação, onde o Elleven certamente recusou.
+ * Essa é justamente a janela que a gravação antecipada NÃO cobre (ela só roda depois de um
+ * resultado parseado com sucesso) — avisamos o operador em vez de deixar um "falha no AP" genérico.
+ */
+function isAmbiguousMassivaOpenFailure(error: unknown): boolean {
+  if (error instanceof NetworkError) return true
+  if (error instanceof ApiError) return error.status === 408 || error.status >= 500
+  return false
 }
 
 function normalizeAp(value: string | null | undefined): string {
@@ -279,6 +300,38 @@ async function openInfraProtocolIfSelected(
 }
 
 /**
+ * Grava a linha do histórico local logo após o Elleven abrir o protocolo de um AP, antes dos
+ * afetados e da infra. Sem isso, qualquer interrupção entre a abertura e a gravação final (aba
+ * fechada, timeout do proxy, falha em outro AP) deixa o protocolo só no Elleven.
+ *
+ * O servidor faz upsert por assignment/protocolo, então a gravação final continua valendo e só
+ * completa a mesma linha (infra, afetados, encerramento automático). O estado aqui é sempre
+ * "aberta": só a gravação final marca "encerrada", depois que o Elleven confirma o encerramento.
+ * Best-effort: nunca lança, para não transformar um protocolo já aberto em falha do AP.
+ */
+async function registerOpenedHistoryEarly(
+  context: MassivaOpenFinalContext,
+  opened: MassivaOpenSingleResult,
+): Promise<void> {
+  try {
+    await registerOpenedMassivaHistoryInLocalDb(
+      context,
+      { results: [opened] },
+      {
+        complete: false,
+        keepalive: true,
+        signal: AbortSignal.timeout(EARLY_HISTORY_TIMEOUT_MS),
+      },
+    )
+  } catch (error) {
+    console.warn(
+      `[Massiva] Falha na gravação antecipada do histórico (AP ${opened.accessPointCode}); será tentada de novo ao final.`,
+      error,
+    )
+  }
+}
+
+/**
  * Um POST por entrada em `context.plan.requests` — paridade sequência em `_openMassiva`.
  * Em seguida: POST de afetados (seleção da rota) ou encerramento automático se não houver clientes mapeáveis.
  */
@@ -318,11 +371,15 @@ export async function openMassivaFromContext(
       })
       const parsed = parseMassivaOpenHttpResult(data, req.authenticationAccessPointCode)
       successes.push(parsed)
+      await registerOpenedHistoryEarly(context, parsed)
     } catch (e) {
       console.error(`[Massiva] Falha no AP: ${req.authenticationAccessPointCode}`, e)
+      const message = isAmbiguousMassivaOpenFailure(e)
+        ? `${formatMassivaOpenApiFailure(e)} — resposta não confirmada: o Elleven pode ter criado o protocolo mesmo assim. Verifique manualmente no Elleven antes de tentar reabrir este AP.`
+        : formatMassivaOpenApiFailure(e)
       failures.push({
         accessPointCode: req.authenticationAccessPointCode,
-        message: formatMassivaOpenApiFailure(e),
+        message,
       })
     }
   }
@@ -346,7 +403,7 @@ export async function openMassivaFromContext(
         })
         let payload: MassivaOpenMutationSuccessPayload = { ...base, autoClosedWithoutClients: true }
         try {
-          await registerOpenedMassivaHistoryInLocalDb(context, payload)
+          await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
         } catch (localError) {
           console.warn('[Massiva] Falha ao registrar histórico local após autoencerramento.', localError)
           payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
@@ -371,7 +428,7 @@ export async function openMassivaFromContext(
       : base
 
     try {
-      await registerOpenedMassivaHistoryInLocalDb(context, payload)
+      await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
     } catch (localError) {
       console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
       payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
@@ -461,7 +518,7 @@ export async function openMassivaFromContext(
   }
 
   try {
-    await registerOpenedMassivaHistoryInLocalDb(context, payload)
+    await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
   } catch (localError) {
     console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
     payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)

@@ -89,9 +89,24 @@ function resolveTitleForAccessPoint(
   return context.plan.requests[0]?.assignmentTitle?.trim() ?? ''
 }
 
+export type RegisterOpenedMassivaHistoryOptions = {
+  /**
+   * `false` para a gravação antecipada (1 AP, logo após o Elleven abrir — ainda falta infra,
+   * afetados e o encerramento automático) e `true` para a gravação final (linha completa).
+   * Persistido em `history_complete` — permite distinguir, no banco, uma linha parcial de uma
+   * completa quando a gravação final nunca chega a acontecer (aba fechada, falha best-effort).
+   */
+  complete: boolean
+  /** Timeout curto para a gravação antecipada — não pode travar o loop de abertura dos APs. */
+  signal?: AbortSignal
+  /** Sobrevive ao fechamento da aba logo após o POST de abertura responder (gravação antecipada). */
+  keepalive?: boolean
+}
+
 export async function registerOpenedMassivaHistoryInLocalDb(
   context: MassivaOpenFinalContext,
   result: MassivaOpenMutationSuccessPayload,
+  options: RegisterOpenedMassivaHistoryOptions,
 ): Promise<void> {
   const nowBrazil = nowInBrazilIsoLike()
   const expectedCloseBrazil =
@@ -137,7 +152,10 @@ export async function registerOpenedMassivaHistoryInLocalDb(
       infraProtocol: result.infraProtocol ?? null,
       infraAssignmentId: result.infraAssignmentId ?? null,
       identifiedBy: context.eventIdentifiedBy ?? null,
+      complete: options.complete,
     }),
+    signal: options.signal,
+    keepalive: options.keepalive,
   })
 
   if (!response.ok) {
