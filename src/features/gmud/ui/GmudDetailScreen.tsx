@@ -337,6 +337,8 @@ export function GmudDetailScreen() {
                 protocol={protocol}
                 areas={d.areaApprovals}
                 statusAreas={statusAreas}
+                statusComite={d.request?.statusComite}
+                closed={closed}
                 canOverride={isCommitteeMember && !closed}
                 onChanged={refreshGmud}
               />

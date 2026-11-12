@@ -5,6 +5,7 @@ import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { describeAreasSummary } from '@/features/gmud/lib/gmudApprovalText'
 
 const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: string; Icon: typeof Clock }> = {
   pendente: {
@@ -24,12 +25,6 @@ const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: str
   },
 }
 
-const SUMMARY: Record<Exclude<GmudAreasStatus, 'nao_aplicavel'>, string> = {
-  pendente: 'Aguardando as áreas. A GMUD é aprovada automaticamente quando todas aprovarem.',
-  aprovada: 'Todas as áreas aprovaram. A GMUD está aprovada.',
-  negada: 'Uma área negou. A GMUD foi negada.',
-}
-
 function formatWhen(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''
 }
@@ -38,12 +33,17 @@ export function GmudAreaApprovalsCard({
   protocol,
   areas,
   statusAreas,
+  statusComite,
+  closed,
   canOverride,
   onChanged,
 }: {
   protocol: number
   areas: GmudAreaApproval[]
   statusAreas: GmudAreasStatus
+  statusComite?: string | null
+  /** Protocolo já encerrado no Elleven: ninguém mais precisa decidir. */
+  closed?: boolean
   canOverride: boolean
   onChanged: () => void
 }) {
@@ -58,7 +58,7 @@ export function GmudAreaApprovalsCard({
   return (
     <section className={cn(DETAIL_CARD, 'space-y-3 p-4')}>
       <CardTitle icon={<ShieldCheck size={16} />}>Aprovação das áreas</CardTitle>
-      <p className="text-xs text-on-surface-variant">{SUMMARY[statusAreas]}</p>
+      <p className="text-xs text-on-surface-variant">{describeAreasSummary({ statusAreas, statusComite, closed: Boolean(closed) })}</p>
 
       <ul className="divide-y divide-neutral-200/70 dark:divide-white/10">
         {areas.map((a) => {
@@ -68,15 +68,15 @@ export function GmudAreaApprovalsCard({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-on-surface">{a.areaLabel}</p>
                 <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ring-1', st.cls)}>
-                  <st.Icon size={11} aria-hidden /> {st.label}
+                  <st.Icon size={11} aria-hidden /> {a.status === 'pendente' && closed ? 'Sem decisão' : st.label}
                 </span>
               </div>
-              {a.status === 'pendente' ? (
+              {a.status === 'pendente' && !closed ? (
                 <p className="text-xs text-on-surface-variant">
                   Aguardando uma de {a.pessoas.length} pessoa{a.pessoas.length === 1 ? '' : 's'}:{' '}
                   {a.pessoas.map((p) => p.nome).join(', ')}
                 </p>
-              ) : (
+              ) : a.status === 'pendente' ? null : (
                 <p className="text-xs text-on-surface-variant">
                   {a.decidedByName ?? 'Responsável'} · {formatWhen(a.decidedAt)}
                   {a.motivo ? ` — ${a.motivo}` : ''}

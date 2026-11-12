@@ -9,6 +9,7 @@ import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { cn } from '@/shared/lib/utils'
 import { describeSerie, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
+import { committeeLabelOverride, executionLabelOverride } from '@/features/gmud/lib/gmudApprovalText'
 
 const TONE: Record<GmudDeadlineTone, string> = {
   overdue: 'text-rose-600 dark:text-rose-300',
@@ -86,6 +87,7 @@ function fmtWindow(r: GmudDetail['request']): string {
 export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; deadline: GmudDeadline }) {
   const r = detail.request
   const comite = r?.statusComite ?? null
+  const closed = Boolean(r?.ellevenEncerradoEm || detail.voalle.conclusionDate)
   return (
     <section className={cn(CARD, 'p-4')}>
       <CardTitle icon={<Info size={16} />}>Resumo</CardTitle>
@@ -108,9 +110,8 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
               : null}
             <Row label="Assunto">{r.assunto || '—'}</Row>
             <Row label="Comitê">
-              {r.tipo === 'Pré-aprovada' && comite === 'aprovada'
-                ? 'Pré-aprovada (sem aprovação)'
-                : comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—'}
+              {committeeLabelOverride({ tipo: r.tipo, statusComite: comite, closed }) ??
+                (comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—')}
             </Row>
             {describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie) ? (
               <Row label="Série">{describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie)}</Row>
@@ -121,7 +122,12 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
                 {r.aprovadoPor ? ` · ${r.aprovadoPor}` : ''}
               </Row>
             ) : null}
-            <Row label="Execução">{EXEC_LABEL[r.statusExec ?? ''] ?? r.statusExec ?? '—'}</Row>
+            <Row label="Execução">
+              {executionLabelOverride({ statusExec: r.statusExec, encerradaStatus: r.ellevenEncerradoStatus, closed }) ??
+                EXEC_LABEL[r.statusExec ?? ''] ??
+                r.statusExec ??
+                '—'}
+            </Row>
             {r.ellevenEncerradoStatus ? (
               <Row label="Encerrada no Elleven">
                 {ENCERR_LABEL[r.ellevenEncerradoStatus] ?? r.ellevenEncerradoStatus}

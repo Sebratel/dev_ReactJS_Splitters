@@ -325,7 +325,9 @@ function ListPanel({
                             sem membros: ninguém pode aprovar ou negar GMUDs
                           </span>
                         ) : (
-                          <span className="text-[11px] text-on-surface-variant/40 italic">sem aprovador</span>
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400" title="GMUDs que marcarem esta área não poderão ser registradas até cadastrar um aprovador">
+                            sem aprovador: bloqueia GMUDs que marcarem esta área
+                          </span>
                         )
                       )}
                     </button>
