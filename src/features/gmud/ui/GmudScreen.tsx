@@ -11,6 +11,8 @@ import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
 import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
+import { GmudSummaryStrip } from '@/features/gmud/ui/GmudSummaryStrip'
+import { useGmudListSummary } from '@/features/gmud/api/fetchGmudListSummary'
 import type { GmudListFilter, GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
 
@@ -24,6 +26,7 @@ const FILTERS: { key: GmudListFilter; label: string }[] = [
   { key: 'vencidas', label: 'Prazo vencido' },
   { key: 'comite_pendente', label: 'Aguardando Comitê' },
   { key: 'aprovadas', label: 'Aprovadas' },
+  { key: 'vencem_semana', label: 'Vencem em 7 dias' },
   { key: 'plataforma', label: 'Abertas pela plataforma' },
   { key: 'minhas', label: 'Minhas' },
 ]
@@ -51,6 +54,7 @@ export function GmudScreen() {
   const canApprove = useIsGmudCommitteeMember()
   const canConfigure = useAccessAuthStore((s) => s.hasPermission('canConfigureGmud') || s.hasPermission('isAdmin'))
   const pendingCount = useGmudPendingCount()
+  const summaryQuery = useGmudListSummary()
 
   // Debounce simples da busca (reseta pra página 0 quando muda).
   useEffect(() => {
@@ -137,6 +141,16 @@ export function GmudScreen() {
         subtitle="Mudanças de rede, do pedido à aprovação — integrado ao Elleven"
         icon={ClipboardList}
         actions={headerTrailing}
+      />
+
+      <GmudSummaryStrip
+        summary={summaryQuery.data}
+        filter={filter}
+        onSelect={(next) => {
+          setView('all')
+          setFilter(next)
+          setPage(0)
+        }}
       />
 
       <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">

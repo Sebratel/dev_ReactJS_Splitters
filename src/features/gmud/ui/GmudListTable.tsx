@@ -6,6 +6,7 @@ import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import { gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
+import { requesterInitials, shortRequesterName } from '@/features/gmud/lib/gmudRequester'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
@@ -88,8 +89,7 @@ export function GmudListTable({
             <SortHeader label="Solicitante" column="solicitante" sort={sort} onSort={onSort} />
             <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} />
             <SortHeader label="Prazo" column="prazo" sort={sort} onSort={onSort} />
-            <SortHeader label="Voalle" column="status" sort={sort} onSort={onSort} />
-            <th className="px-4 py-2">Aprovação</th>
+            <SortHeader label="Situação" column="status" sort={sort} onSort={onSort} />
             <th className="px-4 py-2 text-right">Ações</th>
           </tr>
         </thead>
@@ -99,7 +99,7 @@ export function GmudListTable({
             const plataforma = g.extra != null
             const comite = g.extra?.statusComite ?? null
             return (
-              <tr key={g.protocol} className="border-t border-neutral-200/60 transition hover:bg-surface-container-low/60 dark:border-white/5">
+              <tr key={g.protocol} className="group/row border-t border-neutral-200/60 transition hover:bg-surface-container-low/60 dark:border-white/5">
                 <td className="max-w-[34rem] px-4 py-2.5">
                   <Link to={`/gmud/${g.protocol}`} className="group block">
                     <span className="flex items-center gap-2">
@@ -121,15 +121,22 @@ export function GmudListTable({
                     </span>
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 text-on-surface-variant">{g.requester || '—'}</td>
+                <td className="px-4 py-2.5">
+                  <span className="flex items-center gap-2" title={g.requester || undefined}>
+                    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-container-low text-[10px] font-bold text-on-surface-variant ring-1 ring-neutral-200/70 dark:ring-white/10" aria-hidden>
+                      {requesterInitials(g.requester)}
+                    </span>
+                    <span className="whitespace-nowrap text-on-surface-variant">{shortRequesterName(g.requester)}</span>
+                  </span>
+                </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-xs text-on-surface-variant">{fmtDate(g.openedAt)}</td>
                 <td className="px-4 py-2.5">
                   <span className={cn(PILL, DEADLINE_STYLE[deadline.tone])} title={g.slaDate ? `Prazo: ${fmtDate(g.slaDate)}` : undefined}>
                     {deadline.label}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-on-surface-variant">{g.status || '—'}</td>
                 <td className="px-4 py-2.5">
+                  <div className="flex flex-col items-start gap-0.5">
                   {(comite === 'pendente' || comite === 'aprovada') && g.extra?.statusAreas === 'pendente' ? (
                     <span
                       className={cn(PILL, COMITE_STYLE.pendente)}
@@ -145,15 +152,20 @@ export function GmudListTable({
                         : GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite}
                     </span>
                   ) : (
-                    <span className="text-xs text-on-surface-variant/60">—</span>
+                    <span className="text-xs text-on-surface-variant">{g.status || '—'}</span>
                   )}
+                  {comite && g.status ? <span className="text-[11px] text-on-surface-variant/70">Voalle: {g.status}</span> : null}
+                  </div>
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end gap-1.5">
                     <button
                       type="button"
                       onClick={() => onLink(g)}
-                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low focus-visible:opacity-100 dark:ring-white/10',
+                        g.massivaLinksCount > 0 ? '' : 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100',
+                      )}
                       title="Massivas vinculadas"
                     >
                       <Link2 size={13} />
