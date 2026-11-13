@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { useMutation } from '@tanstack/react-query'
 import { CalendarClock, Loader2, X } from 'lucide-react'
 import { rescheduleGmud, sendGmudReport, type GmudAgendaItem } from '@/features/gmud/api/gmudAgenda'
@@ -34,6 +35,7 @@ export function GmudRescheduleModal({
   onClose: () => void
   onDone: () => void
 }) {
+  useEscapeKey(onClose)
   const profile = useAccessAuthStore((s) => s.profile)
   const user = profile?.displayName || profile?.email || ''
   const [win, setWin] = useState<GmudWindow>(initialWindow)
@@ -146,7 +148,7 @@ export function GmudRescheduleModal({
                 type="button"
                 onClick={() => mutation.mutate()}
                 disabled={!canSubmit || mutation.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:opacity-60"
               >
                 {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
                 Reagendar e registrar relato

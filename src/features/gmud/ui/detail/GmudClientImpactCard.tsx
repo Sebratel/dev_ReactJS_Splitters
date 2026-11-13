@@ -28,7 +28,7 @@ export function GmudClientImpactCard({ protocol }: { protocol: number }) {
     <section className={`${CARD} p-4`} aria-label="Clientes impactados">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Users size={16} className="text-primary" aria-hidden />
+          <Users size={16} className="text-on-surface-variant" aria-hidden />
           <h3 className="text-sm font-bold text-on-surface">Clientes impactados</h3>
           {data.source === 'estimativa' ? (
             <span className="rounded-full bg-surface-container-low px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">

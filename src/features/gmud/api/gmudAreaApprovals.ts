@@ -35,6 +35,8 @@ export type AreaApprovalInfo = {
     popSite: string
     /** Abrangência na rede já formatada (ponto de acesso · slot · PON · splitter); vazio = site inteiro. */
     escopoRede?: string
+    /** Clientes ponto a ponto e fibra apagada informados à mão. */
+    clientesManuais?: string
     solicitante: string
     dataInicio: string
     horaInicio: string

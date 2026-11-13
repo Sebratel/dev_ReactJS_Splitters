@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
-import { formatEscopoRede, normalizeEscopoRede } from './lib/gmudEscopoRede.js';
+import { formatEscopoRotas, normalizeEscopoRotas } from './lib/gmudEscopoRede.js';
+import { composeClientesTexto } from './lib/gmudClientesSemSplitter.js';
 import {
   AREA_STATUS,
   computeAreasStatus,
@@ -12,6 +13,8 @@ import {
   APROVADA_FINAL_SQL,
   COMMITTEE_ITEM_LABEL,
   COMMITTEE_LIST_KEY,
+  COR_ITEM_LABEL,
+  COR_LIST_KEY,
   assertCommitteeMember,
   isCommitteeMember,
   isGmudAprovadaFinal,
@@ -43,6 +46,7 @@ const AREA_TOKENS_TABLE = 'gmud_area_approval_tokens';
 
 export const GMUD_EVENT_TYPES = new Set([
   'criada',
+  'pre_aprovada',
   'comite_aprovada',
   'comite_negada',
   'comite_pendente',
@@ -62,6 +66,8 @@ export const GMUD_EVENT_TYPES = new Set([
   'area_negada',
   'area_aprovada_comite',
   'cancelamento_elleven_falhou',
+  'cor_lista_enviada',
+  'cor_lembrete_enviado',
 ]);
 
 let dataPool = null;
@@ -674,6 +680,90 @@ export async function getGmudRequest(protocol) {
  * `nowNaive` ('YYYY-MM-DD HH:mm:ss'). O horário exato é conferido em lib/gmudClientSync.js.
  * Usada pelo job que põe os clientes da GMUD em assignment_clients no início previsto.
  */
+/**
+ * Lista de clientes ao COR: cria (só quando alguém pede, nunca no início) o item fixo "COR" que agrupa os
+ * destinatários. Retorna o id do item.
+ */
+export async function ensureGmudCorItem(createdBy) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT id FROM ${CONFIG_TABLE} WHERE list_key = ? AND active = 1 ORDER BY id LIMIT 1`,
+    [COR_LIST_KEY],
+  );
+  if (rows?.[0]?.id != null) return { id: Number(rows[0].id), created: false };
+  const [result] = await pool.query(
+    `INSERT INTO ${CONFIG_TABLE} (list_key, label, sort_order, created_by) VALUES (?, ?, 1, ?)`,
+    [COR_LIST_KEY, COR_ITEM_LABEL, toCleanString(createdBy) || null],
+  );
+  return { id: Number(result.insertId), created: true };
+}
+
+/** Destinatários da lista ao COR (e-mail e nome), sem repetir e-mail. */
+export async function listGmudCorRecipients() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT a.user_email, a.user_display_name
+       FROM ${TEAM_APPROVERS_TABLE} a
+       JOIN ${CONFIG_TABLE} c ON c.id = a.equipe_id
+      WHERE c.list_key = ? AND c.active = 1
+      ORDER BY a.id`,
+    [COR_LIST_KEY],
+  );
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const key = String(r.user_email).trim().toLowerCase();
+    if (key === '' || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ email: r.user_email, nome: r.user_display_name ?? null });
+  }
+  return out;
+}
+
+/** GMUDs liberadas, de rede, ainda não encerradas e cuja janela não terminou (candidatas à lista ao COR). */
+export async function listGmudsForCorLista(nowNaive) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const day = String(nowNaive ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE}
+      WHERE ${APROVADA_FINAL_SQL}
+        AND (categoria IS NULL OR categoria = 'rede_externa')
+        AND elleven_encerrado_em IS NULL
+        AND COALESCE(status_exec, '') <> 'concluida'
+        AND data_inicio IS NOT NULL
+        AND COALESCE(data_fim, data_inicio) >= ?
+      LIMIT 500`,
+    [day],
+  );
+  return rows.map(mapGmudRow);
+}
+
+/** Último evento de cada tipo, por protocolo: Map protocolo -> { [tipo]: { at, payload } }. */
+export async function getLatestGmudEventsByTypes(protocols, types) {
+  await ensureTable();
+  const ids = [...new Set((Array.isArray(protocols) ? protocols : []).map(normalizePositiveInt).filter(Boolean))];
+  const kinds = (Array.isArray(types) ? types : []).filter((t) => GMUD_EVENT_TYPES.has(t));
+  const out = new Map();
+  if (ids.length === 0 || kinds.length === 0) return out;
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, event_type, payload, created_at FROM ${EVENTS_TABLE}
+      WHERE voalle_protocol IN (?) AND event_type IN (?) ORDER BY created_at DESC, id DESC`,
+    [ids, kinds],
+  );
+  for (const r of rows) {
+    const p = Number(r.voalle_protocol);
+    const bucket = out.get(p) ?? {};
+    if (!bucket[r.event_type]) bucket[r.event_type] = { at: r.created_at, payload: parseJsonColumn(r.payload) };
+    out.set(p, bucket);
+  }
+  return out;
+}
+
 export async function listGmudsForClientSync(nowNaive) {
   await ensureTable();
   const pool = getMysqlPool();
@@ -1046,9 +1136,9 @@ export async function deactivateGmudConfigItem(id) {
   const itemId = normalizePositiveInt(id);
   if (!itemId) throw buildError('ID de item inválido.', 400);
   const [protectedRows] = await pool.query(
-    `SELECT id FROM ${CONFIG_TABLE} WHERE id = ? AND list_key = ? LIMIT 1`, [itemId, COMMITTEE_LIST_KEY],
+    `SELECT id FROM ${CONFIG_TABLE} WHERE id = ? AND list_key IN (?, ?) LIMIT 1`, [itemId, COMMITTEE_LIST_KEY, COR_LIST_KEY],
   );
-  if (protectedRows.length > 0) throw buildError('O item "Comitê" é fixo e não pode ser removido.', 400);
+  if (protectedRows.length > 0) throw buildError('Este item é fixo e não pode ser removido.', 400);
   const [result] = await pool.query(
     `UPDATE ${CONFIG_TABLE} SET active = 0 WHERE id = ? AND active = 1`, [itemId],
   );
@@ -1243,8 +1333,8 @@ export async function addTeamApprover({ areaId, userEmail, userDisplayName, crea
   const id = normalizePositiveInt(areaId);
   if (!id) throw buildError('ID de área inválido.', 400);
   const [areaRows] = await pool.query(
-    `SELECT id FROM ${CONFIG_TABLE} WHERE id = ? AND list_key IN ('areas', ?) AND active = 1 LIMIT 1`,
-    [id, COMMITTEE_LIST_KEY],
+    `SELECT id FROM ${CONFIG_TABLE} WHERE id = ? AND list_key IN ('areas', ?, ?) AND active = 1 LIMIT 1`,
+    [id, COMMITTEE_LIST_KEY, COR_LIST_KEY],
   );
   if (areaRows.length === 0) throw buildError('Área não encontrada.', 404);
   const email = toCleanString(userEmail);
@@ -1481,7 +1571,8 @@ export async function lookupApprovalToken(token) {
       categoria: r.categoria ?? '',
       descricao: TRUNC(r.descricao, 1500),
       popSite: r.pop_site ?? '',
-      escopoRede: formatEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
+      escopoRede: formatEscopoRotas(normalizeEscopoRotas(parseJsonColumn(r.categoria_data))),
+      clientesManuais: composeClientesTexto(parseJsonColumn(r.categoria_data)),
       solicitante: r.solicitante_nome ?? '',
       dataInicio: toDateStr(r.data_inicio) ?? '',
       horaInicio: toTimeStr(r.hora_inicio) ?? '',
@@ -1682,8 +1773,8 @@ export async function listGmudUpcomingForHsm(daysAhead = 7) {
     tipo: r.tipo ?? '',
     categoria: r.categoria ?? '',
     popSite: (r.pop_site ?? '').trim(),
-    // Afunilamento por ponto de acesso/slot/PON/splitter (null = site inteiro).
-    escopoRede: normalizeEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
+    // Afunilamento por rota (ponto de acesso/slot/PON/splitter); lista vazia = site inteiro.
+    escopoRotas: normalizeEscopoRotas(parseJsonColumn(r.categoria_data)),
     dataInicio: toDateStr(r.data_inicio) ?? '',
     horaInicio: r.hora_inicio ?? '',
     dataFim: toDateStr(r.data_fim) ?? '',

@@ -5,6 +5,7 @@ import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { describeAreasSummary } from '@/features/gmud/lib/gmudApprovalText'
 
 const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: string; Icon: typeof Clock }> = {
   pendente: {
@@ -24,12 +25,6 @@ const STATUS_STYLE: Record<GmudAreaApproval['status'], { label: string; cls: str
   },
 }
 
-const SUMMARY: Record<Exclude<GmudAreasStatus, 'nao_aplicavel'>, string> = {
-  pendente: 'Aguardando as áreas. A GMUD é aprovada automaticamente quando todas aprovarem.',
-  aprovada: 'Todas as áreas aprovaram. A GMUD está aprovada.',
-  negada: 'Uma área negou. A GMUD foi negada.',
-}
-
 function formatWhen(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''
 }
@@ -38,12 +33,20 @@ export function GmudAreaApprovalsCard({
   protocol,
   areas,
   statusAreas,
+  statusComite,
+  committee,
+  closed,
   canOverride,
   onChanged,
 }: {
   protocol: number
   areas: GmudAreaApproval[]
   statusAreas: GmudAreasStatus
+  statusComite?: string | null
+  /** Quando informado, o Comitê aparece como a primeira linha do cartão. */
+  committee?: { decididoEm: string | null; aprovadoPor: string | null } | null
+  /** Protocolo já encerrado no Elleven: ninguém mais precisa decidir. */
+  closed?: boolean
   canOverride: boolean
   onChanged: () => void
 }) {
@@ -53,30 +56,54 @@ export function GmudAreaApprovalsCard({
     onSuccess: onChanged,
   })
 
-  if (areas.length === 0 || statusAreas === 'nao_aplicavel') return null
+  const showAreas = areas.length > 0 && statusAreas !== 'nao_aplicavel'
+  if (!showAreas && !committee) return null
+  const comiteKey = (statusComite ?? 'pendente') as 'pendente' | 'aprovada' | 'negada'
+  const comiteStyle = STATUS_STYLE[comiteKey] ?? STATUS_STYLE.pendente
 
   return (
     <section className={cn(DETAIL_CARD, 'space-y-3 p-4')}>
-      <CardTitle icon={<ShieldCheck size={16} />}>Aprovação das áreas</CardTitle>
-      <p className="text-xs text-on-surface-variant">{SUMMARY[statusAreas]}</p>
+      <CardTitle icon={<ShieldCheck size={16} />}>Aprovações</CardTitle>
+      {showAreas ? (
+        <p className="text-xs text-on-surface-variant">
+          {describeAreasSummary({ statusAreas: statusAreas as 'pendente' | 'aprovada' | 'negada', statusComite, closed: Boolean(closed) })}
+        </p>
+      ) : (
+        <p className="text-xs text-on-surface-variant">Só o Comitê decide esta GMUD.</p>
+      )}
 
       <ul className="divide-y divide-neutral-200/70 dark:divide-white/10">
-        {areas.map((a) => {
+        {committee ? (
+          <li className="space-y-1 py-2.5 first:pt-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-on-surface">Comitê</p>
+              <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ring-1', comiteStyle.cls)}>
+                <comiteStyle.Icon size={11} aria-hidden /> {comiteKey === 'pendente' && closed ? 'Sem decisão' : comiteStyle.label}
+              </span>
+            </div>
+            {committee.decididoEm ? (
+              <p className="text-xs text-on-surface-variant">
+                {committee.aprovadoPor ?? 'Responsável'} · {formatWhen(committee.decididoEm)}
+              </p>
+            ) : null}
+          </li>
+        ) : null}
+        {(showAreas ? areas : []).map((a) => {
           const st = STATUS_STYLE[a.status]
           return (
             <li key={a.id} className="space-y-1 py-2.5 first:pt-0 last:pb-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-on-surface">{a.areaLabel}</p>
                 <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ring-1', st.cls)}>
-                  <st.Icon size={11} aria-hidden /> {st.label}
+                  <st.Icon size={11} aria-hidden /> {a.status === 'pendente' && closed ? 'Sem decisão' : st.label}
                 </span>
               </div>
-              {a.status === 'pendente' ? (
+              {a.status === 'pendente' && !closed ? (
                 <p className="text-xs text-on-surface-variant">
                   Aguardando uma de {a.pessoas.length} pessoa{a.pessoas.length === 1 ? '' : 's'}:{' '}
                   {a.pessoas.map((p) => p.nome).join(', ')}
                 </p>
-              ) : (
+              ) : a.status === 'pendente' ? null : (
                 <p className="text-xs text-on-surface-variant">
                   {a.decidedByName ?? 'Responsável'} · {formatWhen(a.decidedAt)}
                   {a.motivo ? ` — ${a.motivo}` : ''}

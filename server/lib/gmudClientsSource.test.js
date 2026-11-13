@@ -10,8 +10,9 @@ function source(rows, { throws = false, match } = {}) {
   const s = createGmudClientsSource({
     pool,
     baseQuery: 'SELECT 1',
-    normalizeEscopoRede: (raw) => (raw ? { apCode: 'AP1', ...raw } : null),
-    rowMatchesEscopoRede: match ?? (() => true),
+    normalizeEscopoRotas: (cd) => (Array.isArray(cd?.escopoRotas) ? cd.escopoRotas : cd?.escopoRede ? [cd.escopoRede] : []).map((r) => ({ apCode: 'AP1', ...r })),
+    rowMatchesEscopoRotas: match ?? (() => true),
+    normalizeClientesSemSplitter: (cd) => (Array.isArray(cd?.clientesSemSplitter) ? cd.clientesSemSplitter : []),
   });
   return { s, queries };
 }
@@ -21,8 +22,8 @@ test('site inteiro: todos os clientes com PPPoE e contrato, sem repetir contrato
   const out = await s.listClients({ popSite: 'SLESC', categoriaData: null });
   assert.equal(out.ok, true);
   assert.deepEqual(out.clients, [
-    { contractId: 10, pppoe: 'ana', corporate: false },
-    { contractId: 11, pppoe: 'beto', corporate: true },
+    { contractId: 10, pppoe: 'ana', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 11, pppoe: 'beto', corporate: true, nome: '', pontoAcesso: '' },
   ]);
   assert.deepEqual(queries[0], ['SLESC']);
 });
@@ -31,6 +32,14 @@ test('com afunilamento só ficam as linhas que batem com o escopo', async () => 
   const { s } = source([row('10', 'ana', { slot: 1 }), row('11', 'beto', { slot: 2 })], { match: (r) => r.slot === 2 });
   const out = await s.listClients({ popSite: 'SLESC', categoriaData: { escopoRede: { apCode: 'AP1', slot: 2 } } });
   assert.deepEqual(out.clients.map((c) => c.contractId), [11]);
+});
+
+test('várias rotas: entra quem bate com qualquer uma', async () => {
+  const { s } = source([row('10', 'ana', { slot: 1 }), row('11', 'beto', { slot: 2 }), row('12', 'caio', { slot: 3 })], {
+    match: (r, rotas) => rotas.some((x) => x.slot === r.slot),
+  });
+  const out = await s.listClients({ popSite: 'SLESC', categoriaData: { escopoRotas: [{ slot: 1 }, { slot: 3 }] } });
+  assert.deepEqual(out.clients.map((c) => c.contractId), [10, 12]);
 });
 
 test('sem POP/Site não há como localizar os clientes', async () => {
@@ -44,4 +53,25 @@ test('falha do banco vira erro, sem lançar', async () => {
   const out = await s.listClients({ popSite: 'SLESC' });
   assert.equal(out.ok, false);
   assert.match(out.reason, /pg fora/);
+});
+
+test('clientes escolhidos à mão (sem splitter) entram pelo contrato, com ou sem PPPoE, sem repetir', async () => {
+  const { s } = source([row('10', 'ana'), row('11', 'beto')]);
+  const out = await s.listClients({
+    popSite: 'SLESC',
+    categoriaData: {
+      clientesSemSplitter: [
+        { contractId: 10, pppoe: 'ana-repetida' }, // já veio do splitter: não duplica
+        { contractId: 77, pppoe: 'p2p-1' },
+        { contractId: 88, pppoe: '' }, // fibra apagada: só contrato
+      ],
+    },
+  });
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.clients, [
+    { contractId: 10, pppoe: 'ana', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 11, pppoe: 'beto', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 77, pppoe: 'p2p-1', corporate: true, nome: '', pontoAcesso: '' },
+    { contractId: 88, pppoe: '', corporate: true, nome: '', pontoAcesso: '' },
+  ]);
 });

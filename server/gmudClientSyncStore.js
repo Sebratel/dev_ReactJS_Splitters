@@ -84,7 +84,7 @@ export function createGmudClientSyncStore(config, { poolFactory = mysql.createPo
         const slice = clients.slice(i, i + CHUNK);
         await pool.query(
           'INSERT INTO gmud_affected_clients (gmud_protocol, contract_id, pppoe, corporate_client, status, included_at) VALUES ?',
-          [slice.map((c) => [protocol, c.contractId, c.pppoe, c.corporate ? 1 : 0, skipped.has(c.contractId) ? 'ja_em_outro_evento' : 'incluido', nowNaive])],
+          [slice.map((c) => [protocol, c.contractId, c.pppoe || null, c.corporate ? 1 : 0, skipped.has(c.contractId) ? 'ja_em_outro_evento' : 'incluido', nowNaive])],
         );
       }
     },

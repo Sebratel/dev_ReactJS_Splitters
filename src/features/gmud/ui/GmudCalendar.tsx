@@ -10,6 +10,7 @@ import {
   type GmudWindow,
 } from '@/features/gmud/lib/gmudSchedule'
 import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
+import { AGENDA_TONE_CLASS, AGENDA_TONE_LABEL, agendaTone, upcomingInRange, type AgendaTone } from '@/features/gmud/lib/gmudAgendaTone'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -53,6 +54,27 @@ export function GmudCalendar() {
   })
   const items = agendaQuery.data ?? []
 
+  // Próximos 7 dias: consulta própria, para não depender do mês que está na tela.
+  const upcomingFrom = todayKey
+  const upcomingTo = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 7)
+    return localDayKey(d)
+  })()
+  const upcomingQuery = useQuery({
+    queryKey: ['gmud', 'agenda', upcomingFrom, upcomingTo],
+    queryFn: () => fetchGmudAgenda(upcomingFrom, upcomingTo),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  })
+  const upcoming = upcomingInRange(upcomingQuery.data ?? [], upcomingFrom, upcomingTo)
+  const goToday = () => {
+    const now = new Date()
+    setCursor({ year: now.getFullYear(), month: now.getMonth() })
+  }
+
   const move = (delta: number) =>
     setCursor(({ year, month }) => {
       const d = new Date(year, month + delta, 1)
@@ -69,7 +91,8 @@ export function GmudCalendar() {
   }
 
   return (
-    <div className="rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+    <div className="min-w-0 rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200/70 dark:border-white/10 px-4 py-3">
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => move(-1)} className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container-low" aria-label="Mês anterior">
@@ -83,6 +106,13 @@ export function GmudCalendar() {
           </p>
           <button type="button" onClick={() => move(1)} className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container-low" aria-label="Próximo mês">
             <ChevronRight size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={goToday}
+            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+          >
+            Hoje
           </button>
           {agendaQuery.isFetching ? <Loader2 className="size-4 animate-spin text-on-surface-variant" /> : null}
         </div>
@@ -151,11 +181,7 @@ export function GmudCalendar() {
                       onClick={() => setEditing({ item, window: itemWindow(item) })}
                       title={`${item.voalleProtocol} · ${item.titulo ?? ''} (${item.horaInicio}–${item.horaFim})`}
                       className={`block w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium transition ${
-                        item.ellevenEncerradoEm
-                          ? 'bg-neutral-200 text-neutral-600 dark:bg-white/10 dark:text-neutral-300'
-                          : isStart
-                            ? 'bg-primary/90 text-white hover:bg-primary'
-                            : 'bg-primary/15 text-primary'
+                        isStart ? AGENDA_TONE_CLASS[agendaTone(item)].start : AGENDA_TONE_CLASS[agendaTone(item)].cont
                       } ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
                     >
                       {isStart ? `${item.horaInicio} ` : '↳ '}
@@ -170,9 +196,17 @@ export function GmudCalendar() {
         })}
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200/70 px-4 py-2.5 text-[11px] text-on-surface-variant dark:border-white/10">
+        {(['programada', 'emergencial', 'pre_aprovada', 'encerrada'] as AgendaTone[]).map((t) => (
+          <span key={t} className="inline-flex items-center gap-1.5">
+            <span className={`size-2.5 rounded-sm ${AGENDA_TONE_CLASS[t].dot}`} aria-hidden /> {AGENDA_TONE_LABEL[t]}
+          </span>
+        ))}
+      </div>
+
       {!agendaQuery.isLoading && items.length === 0 && !agendaQuery.isError ? (
-        <p className="p-4 text-center text-sm text-on-surface-variant">
-          Nenhuma GMUD aprovada com janela neste período.
+        <p className="border-t border-neutral-200/70 p-4 text-center text-sm text-on-surface-variant dark:border-white/10">
+          Nenhuma GMUD liberada com janela neste mês. Só aparecem na agenda as GMUDs aprovadas pelo Comitê e pelas áreas.
         </p>
       ) : null}
 
@@ -185,6 +219,33 @@ export function GmudCalendar() {
           onDone={() => void agendaQuery.refetch()}
         />
       ) : null}
+    </div>
+
+    <aside className="min-w-0 rounded-2xl border border-neutral-200/90 bg-surface-container-lowest p-4 dark:border-white/10" aria-label="Próximos 7 dias">
+      <p className="text-sm font-bold text-on-surface">Próximos 7 dias</p>
+      {upcomingQuery.isLoading ? (
+        <p className="mt-2 text-xs text-on-surface-variant">Carregando…</p>
+      ) : upcoming.length === 0 ? (
+        <p className="mt-2 text-xs text-on-surface-variant">Nenhuma GMUD liberada nos próximos 7 dias.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-neutral-200/60 dark:divide-white/5">
+          {upcoming.map((item) => (
+            <li key={item.voalleProtocol} className="py-2">
+              <button type="button" onClick={() => setEditing({ item, window: itemWindow(item) })} className="block w-full text-left">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-on-surface">
+                  <span className={`size-2 shrink-0 rounded-sm ${AGENDA_TONE_CLASS[agendaTone(item)].dot}`} aria-hidden />
+                  {item.dataInicio < todayKey ? 'Em andamento' : `${item.dataInicio === todayKey ? 'Hoje' : item.dataInicio.split('-').reverse().slice(0, 2).join('/')} ${item.horaInicio}`}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-on-surface-variant" title={item.titulo ?? undefined}>
+                  {item.popSite ? `${item.popSite} · ` : ''}
+                  {item.titulo || item.voalleProtocol}
+                </p>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
     </div>
   )
 }

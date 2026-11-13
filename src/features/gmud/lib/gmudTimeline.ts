@@ -14,6 +14,7 @@ type EventLike = { type: string; actor: string | null; payload: Record<string, u
 
 const EVENT_LABEL: Record<string, { title: string; tone: TimelineTone }> = {
   criada: { title: 'Registrada na plataforma', tone: 'primary' },
+  pre_aprovada: { title: 'Pré-aprovada (sem aprovação)', tone: 'success' },
   comite_aprovada: { title: 'Aprovada pelo Comitê', tone: 'success' },
   comite_negada: { title: 'Negada pelo Comitê', tone: 'danger' },
   comite_pendente: { title: 'Voltou para pendente no Comitê', tone: 'warning' },
@@ -33,6 +34,8 @@ const EVENT_LABEL: Record<string, { title: string; tone: TimelineTone }> = {
   area_negada: { title: 'Área negou — GMUD negada', tone: 'danger' },
   area_aprovada_comite: { title: 'Comitê aprovou em nome da área', tone: 'warning' },
   cancelamento_elleven_falhou: { title: 'Cancelamento no Elleven não concluído', tone: 'danger' },
+  cor_lista_enviada: { title: 'Lista de clientes enviada ao COR', tone: 'primary' },
+  cor_lembrete_enviado: { title: 'Lembrete da lista de clientes enviado ao COR', tone: 'neutral' },
 }
 
 function isWindow(value: unknown): value is GmudWindow {

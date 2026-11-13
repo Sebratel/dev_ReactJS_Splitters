@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Link2, Loader2, Lock, Plus, Trash2, X } from 'lucide-react'
@@ -16,6 +17,7 @@ const FIELD =
   'w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
 
 export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose: () => void }) {
+  useEscapeKey(onClose)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [massivaInput, setMassivaInput] = useState('')
@@ -126,7 +128,7 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
                 type="button"
                 onClick={() => canAdd && addMutation.mutate(parsedInput)}
                 disabled={!canAdd}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-60"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:opacity-60"
               >
                 {addMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                 Vincular

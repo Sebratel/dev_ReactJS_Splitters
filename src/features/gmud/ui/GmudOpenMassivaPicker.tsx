@@ -131,7 +131,7 @@ export function GmudOpenMassivaPicker({
           type="button"
           onClick={() => bulkMutation.mutate()}
           disabled={selectedVisible.length === 0 || bulkMutation.isPending}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-60"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:opacity-60"
         >
           {bulkMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
           Vincular selecionadas ({selectedVisible.length})

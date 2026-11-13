@@ -23,8 +23,12 @@ import { createGmudClientSyncStore } from './gmudClientSyncStore.js';
 import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib/gmudClientSyncService.js';
 import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
+import { composeClientesTexto, normalizeClientesSemSplitter } from './lib/gmudClientesSemSplitter.js';
+import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
+import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
+import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
 import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
 import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
@@ -89,7 +93,7 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
-import { formatEscopoRede, normalizeEscopoRede, rowMatchesEscopoRede } from './lib/gmudEscopoRede.js';
+import { formatEscopoRotas, normalizeEscopoRotas, rowMatchesEscopoRotas } from './lib/gmudEscopoRede.js';
 import {
   recordUsageEvents,
   summarizeUsage,
@@ -129,6 +133,10 @@ import {
   addTeamApprover,
   removeTeamApprover,
   resolveAreasWithApprovers,
+  ensureGmudCorItem,
+  listGmudCorRecipients,
+  listGmudsForCorLista,
+  getLatestGmudEventsByTypes,
   createAreaApprovals,
   getAreaApprovals,
   lookupApprovalToken,
@@ -4578,6 +4586,7 @@ app.get('/api/gmud/list', async (req, res) => {
     const OPEN_SQL = ` AND a.conclusion_date IS NULL AND COALESCE(ist.title, '') NOT ILIKE '%cancel%'`;
     if (filter === 'abertas') searchClause += OPEN_SQL;
     else if (filter === 'vencidas') searchClause += `${OPEN_SQL} AND ai.responsible_final_date < now()`;
+    else if (filter === 'vencem_semana') searchClause += `${OPEN_SQL} AND ${GMUD_VENCE_EM_7_DIAS_SQL}`;
     else if (filter === 'minhas') {
       params.push(String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase());
       searchClause += ` AND lower(pe.email) = $${params.length}`;
@@ -4671,6 +4680,81 @@ app.get('/api/gmud/list', async (req, res) => {
 });
 
 /**
+ * Busca de clientes corporativos no Elleven para a GMUD (ponto a ponto, fibra apagada): por nome, contrato ou
+ * usuário. Somente leitura; devolve só o necessário para escolher (sem telefone nem endereço).
+ */
+const gmudClientesEllevenSearch = createClientesEllevenSearch({ pool });
+app.get('/api/gmud/clientes-elleven', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const q = typeof req.query?.q === 'string' ? req.query.q : '';
+    const data = await gmudClientesEllevenSearch.search(q);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao buscar clientes no Elleven.'),
+    });
+  }
+});
+
+/** Aberta e ainda dentro do prazo, vencendo nos próximos 7 dias (mesma regra do filtro "vencem_semana"). */
+const GMUD_VENCE_EM_7_DIAS_SQL = `ai.responsible_final_date >= now() AND ai.responsible_final_date < now() + interval '7 days'`;
+
+/**
+ * Números dos indicadores do topo do painel de GMUDs. Cada um usa a MESMA regra do filtro de mesmo nome
+ * da lista, para o número do cartão ser igual ao total que aparece ao clicar nele.
+ */
+app.get('/api/gmud/list-summary', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const OPEN_SQL = `a.conclusion_date IS NULL AND COALESCE(ist.title, '') NOT ILIKE '%cancel%'`;
+    const result = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE ${OPEN_SQL})::int AS abertas,
+              COUNT(*) FILTER (WHERE ${OPEN_SQL} AND ai.responsible_final_date < now())::int AS vencidas,
+              COUNT(*) FILTER (WHERE ${OPEN_SQL} AND ${GMUD_VENCE_EM_7_DIAS_SQL})::int AS vencem_semana
+         FROM erp.assignment_incidents ai
+         JOIN erp.assignments a ON a.id = ai.assignment_id
+         LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+        WHERE ai.incident_type_id = $1`,
+      [GMUD_INCIDENT_TYPE_ID],
+    );
+    const row = result.rows?.[0] ?? {};
+    let comitePendente = 0;
+    try {
+      const protocols = await listRegisteredGmudProtocols(['pendente']);
+      if (protocols.length > 0) {
+        const c = await pool.query(
+          `SELECT COUNT(*)::int AS total
+             FROM erp.assignment_incidents ai
+            WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[])`,
+          [GMUD_INCIDENT_TYPE_ID, protocols],
+        );
+        comitePendente = c.rows?.[0]?.total ?? 0;
+      }
+    } catch (e) {
+      logger.warn('[gmud] Falha ao contar GMUDs aguardando o Comitê (segue com 0): %s', e?.message);
+    }
+    return res.json({
+      success: true,
+      data: {
+        abertas: row.abertas ?? 0,
+        vencidas: row.vencidas ?? 0,
+        vencemSemana: row.vencem_semana ?? 0,
+        comitePendente,
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar o resumo das GMUDs.'),
+    });
+  }
+});
+
+/**
  * Áreas marcadas na GMUD (sistemas internos: areasImpactadas; externos: areasAfetadas).
  * São as áreas cujas pessoas cadastradas recebem o aviso de aprovação.
  */
@@ -4710,7 +4794,8 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = []
     categoria: gmud.categoria,
     tipo: gmud.tipo,
     popSite: gmud.popSite ?? '',
-    abrangenciaRede: formatEscopoRede(gmud.categoriaData?.escopoRede),
+    abrangenciaRede: formatEscopoRotas(normalizeEscopoRotas(gmud.categoriaData)),
+    clientesManuais: composeClientesTexto(gmud.categoriaData),
     solicitanteNome: gmud.solicitanteNome,
     solicitanteEmail: gmud.solicitanteEmail,
     dataInicio: gmud.dataInicio,
@@ -4792,13 +4877,16 @@ app.post('/api/gmud/create', async (req, res) => {
       return res.status(400).json({ success: false, message: 'O fim da janela deve ser depois do início.' });
     }
 
-    if (!existing && String(body.tipo ?? '').trim() === 'Programada') {
+    const preAprovadaError = preAprovadaCreateError({ tipo: body.tipo, categoria: body.categoria });
+    if (preAprovadaError) return res.status(400).json({ success: false, message: preAprovadaError });
+
+    if (!existing && (String(body.tipo ?? '').trim() === 'Programada' || isPreAprovada(body.tipo))) {
       const dataInicio = String(body.dataInicio ?? '').slice(0, 10);
       const minimo = minDataProgramada();
       if (dataInicio !== '' && dataInicio < minimo) {
         return res.status(400).json({
           success: false,
-          message: `GMUD Programada só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
+          message: `GMUD ${isPreAprovada(body.tipo) ? 'Pré-aprovada' : 'Programada'} só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
         });
       }
     }
@@ -4834,6 +4922,18 @@ app.post('/api/gmud/create', async (req, res) => {
       payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
     });
 
+    // Pré-aprovada: não passa por aprovação. Já nasce liberada (agenda, vínculo de massivas, clientes em alerta).
+    // Só na criação: reenviar ou editar uma GMUD existente nunca a aprova por esse caminho.
+    if (!existing && isPreAprovada(body.tipo)) {
+      await setGmudApproval({ voalleProtocol, statusComite: 'aprovada', aprovadoPor: 'Pré-aprovada' });
+      await logGmudEvent({
+        voalleProtocol,
+        type: 'pre_aprovada',
+        actor: gmudActorName(actor) || createdByEmail,
+        payload: { serie: body.categoriaData?.serie ?? null },
+      });
+    }
+
     // Toda GMUD NOVA avisa (Chat + e-mail), com ou sem aprovação de área.
     let approvals = [];
     if (areasToApprove.length > 0) {
@@ -4856,7 +4956,7 @@ app.post('/api/gmud/create', async (req, res) => {
       // Executor/Validador/Observador) são avisadas por e-mail. Best-effort: área sem ninguém
       // cadastrado só deixa de receber — nunca bloqueia a Emergencial.
       let avisos = [];
-      if (String(body.tipo ?? '').trim() === 'Emergencial') {
+      if (String(body.tipo ?? '').trim() === 'Emergencial' || isPreAprovada(body.tipo)) {
         try {
           const labels = deriveNotificationAreas({
             categoria: body.categoria,
@@ -5900,6 +6000,24 @@ function getEventSuppressedStore() {
   return eventSuppressedStore;
 }
 
+// ─── Lista de clientes ao COR (corporativos + ponto a ponto/fibra apagada), por e-mail via N8N ─────────────────
+// Desligada por padrão (GMUD_COR_LISTA_ENABLED=true liga; começa em simulação, GMUD_COR_LISTA_DRY_RUN=false envia).
+let gmudCorListaService = null;
+function getGmudCorLista() {
+  if (gmudCorListaService) return gmudCorListaService;
+  const { clientsSource } = getGmudClientSync();
+  gmudCorListaService = createGmudCorListaService({
+    gmudSource: { listCandidates: (nowNaive) => listGmudsForCorLista(nowNaive) },
+    eventsSource: { latestByTypes: (protocols, types) => getLatestGmudEventsByTypes(protocols, types), log: (event) => logGmudEvent(event) },
+    clientsSource,
+    recipientsSource: { list: () => listGmudCorRecipients() },
+    sender: createCorListaSender(),
+    env: process.env,
+    logger,
+  });
+  return gmudCorListaService;
+}
+
 let gmudClientSyncParts = null;
 function getGmudClientSync() {
   if (gmudClientSyncParts) return gmudClientSyncParts;
@@ -5914,8 +6032,9 @@ function getGmudClientSync() {
   const clientsSource = createGmudClientsSource({
     pool,
     baseQuery: SPLITTERS_BASE_QUERY,
-    normalizeEscopoRede,
-    rowMatchesEscopoRede,
+    normalizeEscopoRotas,
+    rowMatchesEscopoRotas,
+    normalizeClientesSemSplitter,
   });
   const service = createGmudClientSyncService({
     store,
@@ -6101,6 +6220,35 @@ app.get('/api/gmud/:protocol/clientes-impactados', async (req, res) => {
 });
 
 // Estado do job: configuração, última execução, erros e quantos clientes de GMUD estão ativos.
+app.get('/api/gmud/cor-lista/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    return res.json({ success: true, data: await getGmudCorLista().getStatus() });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o envio da lista ao COR.'),
+    });
+  }
+});
+
+// Cria (sob demanda) o item fixo "COR" da lista de destinatários; as pessoas entram por /api/gmud/team-approvers.
+app.post('/api/gmud/cor/item', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await ensureGmudCorItem(createdBy);
+    return res.status(result.created ? 201 : 200).json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao criar a lista do COR.'),
+    });
+  }
+});
+
 app.get('/api/gmud/clientes-sync/status', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
@@ -6185,7 +6333,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
         base."PORTA[SPLT.PRIMARIO]"
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE UPPER(TRIM(base."SITE")) = UPPER(TRIM($1))
-        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $2
+        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = ANY($2::text[])
         AND base."ID CONEXAO[CLIENTE]" IS NOT NULL
         AND base."CORPORATIVO" IS TRUE
         AND base."OCUPADO:[SPLT.SECUNDARIO]" IS TRUE
@@ -6197,12 +6345,12 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
       gmudRows.map(async (gmud) => {
         let clientes = [];
         try {
-          const escopo = gmud.escopoRede;
-          const { rows } = escopo
-            ? await pool.query(scopedQuery, [gmud.popSite, escopo.apCode])
+          const rotas = gmud.escopoRotas ?? [];
+          const { rows } = rotas.length > 0
+            ? await pool.query(scopedQuery, [gmud.popSite, [...new Set(rotas.map((r) => r.apCode))]])
             : await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
           const seen = new Set();
-          for (const r of escopo ? rows.filter((row) => rowMatchesEscopoRede(row, escopo)) : rows) {
+          for (const r of rotas.length > 0 ? rows.filter((row) => rowMatchesEscopoRotas(row, rotas)) : rows) {
             const cliente = {
               nome: (r.nome ?? '').trim(),
               telefone: (r.telefone ?? '').trim(),
@@ -6218,7 +6366,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
           logger.error('[gmud-corporate-hsm] Falha ao buscar clientes do site:', { site: gmud.popSite, error: err.message });
         }
         return {
-          gmud: { ...gmud, escopoTexto: formatEscopoRede(gmud.escopoRede) },
+          gmud: { ...gmud, escopoTexto: formatEscopoRotas(gmud.escopoRotas) },
           clienteCount: clientes.length,
           clientes,
         };
@@ -8270,6 +8418,8 @@ async function startServer() {
     const { service, store, gateway } = getGmudClientSync();
     startGmudClientSyncScheduler({ service, store, gateway, env: process.env, logger });
   }
+
+  startGmudCorListaScheduler({ service: getGmudCorLista(), env: process.env, logger });
 
   {
     const { suppressed, gateway, service } = getEventReinclusion();

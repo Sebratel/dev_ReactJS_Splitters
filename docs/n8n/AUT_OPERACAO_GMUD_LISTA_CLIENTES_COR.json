@@ -1,0 +1,175 @@
+{
+  "name": "AUT_OPERACAO_GMUD_LISTA_CLIENTES_COR",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gmud-lista-cor",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4a00-8000-000000000001",
+      "name": "01A - Receber Lista de Clientes da GMUD",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "webhookId": "gmud-lista-cor"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    _ctx: {\n      executionId: $execution.id,\n      catalogId:   'AUT-XXXX',\n      runDate:     new Intl.DateTimeFormat('pt-BR', {\n                     timeZone: 'America/Sao_Paulo',\n                     year: 'numeric', month: '2-digit', day: '2-digit'\n                   }).format(new Date()),\n      environment: 'production',\n      startedAt:   new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0002-4a00-8000-000000000002",
+      "name": "02A - Montar Contexto da Execução",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        570,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta o e-mail ao COR a partir do payload do backend (evento gmud_lista_cor).\nconst p = $('01A - Receber Lista de Clientes da GMUD').first().json.body ?? {};\nif (p.evento !== 'gmud_lista_cor') throw new Error('Evento inesperado: ' + p.evento);\nconst destinatarios = (p.destinatarios ?? []).map((d) => String(d.email ?? '').trim()).filter((e) => e.includes('@'));\nif (destinatarios.length === 0) throw new Error('Sem destinatários no payload.');\n\nconst esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst fmt = (s) => {\n  const m = /^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})/.exec(String(s ?? ''));\n  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : '-';\n};\nconst ROTULO = { liberacao: 'GMUD liberada', atualizacao: 'GMUD ATUALIZADA', lembrete: 'Lembrete' };\nconst rotulo = ROTULO[p.tipo] ?? 'GMUD';\nconst r = p.resumo ?? {};\nconst janela = p.janela ? `${fmt(p.janela.inicio)} → ${fmt(p.janela.fim)}` : '-';\n\nconst linhas = (p.clientes ?? []).map((c) => {\n  const destaque = c.tipo === 'corporativo' ? '' : ' style=\"background:#fff3d0\"';\n  return `<tr${destaque}><td>${esc(c.nome)}</td><td>${esc(c.contrato)}</td><td>${esc(c.pppoe) || '-'}</td><td>${esc(c.pontoAcesso) || '-'}</td><td>${esc(c.tipoLabel)}</td></tr>`;\n}).join('');\n\nconst intro = {\n  liberacao: 'A GMUD abaixo foi liberada. Segue a lista de clientes que serão impactados, para o COR se preparar antes da execução.',\n  atualizacao: 'A abrangência, os clientes ou a janela desta GMUD mudaram. Esta lista substitui a anterior.',\n  lembrete: 'A execução desta GMUD está próxima. Segue a lista de clientes impactados.',\n}[p.tipo] ?? '';\n\nconst html = `\n<div style=\"font-family:Arial,sans-serif;font-size:14px;color:#222\">\n  <h2 style=\"margin:0 0 4px\">${esc(rotulo)} — GMUD ${esc(p.protocol)}</h2>\n  <p style=\"margin:0 0 12px;color:#555\">${esc(p.titulo)}</p>\n  <p>${esc(intro)}</p>\n  <table style=\"border-collapse:collapse;margin:8px 0 12px\" cellpadding=\"4\">\n    <tr><td><b>Janela</b></td><td>${esc(janela)}</td></tr>\n    <tr><td><b>POP/Site</b></td><td>${esc(p.popSite) || '-'}</td></tr>\n    <tr><td><b>Abrangência</b></td><td>${esc(p.abrangenciaRede) || 'Site inteiro'}</td></tr>\n    <tr><td><b>Solicitante</b></td><td>${esc(p.solicitanteNome)}${p.solicitanteEmail ? ' (' + esc(p.solicitanteEmail) + ')' : ''}</td></tr>\n    <tr><td><b>Clientes</b></td><td>${esc(r.total ?? 0)} no total: ${esc(r.corporativos ?? 0)} corporativos, ${esc(r.pontoAPonto ?? 0)} ponto a ponto, ${esc(r.fibraApagada ?? 0)} fibra apagada</td></tr>\n  </table>\n  <table style=\"border-collapse:collapse;width:100%\" border=\"1\" cellpadding=\"6\">\n    <tr style=\"background:#eee\"><th align=\"left\">Cliente</th><th align=\"left\">Contrato</th><th align=\"left\">Usuário</th><th align=\"left\">Ponto de acesso</th><th align=\"left\">Tipo</th></tr>\n    ${linhas || '<tr><td colspan=\"5\">Nenhum cliente corporativo ou ponto a ponto nesta GMUD.</td></tr>'}\n  </table>\n  ${p.link ? `<p style=\"margin-top:14px\"><a href=\"${esc(p.link)}\">Abrir a GMUD na plataforma</a></p>` : ''}\n  <p style=\"color:#888;font-size:12px\">A lista completa também segue em anexo (CSV). Enviado automaticamente pelo Monitoramento de Splitters.</p>\n</div>`;\n\nconst csv = '\\uFEFF' + String(p.csv ?? '');\nreturn [{\n  json: {\n    to: destinatarios.join(','),\n    subject: `[GMUD ${p.protocol}] ${rotulo}: lista de clientes impactados — ${p.titulo ?? ''}`.slice(0, 200),\n    html,\n    protocol: p.protocol,\n    tipo: p.tipo,\n    total: r.total ?? 0,\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(Buffer.from(csv, 'utf8'), `gmud-${p.protocol}-clientes.csv`, 'text/csv'),\n  },\n}];"
+      },
+      "id": "a1b2c3d4-0003-4a00-8000-000000000003",
+      "name": "03A - Montar E-mail ao COR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a1b2c3d4-0004-4a00-8000-000000000004",
+      "name": "04A - Enviar E-mail ao COR",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1110,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CREDENTIAL_ID_AQUI",
+          "name": "gmail_dev"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# AUT_OPERACAO_GMUD_LISTA_CLIENTES_COR\n\n**O que faz:** recebe do backend do Monitoramento de Splitters a lista de clientes impactados por uma GMUD (corporativos da abrangência + ponto a ponto/fibra apagada escolhidos) e envia por e-mail ao COR, com a tabela no corpo e o CSV anexo. É enviado ao liberar a GMUD, quando algo muda (atualização) e como lembrete antes da janela.\n\n**Gatilho:** webhook `POST /webhook/gmud-lista-cor` (evento `gmud_lista_cor`).\n\n**Dependências:**\n- MySQL: nenhum (o backend decide quando enviar e registra o envio nos eventos da GMUD)\n- Sheets: nenhuma\n- APIs: Gmail\n- Credenciais: `gmail_dev` (Gmail OAuth2)\n\n**Resposta:** o webhook responde só depois de enviar o e-mail; se falhar, responde erro e o backend tenta de novo no próximo ciclo.",
+        "height": 360,
+        "width": 900,
+        "color": 2
+      },
+      "id": "a1b2c3d4-0010-4a00-8000-000000000010",
+      "name": "Sticky Note - Cabeçalho",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        260,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Sub-fluxo A — Enviar lista de clientes ao COR\n\n**Início:** 01A - Receber Lista de Clientes da GMUD (webhook)\n**Fim:** 04A - Enviar E-mail ao COR (Gmail)\n**Objetivo:** validar o evento, montar o e-mail (tabela + CSV anexo) e enviá-lo aos destinatários cadastrados em Configurações da GMUD > COR.",
+        "height": 150,
+        "width": 900,
+        "color": 2
+      },
+      "id": "a1b2c3d4-0011-4a00-8000-000000000011",
+      "name": "Sticky Note - Sub-fluxo A",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        260,
+        130
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Configuração por ambiente\n\n- Credencial Gmail (`gmail_dev`): reselecionar após importar.\n- Backend: `N8N_GMUD_COR_LISTA_WEBHOOK_URL` = URL de produção deste webhook.\n- `catalogId`: trocar `AUT-XXXX` no node 02A.\n- Os destinatários vêm do payload (Configurações da GMUD > COR); nada fixo aqui.",
+        "height": 190,
+        "width": 330,
+        "color": 2
+      },
+      "id": "a1b2c3d4-0012-4a00-8000-000000000012",
+      "name": "Sticky Note - Configuração",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1190,
+        130
+      ]
+    }
+  ],
+  "connections": {
+    "01A - Receber Lista de Clientes da GMUD": {
+      "main": [
+        [
+          {
+            "node": "02A - Montar Contexto da Execução",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02A - Montar Contexto da Execução": {
+      "main": [
+        [
+          {
+            "node": "03A - Montar E-mail ao COR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03A - Montar E-mail ao COR": {
+      "main": [
+        [
+          {
+            "node": "04A - Enviar E-mail ao COR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "AUT_GLOBAL_ERR",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

@@ -10,6 +10,10 @@
 export const COMMITTEE_LIST_KEY = 'comite';
 export const COMMITTEE_ITEM_LABEL = 'Comitê';
 
+/** Destinatários da lista de clientes ao COR: mesma mecânica do Comitê (um item fixo + pessoas). */
+export const COR_LIST_KEY = 'cor';
+export const COR_ITEM_LABEL = 'COR';
+
 export const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase();
 
 /** `members`: [{ userEmail }]. */

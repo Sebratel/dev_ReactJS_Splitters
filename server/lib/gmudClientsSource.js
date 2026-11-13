@@ -11,11 +11,12 @@ const toPositiveInt = (v) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRede, rowMatchesEscopoRede }) {
+export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRotas, rowMatchesEscopoRotas, normalizeClientesSemSplitter = () => [] }) {
   const sql = `
     SELECT
       base."CONTRATO ID[CLIENTE]"::text    AS contrato,
       base."USUÁRIO[CLIENTE]"              AS pppoe,
+      base."NOME CLIENTE"                  AS nome,
       base."CORPORATIVO"                   AS corporativo,
       base."PONTO DE ACESSO CODE",
       base."PONTO DE ACESSO",
@@ -38,15 +39,19 @@ export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRede, 
       const site = text(gmud?.popSite);
       if (site === '') return { ok: false, reason: 'GMUD sem POP/Site: não há como localizar os clientes.' };
       try {
-        const escopo = normalizeEscopoRede(gmud?.categoriaData?.escopoRede);
+        const rotas = normalizeEscopoRotas(gmud?.categoriaData);
         const { rows } = await pool.query(sql, [site]);
-        const scoped = escopo ? rows.filter((row) => rowMatchesEscopoRede(row, escopo)) : rows;
+        const scoped = rotas.length > 0 ? rows.filter((row) => rowMatchesEscopoRotas(row, rotas)) : rows;
         const byContract = new Map();
         for (const r of scoped) {
           const contractId = toPositiveInt(r.contrato);
           const pppoe = text(r.pppoe);
           if (contractId === null || pppoe === '' || byContract.has(contractId)) continue;
-          byContract.set(contractId, { contractId, pppoe, corporate: r.corporativo === true });
+          byContract.set(contractId, { contractId, pppoe, corporate: r.corporativo === true, nome: text(r.nome), pontoAcesso: text(r['PONTO DE ACESSO']) });
+        }
+        // Clientes escolhidos à mão (ponto a ponto, fibra apagada): entram pelo contrato; PPPoE pode não existir.
+        for (const m of normalizeClientesSemSplitter(gmud?.categoriaData)) {
+          if (!byContract.has(m.contractId)) byContract.set(m.contractId, { contractId: m.contractId, pppoe: m.pppoe, corporate: true, nome: m.nome ?? '', pontoAcesso: '' });
         }
         return { ok: true, clients: [...byContract.values()] };
       } catch (error) {

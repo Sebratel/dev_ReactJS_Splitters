@@ -85,6 +85,7 @@ function Summary({ info }: { info: AreaApprovalInfo }) {
         <Row label="Janela de execução" value={janela} />
         <Row label="POP / Site" value={g.popSite} />
         <Row label="Abrangência na rede" value={g.escopoRede ?? ''} />
+        <Row label="Clientes ponto a ponto e fibra apagada" value={g.clientesManuais ?? ''} />
         <Row label="Solicitante" value={g.solicitante} />
       </dl>
       {g.descricao.trim() !== '' ? (
@@ -102,8 +103,8 @@ function Outcome({ outcome }: { outcome: AreaApprovalOutcome }) {
     return (
       <Notice tone="success" title="Aprovação registrada">
         {outcome.areasStatus === 'aprovada'
-          ? 'Obrigado. Todas as áreas aprovaram: a GMUD segue para a aprovação final do Comitê.'
-          : 'Obrigado. Quando todas as áreas aprovarem, a GMUD segue para a aprovação final do Comitê.'}
+          ? 'Obrigado. Todas as áreas aprovaram. A GMUD é liberada quando o Comitê também aprovar.'
+          : 'Obrigado. A GMUD é liberada quando todas as áreas e o Comitê aprovarem.'}
       </Notice>
     )
   }
@@ -226,14 +227,14 @@ export function GmudAreaApprovalPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {denying ? (
             <>
               <button
                 type="button"
                 disabled={decide.isPending || motivo.trim().length < 3}
                 onClick={() => decide.mutate('negada')}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-base font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50 sm:w-auto"
               >
                 {decide.isPending ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
                 Confirmar negativa
@@ -242,7 +243,7 @@ export function GmudAreaApprovalPage() {
                 type="button"
                 disabled={decide.isPending}
                 onClick={() => { setDenying(false); setMotivo('') }}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-on-surface-variant ring-1 ring-neutral-200 transition hover:bg-surface-container-low dark:ring-white/10"
+                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl px-4 py-2 text-base font-semibold text-on-surface-variant ring-1 ring-neutral-200 transition hover:bg-surface-container-low dark:ring-white/10 sm:w-auto"
               >
                 Voltar
               </button>
@@ -253,7 +254,7 @@ export function GmudAreaApprovalPage() {
                 type="button"
                 disabled={decide.isPending}
                 onClick={() => decide.mutate('aprovada')}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-bold text-white transition hover:bg-primary/90 disabled:opacity-60"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2 text-base font-bold text-neutral-900 transition hover:bg-primary/90 disabled:opacity-60 sm:w-auto"
               >
                 {decide.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                 Aprovar
@@ -262,7 +263,7 @@ export function GmudAreaApprovalPage() {
                 type="button"
                 disabled={decide.isPending}
                 onClick={() => setDenying(true)}
-                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-rose-700 ring-1 ring-rose-300 transition hover:bg-rose-50 dark:text-rose-200 dark:ring-rose-800/60 dark:hover:bg-rose-950/40"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-base font-semibold text-rose-700 ring-1 ring-rose-300 transition hover:bg-rose-50 dark:text-rose-200 dark:ring-rose-800/60 dark:hover:bg-rose-950/40 sm:w-auto"
               >
                 <XCircle size={14} /> Negar
               </button>

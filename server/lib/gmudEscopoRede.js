@@ -49,6 +49,41 @@ export function formatEscopoRede(raw) {
 }
 
 /**
+ * Rotas da GMUD. Novas GMUDs guardam `escopoRotas` (lista); as antigas guardam um único `escopoRede`
+ * (tratado como lista de uma rota). Lista vazia = site inteiro.
+ * @returns {ReturnType<typeof normalizeEscopoRede>[]}
+ */
+export function normalizeEscopoRotas(categoriaData) {
+  const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
+  const lista = Array.isArray(data.escopoRotas) ? data.escopoRotas : data.escopoRede ? [data.escopoRede] : [];
+  const seen = new Set();
+  const rotas = [];
+  for (const raw of lista) {
+    const rota = normalizeEscopoRede(raw);
+    if (!rota) continue;
+    const key = JSON.stringify(rota);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rotas.push(rota);
+  }
+  return rotas;
+}
+
+/** Uma linha por rota, separadas por "; ". Vazio quando não há afunilamento. */
+export function formatEscopoRotas(rotas) {
+  return (Array.isArray(rotas) ? rotas : [])
+    .map((r) => formatEscopoRede(r))
+    .filter((t) => t !== '')
+    .join('; ');
+}
+
+/** Sem rotas = site inteiro (tudo bate); com rotas, basta bater com uma delas. */
+export function rowMatchesEscopoRotas(row, rotas) {
+  if (!Array.isArray(rotas) || rotas.length === 0) return true;
+  return rotas.some((rota) => rowMatchesEscopoRede(row, rota));
+}
+
+/**
  * A linha de SPLITTERS_BASE_QUERY está dentro do afunilamento? Todos os níveis informados têm de bater
  * (AND); nível vazio não restringe. Slot/PON seguem a mesma regra da massiva (título do splitter,
  * com fallback nas colunas do SQL).

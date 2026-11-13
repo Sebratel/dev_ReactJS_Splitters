@@ -21,7 +21,7 @@ const DOT: Record<TimelineTone, string> = {
 export function CardTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <h3 className="flex items-center gap-2 text-sm font-bold text-on-surface">
-      <span className="text-primary">{icon}</span>
+      <span className="text-on-surface-variant">{icon}</span>
       {children}
     </h3>
   )
