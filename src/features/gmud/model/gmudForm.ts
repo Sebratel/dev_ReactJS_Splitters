@@ -311,25 +311,28 @@ function formatYmdBr(ymd: string): string {
 }
 
 /** Valida campos obrigatórios por categoria. Retorna rótulos dos campos faltando. */
-export function validateGmudForm(
+/** Pendência do formulário e a seção (título exato do cartão na tela) onde ela se resolve. */
+export type GmudPendencia = { section: string; message: string }
+
+export function validateGmudFormBySection(
   form: GmudFormState,
   siData?: GmudSistemasInternosData | null,
   seData?: GmudSistemasExternosData | null,
-): string[] {
-  const missing: string[] = []
-  const req = (ok: boolean, label: string) => { if (!ok) missing.push(label) }
+): GmudPendencia[] {
+  const missing: GmudPendencia[] = []
+  const req = (ok: boolean, message: string, section: string) => { if (!ok) missing.push({ section, message }) }
 
   // Campos comuns a todas as categorias
-  req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
-  req(form.tipo !== '', 'Tipo da GMUD')
-  req(form.titulo.trim() !== '', 'Título')
-  req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)')
-  req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)')
+  req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante', 'Identificação')
+  req(form.tipo !== '', 'Tipo da GMUD', 'Identificação')
+  req(form.titulo.trim() !== '', 'Título', 'Identificação')
+  req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)', 'Janela de mudança')
+  req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)', 'Janela de mudança')
 
   if (form.dataInicio !== '' && form.dataFim !== '') {
     const inicio = `${form.dataInicio} ${form.horaInicio || '00:00'}`
     const fim = `${form.dataFim} ${form.horaFim || '00:00'}`
-    req(fim > inicio, 'Fim da janela deve ser depois do início')
+    req(fim > inicio, 'Fim da janela deve ser depois do início', 'Janela de mudança')
   }
 
   if ((form.tipo === 'Programada' || form.tipo === GMUD_TIPO_PRE_APROVADA) && form.dataInicio !== '') {
@@ -337,34 +340,37 @@ export function validateGmudForm(
     req(
       form.dataInicio >= minimo,
       `Data de início da GMUD ${form.tipo}: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+      'Janela de mudança',
     )
   }
 
   if (form.tipo === GMUD_TIPO_PRE_APROVADA) {
-    req(form.categoria === 'rede_externa', 'GMUD Pré-aprovada só está disponível para Rede Externa')
+    req(form.categoria === 'rede_externa', 'GMUD Pré-aprovada só está disponível para Rede Externa', 'Identificação')
     req(
       parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) !== null,
       'Repetição: quantidade de 1 a 12 e, repetindo, intervalo de 1 a 365 dias',
+      'Identificação',
     )
   }
 
   if (form.categoria === 'rede_externa') {
     // Campos obrigatórios de Rede Externa (comportamento original preservado)
-    req(form.assunto !== '', 'Natureza da mudança')
-    req(form.descricao.trim() !== '', 'Descrição da atividade')
-    req(form.popSite.trim() !== '', 'POP/Site')
-    req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação')
-    req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado')
-    req(form.comunicaCliente !== '', 'Comunica cliente?')
-    req(form.impactoParada !== '', 'Impacto de parada?')
-    req(form.planoExecucao.trim() !== '', 'Plano de execução')
-    req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
+    req(form.assunto !== '', 'Natureza da mudança', 'Identificação')
+    req(form.descricao.trim() !== '', 'Descrição da atividade', 'Atividade')
+    req(form.popSite.trim() !== '', 'POP/Site', 'Atividade')
+    req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação', 'Atividade')
+    req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado', 'Ambiente afetado')
+    req(form.comunicaCliente !== '', 'Comunica cliente?', 'Impacto')
+    req(form.impactoParada !== '', 'Impacto de parada?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução', 'Execução')
+    req(form.riscoExecucao.trim() !== '', 'Risco durante a execução', 'Execução')
     req(
       Object.values(form.recursosAdministrativos).some((papel) => papel === 'executor' || papel === 'validador'),
       'Recursos administrativos (ao menos uma área como Executor ou Validador)',
+      'Recursos administrativos',
     )
-    req(form.planoRollback.trim() !== '', 'Plano de rollback')
-    req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback', 'Execução')
+    req(form.listaClientesCor !== '', 'Lista de clientes ao COR', 'Alinhamento')
   }
 
   if (form.categoria === 'sistemas_internos' && siData) {
@@ -372,14 +378,14 @@ export function validateGmudForm(
     const sistema = si.sistemaAfetado === 'Outro (especificar)'
       ? si.sistemaAfetadoOutro.trim()
       : si.sistemaAfetado.trim()
-    req(sistema !== '', 'Sistema afetado')
-    req(si.natureza !== '', 'Natureza da mudança')
-    req(si.ambiente !== '', 'Ambiente')
-    req(si.areasImpactadas.length > 0, 'Áreas impactadas (quem será avisado)')
-    req(form.descricao.trim() !== '', 'Objetivo / Descrição')
-    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
-    req(form.planoExecucao.trim() !== '', 'Plano de execução')
-    req(form.planoRollback.trim() !== '', 'Plano de rollback')
+    req(sistema !== '', 'Sistema afetado', 'Sistema')
+    req(si.natureza !== '', 'Natureza da mudança', 'Sistema')
+    req(si.ambiente !== '', 'Ambiente', 'Sistema')
+    req(si.areasImpactadas.length > 0, 'Áreas impactadas (quem será avisado)', 'Impacto')
+    req(form.descricao.trim() !== '', 'Objetivo / Descrição', 'Descrição')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução', 'Execução')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback', 'Execução')
   }
 
   if (form.categoria === 'sistemas_externos' && seData) {
@@ -387,15 +393,23 @@ export function validateGmudForm(
     const sistema = se.sistemaExterno === 'Outro (especificar)'
       ? se.sistemaExternoOutro.trim()
       : se.sistemaExterno.trim()
-    req(sistema !== '', 'Sistema externo')
-    req(se.natureza !== '', 'Natureza da mudança')
-    req(se.areasAfetadas.length > 0, 'Áreas afetadas (quem será avisado)')
-    req(form.descricao.trim() !== '', 'Mudança prevista')
-    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
-    req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução')
+    req(sistema !== '', 'Sistema externo', 'Sistema e fornecedor')
+    req(se.natureza !== '', 'Natureza da mudança', 'Sistema e fornecedor')
+    req(se.areasAfetadas.length > 0, 'Áreas afetadas (quem será avisado)', 'Impacto')
+    req(form.descricao.trim() !== '', 'Mudança prevista', 'Mudança prevista')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução', 'Contingência')
   }
 
   return missing
+}
+
+export function validateGmudForm(
+  form: GmudFormState,
+  siData?: GmudSistemasInternosData | null,
+  seData?: GmudSistemasExternosData | null,
+): string[] {
+  return validateGmudFormBySection(form, siData, seData).map((p) => p.message)
 }
 
 // ---------------------------------------------------------------------------

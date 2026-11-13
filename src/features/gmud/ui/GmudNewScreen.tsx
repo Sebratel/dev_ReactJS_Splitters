@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ClipboardList, Loader2, Zap } from 'lucide-react'
+import { Check, ChevronDown, ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -28,6 +28,7 @@ import {
   GMUD_TIPO_OPTIONS,
   GMUD_TIPO_PRE_APROVADA,
   validateGmudForm,
+  validateGmudFormBySection,
   minDataProgramada,
   type GmudCategoria,
   type GmudFormState,
@@ -48,6 +49,7 @@ import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
 import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
 import { emptyEscopoRede, hasEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
+import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
 import {
   buildGmudDescription,
   buildGmudTitle,
@@ -80,14 +82,72 @@ function sectionId(title: string): string {
   return 'gmud-sec-' + title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-function Section({ title, children, hint }: { title: string; children: React.ReactNode; hint?: string }) {
+/** Estado do acordeão do formulário: só uma seção fica aberta por vez; as outras mostram o status numa linha. */
+type FormAccordion = {
+  current: string
+  select: (title: string) => void
+  pending: Record<string, number>
+  summaries: Record<string, string>
+  next: (title: string) => string | null
+}
+const FormAccordionContext = createContext<FormAccordion | null>(null)
+
+function FormCard({ title, children, hint, grid = true }: { title: string; children: React.ReactNode; hint?: string; grid?: boolean }) {
+  const acc = useContext(FormAccordionContext)
+  const open = acc ? acc.current === title : true
+  const pend = acc?.pending[title] ?? 0
+  const summary = acc?.summaries[title] ?? ''
+  const next = acc?.next(title) ?? null
+  const optional = title.includes('(opcional)')
+  const bodyId = sectionId(title) + '-corpo'
   return (
-    <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section={title} id={sectionId(title)}>
-      <p className="mb-3 text-sm font-bold text-on-surface">{title}</p>
-      {hint ? <p className="mb-3 text-xs text-on-surface-variant">{hint}</p> : null}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
+    <div className={cn(CARD, 'scroll-mt-24 !p-0')} data-gmud-section={title} id={sectionId(title)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => acc?.select(open ? '' : title)}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5"
+      >
+        <span
+          className={cn(
+            'flex size-5 shrink-0 items-center justify-center rounded-full',
+            pend > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' : optional ? 'bg-surface-container-low text-on-surface-variant' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+          )}
+          aria-hidden
+        >
+          {pend > 0 ? <span className="text-[11px] font-bold">{pend}</span> : <Check size={12} strokeWidth={3} />}
+        </span>
+        <span className="text-sm font-bold text-on-surface">{title}</span>
+        {!open && summary !== '' ? <span className="min-w-0 flex-1 truncate text-xs text-on-surface-variant">{summary}</span> : <span className="flex-1" />}
+        {pend > 0 ? (
+          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+            {pend} pendência{pend === 1 ? '' : 's'}
+          </span>
+        ) : null}
+        <ChevronDown size={16} className={cn('shrink-0 text-on-surface-variant transition', open ? 'rotate-180' : '')} aria-hidden />
+      </button>
+      <div id={bodyId} hidden={!open} className="px-4 pb-4 sm:px-5 sm:pb-5">
+        {hint ? <p className="mb-3 text-xs text-on-surface-variant">{hint}</p> : null}
+        {grid ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div> : children}
+        {next ? (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => acc?.select(next)}
+              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/80 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
+            >
+              Próxima seção <ChevronDown size={13} aria-hidden />
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
+}
+
+function Section({ title, children, hint }: { title: string; children: React.ReactNode; hint?: string }) {
+  return <FormCard title={title} hint={hint}>{children}</FormCard>
 }
 
 function Field({ label, required, children, full }: { label: string; required?: boolean; children: React.ReactNode; full?: boolean }) {
@@ -323,16 +383,9 @@ function RecursosAdministrativosCard({
   const emUso = (area: string) => (form.recursosAdministrativos[area] ?? 'na') !== 'na' || destacar.includes(area)
   const visiveis = todas ? lista : lista.filter(emUso)
   const escondidas = lista.length - visiveis.length
-  const aprovam = lista.filter((a) => (form.recursosAdministrativos[a] ?? 'na') !== 'na').length
 
   return (
-    <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section="Recursos administrativos" id={sectionId('Recursos administrativos')}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-bold text-on-surface">Recursos administrativos</p>
-        <span className="rounded-full bg-surface-container-low px-2 py-0.5 text-[11px] font-semibold text-on-surface-variant">
-          {aprovam === 0 ? 'Nenhuma área aprova' : `${aprovam} área${aprovam === 1 ? '' : 's'} aprova${aprovam === 1 ? '' : 'm'}`}
-        </span>
-      </div>
+    <FormCard title="Recursos administrativos" grid={false}>
       <p className="mb-3 mt-0.5 text-xs text-on-surface-variant">
         {form.tipo === 'Pré-aprovada' || form.tipo === 'Emergencial'
           ? `${form.tipo === 'Emergencial' ? 'Emergencial vai direto ao Comitê' : 'Pré-aprovada não passa por aprovação'}: as áreas marcadas como Executor, Validador ou Observador só são avisadas por e-mail.${complemento}`
@@ -382,7 +435,7 @@ function RecursosAdministrativosCard({
           {todas ? 'Mostrar só as áreas em uso' : `Mostrar todas as áreas (+${escondidas} em N/A)`}
         </button>
       ) : null}
-    </div>
+    </FormCard>
   )
 }
 
@@ -400,48 +453,17 @@ function groupAmbienteOptions(options: readonly string[]): Array<{ title: string
   return groups.filter((g) => g.items.length > 0)
 }
 
-/** Seleção do ambiente afetado: cartões agrupados, com marca de seleção bem visível. */
+/** Seleção do ambiente afetado: uma linha com as etiquetas escolhidas; a lista agrupada abre sobre a tela. */
 function AmbienteAfetadoPicker({ options, selected, onToggle }: { options: readonly string[]; selected: string[]; onToggle: (value: string) => void }) {
   const groups = groupAmbienteOptions(options)
   return (
-    <div className="space-y-4" role="group" aria-label="Ambiente afetado">
-      {groups.map((g) => (
-        <div key={g.title} className="min-w-0 space-y-2">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">{g.title}</p>
-          <div className="grid gap-2 sm:grid-cols-2">
-          {g.items.map((it) => {
-            const ativo = selected.includes(it.value)
-            return (
-              <button
-                key={it.value}
-                type="button"
-                role="checkbox"
-                aria-checked={ativo}
-                onClick={() => onToggle(it.value)}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  ativo
-                    ? 'border-primary bg-primary/10 font-semibold text-on-surface'
-                    : 'border-neutral-200/90 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low dark:border-white/10',
-                )}
-              >
-                <span
-                  className={cn(
-                    'flex size-5 shrink-0 items-center justify-center rounded-md border transition',
-                    ativo ? 'border-primary bg-primary text-neutral-900' : 'border-neutral-300 bg-surface-container-lowest dark:border-white/25',
-                  )}
-                  aria-hidden
-                >
-                  {ativo ? <Check size={14} strokeWidth={3} /> : null}
-                </span>
-                <span className="min-w-0 break-words">{it.label}</span>
-              </button>
-            )
-          })}
-          </div>
-        </div>
-      ))}
-    </div>
+    <GmudDropdownMultiSelect
+      options={groups.flatMap((g) => g.items.map((it) => ({ value: it.value, label: it.label, group: g.title })))}
+      selected={selected}
+      onToggle={onToggle}
+      placeholder="Selecionar ambientes…"
+      ariaLabel="Ambiente afetado"
+    />
   )
 }
 
@@ -487,11 +509,8 @@ function RedeExternaFields({
         <GmudEscopoRedeField popSite={form.popSite} value={form.escopoRede} onChange={(v) => set('escopoRede', v)} />
       </Section>
 
-      <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section="Ambiente afetado" id={sectionId('Ambiente afetado')}>
-        <p className="mb-1 text-sm font-bold text-on-surface">Ambiente afetado *</p>
-        <p className="mb-3 text-xs text-on-surface-variant">
-          {form.ambienteAfetado.length === 0 ? 'Marque ao menos um.' : `${form.ambienteAfetado.length} selecionado${form.ambienteAfetado.length === 1 ? '' : 's'}`}
-        </p>
+      <FormCard title="Ambiente afetado" grid={false}>
+        <p className="text-xs font-semibold text-on-surface-variant">Ambiente afetado *</p>
         <AmbienteAfetadoPicker options={GMUD_AMBIENTE_OPTIONS} selected={form.ambienteAfetado} onToggle={toggleAmbiente} />
         <label className="mt-3 block">
           <span className={LABEL}>Outro (especificar)</span>
@@ -502,7 +521,7 @@ function RedeExternaFields({
             placeholder="Se o ambiente não estiver na lista acima"
           />
         </label>
-      </div>
+      </FormCard>
 
       <Section title="Impacto">
         <Field label="Comunica cliente?" required>
@@ -619,6 +638,7 @@ function SistemasInternosFields({
       <Section title="Impacto">
         <Field label="Áreas impactadas" required full>
           <GmudMultiSelect
+            label="Áreas"
             options={areasOptions}
             value={si.areasImpactadas}
             onChange={(v) => s('areasImpactadas', v)}
@@ -722,6 +742,7 @@ function SistemasExternosFields({
       <Section title="Impacto">
         <Field label="Áreas afetadas" required full>
           <GmudMultiSelect
+            label="Áreas"
             options={areasOptions}
             value={se.areasAfetadas}
             onChange={(v) => s('areasAfetadas', v)}
@@ -906,6 +927,8 @@ export function GmudNewScreen() {
       form.categoria === 'sistemas_externos' ? seData : null,
     )
     if (miss.length > 0) {
+      const primeira = pendenciasDetalhe[0]?.section
+      if (primeira) irParaSecao(primeira)
       showFeedbackDialog({
         variant: 'warning',
         title: 'Corrija antes de enviar',
@@ -918,13 +941,45 @@ export function GmudNewScreen() {
   }
 
   const canSubmit = !mutation.isPending
-  const pendencias = validateGmudForm(
+  const pendenciasDetalhe = validateGmudFormBySection(
     form,
     form.categoria === 'sistemas_internos' ? siData : null,
     form.categoria === 'sistemas_externos' ? seData : null,
   )
+  const pendencias = pendenciasDetalhe.map((p) => p.message)
+  const pendentesPorSecao: Record<string, number> = {}
+  for (const p of pendenciasDetalhe) pendentesPorSecao[p.section] = (pendentesPorSecao[p.section] ?? 0) + 1
   const formRef = useRef<HTMLDivElement>(null)
   const [secoes, setSecoes] = useState<string[]>([])
+  const [atual, setAtual] = useState('Identificação')
+  const secaoAtual = secoes.length === 0 || secoes.includes(atual) || atual === '' ? atual : (secoes[0] ?? '')
+  const irParaSecao = (titulo: string) => {
+    setAtual(titulo)
+    // Espera a seção abrir (o resto fecha) antes de rolar até ela.
+    window.setTimeout(() => document.getElementById(sectionId(titulo))?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
+  const resumos: Record<string, string> = {
+    'Identificação': [form.tipo, form.titulo].filter((x) => x.trim() !== '').join(' · '),
+    'Ambiente afetado': collectAmbienteAfetado(form).join(', '),
+    'Janela de mudança':
+      form.dataInicio !== ''
+        ? `${form.dataInicio.split('-').reverse().slice(0, 2).join('/')} ${form.horaInicio} → ${form.dataFim.split('-').reverse().slice(0, 2).join('/')} ${form.horaFim}`.trim()
+        : '',
+    'Recursos administrativos': (() => {
+      const n = Object.values(form.recursosAdministrativos).filter((p) => p !== 'na').length
+      return n === 0 ? '' : `${n} área${n === 1 ? '' : 's'} aprova${n === 1 ? '' : 'm'}`
+    })(),
+  }
+  const acordeao: FormAccordion = {
+    current: secaoAtual,
+    select: setAtual,
+    pending: pendentesPorSecao,
+    summaries: resumos,
+    next: (titulo) => {
+      const i = secoes.indexOf(titulo)
+      return i >= 0 && i < secoes.length - 1 ? (secoes[i + 1] ?? null) : null
+    },
+  }
   useEffect(() => {
     const els = formRef.current?.querySelectorAll<HTMLElement>('[data-gmud-section]')
     const titulos = Array.from(els ?? []).map((e) => e.dataset.gmudSection ?? '').filter((t) => t !== '')
@@ -984,6 +1039,7 @@ export function GmudNewScreen() {
           if (canSubmit) handleSubmit()
         }}
       >
+        <FormAccordionContext.Provider value={acordeao}>
         <div className="min-w-0 space-y-4" ref={formRef}>
         {/* Campos comuns — Identificação + Solicitante */}
         <CamposComuns form={form} set={set} categoria={form.categoria} />
@@ -1041,6 +1097,7 @@ export function GmudNewScreen() {
         {/* Observações — comum a todas as categorias */}
         <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
         </div>
+        </FormAccordionContext.Provider>
 
         {/* Coluna lateral: pré-visualização + envio (no celular fica abaixo do formulário) */}
         <aside className="min-w-0 space-y-4 lg:sticky lg:top-20">
@@ -1060,8 +1117,13 @@ export function GmudNewScreen() {
           </div>
           {pendencias.length > 0 ? (
             <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-on-surface-variant">
-              {pendencias.map((m) => (
-                <li key={m} className="flex gap-1.5"><span aria-hidden>•</span><span>{m}</span></li>
+              {pendenciasDetalhe.map((p) => (
+                <li key={p.message}>
+                  <button type="button" onClick={() => irParaSecao(p.section)} className="flex w-full gap-1.5 text-left hover:text-on-surface">
+                    <span aria-hidden>•</span>
+                    <span>{p.message}</span>
+                  </button>
+                </li>
               ))}
             </ul>
           ) : null}
@@ -1073,7 +1135,7 @@ export function GmudNewScreen() {
                   href={`#${sectionId(t)}`}
                   onClick={(e) => {
                     e.preventDefault()
-                    document.getElementById(sectionId(t))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    irParaSecao(t)
                   }}
                   className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant ring-1 ring-neutral-200/80 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
                 >
