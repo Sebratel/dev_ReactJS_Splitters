@@ -22,23 +22,29 @@ function fmtJanela(form: GmudFormState): string {
   const fim = form.dataFim
     ? `${fmtDate(form.dataFim)}${form.horaFim ? ` ${form.horaFim}` : ''}`
     : '-'
-  return `${ini}  ->  ${fim}`
+  return `${ini} → ${fim}`
 }
 
-function section(out: string[], title: string, value: string) {
+/**
+ * Bloco com título: linha em branco, "EMOJI TÍTULO" e o texto. Some quando o texto está vazio.
+ * O relato é texto puro (vai para o protocolo do Elleven); o emoji só marca a seção.
+ */
+function section(out: string[], emoji: string, title: string, value: string) {
   const v = (value ?? '').trim()
   if (v === '') return
   out.push('')
-  out.push(`>> ${title.toUpperCase()}`)
+  out.push(`${emoji} ${title.toUpperCase()}`)
   out.push(v)
 }
 
+/** Linha "rótulo: valor" dos detalhes; some quando vazia. */
 function field(out: string[], label: string, value: string) {
   const v = (value ?? '').trim()
   if (v !== '') out.push(`${label}: ${v}`)
 }
 
-const SEP = '----------------------------------------'
+const SEP = '──────────────────────────'
+const SEP_DETALHES = '──────── DETALHES ────────'
 
 /** Título padronizado: "GMUD - {Tipo} - {Contexto} - {Título}". */
 export function buildGmudTitle(form: GmudFormState, siData?: GmudSistemasInternosData | null, seData?: GmudSistemasExternosData | null): string {
@@ -64,8 +70,39 @@ export function buildGmudTitle(form: GmudFormState, siData?: GmudSistemasInterno
 }
 
 // ---------------------------------------------------------------------------
-// Máscara — Rede Externa (comportamento original preservado)
+// Peças comuns do relato
 // ---------------------------------------------------------------------------
+
+/** Primeira linha: "🛠️ GMUD {TIPO} · {contexto}". */
+function tituloRelato(form: GmudFormState, contexto: string): string {
+  const tipo = form.tipo.trim() !== '' ? ` ${form.tipo.trim().toUpperCase()}` : ''
+  const ctx = contexto.trim() !== '' ? ` · ${contexto.trim()}` : ''
+  return `🛠️ GMUD${tipo}${ctx}`
+}
+
+/** Impacto em destaque: verde sem parada, vermelho com parada; some se ainda não respondido. */
+function linhaImpacto(form: GmudFormState): string | null {
+  if (form.impactoParada === 'Sim') return '🔴 Impacto: COM PARADA DE SERVIÇO'
+  if (form.impactoParada === 'Não') return '🟢 Impacto: SEM PARADA DE SERVIÇO'
+  return null
+}
+
+/** Resumo do topo (quando, impacto e onde), para quem só passa o olho. */
+function pushResumo(out: string[], form: GmudFormState, onde: string, ondeEmoji = '📍', ondeLabel = 'Onde') {
+  out.push(`🕐 Quando: ${fmtJanela(form)}`)
+  const impacto = linhaImpacto(form)
+  if (impacto) out.push(impacto)
+  const o = onde.trim()
+  if (o !== '') {
+    const partes = o.split('; ').filter((p) => p.trim() !== '')
+    if (partes.length > 1) {
+      out.push(`${ondeEmoji} ${ondeLabel}:`)
+      partes.forEach((p) => out.push(`   • ${p}`))
+    } else {
+      out.push(`${ondeEmoji} ${ondeLabel}: ${o}`)
+    }
+  }
+}
 
 /** Matriz "Recursos administrativos" (Executor/Validador/Observador); vale para as 3 categorias. */
 function pushRecursosAdministrativos(out: string[], form: GmudFormState) {
@@ -73,27 +110,42 @@ function pushRecursosAdministrativos(out: string[], form: GmudFormState) {
     .filter(([, papel]) => papel && papel !== 'na')
     .map(([area, papel]) => {
       const label = GMUD_RECURSO_PAPEIS.find((p) => p.value === papel)?.label ?? papel
-      return `${area}: ${label}`
+      return `${area} → ${label}`
     })
   if (recursos.length > 0) {
     out.push('')
-    out.push('>> RECURSOS ADMINISTRATIVOS')
-    out.push(recursos.join('  |  '))
+    out.push('👥 RECURSOS ADMINISTRATIVOS')
+    recursos.forEach((r) => out.push(r))
   }
 }
+
+function pushRodape(out: string[], form: GmudFormState) {
+  out.push('')
+  out.push(SEP)
+  const solicNome = form.solicitanteNome.trim()
+  const solicEmail = form.solicitanteEmail.trim()
+  if (solicNome !== '' || solicEmail !== '') {
+    const email = solicEmail !== '' ? ` (${solicEmail})` : ''
+    const area = form.areaSolicitante.trim() !== '' ? ` · ${form.areaSolicitante.trim()}` : ''
+    out.push(`👤 Solicitante: ${solicNome}${email}${area}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Relato — Rede Externa
+// ---------------------------------------------------------------------------
 
 function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   const out: string[] = []
 
-  out.push(`GESTÃO DE MUDANÇA DE REDE (GMUD)${form.tipo.trim() ? ` - ${form.tipo.trim()}` : ''}`)
-  out.push(SEP)
+  out.push(tituloRelato(form, form.popSite))
+  pushResumo(out, form, formatEscopoRotas(form.escopoRotas))
+
+  out.push('')
+  out.push(SEP_DETALHES)
   field(out, 'Assunto', form.assunto)
-  field(out, 'POP/Site', form.popSite)
-  field(out, 'Abrangência na rede', formatEscopoRotas(form.escopoRotas))
-  field(out, 'Janela de mudança', fmtJanela(form))
   field(out, 'Comunica cliente', form.comunicaCliente)
   field(out, 'Clientes ponto a ponto e fibra apagada', composeClientesTexto(form.clientesSemSplitter, form.clientesManuais))
-  field(out, 'Impacto de parada do serviço', form.impactoParada)
   if (form.impactoParada === 'Sim') {
     field(out, 'Indisponibilidade', form.tipoIndisponibilidade)
     field(out, 'Duração estimada', form.duracaoEstimada)
@@ -101,126 +153,85 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   const amb = collectAmbienteAfetado(form)
   if (amb.length > 0) field(out, 'Ambiente afetado', amb.join('; '))
 
-  section(out, 'Descrição da atividade', form.descricao)
-  section(out, 'Plano de execução', form.planoExecucao)
-  section(out, 'Plano de rollback (retorno)', form.planoRollback)
-  section(out, 'Observações', form.observacoes)
+  section(out, '📝', 'Descrição', form.descricao)
+  section(out, '⚙️', 'Execução', form.planoExecucao)
+  section(out, '↩️', 'Rollback', form.planoRollback)
 
   const riscos: string[] = []
   if (form.riscoNaoImplementacao.trim() !== '')
-    riscos.push(`Não implementação: ${form.riscoNaoImplementacao.trim()}`)
+    riscos.push(`Se não for feita: ${form.riscoNaoImplementacao.trim()}`)
   if (form.riscoExecucao.trim() !== '')
     riscos.push(`Durante a execução: ${form.riscoExecucao.trim()}`)
   if (riscos.length > 0) {
     out.push('')
-    out.push('>> RISCOS')
+    out.push('⚠️ RISCOS')
     riscos.forEach((r) => out.push(r))
   }
 
   pushRecursosAdministrativos(out, form)
-
-  out.push('')
-  out.push(SEP)
-  field(out, 'Lista de clientes impactados enviada ao COR', form.listaClientesCor)
-  const solicNome = form.solicitanteNome.trim()
-  const solicEmail = form.solicitanteEmail.trim()
-  if (solicNome !== '' || solicEmail !== '') {
-    const email = solicEmail !== '' ? ` (${solicEmail})` : ''
-    const area = form.areaSolicitante.trim() !== '' ? ` - Área: ${form.areaSolicitante.trim()}` : ''
-    out.push(`Solicitante: ${solicNome}${email}${area}`)
-  }
+  section(out, '💬', 'Observações', form.observacoes)
+  pushRodape(out, form)
 
   return out.join('\n')
 }
 
 // ---------------------------------------------------------------------------
-// Máscara — Sistemas Internos
+// Relato — Sistemas Internos
 // ---------------------------------------------------------------------------
 
 function buildGmudDescriptionSistemasInternos(form: GmudFormState, si: GmudSistemasInternosData): string {
   const out: string[] = []
   const sistema = si.sistemaAfetado === 'Outro (especificar)' ? si.sistemaAfetadoOutro : si.sistemaAfetado
 
-  out.push(`GESTÃO DE MUDANÇA — SISTEMAS INTERNOS${form.tipo.trim() ? ` (${form.tipo.trim()})` : ''}`)
-  out.push(SEP)
-  field(out, 'Sistema afetado', sistema)
-  field(out, 'Ambiente', si.ambiente)
-  field(out, 'Natureza da mudança', si.natureza)
-  field(out, 'Janela de execução', fmtJanela(form))
-
-  section(out, 'Objetivo / Descrição', form.descricao)
-
-  const impactoLines: string[] = []
-  if (si.areasImpactadas.length > 0) impactoLines.push(`Áreas impactadas: ${si.areasImpactadas.join(', ')}`)
-  if (form.impactoParada) impactoLines.push(`Haverá indisponibilidade: ${form.impactoParada}`)
-  if (si.tipoIndisponibilidade && form.impactoParada === 'Sim') impactoLines.push(`Tipo: ${si.tipoIndisponibilidade}`)
-  if (si.duracaoEstimada.trim()) impactoLines.push(`Duração estimada: ${si.duracaoEstimada.trim()}`)
-  if (impactoLines.length > 0) {
-    out.push('')
-    out.push('>> IMPACTO')
-    impactoLines.forEach((l) => out.push(l))
-  }
-
-  section(out, 'Plano de execução', form.planoExecucao)
-  section(out, 'Plano de rollback', form.planoRollback)
-  section(out, 'Observações', form.observacoes)
-  pushRecursosAdministrativos(out, form)
+  out.push(tituloRelato(form, 'SISTEMAS INTERNOS'))
+  pushResumo(out, form, sistema, '💻', 'Sistema')
 
   out.push('')
-  out.push(SEP)
-  const solicNome = form.solicitanteNome.trim()
-  const solicEmail = form.solicitanteEmail.trim()
-  if (solicNome !== '' || solicEmail !== '') {
-    const email = solicEmail !== '' ? ` (${solicEmail})` : ''
-    const area = form.areaSolicitante.trim() !== '' ? ` - Área: ${form.areaSolicitante.trim()}` : ''
-    out.push(`Solicitante: ${solicNome}${email}${area}`)
-  }
+  out.push(SEP_DETALHES)
+  field(out, 'Assunto', form.assunto)
+  field(out, 'Ambiente', si.ambiente)
+  field(out, 'Natureza da mudança', si.natureza)
+  if (si.areasImpactadas.length > 0) field(out, 'Áreas impactadas', si.areasImpactadas.join(', '))
+  if (si.tipoIndisponibilidade && form.impactoParada === 'Sim') field(out, 'Tipo de indisponibilidade', si.tipoIndisponibilidade)
+  if (si.duracaoEstimada.trim()) field(out, 'Duração estimada', si.duracaoEstimada)
+
+  section(out, '📝', 'Objetivo / Descrição', form.descricao)
+  section(out, '⚙️', 'Execução', form.planoExecucao)
+  section(out, '↩️', 'Rollback', form.planoRollback)
+  pushRecursosAdministrativos(out, form)
+  section(out, '💬', 'Observações', form.observacoes)
+  pushRodape(out, form)
 
   return out.join('\n')
 }
 
 // ---------------------------------------------------------------------------
-// Máscara — Sistemas Externos
+// Relato — Sistemas Externos
 // ---------------------------------------------------------------------------
 
 function buildGmudDescriptionSistemasExternos(form: GmudFormState, se: GmudSistemasExternosData): string {
   const out: string[] = []
   const sistema = se.sistemaExterno === 'Outro (especificar)' ? se.sistemaExternoOutro : se.sistemaExterno
+  const fornecedor = se.fornecedor.trim()
+  const sistemaEFornecedor = fornecedor !== '' ? `${sistema.trim()} (${fornecedor})` : sistema
 
-  out.push(`GESTÃO DE MUDANÇA — SISTEMAS EXTERNOS${form.tipo.trim() ? ` (${form.tipo.trim()})` : ''}`)
-  out.push(SEP)
-  field(out, 'Sistema externo', sistema)
-  field(out, 'Fornecedor', se.fornecedor)
-  field(out, 'Natureza da mudança', se.natureza)
-  field(out, 'Janela de execução', fmtJanela(form))
-  if (se.chamadoFornecedor.trim()) field(out, 'Chamado no fornecedor', se.chamadoFornecedor)
-
-  section(out, 'Mudança prevista', form.descricao)
-
-  const impactoLines: string[] = []
-  if (se.areasAfetadas.length > 0) impactoLines.push(`Áreas afetadas: ${se.areasAfetadas.join(', ')}`)
-  if (form.impactoParada) impactoLines.push(`Haverá indisponibilidade: ${form.impactoParada}`)
-  if (se.tipoIndisponibilidade && form.impactoParada === 'Sim') impactoLines.push(`Tipo: ${se.tipoIndisponibilidade}`)
-  if (se.duracaoEstimada.trim()) impactoLines.push(`Duração estimada: ${se.duracaoEstimada.trim()}`)
-  if (impactoLines.length > 0) {
-    out.push('')
-    out.push('>> IMPACTO')
-    impactoLines.forEach((l) => out.push(l))
-  }
-
-  section(out, 'Plano de contingência/execução', form.planoExecucao)
-  section(out, 'Observações', form.observacoes)
-  pushRecursosAdministrativos(out, form)
+  out.push(tituloRelato(form, 'SISTEMAS EXTERNOS'))
+  pushResumo(out, form, sistemaEFornecedor, '🌐', 'Sistema')
 
   out.push('')
-  out.push(SEP)
-  const solicNome = form.solicitanteNome.trim()
-  const solicEmail = form.solicitanteEmail.trim()
-  if (solicNome !== '' || solicEmail !== '') {
-    const email = solicEmail !== '' ? ` (${solicEmail})` : ''
-    const area = form.areaSolicitante.trim() !== '' ? ` - Área: ${form.areaSolicitante.trim()}` : ''
-    out.push(`Solicitante: ${solicNome}${email}${area}`)
-  }
+  out.push(SEP_DETALHES)
+  field(out, 'Assunto', form.assunto)
+  field(out, 'Natureza da mudança', se.natureza)
+  if (se.chamadoFornecedor.trim()) field(out, 'Chamado no fornecedor', se.chamadoFornecedor)
+  if (se.areasAfetadas.length > 0) field(out, 'Áreas afetadas', se.areasAfetadas.join(', '))
+  if (se.tipoIndisponibilidade && form.impactoParada === 'Sim') field(out, 'Tipo de indisponibilidade', se.tipoIndisponibilidade)
+  if (se.duracaoEstimada.trim()) field(out, 'Duração estimada', se.duracaoEstimada)
+
+  section(out, '📝', 'Mudança prevista', form.descricao)
+  section(out, '⚙️', 'Plano de contingência/execução', form.planoExecucao)
+  pushRecursosAdministrativos(out, form)
+  section(out, '💬', 'Observações', form.observacoes)
+  pushRodape(out, form)
 
   return out.join('\n')
 }
@@ -231,8 +242,8 @@ function buildGmudDescriptionSistemasExternos(form: GmudFormState, se: GmudSiste
 
 /**
  * Gera a descrição estruturada do protocolo no Elleven, adaptada à categoria da GMUD.
- * Para Rede Externa: comportamento original preservado (retrocompat total).
- * Para Sistemas Internos/Externos: máscara específica.
+ * Formato: resumo no topo (quando, impacto, onde), detalhes e seções com um emoji por bloco.
+ * É texto puro; nada no sistema lê esse texto de volta (os dados vêm do cadastro estruturado).
  */
 export function buildGmudDescription(
   form: GmudFormState,
