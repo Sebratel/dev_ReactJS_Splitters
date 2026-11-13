@@ -209,12 +209,12 @@ function CamposComuns({
                 className={cn(
                   'rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50',
                   ativo
-                    ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                    ? 'border-primary bg-primary shadow-sm ring-1 ring-primary'
                     : 'border-neutral-200/80 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/10',
                 )}
               >
-                <span className="block text-sm font-semibold text-on-surface">{o}</span>
-                <span className="mt-0.5 block text-[11px] text-on-surface-variant">
+                <span className={cn('block text-sm font-semibold', ativo ? 'text-neutral-900' : 'text-on-surface')}>{o}</span>
+                <span className={cn('mt-0.5 block text-[11px]', ativo ? 'text-neutral-800' : 'text-on-surface-variant')}>
                   {bloqueada ? 'Só para Rede Externa' : (TIPO_DESCRICAO[o] ?? '')}
                 </span>
               </button>
@@ -359,7 +359,7 @@ function RecursosAdministrativosCard({
                       atual === p.value
                         ? p.value === 'na'
                           ? 'bg-surface-container-lowest text-on-surface shadow-sm ring-1 ring-neutral-300 dark:ring-white/20'
-                          : 'bg-primary/25 text-on-surface shadow-sm ring-1 ring-primary'
+                          : 'bg-primary text-neutral-900 shadow-sm ring-1 ring-primary'
                         : 'text-on-surface-variant hover:text-on-surface',
                     )}
                   >
@@ -1016,12 +1016,12 @@ export function GmudNewScreen() {
               className={cn(
                 'rounded-lg border px-4 py-3 text-left text-sm font-semibold transition',
                 form.categoria === cat
-                  ? 'border-primary bg-primary/15 text-on-surface shadow-sm ring-1 ring-primary'
+                  ? 'border-primary bg-primary text-neutral-900 shadow-sm ring-1 ring-primary'
                   : 'border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
               )}
             >
               {GMUD_CATEGORIA_LABEL[cat]}
-              <span className="mt-1 block text-[11px] font-normal opacity-80">
+              <span className={cn('mt-1 block text-[11px] font-normal', form.categoria === cat ? 'text-neutral-800' : 'opacity-80')}>
                 {cat === 'rede_externa' && 'Infraestrutura, OLTs, backbone, sites'}
                 {cat === 'sistemas_internos' && 'Hub Apps, plataformas, sistemas Sebratel'}
                 {cat === 'sistemas_externos' && 'Voalle, GeoGrid, Matrix, fornecedores'}

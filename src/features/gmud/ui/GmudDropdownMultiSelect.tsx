@@ -63,13 +63,13 @@ export function GmudDropdownMultiSelect({
           {selected.map((v) => (
             <span
               key={v}
-              className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary/20 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-on-surface ring-1 ring-primary/60"
+              className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary py-0.5 pl-2.5 pr-1 text-xs font-semibold text-neutral-900 ring-1 ring-primary"
             >
               <span className="truncate">{v}</span>
               <button
                 type="button"
                 onClick={() => onToggle(v)}
-                className="inline-flex size-4 items-center justify-center rounded-full hover:bg-primary/30"
+                className="inline-flex size-4 items-center justify-center rounded-full hover:bg-neutral-900/15"
                 aria-label={`Remover ${v}`}
               >
                 <X size={11} aria-hidden />

@@ -18,7 +18,7 @@ const SELECT =
   'mt-1 w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30 disabled:opacity-50'
 
 const CHIP_OFF = 'border-neutral-300 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low dark:border-white/15'
-const CHIP_ON = 'border-primary bg-primary/20 font-semibold text-on-surface'
+const CHIP_ON = 'border-primary bg-primary font-semibold text-neutral-900'
 
 function Chip({ on, onClick, children, className }: { on: boolean; onClick: () => void; children: React.ReactNode; className?: string }) {
   return (
@@ -144,16 +144,16 @@ export function GmudEscopoRedeField({
           <>
             <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-on-surface-variant" aria-label="Caminho da rota">
               <span>Caminho:</span>
-              <span className="rounded-full border border-primary bg-primary/20 px-2.5 py-0.5 font-semibold text-on-surface">{editor.apTitle}</span>
+              <span className="rounded-full border border-primary bg-primary px-2.5 py-0.5 font-semibold text-neutral-900">{editor.apTitle}</span>
               <ChevronRight size={12} aria-hidden />
-              <span className="rounded-full border border-primary bg-primary/20 px-2.5 py-0.5 font-semibold text-on-surface">{caminhoSlot}</span>
+              <span className="rounded-full border border-primary bg-primary px-2.5 py-0.5 font-semibold text-neutral-900">{caminhoSlot}</span>
               {caminhoPon !== '' ? (
                 <>
                   <ChevronRight size={12} aria-hidden />
                   <span
                     className={cn(
                       'rounded-full border px-2.5 py-0.5',
-                      editor.ports.length > 0 ? 'border-primary bg-primary/20 font-semibold text-on-surface' : 'border-neutral-300 dark:border-white/15',
+                      editor.ports.length > 0 ? 'border-primary bg-primary font-semibold text-neutral-900' : 'border-neutral-300 dark:border-white/15',
                     )}
                   >
                     {caminhoPon}
