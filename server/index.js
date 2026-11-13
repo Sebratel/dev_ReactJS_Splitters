@@ -25,6 +25,7 @@ import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
 import { composeClientesTexto, normalizeClientesSemSplitter } from './lib/gmudClientesSemSplitter.js';
 import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
+import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
@@ -132,6 +133,10 @@ import {
   addTeamApprover,
   removeTeamApprover,
   resolveAreasWithApprovers,
+  ensureGmudCorItem,
+  listGmudCorRecipients,
+  listGmudsForCorLista,
+  getLatestGmudEventsByTypes,
   createAreaApprovals,
   getAreaApprovals,
   lookupApprovalToken,
@@ -5995,6 +6000,24 @@ function getEventSuppressedStore() {
   return eventSuppressedStore;
 }
 
+// ─── Lista de clientes ao COR (corporativos + ponto a ponto/fibra apagada), por e-mail via N8N ─────────────────
+// Desligada por padrão (GMUD_COR_LISTA_ENABLED=true liga; começa em simulação, GMUD_COR_LISTA_DRY_RUN=false envia).
+let gmudCorListaService = null;
+function getGmudCorLista() {
+  if (gmudCorListaService) return gmudCorListaService;
+  const { clientsSource } = getGmudClientSync();
+  gmudCorListaService = createGmudCorListaService({
+    gmudSource: { listCandidates: (nowNaive) => listGmudsForCorLista(nowNaive) },
+    eventsSource: { latestByTypes: (protocols, types) => getLatestGmudEventsByTypes(protocols, types), log: (event) => logGmudEvent(event) },
+    clientsSource,
+    recipientsSource: { list: () => listGmudCorRecipients() },
+    sender: createCorListaSender(),
+    env: process.env,
+    logger,
+  });
+  return gmudCorListaService;
+}
+
 let gmudClientSyncParts = null;
 function getGmudClientSync() {
   if (gmudClientSyncParts) return gmudClientSyncParts;
@@ -6197,6 +6220,35 @@ app.get('/api/gmud/:protocol/clientes-impactados', async (req, res) => {
 });
 
 // Estado do job: configuração, última execução, erros e quantos clientes de GMUD estão ativos.
+app.get('/api/gmud/cor-lista/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    return res.json({ success: true, data: await getGmudCorLista().getStatus() });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o envio da lista ao COR.'),
+    });
+  }
+});
+
+// Cria (sob demanda) o item fixo "COR" da lista de destinatários; as pessoas entram por /api/gmud/team-approvers.
+app.post('/api/gmud/cor/item', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await ensureGmudCorItem(createdBy);
+    return res.status(result.created ? 201 : 200).json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao criar a lista do COR.'),
+    });
+  }
+});
+
 app.get('/api/gmud/clientes-sync/status', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
@@ -8366,6 +8418,8 @@ async function startServer() {
     const { service, store, gateway } = getGmudClientSync();
     startGmudClientSyncScheduler({ service, store, gateway, env: process.env, logger });
   }
+
+  startGmudCorListaScheduler({ service: getGmudCorLista(), env: process.env, logger });
 
   {
     const { suppressed, gateway, service } = getEventReinclusion();

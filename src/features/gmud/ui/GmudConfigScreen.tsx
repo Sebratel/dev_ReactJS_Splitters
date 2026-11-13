@@ -5,6 +5,7 @@ import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import {
   fetchGmudConfigLists,
   addGmudConfigItem,
+  ensureGmudCorItem,
   removeGmudConfigItem,
   type GmudConfigItem,
 } from '@/features/gmud/api/gmudConfigLists'
@@ -29,6 +30,10 @@ const LIST_META: Record<string, { label: string; hint: string }> = {
   comite: {
     label: 'Comitê',
     hint: 'Quem toma a decisão final (aprovar ou negar) das GMUDs. Use "Gerenciar membros" para escolher quem decide; basta um deles. A aprovação das áreas não substitui a do Comitê. Sem membros, nenhuma GMUD pode ser aprovada.',
+  },
+  cor: {
+    label: 'COR — lista de clientes',
+    hint: 'Quem recebe por e-mail a lista de clientes corporativos e ponto a ponto/fibra apagada de cada GMUD liberada (e de novo se a abrangência ou a janela mudar, mais um lembrete antes da janela). Sem destinatários, nada é enviado.',
   },
   processos: {
     label: 'Processos de negócio',
@@ -57,6 +62,7 @@ function TeamApproversModal({
   allUsers,
   usersLoading,
   isCommittee = false,
+  isCor = false,
   refetch,
   onClose,
 }: {
@@ -66,6 +72,7 @@ function TeamApproversModal({
   usersLoading: boolean
   /** Modal dos membros do Comitê (textos próprios), em vez de aprovadores de uma área. */
   isCommittee?: boolean
+  isCor?: boolean
   refetch: () => void
   onClose: () => void
 }) {
@@ -121,10 +128,12 @@ function TeamApproversModal({
             </div>
             <div>
               <p className="font-semibold text-sm text-on-surface">
-                {isCommittee ? 'Membros do Comitê' : `Quem aprova — ${areaItem.label}`}
+                {isCor ? 'Destinatários da lista ao COR' : isCommittee ? 'Membros do Comitê' : `Quem aprova — ${areaItem.label}`}
               </p>
               <p className="text-xs text-on-surface-variant">
-                {isCommittee
+                {isCor
+                  ? 'Recebem por e-mail a lista de clientes corporativos e ponto a ponto/fibra apagada de cada GMUD liberada.'
+                  : isCommittee
                   ? 'Tomam a decisão final das GMUDs (aprovar ou negar) na plataforma. Basta um membro decidir. Sem membros, ninguém consegue aprovar.'
                   : 'Recebem por e-mail o link para aprovar ou negar as GMUDs que marcarem esta área. Basta uma pessoa decidir.'}
               </p>
@@ -143,7 +152,9 @@ function TeamApproversModal({
         <div className="overflow-y-auto px-5 py-4 space-y-3">
           {approvers.length === 0 ? (
             <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">
-              {isCommittee
+              {isCor
+                ? 'Ninguém cadastrado: o COR não receberá a lista de clientes.'
+                : isCommittee
                 ? 'Ninguém cadastrado: nenhuma GMUD pode ser aprovada ou negada até haver membros.'
                 : 'Ninguém cadastrado: GMUDs com esta área não podem ser abertas.'}
             </p>
@@ -182,7 +193,7 @@ function TeamApproversModal({
           {/* Adicionar aprovador */}
           <div className="border-t border-neutral-200/60 dark:border-white/6 pt-3 space-y-2">
             <p className="text-xs font-semibold text-on-surface-variant">
-              {isCommittee ? 'Adicionar membro' : 'Adicionar aprovador'}
+              {isCor ? 'Adicionar destinatário' : isCommittee ? 'Adicionar membro' : 'Adicionar aprovador'}
             </p>
             <form
               className="flex flex-col gap-2"
@@ -268,7 +279,17 @@ function ListPanel({
   const qc = useQueryClient()
   const meta = LIST_META[listKey] ?? { label: listKey, hint: '' }
   const isCommittee = listKey === 'comite'
-  const hasApprovers = listKey === 'areas' || isCommittee
+  const isCor = listKey === 'cor'
+  const isFixed = isCommittee || isCor
+  const hasApprovers = listKey === 'areas' || isFixed
+  const createCorMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível criar a lista do COR'),
+    mutationFn: () => ensureGmudCorItem(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmud-config-lists'] })
+      refetch()
+    },
+  })
 
   const addMutation = useMutation({
     onError: (error) => showGmudError(error, 'Não foi possível adicionar o item'),
@@ -301,9 +322,21 @@ function ListPanel({
           {meta.hint ? <p className="mt-0.5 text-xs text-on-surface-variant">{meta.hint}</p> : null}
         </div>
 
-        {items.length === 0 ? (
+        {items.length === 0 && isCor ? (
+          <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+            <p className="min-w-0 flex-1 text-sm text-on-surface-variant">A lista do COR ainda não foi criada.</p>
+            <button
+              type="button"
+              onClick={() => createCorMutation.mutate()}
+              disabled={createCorMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+            >
+              {createCorMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Criar lista do COR
+            </button>
+          </div>
+        ) : items.length === 0 ? (
           <p className="px-4 py-4 text-sm italic text-on-surface-variant/60">Nenhum item cadastrado.</p>
-        ) : isCommittee ? (
+        ) : isFixed ? (
           <div className="space-y-2 px-4 py-3">
             {items.map((item) => {
               const members = approversMap?.[item.id] ?? []
@@ -324,7 +357,7 @@ function ListPanel({
                     {members.length > 0 ? (
                       <>
                         <p className="font-semibold text-on-surface">
-                          {members.length} membro{members.length === 1 ? '' : 's'}
+                          {members.length} {isCor ? `destinatário${members.length === 1 ? '' : 's'}` : `membro${members.length === 1 ? '' : 's'}`}
                         </p>
                         <p className="truncate text-xs text-on-surface-variant">
                           {members.map((m) => m.userDisplayName ?? m.userEmail).join(', ')}
@@ -332,7 +365,7 @@ function ListPanel({
                       </>
                     ) : (
                       <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                        Sem membros: ninguém pode aprovar ou negar GMUDs
+                        {isCor ? 'Sem destinatários: o COR não receberá a lista de clientes' : 'Sem membros: ninguém pode aprovar ou negar GMUDs'}
                       </p>
                     )}
                   </div>
@@ -341,7 +374,7 @@ function ListPanel({
                     onClick={() => setOpenApproversForId(item.id)}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
                   >
-                    <Users size={13} /> Gerenciar membros
+                    <Users size={13} /> {isCor ? 'Gerenciar destinatários' : 'Gerenciar membros'}
                   </button>
                 </div>
               )
@@ -426,7 +459,7 @@ function ListPanel({
           </div>
         )}
 
-        {!isCommittee ? (
+        {!isFixed ? (
         <div className="border-t border-neutral-200/70 dark:border-white/8 px-4 py-3">
           <form
             className="flex items-center gap-2"
@@ -462,6 +495,7 @@ function ListPanel({
           allUsers={allUsers}
           usersLoading={usersLoading ?? false}
           isCommittee={isCommittee}
+          isCor={isCor}
           refetch={() => {
             refetch()
             refetchApprovers?.()
@@ -527,6 +561,16 @@ export function GmudConfigScreen() {
           <ListPanel
             listKey="comite"
             items={data?.comite ?? []}
+            refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
+          />
+
+          <ListPanel
+            listKey="cor"
+            items={data?.cor ?? []}
             refetch={handleRefetch}
             approversMap={approversMap}
             allUsers={allUsers}

@@ -41,6 +41,12 @@ export async function addGmudConfigItem(
   return parse<GmudConfigItem>(response, 'Falha ao adicionar item.')
 }
 
+/** Cria (se ainda não existir) o item fixo "COR" que agrupa os destinatários da lista de clientes. */
+export async function ensureGmudCorItem(): Promise<{ id: number; created: boolean }> {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/cor/item`, { method: 'POST' })
+  return parse<{ id: number; created: boolean }>(response, 'Falha ao criar a lista do COR.')
+}
+
 export async function removeGmudConfigItem(id: number): Promise<void> {
   const response = await fetchWithSessionAuth(
     `${env.localBffUrl}/api/gmud/config-lists/${id}`,

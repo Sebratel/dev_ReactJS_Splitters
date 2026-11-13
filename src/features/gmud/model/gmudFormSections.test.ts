@@ -9,7 +9,7 @@ import {
 
 const COMUNS = ['Identificação', 'Janela de mudança']
 const POR_CATEGORIA = {
-  rede_externa: [...COMUNS, 'Atividade', 'Ambiente afetado', 'Impacto', 'Execução', 'Recursos administrativos', 'Alinhamento'],
+  rede_externa: [...COMUNS, 'Atividade', 'Ambiente afetado', 'Impacto', 'Execução', 'Recursos administrativos'],
   sistemas_internos: [...COMUNS, 'Sistema', 'Descrição', 'Impacto', 'Execução'],
   sistemas_externos: [...COMUNS, 'Sistema e fornecedor', 'Mudança prevista', 'Impacto', 'Contingência'],
 } as const

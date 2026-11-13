@@ -16,6 +16,7 @@ export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRotas,
     SELECT
       base."CONTRATO ID[CLIENTE]"::text    AS contrato,
       base."USUÁRIO[CLIENTE]"              AS pppoe,
+      base."NOME CLIENTE"                  AS nome,
       base."CORPORATIVO"                   AS corporativo,
       base."PONTO DE ACESSO CODE",
       base."PONTO DE ACESSO",
@@ -46,11 +47,11 @@ export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRotas,
           const contractId = toPositiveInt(r.contrato);
           const pppoe = text(r.pppoe);
           if (contractId === null || pppoe === '' || byContract.has(contractId)) continue;
-          byContract.set(contractId, { contractId, pppoe, corporate: r.corporativo === true });
+          byContract.set(contractId, { contractId, pppoe, corporate: r.corporativo === true, nome: text(r.nome), pontoAcesso: text(r['PONTO DE ACESSO']) });
         }
         // Clientes escolhidos à mão (ponto a ponto, fibra apagada): entram pelo contrato; PPPoE pode não existir.
         for (const m of normalizeClientesSemSplitter(gmud?.categoriaData)) {
-          if (!byContract.has(m.contractId)) byContract.set(m.contractId, { contractId: m.contractId, pppoe: m.pppoe, corporate: true });
+          if (!byContract.has(m.contractId)) byContract.set(m.contractId, { contractId: m.contractId, pppoe: m.pppoe, corporate: true, nome: m.nome ?? '', pontoAcesso: '' });
         }
         return { ok: true, clients: [...byContract.values()] };
       } catch (error) {

@@ -40,7 +40,7 @@ export function wizardSteps(categoria: WizardCategoria): WizardStep[] {
   return [
     ident,
     { key: 'oQueSeraFeito', label: 'O que será feito', sections: ['Atividade', 'Ambiente afetado'] },
-    { key: 'impacto', label: 'Impacto e execução', sections: ['Impacto', 'Execução', 'Alinhamento'] },
+    { key: 'impacto', label: 'Impacto e execução', sections: ['Impacto', 'Execução'] },
     APROVADORES,
     FINAL,
   ]

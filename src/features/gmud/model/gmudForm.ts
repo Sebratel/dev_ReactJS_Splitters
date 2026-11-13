@@ -386,7 +386,6 @@ export function validateGmudFormBySection(
       'Recursos administrativos',
     )
     req(form.planoRollback.trim() !== '', 'Plano de rollback', 'Execução')
-    req(form.listaClientesCor !== '', 'Lista de clientes ao COR', 'Alinhamento')
   }
 
   if (form.categoria === 'sistemas_internos' && siData) {

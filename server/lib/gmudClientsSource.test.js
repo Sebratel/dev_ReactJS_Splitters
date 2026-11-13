@@ -22,8 +22,8 @@ test('site inteiro: todos os clientes com PPPoE e contrato, sem repetir contrato
   const out = await s.listClients({ popSite: 'SLESC', categoriaData: null });
   assert.equal(out.ok, true);
   assert.deepEqual(out.clients, [
-    { contractId: 10, pppoe: 'ana', corporate: false },
-    { contractId: 11, pppoe: 'beto', corporate: true },
+    { contractId: 10, pppoe: 'ana', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 11, pppoe: 'beto', corporate: true, nome: '', pontoAcesso: '' },
   ]);
   assert.deepEqual(queries[0], ['SLESC']);
 });
@@ -69,9 +69,9 @@ test('clientes escolhidos à mão (sem splitter) entram pelo contrato, com ou se
   });
   assert.equal(out.ok, true);
   assert.deepEqual(out.clients, [
-    { contractId: 10, pppoe: 'ana', corporate: false },
-    { contractId: 11, pppoe: 'beto', corporate: false },
-    { contractId: 77, pppoe: 'p2p-1', corporate: true },
-    { contractId: 88, pppoe: '', corporate: true },
+    { contractId: 10, pppoe: 'ana', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 11, pppoe: 'beto', corporate: false, nome: '', pontoAcesso: '' },
+    { contractId: 77, pppoe: 'p2p-1', corporate: true, nome: '', pontoAcesso: '' },
+    { contractId: 88, pppoe: '', corporate: true, nome: '', pontoAcesso: '' },
   ]);
 });

@@ -16,7 +16,6 @@ import {
   GMUD_AMBIENTE_SI_OPTIONS,
   GMUD_AREA_OPTIONS,
   GMUD_CATEGORIA_LABEL,
-  GMUD_LISTA_COR,
   GMUD_NATUREZA_RE_OPTIONS,
   GMUD_NATUREZA_SI_OPTIONS,
   GMUD_NATUREZA_SE_OPTIONS,
@@ -529,15 +528,6 @@ function RedeExternaFields({
       </Section>
 
       <RecursosAdministrativosCard form={form} set={set} areas={areas} />
-
-      <Section title="Alinhamento">
-        <Field label="Caso necessário informar clientes, a lista de clientes impactados foi enviada ao COR?" required full>
-          <select className={FIELD} value={form.listaClientesCor} onChange={(e) => set('listaClientesCor', e.target.value)}>
-            <option value="">Escolher…</option>
-            {GMUD_LISTA_COR.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </Field>
-      </Section>
     </>
   )
 }
