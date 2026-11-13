@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pendenciasDaEtapa, previaDoFormulario, primeiraEtapaPendente, wizardSteps, wizardStates } from '@/features/gmud/lib/gmudWizard'
+import { etapaAoEscolherCategoria, pendenciasDaEtapa, previaDoFormulario, primeiraEtapaPendente, wizardSteps, wizardStates } from '@/features/gmud/lib/gmudWizard'
 import {
   emptyGmudForm,
   emptyGmudSistemasExternosData,
@@ -64,5 +64,15 @@ describe('prévia do formulário na escolha da categoria', () => {
     for (const cat of ['rede_externa', 'sistemas_internos', 'sistemas_externos'] as const) {
       expect(previaDoFormulario(cat).comuns).toEqual(['Aprovadores e janela', 'Revisão'])
     }
+  })
+})
+
+describe('etapa ao escolher a categoria na tela inicial', () => {
+  it('a mesma categoria do rascunho continua na etapa salva', () => {
+    expect(etapaAoEscolherCategoria('sistemas_internos', 'sistemas_internos', 2)).toEqual({ trocou: false, etapa: 2 })
+    expect(etapaAoEscolherCategoria('rede_externa', 'rede_externa', 0)).toEqual({ trocou: false, etapa: 0 })
+  })
+  it('outra categoria volta ao primeiro passo', () => {
+    expect(etapaAoEscolherCategoria('sistemas_internos', 'rede_externa', 3)).toEqual({ trocou: true, etapa: 0 })
   })
 })

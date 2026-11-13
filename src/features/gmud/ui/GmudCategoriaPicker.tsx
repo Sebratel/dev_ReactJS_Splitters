@@ -1,7 +1,8 @@
 import { useId, useState } from 'react'
-import { ArrowRight, Network } from 'lucide-react'
+import { ArrowRight, History, Network } from 'lucide-react'
 import { GMUD_CATEGORIA_LABEL, type GmudCategoria } from '@/features/gmud/model/gmudForm'
 import { previaDoFormulario } from '@/features/gmud/lib/gmudWizard'
+import { GmudDiscardDraftButton } from '@/features/gmud/ui/GmudDiscardDraftButton'
 import { cn } from '@/shared/lib/utils'
 
 const CATEGORIAS: GmudCategoria[] = ['rede_externa', 'sistemas_internos', 'sistemas_externos']
@@ -101,12 +102,21 @@ const LINHA = 'pointer-events-none absolute hidden bg-neutral-300 md:block dark:
  */
 const ACESO = 'pointer-events-none absolute hidden bg-neutral-900 transition-opacity duration-[120ms] md:block dark:bg-white'
 
+/** Rascunho em andamento (guardado no navegador), mostrado na tela inicial para a pessoa lembrar onde parou. */
+export type GmudRascunhoResumo = { categoria: GmudCategoria; salvoEm: string; etapaLabel: string }
+
+function formatarSalvoEm(iso: string): string {
+  const data = new Date(iso)
+  return Number.isNaN(data.getTime()) ? '' : data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 /** Cartão cujo caminho está desenhado; `seq` muda a cada nova ligação, para a animação recomeçar do nó. */
 type Caminho = { cat: GmudCategoria; seq: number; aceso: boolean }
 
 function CartaoCategoria({
-  cat, indice, onEscolher, caminho, onHover, onFoco,
+  cat, indice, onEscolher, caminho, onHover, onFoco, temRascunho,
 }: {
+  temRascunho: boolean
   cat: GmudCategoria
   indice: number
   onEscolher: (cat: GmudCategoria) => void
@@ -133,7 +143,7 @@ function CartaoCategoria({
         onFocus={() => onFoco(cat)}
         onBlur={() => onFoco(null)}
         aria-labelledby={`${id}-nome`}
-        aria-describedby={`${id}-desc ${id}-previa`}
+        aria-describedby={temRascunho ? `${id}-rascunho ${id}-desc ${id}-previa` : `${id}-desc ${id}-previa`}
         className={cn(
           'gmud-pick-card group flex w-full flex-col rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-3 text-left shadow-sm transition duration-200 sm:p-4 dark:border-white/10',
           'hover:shadow-md focus-visible:shadow-md motion-safe:hover:-translate-y-0.5 motion-safe:focus-visible:-translate-y-0.5 motion-reduce:transition-none',
@@ -141,6 +151,14 @@ function CartaoCategoria({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest dark:focus-visible:ring-white',
         )}
       >
+        {temRascunho ? (
+          <span
+            id={`${id}-rascunho`}
+            className="mb-2 inline-flex items-center gap-1.5 self-start rounded-full border border-neutral-900 bg-primary px-2.5 py-0.5 text-xs font-bold text-neutral-900"
+          >
+            <History size={13} aria-hidden /> Rascunho aqui · continuar
+          </span>
+        ) : null}
         {/* Quadro da ilustração: escurece quando o cartão acende, para o desenho continuar legível sobre o amarelo. */}
         <span
           aria-hidden
@@ -180,7 +198,7 @@ function CartaoCategoria({
         </span>
 
         <span className="mt-auto flex items-center justify-end gap-1.5 pt-3 text-xs font-bold text-on-surface transition-colors group-hover:text-neutral-900 group-focus-visible:text-neutral-900" aria-hidden>
-          Escolher
+          {temRascunho ? 'Continuar de onde parou' : 'Escolher'}
           <ArrowRight size={14} className="transition-transform group-hover:translate-x-1 group-focus-visible:translate-x-1 motion-reduce:transform-none motion-reduce:transition-none" />
         </span>
       </button>
@@ -232,7 +250,14 @@ function CartaoCategoria({
  * Tela inicial do "Abrir GMUD": a mudança no topo e, em árvore, as três frentes onde ela pode acontecer.
  * Cada frente é um cartão ilustrado com a prévia do que o formulário vai pedir. No celular vira lista.
  */
-export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCategoria) => void }) {
+export function GmudCategoriaPicker({
+  onEscolher, rascunho, onDescartarRascunho,
+}: {
+  onEscolher: (cat: GmudCategoria) => void
+  /** Rascunho em andamento: mostra o aviso e marca o cartão da categoria dele. */
+  rascunho?: GmudRascunhoResumo
+  onDescartarRascunho?: () => void
+}) {
   // Só visual: qual cartão está sob o mouse e qual tem o foco (o mouse manda quando há os dois).
   const [estado, setEstado] = useState<{ hover: GmudCategoria | null; foco: GmudCategoria | null; caminho: Caminho | null }>({
     hover: null,
@@ -252,9 +277,37 @@ export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCate
     })
   const { caminho } = estado
   const indiceAtivo = caminho ? CATEGORIAS.indexOf(caminho.cat) : -1
+  const salvoEm = rascunho ? formatarSalvoEm(rascunho.salvoEm) : ''
 
   return (
     <div role="group" aria-label="Categoria da GMUD" className="mt-4">
+      <div aria-live="polite">
+        {rascunho ? (
+          <div
+            data-testid="aviso-rascunho"
+            className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl border-2 border-neutral-900 bg-surface-container-low px-4 py-3 dark:border-white/70"
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-neutral-900">
+                <History size={20} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-on-surface">Você tem um rascunho em andamento</p>
+                <p className="mt-0.5 text-sm text-on-surface-variant">
+                  Categoria: <strong className="font-bold text-on-surface">{GMUD_CATEGORIA_LABEL[rascunho.categoria]}</strong>
+                  {salvoEm !== '' ? <> · Salvo em {salvoEm}</> : null}
+                  {rascunho.etapaLabel !== '' ? (
+                    <>
+                      {' '}· Parou em: <span className="font-semibold text-on-surface">{rascunho.etapaLabel}</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+            {onDescartarRascunho ? <GmudDiscardDraftButton rotulo="Descartar rascunho" onConfirmar={onDescartarRascunho} /> : null}
+          </div>
+        ) : null}
+      </div>
       <div className="gmud-pick-node flex items-center gap-3 rounded-xl border border-primary bg-primary px-4 py-3 text-neutral-900 shadow-sm md:mx-auto md:w-fit md:px-6">
         <Network size={26} aria-hidden className="shrink-0" />
         <span>
@@ -284,6 +337,7 @@ export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCate
             caminho={caminho}
             onHover={(c) => atualizar({ hover: c })}
             onFoco={(c) => atualizar({ foco: c })}
+            temRascunho={rascunho?.categoria === cat}
           />
         ))}
         {/* Trecho horizontal do caminho aceso: do centro (embaixo do nó) até o meio da coluna do cartão.
