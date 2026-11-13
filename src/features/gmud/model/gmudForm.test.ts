@@ -10,7 +10,14 @@ import {
   validateGmudForm,
   type GmudFormState,
 } from '@/features/gmud/model/gmudForm'
-import { emptyEscopoRede, formatEscopoRede, normalizeEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import {
+  emptyEscopoRede,
+  formatEscopoRede,
+  formatEscopoRotas,
+  normalizeEscopoRede,
+  normalizeEscopoRotas,
+  rotasFromCategoriaData,
+} from '@/features/gmud/model/gmudEscopoRede'
 
 describe('minDataProgramada', () => {
   it('aberta de quarta a segunda: terça da apresentação + 7 dias', () => {
@@ -141,14 +148,14 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
   }
 
   it('sem ponto de acesso não há afunilamento e nada é gravado', () => {
-    expect(redeExternaCategoriaData({ ...semImpacto, escopoRede: emptyEscopoRede() })).toBeNull()
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRotas: [emptyEscopoRede()] })).toBeNull()
   })
 
   it('grava o afunilamento limpo, mesmo sem impacto de parada', () => {
-    expect(redeExternaCategoriaData({ ...semImpacto, escopoRede: escopo })).toEqual({
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRotas: [escopo] })).toEqual({
       tipoIndisponibilidade: '',
       duracaoEstimada: '',
-      escopoRede: { apCode: 'AP-1', apTitle: 'OLT 01', slot: 2, ports: [4, 5], splitters: [{ code: 'S1', title: 'SPL 1' }] },
+      escopoRotas: [{ apCode: 'AP-1', apTitle: 'OLT 01', slot: 2, ports: [4, 5], splitters: [{ code: 'S1', title: 'SPL 1' }] }],
     })
   })
 
@@ -157,10 +164,10 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
       impactoParada: 'Sim',
       tipoIndisponibilidade: 'Parcial',
       duracaoEstimada: '1 hora',
-      escopoRede: escopo,
+      escopoRotas: [escopo],
     })
     expect(data).toMatchObject({ tipoIndisponibilidade: 'Parcial', duracaoEstimada: '1 hora' })
-    expect(data?.escopoRede?.apCode).toBe('AP-1')
+    expect(data?.escopoRotas?.[0]?.apCode).toBe('AP-1')
   })
 
   it('PON só vale com slot escolhido', () => {
@@ -170,8 +177,30 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
   it('formata o texto da abrangência e entra na máscara do Elleven', () => {
     expect(formatEscopoRede(escopo)).toBe('OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
     expect(formatEscopoRede(emptyEscopoRede())).toBe('')
-    const form: GmudFormState = { ...emptyGmudForm(), escopoRede: escopo }
+    const form: GmudFormState = { ...emptyGmudForm(), escopoRotas: [escopo] }
     expect(buildGmudDescription(form)).toContain('Abrangência na rede: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
     expect(buildGmudDescription(emptyGmudForm())).not.toContain('Abrangência na rede')
+  })
+  it('várias rotas: grava a lista sem repetir nem rotas vazias', () => {
+    const outra = { apCode: 'AP-2', apTitle: 'OLT 02', slot: null, ports: [], splitters: [] }
+    const data = redeExternaCategoriaData({ ...semImpacto, escopoRotas: [escopo, { ...escopo }, outra, emptyEscopoRede()] })
+    expect(data?.escopoRotas).toHaveLength(2)
+    expect(data?.escopoRotas?.map((r) => r.apCode)).toEqual(['AP-1', 'AP-2'])
+    expect(normalizeEscopoRotas([escopo, escopo])).toHaveLength(1)
+  })
+
+  it('várias rotas: texto com uma frase por rota e entra na máscara do Elleven', () => {
+    const outra = { apCode: 'AP-2', apTitle: 'OLT 02', slot: null, ports: [], splitters: [] }
+    expect(formatEscopoRotas([escopo, outra])).toBe('OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1; OLT 02')
+    expect(formatEscopoRotas([])).toBe('')
+    const form: GmudFormState = { ...emptyGmudForm(), escopoRotas: [escopo, outra] }
+    expect(buildGmudDescription(form)).toContain('Abrangência na rede: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1; OLT 02')
+  })
+
+  it('GMUD antiga (um escopoRede) é lida como uma rota; lista nova tem prioridade', () => {
+    expect(rotasFromCategoriaData({ escopoRede: escopo })).toHaveLength(1)
+    expect(rotasFromCategoriaData({ escopoRotas: [], escopoRede: escopo })).toEqual([])
+    expect(rotasFromCategoriaData(null)).toEqual([])
+    expect(rotasFromCategoriaData({ escopoRotas: [escopo, escopo] })).toHaveLength(1)
   })
 })

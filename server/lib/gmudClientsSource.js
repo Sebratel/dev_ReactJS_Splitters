@@ -11,7 +11,7 @@ const toPositiveInt = (v) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRede, rowMatchesEscopoRede }) {
+export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRotas, rowMatchesEscopoRotas }) {
   const sql = `
     SELECT
       base."CONTRATO ID[CLIENTE]"::text    AS contrato,
@@ -38,9 +38,9 @@ export function createGmudClientsSource({ pool, baseQuery, normalizeEscopoRede, 
       const site = text(gmud?.popSite);
       if (site === '') return { ok: false, reason: 'GMUD sem POP/Site: não há como localizar os clientes.' };
       try {
-        const escopo = normalizeEscopoRede(gmud?.categoriaData?.escopoRede);
+        const rotas = normalizeEscopoRotas(gmud?.categoriaData);
         const { rows } = await pool.query(sql, [site]);
-        const scoped = escopo ? rows.filter((row) => rowMatchesEscopoRede(row, escopo)) : rows;
+        const scoped = rotas.length > 0 ? rows.filter((row) => rowMatchesEscopoRotas(row, rotas)) : rows;
         const byContract = new Map();
         for (const r of scoped) {
           const contractId = toPositiveInt(r.contrato);

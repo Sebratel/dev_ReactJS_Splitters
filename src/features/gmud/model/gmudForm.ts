@@ -1,4 +1,4 @@
-import { emptyEscopoRede, normalizeEscopoRede, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { normalizeEscopoRotas, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 import { parseRepeticao, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
 
 /** Opções do formulário de GMUD (espelham o Google Form atual). */
@@ -120,7 +120,9 @@ export type GmudSistemasExternosData = {
 export type GmudRedeExternaImpactoData = {
   tipoIndisponibilidade: string
   duracaoEstimada: string
-  /** Afunilamento opcional por ponto de acesso/slot/PON/splitter dentro do POP/Site. */
+  /** Abrangência em rotas (ponto de acesso/slot/PON/splitter) dentro do POP/Site; ausente = site inteiro. */
+  escopoRotas?: GmudEscopoRede[]
+  /** GMUDs antigas: um único afunilamento (lido como uma rota). */
   escopoRede?: GmudEscopoRede
   /** Pré-aprovada repetida: ligação informativa entre as ocorrências da série. */
   serie?: GmudSerie
@@ -136,15 +138,15 @@ export function redeExternaImpactoData(form: Pick<GmudFormState, 'impactoParada'
 
 /** `categoria_data` da Rede Externa: impacto de parada + afunilamento na rede; null quando não há nenhum. */
 export function redeExternaCategoriaData(
-  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRede'>,
+  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas'>,
 ): GmudRedeExternaImpactoData | null {
   const impacto = redeExternaImpactoData(form)
-  const escopo = normalizeEscopoRede(form.escopoRede)
-  if (!impacto && !escopo) return null
+  const rotas = normalizeEscopoRotas(form.escopoRotas)
+  if (!impacto && rotas.length === 0) return null
   return {
     tipoIndisponibilidade: impacto?.tipoIndisponibilidade ?? '',
     duracaoEstimada: impacto?.duracaoEstimada ?? '',
-    ...(escopo ? { escopoRede: escopo } : {}),
+    ...(rotas.length > 0 ? { escopoRotas: rotas } : {}),
   }
 }
 
@@ -219,7 +221,7 @@ export type GmudFormState = {
   descricao: string
   popSite: string
   /** Rede Externa: afunilamento opcional dentro do POP/Site (ponto de acesso, slot, PON, splitter). */
-  escopoRede: GmudEscopoRede
+  escopoRotas: GmudEscopoRede[]
   solicitanteNome: string
   solicitanteEmail: string
   areaSolicitante: string
@@ -427,7 +429,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     titulo: '',
     descricao: '',
     popSite: '',
-    escopoRede: emptyEscopoRede(),
+    escopoRotas: [],
     solicitanteNome: prefillName,
     solicitanteEmail: prefillEmail,
     areaSolicitante: '',

@@ -47,7 +47,6 @@ import {
 import { openGmudOccurrences } from '@/features/gmud/lib/openGmudOccurrences'
 import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
 import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
-import { emptyEscopoRede, hasEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
 import { GmudFormTrail } from '@/features/gmud/ui/GmudFormTrail'
@@ -453,14 +452,19 @@ function RedeExternaFields({
             onChange={(v) => {
               set('popSite', v)
               // O afunilamento pertence ao site escolhido: trocar o site descarta a escolha anterior.
-              if (hasEscopoRede(form.escopoRede)) set('escopoRede', emptyEscopoRede())
+              if (form.escopoRotas.length > 0) set('escopoRotas', [])
             }}
           />
         </Field>
         <Field label="Risco(s) da não implementação" required>
           <input className={FIELD} value={form.riscoNaoImplementacao} onChange={(e) => set('riscoNaoImplementacao', e.target.value)} />
         </Field>
-        <GmudEscopoRedeField popSite={form.popSite} value={form.escopoRede} onChange={(v) => set('escopoRede', v)} />
+        <GmudEscopoRedeField
+          key={form.popSite.trim().toLowerCase()}
+          popSite={form.popSite}
+          value={form.escopoRotas}
+          onChange={(v) => set('escopoRotas', v)}
+        />
       </Section>
 
       <FormCard title="Ambiente afetado" grid={false}>

@@ -1,6 +1,6 @@
 import { Monitor, Server } from 'lucide-react'
 import type { GmudRedeExternaImpactoData, GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
-import { formatEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { formatEscopoRotas, rotasFromCategoriaData } from '@/features/gmud/model/gmudEscopoRede'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
@@ -26,7 +26,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export function GmudRedeExternaImpactoCard({ data }: { data: GmudRedeExternaImpactoData }) {
-  const abrangencia = formatEscopoRede(data.escopoRede)
+  const abrangencia = formatEscopoRotas(rotasFromCategoriaData(data))
   const temImpacto = Boolean(data.tipoIndisponibilidade || data.duracaoEstimada)
   if (!temImpacto && abrangencia === '') return null
   return (

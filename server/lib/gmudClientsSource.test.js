@@ -10,8 +10,8 @@ function source(rows, { throws = false, match } = {}) {
   const s = createGmudClientsSource({
     pool,
     baseQuery: 'SELECT 1',
-    normalizeEscopoRede: (raw) => (raw ? { apCode: 'AP1', ...raw } : null),
-    rowMatchesEscopoRede: match ?? (() => true),
+    normalizeEscopoRotas: (cd) => (Array.isArray(cd?.escopoRotas) ? cd.escopoRotas : cd?.escopoRede ? [cd.escopoRede] : []).map((r) => ({ apCode: 'AP1', ...r })),
+    rowMatchesEscopoRotas: match ?? (() => true),
   });
   return { s, queries };
 }
@@ -31,6 +31,14 @@ test('com afunilamento só ficam as linhas que batem com o escopo', async () => 
   const { s } = source([row('10', 'ana', { slot: 1 }), row('11', 'beto', { slot: 2 })], { match: (r) => r.slot === 2 });
   const out = await s.listClients({ popSite: 'SLESC', categoriaData: { escopoRede: { apCode: 'AP1', slot: 2 } } });
   assert.deepEqual(out.clients.map((c) => c.contractId), [11]);
+});
+
+test('várias rotas: entra quem bate com qualquer uma', async () => {
+  const { s } = source([row('10', 'ana', { slot: 1 }), row('11', 'beto', { slot: 2 }), row('12', 'caio', { slot: 3 })], {
+    match: (r, rotas) => rotas.some((x) => x.slot === r.slot),
+  });
+  const out = await s.listClients({ popSite: 'SLESC', categoriaData: { escopoRotas: [{ slot: 1 }, { slot: 3 }] } });
+  assert.deepEqual(out.clients.map((c) => c.contractId), [10, 12]);
 });
 
 test('sem POP/Site não há como localizar os clientes', async () => {

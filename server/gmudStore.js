@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
-import { formatEscopoRede, normalizeEscopoRede } from './lib/gmudEscopoRede.js';
+import { formatEscopoRotas, normalizeEscopoRotas } from './lib/gmudEscopoRede.js';
 import {
   AREA_STATUS,
   computeAreasStatus,
@@ -1482,7 +1482,7 @@ export async function lookupApprovalToken(token) {
       categoria: r.categoria ?? '',
       descricao: TRUNC(r.descricao, 1500),
       popSite: r.pop_site ?? '',
-      escopoRede: formatEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
+      escopoRede: formatEscopoRotas(normalizeEscopoRotas(parseJsonColumn(r.categoria_data))),
       solicitante: r.solicitante_nome ?? '',
       dataInicio: toDateStr(r.data_inicio) ?? '',
       horaInicio: toTimeStr(r.hora_inicio) ?? '',
@@ -1683,8 +1683,8 @@ export async function listGmudUpcomingForHsm(daysAhead = 7) {
     tipo: r.tipo ?? '',
     categoria: r.categoria ?? '',
     popSite: (r.pop_site ?? '').trim(),
-    // Afunilamento por ponto de acesso/slot/PON/splitter (null = site inteiro).
-    escopoRede: normalizeEscopoRede(parseJsonColumn(r.categoria_data)?.escopoRede),
+    // Afunilamento por rota (ponto de acesso/slot/PON/splitter); lista vazia = site inteiro.
+    escopoRotas: normalizeEscopoRotas(parseJsonColumn(r.categoria_data)),
     dataInicio: toDateStr(r.data_inicio) ?? '',
     horaInicio: r.hora_inicio ?? '',
     dataFim: toDateStr(r.data_fim) ?? '',

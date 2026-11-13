@@ -90,7 +90,7 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
-import { formatEscopoRede, normalizeEscopoRede, rowMatchesEscopoRede } from './lib/gmudEscopoRede.js';
+import { formatEscopoRotas, normalizeEscopoRotas, rowMatchesEscopoRotas } from './lib/gmudEscopoRede.js';
 import {
   recordUsageEvents,
   summarizeUsage,
@@ -4767,7 +4767,7 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = []
     categoria: gmud.categoria,
     tipo: gmud.tipo,
     popSite: gmud.popSite ?? '',
-    abrangenciaRede: formatEscopoRede(gmud.categoriaData?.escopoRede),
+    abrangenciaRede: formatEscopoRotas(normalizeEscopoRotas(gmud.categoriaData)),
     solicitanteNome: gmud.solicitanteNome,
     solicitanteEmail: gmud.solicitanteEmail,
     dataInicio: gmud.dataInicio,
@@ -5986,8 +5986,8 @@ function getGmudClientSync() {
   const clientsSource = createGmudClientsSource({
     pool,
     baseQuery: SPLITTERS_BASE_QUERY,
-    normalizeEscopoRede,
-    rowMatchesEscopoRede,
+    normalizeEscopoRotas,
+    rowMatchesEscopoRotas,
   });
   const service = createGmudClientSyncService({
     store,
@@ -6257,7 +6257,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
         base."PORTA[SPLT.PRIMARIO]"
       FROM (${SPLITTERS_BASE_QUERY}) base
       WHERE UPPER(TRIM(base."SITE")) = UPPER(TRIM($1))
-        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = $2
+        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = ANY($2::text[])
         AND base."ID CONEXAO[CLIENTE]" IS NOT NULL
         AND base."CORPORATIVO" IS TRUE
         AND base."OCUPADO:[SPLT.SECUNDARIO]" IS TRUE
@@ -6269,12 +6269,12 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
       gmudRows.map(async (gmud) => {
         let clientes = [];
         try {
-          const escopo = gmud.escopoRede;
-          const { rows } = escopo
-            ? await pool.query(scopedQuery, [gmud.popSite, escopo.apCode])
+          const rotas = gmud.escopoRotas ?? [];
+          const { rows } = rotas.length > 0
+            ? await pool.query(scopedQuery, [gmud.popSite, [...new Set(rotas.map((r) => r.apCode))]])
             : await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
           const seen = new Set();
-          for (const r of escopo ? rows.filter((row) => rowMatchesEscopoRede(row, escopo)) : rows) {
+          for (const r of rotas.length > 0 ? rows.filter((row) => rowMatchesEscopoRotas(row, rotas)) : rows) {
             const cliente = {
               nome: (r.nome ?? '').trim(),
               telefone: (r.telefone ?? '').trim(),
@@ -6290,7 +6290,7 @@ app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
           logger.error('[gmud-corporate-hsm] Falha ao buscar clientes do site:', { site: gmud.popSite, error: err.message });
         }
         return {
-          gmud: { ...gmud, escopoTexto: formatEscopoRede(gmud.escopoRede) },
+          gmud: { ...gmud, escopoTexto: formatEscopoRotas(gmud.escopoRotas) },
           clienteCount: clientes.length,
           clientes,
         };
