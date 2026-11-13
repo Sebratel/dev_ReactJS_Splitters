@@ -241,12 +241,150 @@
   animation: gmud-enter 0.28s ease-out both;
 }
 
+/* Tela de escolha da categoria da GMUD: entrada em sequência (nó → árvore → cartões), no máximo ~700 ms. */
+@keyframes gmud-pick-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gmud-pick-node {
+  animation: gmud-pick-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gmud-pick-stem {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 120ms ease-out 180ms both;
+}
+
+.gmud-pick-bar {
+  animation: gmud-pick-grow-x 140ms ease-out 280ms both;
+}
+
+.gmud-pick-drop {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 120ms ease-out 400ms both;
+}
+
+.gmud-pick-dot {
+  animation: gmud-pick-fade 120ms ease-out 480ms both;
+}
+
+.gmud-pick-card {
+  animation: gmud-pick-rise 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 440ms);
+}
+
+/* Ilustrações dos cartões: movimento contínuo e discreto que conta o tema de cada categoria. */
+@keyframes gmud-fiber-trunk {
+  0% {
+    stroke-dashoffset: 12;
+  }
+  25%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes gmud-fiber-fan {
+  0%,
+  25% {
+    stroke-dashoffset: 12;
+  }
+  60%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes gmud-led {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes gmud-link {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+
+/* Pulso de luz na fibra: um traço curto (pathLength 100) que fica escondido fora da animação. */
+.gmud-fiber-trunk,
+.gmud-fiber-fan {
+  stroke-dasharray: 12 112;
+  stroke-dashoffset: 12;
+}
+
+.gmud-fiber-trunk {
+  animation: gmud-fiber-trunk 3.6s linear 0.9s infinite;
+}
+
+.gmud-fiber-fan {
+  animation: gmud-fiber-fan 3.6s linear 0.9s infinite;
+}
+
+.gmud-led {
+  animation: gmud-led 2.4s ease-in-out infinite;
+  animation-delay: var(--d, 0ms);
+}
+
+.gmud-link {
+  animation: gmud-link 1.4s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .gmud-trail-dot,
   .gmud-trail-line,
   .gmud-trail-label,
   .gmud-trail-halo,
-  .gmud-enter {
+  .gmud-enter,
+  .gmud-pick-node,
+  .gmud-pick-stem,
+  .gmud-pick-bar,
+  .gmud-pick-drop,
+  .gmud-pick-dot,
+  .gmud-pick-card,
+  .gmud-fiber-trunk,
+  .gmud-fiber-fan,
+  .gmud-led,
+  .gmud-link {
     animation: none;
   }
 }
