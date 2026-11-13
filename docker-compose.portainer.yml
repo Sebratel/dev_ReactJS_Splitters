@@ -152,6 +152,10 @@ services:
         - VITE_MASSIVA_CLOSE_PATH=${VITE_MASSIVA_CLOSE_PATH:-/api/v1/massivas/finalizar-chamado-via-api}
         - VITE_MASSIVA_INFRA_OPEN_PATH=${VITE_MASSIVA_INFRA_OPEN_PATH:-/api/v1/massivas/abrir-protocolo-infra-via-api}
         - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
+        # Ponto de acesso (código) sob o qual as massivas de sistema interno/externo são abertas.
+        # Lido em BUILD. Vazio = o formulário de massiva de sistema fica todo desabilitado.
+        # Defina na stack (o .env.example documenta o valor provisório).
+        - VITE_MASSIVA_SISTEMA_AP_CODE=${VITE_MASSIVA_SISTEMA_AP_CODE:-}
         # Link "Abrir no Elleven" do detalhe da GMUD ({protocol} = número). Vazio = ERP de produção.
         # Em staging, defina na stack (exemplo de formato no .env.example).
         - VITE_ELLEVEN_PROTOCOL_URL=${VITE_ELLEVEN_PROTOCOL_URL:-}
