@@ -16,6 +16,8 @@ const DESCRICAO: Record<GmudCategoria, string> = {
 const TRACO = { stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' } as const
 /** Peça em destaque: preenchida com o amarelo da marca e contornada, para nunca depender só do amarelo. */
 const DESTAQUE = { ...TRACO, className: 'fill-primary' } as const
+/** Pulso de luz que percorre a fibra (traço amarelo por cima do traço escuro; animado em index.css). */
+const PULSO = { strokeWidth: 3, strokeLinecap: 'round', fill: 'none' } as const
 
 /** Rede externa: a OLT, a fibra, o splitter e a fibra se abrindo para as casas dos clientes. */
 function IlustracaoRedeExterna() {
@@ -27,10 +29,12 @@ function IlustracaoRedeExterna() {
       <circle cx="29" cy="35" r="2.5" {...DESTAQUE} />
       <path d="M18 45h24" {...TRACO} />
       <path d="M50 40h42" {...TRACO} strokeWidth={3} />
+      <path d="M50 40h42" pathLength={100} {...PULSO} className="gmud-fiber-trunk stroke-primary" />
       <path d="M92 32l20-10v36l-20-10z" {...DESTAQUE} />
       {casas.map((y) => (
         <g key={y}>
           <path d={`M112 40C138 40 136 ${y} 160 ${y}`} {...TRACO} />
+          <path d={`M112 40C138 40 136 ${y} 160 ${y}`} pathLength={100} {...PULSO} className="gmud-fiber-fan stroke-primary" />
           <path d={`M162 ${y + 6}v-7l8-6 8 6v7z`} {...DESTAQUE} />
         </g>
       ))}
@@ -43,10 +47,10 @@ function IlustracaoSistemasInternos() {
   return (
     <>
       <rect x="70" y="8" width="60" height="64" rx="5" {...TRACO} />
-      {[14, 33, 52].map((y) => (
+      {[14, 33, 52].map((y, i) => (
         <g key={y}>
           <rect x="76" y={y} width="48" height="14" rx="3" {...TRACO} />
-          <circle cx="84" cy={y + 7} r="2.5" {...DESTAQUE} />
+          <circle cx="84" cy={y + 7} r="2.5" {...DESTAQUE} className="gmud-led fill-primary" style={{ '--d': `${i * 800}ms` } as React.CSSProperties} />
           <path d={`M94 ${y + 7}h22`} {...TRACO} />
         </g>
       ))}
@@ -69,7 +73,7 @@ function IlustracaoSistemasExternos() {
       <rect x="12" y="26" width="38" height="28" rx="4" {...TRACO} />
       <circle cx="22" cy="35" r="2.5" {...DESTAQUE} />
       <path d="M20 45h22" {...TRACO} />
-      <path d="M50 40h68" {...TRACO} strokeDasharray="5 6" />
+      <path d="M50 40h68" {...TRACO} strokeDasharray="5 6" className="gmud-link" />
       <circle cx="84" cy="40" r="6" {...DESTAQUE} />
       <path
         d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"
@@ -100,11 +104,13 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
     <div className="relative flex md:px-2 md:pt-7">
       <button
         type="button"
+        style={{ '--d': `${440 + indice * 30}ms` } as React.CSSProperties}
         onClick={() => onEscolher(cat)}
         aria-labelledby={`${id}-nome`}
         aria-describedby={`${id}-desc ${id}-previa`}
         className={cn(
-          'group peer flex w-full flex-col rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-3 text-left shadow-sm transition-colors sm:p-4 dark:border-white/10',
+          'gmud-pick-card group peer flex w-full flex-col rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-3 text-left shadow-sm transition duration-200 sm:p-4 dark:border-white/10',
+          'hover:shadow-md focus-visible:shadow-md motion-safe:hover:-translate-y-0.5 motion-safe:focus-visible:-translate-y-0.5 motion-reduce:transition-none',
           'hover:border-primary hover:bg-primary focus-visible:border-primary focus-visible:bg-primary',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest dark:focus-visible:ring-white',
         )}
@@ -156,15 +162,15 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
       {/* Árvore: barra horizontal até o centro da coluna e descida reta até o meio do topo do cartão. */}
       <span
         aria-hidden
-        className={cn(LINHA, 'top-0 h-0.5', indice === 0 ? 'left-1/2 right-0' : ultimo ? 'left-0 right-1/2' : 'inset-x-0')}
+        className={cn(LINHA, 'gmud-pick-bar top-0 h-0.5', indice === 0 ? 'left-1/2 right-0 origin-right' : ultimo ? 'left-0 right-1/2 origin-left' : 'inset-x-0 origin-center')}
       />
       <span
         aria-hidden
-        className={cn(LINHA, 'left-1/2 top-0 h-7 w-0.5 -translate-x-1/2 transition-colors peer-hover:bg-neutral-900 peer-focus-visible:bg-neutral-900 dark:peer-hover:bg-white dark:peer-focus-visible:bg-white')}
+        className={cn(LINHA, 'gmud-pick-drop left-1/2 top-0 h-7 w-0.5 -translate-x-1/2 transition-colors peer-hover:bg-neutral-900 peer-focus-visible:bg-neutral-900 dark:peer-hover:bg-white dark:peer-focus-visible:bg-white')}
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-7 hidden size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-400 bg-surface-container-lowest transition-colors peer-hover:border-neutral-900 peer-hover:bg-primary peer-focus-visible:border-neutral-900 peer-focus-visible:bg-primary md:block dark:border-white/40"
+        className="gmud-pick-dot pointer-events-none absolute left-1/2 top-7 hidden size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-400 bg-surface-container-lowest transition-colors peer-hover:border-neutral-900 peer-hover:bg-primary peer-focus-visible:border-neutral-900 peer-focus-visible:bg-primary md:block dark:border-white/40"
       />
     </div>
   )
@@ -177,14 +183,14 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
 export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCategoria) => void }) {
   return (
     <div role="group" aria-label="Categoria da GMUD" className="mt-4">
-      <div className="flex items-center gap-3 rounded-xl border border-primary bg-primary px-4 py-3 text-neutral-900 shadow-sm md:mx-auto md:w-fit md:px-6">
+      <div className="gmud-pick-node flex items-center gap-3 rounded-xl border border-primary bg-primary px-4 py-3 text-neutral-900 shadow-sm md:mx-auto md:w-fit md:px-6">
         <Network size={26} aria-hidden className="shrink-0" />
         <span>
           <span className="block text-base font-bold">Abrir GMUD</span>
           <span className="block text-xs text-neutral-800">Escolha onde a mudança acontece</span>
         </span>
       </div>
-      <span aria-hidden className="mx-auto hidden h-6 w-0.5 bg-neutral-300 md:block dark:bg-white/20" />
+      <span aria-hidden className="gmud-pick-stem mx-auto hidden h-6 w-0.5 bg-neutral-300 md:block dark:bg-white/20" />
       <div className="mt-3 flex flex-col gap-3 md:mt-0 md:grid md:grid-cols-3 md:gap-0">
         {CATEGORIAS.map((cat, i) => (
           <CartaoCategoria key={cat} cat={cat} indice={i} onEscolher={onEscolher} />
