@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CalendarClock, Check, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, Check, ClipboardList, Cloud, Loader2, Monitor, RadioTower, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -776,6 +776,8 @@ export function GmudNewScreen() {
   const [siData, setSiData] = useState<GmudSistemasInternosData>(() => rascunhoInicial?.si ?? emptyGmudSistemasInternosData())
   const [seData, setSeData] = useState<GmudSistemasExternosData>(() => rascunhoInicial?.se ?? emptyGmudSistemasExternosData())
   const idempotencyKeyRef = useRef<string | null>(null)
+  // A escolha da categoria vem primeiro, sozinha na tela. Com rascunho recuperado a categoria já foi escolhida.
+  const [categoriaEscolhida, setCategoriaEscolhida] = useState(rascunhoInicial !== null)
 
   const { data: configLists, isLoading: listsLoading } = useQuery({
     queryKey: ['gmud-config-lists'],
@@ -975,6 +977,17 @@ export function GmudNewScreen() {
     return () => window.clearTimeout(t)
   }, [form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
 
+  /** Escolha na tela inicial: o que já foi preenchido é mantido; trocar de categoria volta ao primeiro passo. */
+  const escolherCategoria = (cat: GmudCategoria) => {
+    if (cat !== form.categoria) {
+      handleCategoriaChange(cat)
+      setEtapa(0)
+      setAviso([])
+    }
+    setCategoriaEscolhida(true)
+    window.scrollTo({ top: 0 })
+  }
+
   const descartarRascunho = () => {
     clearGmudDraft(window.localStorage, rascunhoKey)
     setForm(emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''))
@@ -1002,8 +1015,49 @@ export function GmudNewScreen() {
     return ''
   }
 
+  if (!categoriaEscolhida) {
+    return (
+      <div key="escolha" className="gmud-enter mx-auto min-w-0 max-w-[1480px] space-y-4">
+        <AppPageHeader
+          badge="Gestão de Mudança de Rede"
+          title="Abrir GMUD"
+          description="Requisição de mudança — abre o protocolo no Elleven e registra na plataforma em um passo só."
+          icon={ClipboardList}
+          primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
+        />
+        <div className={CARD}>
+          <h2 className="text-lg font-bold text-on-surface">Qual é a categoria da GMUD?</h2>
+          <p className="mt-1 text-sm text-on-surface-variant">Ela define as perguntas do formulário e quem aprova.</p>
+          <div role="group" aria-label="Categoria da GMUD" className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {(['rede_externa', 'sistemas_internos', 'sistemas_externos'] as GmudCategoria[]).map((cat) => {
+              const Icone = cat === 'rede_externa' ? RadioTower : cat === 'sistemas_internos' ? Monitor : Cloud
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => escolherCategoria(cat)}
+                  className="group rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-5 text-left transition hover:border-primary hover:bg-primary focus-visible:border-primary focus-visible:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/10"
+                >
+                  <span className="mb-3 flex size-10 items-center justify-center rounded-xl bg-surface-container-low text-on-surface transition group-hover:bg-neutral-900/10 group-hover:text-neutral-900 group-focus-visible:bg-neutral-900/10 group-focus-visible:text-neutral-900" aria-hidden>
+                    <Icone size={22} />
+                  </span>
+                  <span className="block text-base font-bold text-on-surface transition group-hover:text-neutral-900 group-focus-visible:text-neutral-900">{GMUD_CATEGORIA_LABEL[cat]}</span>
+                  <span className="mt-1 block text-xs text-on-surface-variant transition group-hover:text-neutral-800 group-focus-visible:text-neutral-800">
+                    {cat === 'rede_externa' && 'Infraestrutura, OLTs, backbone, sites'}
+                    {cat === 'sistemas_internos' && 'Hub Apps, plataformas, sistemas Sebratel'}
+                    {cat === 'sistemas_externos' && 'Voalle, GeoGrid, Matrix, fornecedores'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
+    <div key="formulario" className="gmud-enter mx-auto min-w-0 max-w-[1480px] space-y-4">
       <AppPageHeader
         badge="Gestão de Mudança de Rede"
         title="Abrir GMUD"
@@ -1021,31 +1075,19 @@ export function GmudNewScreen() {
         </span>
       </div>
 
-      {/* Seletor de categoria — em destaque no topo do formulário */}
-      <div className={`${CARD} ${CATEGORIA_COLORS[form.categoria]}`}>
-        <p className="mb-3 text-sm font-bold text-on-surface">Categoria da GMUD *</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {(['rede_externa', 'sistemas_internos', 'sistemas_externos'] as GmudCategoria[]).map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => handleCategoriaChange(cat)}
-              className={cn(
-                'rounded-lg border px-4 py-3 text-left text-sm font-semibold transition',
-                form.categoria === cat
-                  ? 'border-primary bg-primary text-neutral-900 shadow-sm ring-1 ring-primary'
-                  : 'border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
-              )}
-            >
-              {GMUD_CATEGORIA_LABEL[cat]}
-              <span className={cn('mt-1 block text-[11px] font-normal', form.categoria === cat ? 'text-neutral-800' : 'opacity-80')}>
-                {cat === 'rede_externa' && 'Infraestrutura, OLTs, backbone, sites'}
-                {cat === 'sistemas_internos' && 'Hub Apps, plataformas, sistemas Sebratel'}
-                {cat === 'sistemas_externos' && 'Voalle, GeoGrid, Matrix, fornecedores'}
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* Categoria escolhida: sempre visível, com volta para a tela inicial (o que foi preenchido é mantido) */}
+      <div className={`${CARD} ${CATEGORIA_COLORS[form.categoria]} flex flex-wrap items-center justify-between gap-3 !py-3`}>
+        <p className="flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+          Categoria da GMUD
+          <span className="rounded-full bg-primary px-3 py-1 text-sm font-bold text-neutral-900">{GMUD_CATEGORIA_LABEL[form.categoria]}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => setCategoriaEscolhida(false)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface transition hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/15"
+        >
+          <ArrowLeft size={13} aria-hidden /> Trocar categoria
+        </button>
       </div>
 
       {rascunhoRecuperadoEm ? (

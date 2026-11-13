@@ -225,11 +225,28 @@
   animation-delay: var(--d, 0ms);
 }
 
+@keyframes gmud-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Entrada suave das telas do formulário de GMUD (escolha da categoria → preenchimento). */
+.gmud-enter {
+  animation: gmud-enter 0.28s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .gmud-trail-dot,
   .gmud-trail-line,
   .gmud-trail-label,
-  .gmud-trail-halo {
+  .gmud-trail-halo,
+  .gmud-enter {
     animation: none;
   }
 }
