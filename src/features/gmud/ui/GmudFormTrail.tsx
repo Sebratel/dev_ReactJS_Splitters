@@ -61,7 +61,7 @@ export function GmudFormTrail({
                 <span
                   className={cn(
                     'max-w-full truncate text-[11px]',
-                    st === 'current' ? 'font-semibold text-amber-700 dark:text-amber-300' : st === 'done' ? 'text-emerald-700 dark:text-emerald-300' : st === 'attention' ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-on-surface-variant/70',
+                    st === 'current' ? 'font-bold text-amber-800 dark:text-amber-300' : st === 'done' ? 'text-emerald-700 dark:text-emerald-300' : st === 'attention' ? 'font-bold text-amber-800 dark:text-amber-300' : 'text-on-surface-variant/70',
                   )}
                 >
                   {hint || ' '}
