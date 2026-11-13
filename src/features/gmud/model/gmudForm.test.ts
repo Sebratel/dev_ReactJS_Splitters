@@ -179,8 +179,8 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
     expect(formatEscopoRede(escopo)).toBe('OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
     expect(formatEscopoRede(emptyEscopoRede())).toBe('')
     const form: GmudFormState = { ...emptyGmudForm(), escopoRotas: [escopo] }
-    expect(buildGmudDescription(form)).toContain('Abrangência na rede: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
-    expect(buildGmudDescription(emptyGmudForm())).not.toContain('Abrangência na rede')
+    expect(buildGmudDescription(form)).toContain('📍 Onde: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1')
+    expect(buildGmudDescription(emptyGmudForm())).not.toContain('Onde:')
   })
   it('várias rotas: grava a lista sem repetir nem rotas vazias', () => {
     const outra = { apCode: 'AP-2', apTitle: 'OLT 02', slot: null, ports: [], splitters: [] }
@@ -195,7 +195,8 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
     expect(formatEscopoRotas([escopo, outra])).toBe('OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1; OLT 02')
     expect(formatEscopoRotas([])).toBe('')
     const form: GmudFormState = { ...emptyGmudForm(), escopoRotas: [escopo, outra] }
-    expect(buildGmudDescription(form)).toContain('Abrangência na rede: OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1; OLT 02')
+    const texto = buildGmudDescription(form)
+    expect(texto).toContain(['📍 Onde:', '   • OLT 01 · Slot 2 · PONs 4, 5 · Splitter: SPL 1', '   • OLT 02'].join('\n'))
   })
 
   it('GMUD antiga (um escopoRede) é lida como uma rota; lista nova tem prioridade', () => {
