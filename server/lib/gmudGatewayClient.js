@@ -71,7 +71,7 @@ export function createGmudGatewayClient({ env = process.env, fetchImpl = fetch, 
           const { response, json } = await call('POST', AFETADOS, {
             assignmentId,
             usuarioAfetadoEntities: slice.map((c) => ({
-              pppoe: c.pppoe,
+              pppoe: c.pppoe ? c.pppoe : null,
               protocol,
               reason,
               contractId: c.contractId,

@@ -1,6 +1,7 @@
 import { Monitor, Server } from 'lucide-react'
 import type { GmudRedeExternaImpactoData, GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
 import { formatEscopoRotas, rotasFromCategoriaData } from '@/features/gmud/model/gmudEscopoRede'
+import { formatClienteSemSplitter, normalizeClientesSemSplitter } from '@/features/gmud/model/gmudClientesSemSplitter'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { cn } from '@/shared/lib/utils'
@@ -29,7 +30,8 @@ export function GmudRedeExternaImpactoCard({ data }: { data: GmudRedeExternaImpa
   const abrangencia = formatEscopoRotas(rotasFromCategoriaData(data))
   const temImpacto = Boolean(data.tipoIndisponibilidade || data.duracaoEstimada)
   const manuais = (data.clientesManuais ?? '').trim()
-  if (!temImpacto && abrangencia === '' && manuais === '') return null
+  const semSplitter = normalizeClientesSemSplitter(data.clientesSemSplitter)
+  if (!temImpacto && abrangencia === '' && manuais === '' && semSplitter.length === 0) return null
   return (
     <section className={cn(DETAIL_CARD, 'space-y-5 p-4')}>
       <CardTitle icon={<Server size={16} />}>{temImpacto ? 'Impacto de parada e abrangência' : 'Abrangência na rede'}</CardTitle>
@@ -44,9 +46,10 @@ export function GmudRedeExternaImpactoCard({ data }: { data: GmudRedeExternaImpa
           <Field label="Afunilamento no POP/Site" value={abrangencia} />
         </Group>
       ) : null}
-      {manuais !== '' ? (
-        <Group title="Clientes informados manualmente">
-          <Field label="Ponto a ponto e fibra apagada" value={manuais} />
+      {semSplitter.length > 0 || manuais !== '' ? (
+        <Group title="Clientes ponto a ponto e fibra apagada">
+          {semSplitter.length > 0 ? <Field label="Clientes escolhidos (entram nos afetados)" value={semSplitter.map(formatClienteSemSplitter)} /> : null}
+          <Field label="Observações" value={manuais} />
         </Group>
       ) : null}
     </section>

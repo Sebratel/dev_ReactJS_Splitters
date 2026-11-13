@@ -12,6 +12,7 @@ function source(rows, { throws = false, match } = {}) {
     baseQuery: 'SELECT 1',
     normalizeEscopoRotas: (cd) => (Array.isArray(cd?.escopoRotas) ? cd.escopoRotas : cd?.escopoRede ? [cd.escopoRede] : []).map((r) => ({ apCode: 'AP1', ...r })),
     rowMatchesEscopoRotas: match ?? (() => true),
+    normalizeClientesSemSplitter: (cd) => (Array.isArray(cd?.clientesSemSplitter) ? cd.clientesSemSplitter : []),
   });
   return { s, queries };
 }
@@ -52,4 +53,25 @@ test('falha do banco vira erro, sem lançar', async () => {
   const out = await s.listClients({ popSite: 'SLESC' });
   assert.equal(out.ok, false);
   assert.match(out.reason, /pg fora/);
+});
+
+test('clientes escolhidos à mão (sem splitter) entram pelo contrato, com ou sem PPPoE, sem repetir', async () => {
+  const { s } = source([row('10', 'ana'), row('11', 'beto')]);
+  const out = await s.listClients({
+    popSite: 'SLESC',
+    categoriaData: {
+      clientesSemSplitter: [
+        { contractId: 10, pppoe: 'ana-repetida' }, // já veio do splitter: não duplica
+        { contractId: 77, pppoe: 'p2p-1' },
+        { contractId: 88, pppoe: '' }, // fibra apagada: só contrato
+      ],
+    },
+  });
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.clients, [
+    { contractId: 10, pppoe: 'ana', corporate: false },
+    { contractId: 11, pppoe: 'beto', corporate: false },
+    { contractId: 77, pppoe: 'p2p-1', corporate: true },
+    { contractId: 88, pppoe: '', corporate: true },
+  ]);
 });

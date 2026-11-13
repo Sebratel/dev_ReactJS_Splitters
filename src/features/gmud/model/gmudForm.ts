@@ -1,4 +1,5 @@
 import { normalizeEscopoRotas, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { normalizeClientesSemSplitter, type GmudClienteSemSplitter } from '@/features/gmud/model/gmudClientesSemSplitter'
 import { parseRepeticao, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
 
 /** Opções do formulário de GMUD (espelham o Google Form atual). */
@@ -125,7 +126,9 @@ export type GmudRedeExternaImpactoData = {
   duracaoEstimada: string
   /** Abrangência em rotas (ponto de acesso/slot/PON/splitter) dentro do POP/Site; ausente = site inteiro. */
   escopoRotas?: GmudEscopoRede[]
-  /** Clientes corporativos ponto a ponto e de fibra apagada, informados à mão (o sistema não os localiza). */
+  /** Clientes corporativos ponto a ponto e de fibra apagada escolhidos no Elleven (entram nos afetados pelo contrato). */
+  clientesSemSplitter?: GmudClienteSemSplitter[]
+  /** Observação em texto livre sobre esses clientes. */
   clientesManuais?: string
   /** GMUDs antigas: um único afunilamento (lido como uma rota). */
   escopoRede?: GmudEscopoRede
@@ -143,16 +146,18 @@ export function redeExternaImpactoData(form: Pick<GmudFormState, 'impactoParada'
 
 /** `categoria_data` da Rede Externa: impacto de parada + afunilamento na rede; null quando não há nenhum. */
 export function redeExternaCategoriaData(
-  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas' | 'clientesManuais'>,
+  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas' | 'clientesManuais' | 'clientesSemSplitter'>,
 ): GmudRedeExternaImpactoData | null {
   const impacto = redeExternaImpactoData(form)
   const rotas = normalizeEscopoRotas(form.escopoRotas)
   const manuais = (form.clientesManuais ?? '').trim().slice(0, GMUD_CLIENTES_MANUAIS_MAX)
-  if (!impacto && rotas.length === 0 && manuais === '') return null
+  const semSplitter = normalizeClientesSemSplitter(form.clientesSemSplitter)
+  if (!impacto && rotas.length === 0 && manuais === '' && semSplitter.length === 0) return null
   return {
     tipoIndisponibilidade: impacto?.tipoIndisponibilidade ?? '',
     duracaoEstimada: impacto?.duracaoEstimada ?? '',
     ...(rotas.length > 0 ? { escopoRotas: rotas } : {}),
+    ...(semSplitter.length > 0 ? { clientesSemSplitter: semSplitter } : {}),
     ...(manuais !== '' ? { clientesManuais: manuais } : {}),
   }
 }
@@ -235,7 +240,8 @@ export type GmudFormState = {
   riscoNaoImplementacao: string
   ambienteAfetado: string[]
   comunicaCliente: string
-  /** Texto livre; só Rede Externa. */
+  /** Só Rede Externa: clientes escolhidos no Elleven e observação em texto livre. */
+  clientesSemSplitter: GmudClienteSemSplitter[]
   clientesManuais: string
   impactoParada: string
   /** Rede Externa, quando há impacto de parada: 'Parcial' | 'Total'. Persistido em `categoria_data`. */
@@ -444,6 +450,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     riscoNaoImplementacao: '',
     ambienteAfetado: [],
     comunicaCliente: '',
+    clientesSemSplitter: [],
     clientesManuais: '',
     impactoParada: '',
     tipoIndisponibilidade: '',

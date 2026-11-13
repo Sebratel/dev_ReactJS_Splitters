@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 import { formatEscopoRotas, normalizeEscopoRotas } from './lib/gmudEscopoRede.js';
+import { composeClientesTexto } from './lib/gmudClientesSemSplitter.js';
 import {
   AREA_STATUS,
   computeAreasStatus,
@@ -1483,7 +1484,7 @@ export async function lookupApprovalToken(token) {
       descricao: TRUNC(r.descricao, 1500),
       popSite: r.pop_site ?? '',
       escopoRede: formatEscopoRotas(normalizeEscopoRotas(parseJsonColumn(r.categoria_data))),
-      clientesManuais: TRUNC(String(parseJsonColumn(r.categoria_data)?.clientesManuais ?? ''), 2000),
+      clientesManuais: composeClientesTexto(parseJsonColumn(r.categoria_data)),
       solicitante: r.solicitante_nome ?? '',
       dataInicio: toDateStr(r.data_inicio) ?? '',
       horaInicio: toTimeStr(r.hora_inicio) ?? '',

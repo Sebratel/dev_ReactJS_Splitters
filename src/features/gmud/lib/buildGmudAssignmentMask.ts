@@ -6,6 +6,7 @@ import {
   type GmudSistemasExternosData,
 } from '@/features/gmud/model/gmudForm'
 import { formatEscopoRotas } from '@/features/gmud/model/gmudEscopoRede'
+import { composeClientesTexto } from '@/features/gmud/model/gmudClientesSemSplitter'
 
 /** 'yyyy-mm-dd' → 'dd/mm/yyyy'. */
 function fmtDate(iso: string): string {
@@ -91,7 +92,7 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   field(out, 'Abrangência na rede', formatEscopoRotas(form.escopoRotas))
   field(out, 'Janela de mudança', fmtJanela(form))
   field(out, 'Comunica cliente', form.comunicaCliente)
-  field(out, 'Clientes ponto a ponto e fibra apagada', (form.clientesManuais ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '').join('; '))
+  field(out, 'Clientes ponto a ponto e fibra apagada', composeClientesTexto(form.clientesSemSplitter, form.clientesManuais))
   field(out, 'Impacto de parada do serviço', form.impactoParada)
   if (form.impactoParada === 'Sim') {
     field(out, 'Indisponibilidade', form.tipoIndisponibilidade)

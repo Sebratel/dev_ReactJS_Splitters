@@ -29,7 +29,6 @@ import {
   GMUD_TIPO_PRE_APROVADA,
   validateGmudForm,
   validateGmudFormBySection,
-  GMUD_CLIENTES_MANUAIS_MAX,
   minDataProgramada,
   type GmudCategoria,
   type GmudFormState,
@@ -48,6 +47,7 @@ import {
 import { openGmudOccurrences } from '@/features/gmud/lib/openGmudOccurrences'
 import { GmudPopSiteField } from '@/features/gmud/ui/GmudPopSiteField'
 import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
+import { GmudClientesSemSplitterField } from '@/features/gmud/ui/GmudClientesSemSplitterField'
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
 import { GmudFormTrail } from '@/features/gmud/ui/GmudFormTrail'
@@ -489,18 +489,18 @@ function RedeExternaFields({
             {GMUD_SIM_NAO.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </Field>
-        <Field label="Clientes corporativos ponto a ponto e fibra apagada (opcional)" full>
-          <textarea
-            className={cn(FIELD, 'min-h-[80px]')}
-            value={form.clientesManuais}
-            maxLength={GMUD_CLIENTES_MANUAIS_MAX}
-            onChange={(e) => set('clientesManuais', e.target.value)}
-            placeholder="Um por linha: nome do cliente, circuito ou contrato…"
+        <div className="sm:col-span-2">
+          <span className={LABEL}>Clientes corporativos ponto a ponto e fibra apagada (opcional)</span>
+          <p className="mb-2 mt-0.5 text-[11px] text-on-surface-variant/70">
+            O sistema avisa sozinho os clientes da abrangência escolhida (splitters), mas não localiza ponto a ponto nem fibra apagada. Busque no Elleven e escolha quem também precisa ser avisado: eles entram nos afetados pelo contrato.
+          </p>
+          <GmudClientesSemSplitterField
+            value={form.clientesSemSplitter}
+            onChange={(v) => set('clientesSemSplitter', v)}
+            observacao={form.clientesManuais}
+            onObservacao={(v) => set('clientesManuais', v)}
           />
-          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
-            O sistema avisa sozinho os clientes da abrangência escolhida, mas não localiza clientes ponto a ponto nem de fibra apagada. Liste aqui quem também precisa ser avisado.
-          </span>
-        </Field>
+        </div>
         {form.impactoParada === 'Sim' ? (
           <>
             <Field label="Indisponibilidade parcial ou total">

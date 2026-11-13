@@ -23,6 +23,8 @@ import { createGmudClientSyncStore } from './gmudClientSyncStore.js';
 import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib/gmudClientSyncService.js';
 import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
 import { createGmudClientsSource } from './lib/gmudClientsSource.js';
+import { composeClientesTexto, normalizeClientesSemSplitter } from './lib/gmudClientesSemSplitter.js';
+import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
@@ -4672,6 +4674,26 @@ app.get('/api/gmud/list', async (req, res) => {
   }
 });
 
+/**
+ * Busca de clientes corporativos no Elleven para a GMUD (ponto a ponto, fibra apagada): por nome, contrato ou
+ * usuário. Somente leitura; devolve só o necessário para escolher (sem telefone nem endereço).
+ */
+const gmudClientesEllevenSearch = createClientesEllevenSearch({ pool });
+app.get('/api/gmud/clientes-elleven', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const q = typeof req.query?.q === 'string' ? req.query.q : '';
+    const data = await gmudClientesEllevenSearch.search(q);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao buscar clientes no Elleven.'),
+    });
+  }
+});
+
 /** Aberta e ainda dentro do prazo, vencendo nos próximos 7 dias (mesma regra do filtro "vencem_semana"). */
 const GMUD_VENCE_EM_7_DIAS_SQL = `ai.responsible_final_date >= now() AND ai.responsible_final_date < now() + interval '7 days'`;
 
@@ -4768,7 +4790,7 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = []
     tipo: gmud.tipo,
     popSite: gmud.popSite ?? '',
     abrangenciaRede: formatEscopoRotas(normalizeEscopoRotas(gmud.categoriaData)),
-    clientesManuais: String(gmud.categoriaData?.clientesManuais ?? '').trim().slice(0, 2000),
+    clientesManuais: composeClientesTexto(gmud.categoriaData),
     solicitanteNome: gmud.solicitanteNome,
     solicitanteEmail: gmud.solicitanteEmail,
     dataInicio: gmud.dataInicio,
@@ -5989,6 +6011,7 @@ function getGmudClientSync() {
     baseQuery: SPLITTERS_BASE_QUERY,
     normalizeEscopoRotas,
     rowMatchesEscopoRotas,
+    normalizeClientesSemSplitter,
   });
   const service = createGmudClientSyncService({
     store,
