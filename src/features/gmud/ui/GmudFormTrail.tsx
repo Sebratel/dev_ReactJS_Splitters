@@ -49,9 +49,9 @@ export function GmudFormTrail({
                 disabled={!alcancavel}
                 onClick={() => onSelect(i)}
                 aria-current={i === current ? 'step' : undefined}
-                className="relative flex min-w-0 max-w-full flex-col items-center gap-1 rounded-lg px-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed"
+                className="relative z-10 flex min-w-0 max-w-full flex-col items-center gap-1 rounded-lg px-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed"
               >
-                <span className="relative">
+                <span className="relative z-10">
                   {st === 'current' ? <span className="gmud-trail-halo absolute inset-0 rounded-full bg-primary/50" aria-hidden /> : null}
                   <span className={cn('relative flex size-7 items-center justify-center rounded-full text-xs font-bold', DOT[st])} aria-hidden>
                     {st === 'done' ? <Check size={14} strokeWidth={3} /> : st === 'attention' ? <AlertTriangle size={13} /> : i + 1}

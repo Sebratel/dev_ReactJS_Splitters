@@ -46,7 +46,7 @@ export function GmudStatusTrail({ steps, notice }: { steps: TrailStep[]; notice?
                 aria-hidden
               />
             ) : null}
-            <span className="relative">
+            <span className="relative z-10">
               {s.state === 'current' ? (
                 <span
                   className="gmud-trail-halo absolute inset-0 rounded-full bg-primary/50"
