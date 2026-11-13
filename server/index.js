@@ -4595,6 +4595,8 @@ app.get('/api/gmud/list', async (req, res) => {
       const protocols = await listRegisteredGmudProtocols(statuses);
       params.push(protocols.length > 0 ? protocols : [0]);
       searchClause += ` AND ai.protocol = ANY($${params.length}::bigint[])`;
+      // Cancelada/concluída no Voalle não está mais aguardando ninguém.
+      if (filter === 'comite_pendente') searchClause += OPEN_SQL;
     }
 
     const countSql = `
@@ -4728,7 +4730,9 @@ app.get('/api/gmud/list-summary', async (req, res) => {
         const c = await pool.query(
           `SELECT COUNT(*)::int AS total
              FROM erp.assignment_incidents ai
-            WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[])`,
+             JOIN erp.assignments a ON a.id = ai.assignment_id
+             LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+            WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[]) AND ${OPEN_SQL}`,
           [GMUD_INCIDENT_TYPE_ID, protocols],
         );
         comitePendente = c.rows?.[0]?.total ?? 0;

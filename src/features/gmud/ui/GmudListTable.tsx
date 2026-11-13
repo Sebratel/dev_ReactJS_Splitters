@@ -5,7 +5,7 @@ import { gmudDisplayTitle } from '@/features/gmud/lib/gmudTitle'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
 import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
-import { gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
+import { gmudCancelada, gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
 import { requesterInitials, shortRequesterName } from '@/features/gmud/lib/gmudRequester'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
@@ -137,7 +137,11 @@ export function GmudListTable({
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex flex-col items-start gap-0.5">
-                  {(comite === 'pendente' || comite === 'aprovada') && g.extra?.statusAreas === 'pendente' ? (
+                  {gmudCancelada(g) ? (
+                    <span className={cn(PILL, DEADLINE_STYLE.cancelled)} title="Cancelada: aprovações pendentes não valem mais.">
+                      Cancelada
+                    </span>
+                  ) : (comite === 'pendente' || comite === 'aprovada') && g.extra?.statusAreas === 'pendente' ? (
                     <span
                       className={cn(PILL, COMITE_STYLE.pendente)}
                       title="O Comitê e as áreas decidem em paralelo; a GMUD só é liberada quando ambos aprovarem."

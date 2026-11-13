@@ -16,10 +16,16 @@ export function gmudComiteDecidido(g: Pick<GmudListItem, 'extra'>): boolean {
   return s === 'aprovada' || s === 'negada'
 }
 
+/** Cancelada: pelo plataforma/Elleven ou já cancelada no Voalle (o status do protocolo traz "cancel"). */
+export function gmudCancelada(g: Pick<GmudListItem, 'extra'> & { status?: string | null }): boolean {
+  return g.extra?.ellevenEncerradoStatus === 'cancelada' || /cancel/i.test(g.status ?? '')
+}
+
 /** Protocolo encerrado/terminal (concluída, negada, cancelada ou fechado no Elleven/Voalle). */
-export function gmudEncerrada(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>): boolean {
+export function gmudEncerrada(g: Pick<GmudListItem, 'extra' | 'conclusionDate'> & { status?: string | null }): boolean {
   const e = g.extra
   return (
+    gmudCancelada(g) ||
     Boolean(e?.ellevenEncerradoEm) ||
     e?.statusExec === 'concluida' ||
     e?.statusComite === 'negada' ||
@@ -29,17 +35,17 @@ export function gmudEncerrada(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>)
 }
 
 /** Mostra o botão "Avaliar": GMUD da plataforma, Comitê ainda pendente e protocolo aberto. */
-export function gmudPodeAvaliar(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>): boolean {
+export function gmudPodeAvaliar(g: Pick<GmudListItem, 'extra' | 'conclusionDate'> & { status?: string | null }): boolean {
   return g.extra != null && !gmudComiteDecidido(g) && !gmudEncerrada(g)
 }
 
 /** Mostra o botão "Concluir": aprovada pelo Comitê e pelas áreas, e protocolo aberto. */
-export function gmudPodeConcluir(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>): boolean {
+export function gmudPodeConcluir(g: Pick<GmudListItem, 'extra' | 'conclusionDate'> & { status?: string | null }): boolean {
   return isGmudDisponivel(g.extra?.statusComite, g.extra?.statusAreas) && !gmudEncerrada(g)
 }
 
 /** Mostra o botão "Cancelar": GMUD da plataforma com protocolo aberto (inclusive pendente). */
-export function gmudPodeCancelar(g: Pick<GmudListItem, 'extra' | 'conclusionDate'>): boolean {
+export function gmudPodeCancelar(g: Pick<GmudListItem, 'extra' | 'conclusionDate'> & { status?: string | null }): boolean {
   return g.extra != null && !gmudEncerrada(g)
 }
 
