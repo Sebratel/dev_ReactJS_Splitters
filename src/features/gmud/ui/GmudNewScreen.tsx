@@ -967,8 +967,9 @@ export function GmudNewScreen() {
   const secoesVisiveis = new Set(passos[etapa]?.sections ?? [])
 
   // Rascunho: guarda o que foi digitado (sem formulário em branco) e some ao enviar.
+  // Não regrava enquanto a pessoa ainda está na tela inicial: senão "Salvo em" mostraria a hora da visita, não a do preenchimento.
   useEffect(() => {
-    if (enviadoRef.current) return
+    if (enviadoRef.current || !categoriaEscolhida) return
     const t = window.setTimeout(() => {
       if (enviadoRef.current) return
       if (!draftHasContent(form, emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''))) {
@@ -978,7 +979,7 @@ export function GmudNewScreen() {
       saveGmudDraft(window.localStorage, rascunhoKey, { etapa, maxEtapa, form, si: siData, se: seData })
     }, 600)
     return () => window.clearTimeout(t)
-  }, [form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
+  }, [categoriaEscolhida, form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
 
   /** Escolha na tela inicial: o que já foi preenchido é mantido; trocar de categoria volta ao primeiro passo. */
   const escolherCategoria = (cat: GmudCategoria) => {
