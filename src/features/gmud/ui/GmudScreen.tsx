@@ -125,7 +125,7 @@ export function GmudScreen() {
         ) : null}
         <Link
           to="/gmud/nova"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90"
         >
           <Plus size={15} /> Nova GMUD
         </Link>

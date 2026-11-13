@@ -128,7 +128,7 @@ export function GmudLinksModal({ gmud, onClose }: { gmud: GmudListItem; onClose:
                 type="button"
                 onClick={() => canAdd && addMutation.mutate(parsedInput)}
                 disabled={!canAdd}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-60"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:opacity-60"
               >
                 {addMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                 Vincular

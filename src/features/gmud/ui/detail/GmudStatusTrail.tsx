@@ -7,7 +7,7 @@ const STEP_MS = 300
 
 const DOT: Record<TrailState, string> = {
   done: 'bg-emerald-600 text-white',
-  current: 'bg-primary text-white',
+  current: 'bg-primary text-neutral-900',
   pending: 'bg-surface-container-low text-on-surface-variant ring-1 ring-neutral-300/80 dark:ring-white/15',
   failed: 'bg-rose-600 text-white',
   skipped: 'bg-surface-container-low text-on-surface-variant/70 ring-1 ring-neutral-200/70 dark:ring-white/10',

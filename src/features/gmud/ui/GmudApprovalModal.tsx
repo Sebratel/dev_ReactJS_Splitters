@@ -203,7 +203,7 @@ export function GmudApprovalModal({
             type="button"
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
           >
             {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             Salvar avaliação

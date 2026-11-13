@@ -47,7 +47,7 @@ export function GmudMultiSelect({ options, value, onChange, placeholder, loading
             className={cn(
               'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
               selected
-                ? 'bg-primary text-white ring-primary shadow-sm'
+                ? 'bg-primary/20 text-on-surface ring-primary shadow-sm'
                 : 'bg-surface-container-low text-on-surface ring-neutral-200/70 dark:ring-white/10 hover:bg-surface-container',
             )}
           >

@@ -250,7 +250,7 @@ export function GmudDetailScreen() {
                 type="button"
                 onClick={() => setModal('approve')}
                 title={aguardandoAreas ? 'O Comitê decide em paralelo às áreas; a GMUD só é liberada quando ambos aprovarem.' : undefined}
-                className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90 disabled:opacity-50')}
+                className={cn(ACTION, 'bg-primary text-neutral-900 ring-primary hover:bg-primary/90 disabled:opacity-50')}
               >
                 <Gavel size={14} /> Avaliar
               </button>

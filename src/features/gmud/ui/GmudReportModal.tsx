@@ -110,7 +110,7 @@ export function GmudReportModal({
             onClick={() => mutation.mutate()}
             disabled={!canSend}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90',
+              'inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90',
               !canSend && 'cursor-not-allowed opacity-60',
             )}
           >

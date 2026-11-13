@@ -229,7 +229,7 @@ function TeamApproversModal({
               <button
                 type="submit"
                 disabled={addMutation.isPending || selectedEmail === ''}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {addMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
                 Adicionar aprovador
@@ -445,7 +445,7 @@ function ListPanel({
             <button
               type="submit"
               disabled={addMutation.isPending || newLabel.trim() === ''}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {addMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
               Adicionar

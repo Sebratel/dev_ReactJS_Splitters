@@ -353,7 +353,7 @@ function RecursosAdministrativosCard({
                       atual === p.value
                         ? p.value === 'na'
                           ? 'bg-surface-container-lowest text-on-surface shadow-sm ring-1 ring-neutral-300 dark:ring-white/20'
-                          : 'bg-primary text-white shadow-sm'
+                          : 'bg-primary/25 text-on-surface shadow-sm ring-1 ring-primary'
                         : 'text-on-surface-variant hover:text-on-surface',
                     )}
                   >
@@ -445,7 +445,7 @@ function RedeExternaFields({
                 className={cn(
                   'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
                   ativo
-                    ? 'bg-primary text-white ring-primary'
+                    ? 'bg-primary/20 text-on-surface ring-primary'
                     : 'text-on-surface-variant ring-neutral-200/80 hover:bg-surface-container-low dark:ring-white/10',
                 )}
               >
@@ -923,7 +923,7 @@ export function GmudNewScreen() {
               className={cn(
                 'rounded-lg border px-4 py-3 text-left text-sm font-semibold transition',
                 form.categoria === cat
-                  ? 'border-primary bg-primary text-white shadow-sm'
+                  ? 'border-primary bg-primary/15 text-on-surface shadow-sm ring-1 ring-primary'
                   : 'border-neutral-200/70 dark:border-white/10 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low',
               )}
             >
@@ -1083,7 +1083,7 @@ export function GmudNewScreen() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {mutation.isPending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
