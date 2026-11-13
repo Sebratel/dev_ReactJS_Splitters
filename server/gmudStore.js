@@ -1483,6 +1483,7 @@ export async function lookupApprovalToken(token) {
       descricao: TRUNC(r.descricao, 1500),
       popSite: r.pop_site ?? '',
       escopoRede: formatEscopoRotas(normalizeEscopoRotas(parseJsonColumn(r.categoria_data))),
+      clientesManuais: TRUNC(String(parseJsonColumn(r.categoria_data)?.clientesManuais ?? ''), 2000),
       solicitante: r.solicitante_nome ?? '',
       dataInicio: toDateStr(r.data_inicio) ?? '',
       horaInicio: toTimeStr(r.hora_inicio) ?? '',

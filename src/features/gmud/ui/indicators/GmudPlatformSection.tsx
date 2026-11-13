@@ -122,7 +122,7 @@ export function GmudPlatformSection({ data, error }: { data: GmudPlatformIndicat
         <Panel title="Tipo"><BarList items={data.tipos} color={COLORS.primary} /></Panel>
         <Panel title="Assunto da mudança"><BarList items={data.assuntos} color={COLORS.backlog} /></Panel>
         <Panel title="Impacto de parada"><BarList items={data.impactoParada} color={COLORS.overdue} /></Panel>
-        <Panel title="Comunica cliente"><BarList items={data.comunicaCliente} color={COLORS.closed} /></Panel>
+        {data.comunicaCliente.length > 0 ? <Panel title="Comunica cliente (GMUDs antigas)"><BarList items={data.comunicaCliente} color={COLORS.closed} /></Panel> : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

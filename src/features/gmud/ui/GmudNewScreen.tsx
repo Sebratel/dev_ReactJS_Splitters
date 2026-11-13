@@ -29,6 +29,7 @@ import {
   GMUD_TIPO_PRE_APROVADA,
   validateGmudForm,
   validateGmudFormBySection,
+  GMUD_CLIENTES_MANUAIS_MAX,
   minDataProgramada,
   type GmudCategoria,
   type GmudFormState,
@@ -482,17 +483,23 @@ function RedeExternaFields({
       </FormCard>
 
       <Section title="Impacto">
-        <Field label="Comunica cliente?" required>
-          <select className={FIELD} value={form.comunicaCliente} onChange={(e) => set('comunicaCliente', e.target.value)}>
-            <option value="">Escolher…</option>
-            {GMUD_SIM_NAO.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </Field>
         <Field label="Haverá impacto de parada do serviço?" required>
           <select className={FIELD} value={form.impactoParada} onChange={(e) => set('impactoParada', e.target.value)}>
             <option value="">Escolher…</option>
             {GMUD_SIM_NAO.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
+        </Field>
+        <Field label="Clientes corporativos ponto a ponto e fibra apagada (opcional)" full>
+          <textarea
+            className={cn(FIELD, 'min-h-[80px]')}
+            value={form.clientesManuais}
+            maxLength={GMUD_CLIENTES_MANUAIS_MAX}
+            onChange={(e) => set('clientesManuais', e.target.value)}
+            placeholder="Um por linha: nome do cliente, circuito ou contrato…"
+          />
+          <span className="mt-1 block text-[11px] text-on-surface-variant/70">
+            O sistema avisa sozinho os clientes da abrangência escolhida, mas não localiza clientes ponto a ponto nem de fibra apagada. Liste aqui quem também precisa ser avisado.
+          </span>
         </Field>
         {form.impactoParada === 'Sim' ? (
           <>

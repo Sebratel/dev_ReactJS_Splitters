@@ -28,7 +28,8 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 export function GmudRedeExternaImpactoCard({ data }: { data: GmudRedeExternaImpactoData }) {
   const abrangencia = formatEscopoRotas(rotasFromCategoriaData(data))
   const temImpacto = Boolean(data.tipoIndisponibilidade || data.duracaoEstimada)
-  if (!temImpacto && abrangencia === '') return null
+  const manuais = (data.clientesManuais ?? '').trim()
+  if (!temImpacto && abrangencia === '' && manuais === '') return null
   return (
     <section className={cn(DETAIL_CARD, 'space-y-5 p-4')}>
       <CardTitle icon={<Server size={16} />}>{temImpacto ? 'Impacto de parada e abrangência' : 'Abrangência na rede'}</CardTitle>
@@ -41,6 +42,11 @@ export function GmudRedeExternaImpactoCard({ data }: { data: GmudRedeExternaImpa
       {abrangencia !== '' ? (
         <Group title="Abrangência">
           <Field label="Afunilamento no POP/Site" value={abrangencia} />
+        </Group>
+      ) : null}
+      {manuais !== '' ? (
+        <Group title="Clientes informados manualmente">
+          <Field label="Ponto a ponto e fibra apagada" value={manuais} />
         </Group>
       ) : null}
     </section>

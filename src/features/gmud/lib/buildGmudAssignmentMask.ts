@@ -91,6 +91,7 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   field(out, 'Abrangência na rede', formatEscopoRotas(form.escopoRotas))
   field(out, 'Janela de mudança', fmtJanela(form))
   field(out, 'Comunica cliente', form.comunicaCliente)
+  field(out, 'Clientes ponto a ponto e fibra apagada', (form.clientesManuais ?? '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '').join('; '))
   field(out, 'Impacto de parada do serviço', form.impactoParada)
   if (form.impactoParada === 'Sim') {
     field(out, 'Indisponibilidade', form.tipoIndisponibilidade)

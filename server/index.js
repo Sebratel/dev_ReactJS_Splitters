@@ -4768,6 +4768,7 @@ async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = []
     tipo: gmud.tipo,
     popSite: gmud.popSite ?? '',
     abrangenciaRede: formatEscopoRotas(normalizeEscopoRotas(gmud.categoriaData)),
+    clientesManuais: String(gmud.categoriaData?.clientesManuais ?? '').trim().slice(0, 2000),
     solicitanteNome: gmud.solicitanteNome,
     solicitanteEmail: gmud.solicitanteEmail,
     dataInicio: gmud.dataInicio,

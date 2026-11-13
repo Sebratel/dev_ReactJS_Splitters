@@ -116,12 +116,17 @@ export type GmudSistemasExternosData = {
   chamadoFornecedor: string
 }
 
+/** Tamanho máximo do texto de clientes ponto a ponto / fibra apagada. */
+export const GMUD_CLIENTES_MANUAIS_MAX = 2000
+
 /** Impacto de parada e abrangência da Rede Externa — persistido como JSON em `categoria_data`. */
 export type GmudRedeExternaImpactoData = {
   tipoIndisponibilidade: string
   duracaoEstimada: string
   /** Abrangência em rotas (ponto de acesso/slot/PON/splitter) dentro do POP/Site; ausente = site inteiro. */
   escopoRotas?: GmudEscopoRede[]
+  /** Clientes corporativos ponto a ponto e de fibra apagada, informados à mão (o sistema não os localiza). */
+  clientesManuais?: string
   /** GMUDs antigas: um único afunilamento (lido como uma rota). */
   escopoRede?: GmudEscopoRede
   /** Pré-aprovada repetida: ligação informativa entre as ocorrências da série. */
@@ -138,15 +143,17 @@ export function redeExternaImpactoData(form: Pick<GmudFormState, 'impactoParada'
 
 /** `categoria_data` da Rede Externa: impacto de parada + afunilamento na rede; null quando não há nenhum. */
 export function redeExternaCategoriaData(
-  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas'>,
+  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas' | 'clientesManuais'>,
 ): GmudRedeExternaImpactoData | null {
   const impacto = redeExternaImpactoData(form)
   const rotas = normalizeEscopoRotas(form.escopoRotas)
-  if (!impacto && rotas.length === 0) return null
+  const manuais = (form.clientesManuais ?? '').trim().slice(0, GMUD_CLIENTES_MANUAIS_MAX)
+  if (!impacto && rotas.length === 0 && manuais === '') return null
   return {
     tipoIndisponibilidade: impacto?.tipoIndisponibilidade ?? '',
     duracaoEstimada: impacto?.duracaoEstimada ?? '',
     ...(rotas.length > 0 ? { escopoRotas: rotas } : {}),
+    ...(manuais !== '' ? { clientesManuais: manuais } : {}),
   }
 }
 
@@ -228,6 +235,8 @@ export type GmudFormState = {
   riscoNaoImplementacao: string
   ambienteAfetado: string[]
   comunicaCliente: string
+  /** Texto livre; só Rede Externa. */
+  clientesManuais: string
   impactoParada: string
   /** Rede Externa, quando há impacto de parada: 'Parcial' | 'Total'. Persistido em `categoria_data`. */
   tipoIndisponibilidade: string
@@ -362,7 +371,6 @@ export function validateGmudFormBySection(
     req(form.popSite.trim() !== '', 'POP/Site', 'Atividade')
     req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação', 'Atividade')
     req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado', 'Ambiente afetado')
-    req(form.comunicaCliente !== '', 'Comunica cliente?', 'Impacto')
     req(form.impactoParada !== '', 'Impacto de parada?', 'Impacto')
     req(form.planoExecucao.trim() !== '', 'Plano de execução', 'Execução')
     req(form.riscoExecucao.trim() !== '', 'Risco durante a execução', 'Execução')
@@ -436,6 +444,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     riscoNaoImplementacao: '',
     ambienteAfetado: [],
     comunicaCliente: '',
+    clientesManuais: '',
     impactoParada: '',
     tipoIndisponibilidade: '',
     duracaoEstimada: '',

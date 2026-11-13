@@ -85,6 +85,7 @@ function Summary({ info }: { info: AreaApprovalInfo }) {
         <Row label="Janela de execução" value={janela} />
         <Row label="POP / Site" value={g.popSite} />
         <Row label="Abrangência na rede" value={g.escopoRede ?? ''} />
+        <Row label="Clientes ponto a ponto e fibra apagada" value={g.clientesManuais ?? ''} />
         <Row label="Solicitante" value={g.solicitante} />
       </dl>
       {g.descricao.trim() !== '' ? (

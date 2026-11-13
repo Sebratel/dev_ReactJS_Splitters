@@ -8,6 +8,7 @@ import {
   redeExternaCategoriaData,
   redeExternaImpactoData,
   validateGmudForm,
+  validateGmudFormBySection,
   type GmudFormState,
 } from '@/features/gmud/model/gmudForm'
 import {
@@ -202,5 +203,25 @@ describe('abrangência da Rede Externa (ponto de acesso, slot, PON, splitter)', 
     expect(rotasFromCategoriaData({ escopoRotas: [], escopoRede: escopo })).toEqual([])
     expect(rotasFromCategoriaData(null)).toEqual([])
     expect(rotasFromCategoriaData({ escopoRotas: [escopo, escopo] })).toHaveLength(1)
+  })
+
+  it('clientes ponto a ponto e fibra apagada: grava o texto limpo, mesmo sem impacto nem rotas', () => {
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRotas: [], clientesManuais: '  Cliente A - circuito 1\nCliente B  ' })).toEqual({
+      tipoIndisponibilidade: '',
+      duracaoEstimada: '',
+      clientesManuais: 'Cliente A - circuito 1\nCliente B',
+    })
+    expect(redeExternaCategoriaData({ ...semImpacto, escopoRotas: [], clientesManuais: '   ' })).toBeNull()
+  })
+
+  it('clientes manuais entram na máscara do Elleven, uma frase por cliente', () => {
+    const form: GmudFormState = { ...emptyGmudForm(), clientesManuais: 'Cliente A - circuito 1\n\nCliente B' }
+    expect(buildGmudDescription(form)).toContain('Clientes ponto a ponto e fibra apagada: Cliente A - circuito 1; Cliente B')
+    expect(buildGmudDescription(emptyGmudForm())).not.toContain('ponto a ponto')
+  })
+
+  it('"Comunica cliente?" deixou de ser obrigatório na Rede Externa', () => {
+    const pend = validateGmudFormBySection({ ...emptyGmudForm('a@b.com', 'A'), categoria: 'rede_externa' })
+    expect(pend.some((p) => /Comunica cliente/.test(p.message))).toBe(false)
   })
 })
