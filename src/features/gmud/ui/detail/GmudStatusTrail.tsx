@@ -2,6 +2,9 @@ import { AlertTriangle, Check, Minus, X } from 'lucide-react'
 import type { TrailState, TrailStep } from '@/features/gmud/lib/gmudStatusTrail'
 import { cn } from '@/shared/lib/utils'
 
+/** Intervalo entre um passo e o seguinte na animação de entrada. */
+const STEP_MS = 300
+
 const DOT: Record<TrailState, string> = {
   done: 'bg-emerald-600 text-white',
   current: 'bg-primary text-white',
@@ -36,17 +39,34 @@ export function GmudStatusTrail({ steps, notice }: { steps: TrailStep[]; notice?
             {i > 0 ? (
               <span
                 className={cn(
-                  'absolute right-1/2 top-3.5 h-px w-full -translate-y-1/2',
+                  'gmud-trail-line absolute right-1/2 top-3.5 h-px w-full -translate-y-1/2',
                   steps[i - 1]?.state === 'done' ? 'bg-emerald-600/60' : 'bg-neutral-200 dark:bg-white/10',
                 )}
+                style={{ '--d': `${(i - 1) * STEP_MS + 150}ms` } as React.CSSProperties}
                 aria-hidden
               />
             ) : null}
-            <span className="relative"><Dot state={s.state} index={i} /></span>
-            <span className={cn('text-xs font-semibold', s.state === 'pending' || s.state === 'skipped' ? 'text-on-surface-variant' : 'text-on-surface')}>
-              {s.label}
+            <span className="relative">
+              {s.state === 'current' ? (
+                <span
+                  className="gmud-trail-halo absolute inset-0 rounded-full bg-primary/50"
+                  style={{ '--d': `${steps.length * STEP_MS}ms` } as React.CSSProperties}
+                  aria-hidden
+                />
+              ) : null}
+              <span className="gmud-trail-dot relative block" style={{ '--d': `${i * STEP_MS}ms` } as React.CSSProperties}>
+                <Dot state={s.state} index={i} />
+              </span>
             </span>
-            <span className={cn('max-w-full truncate text-[11px]', HINT[s.state])} title={s.hint}>{s.hint}</span>
+            <span
+              className="gmud-trail-label flex min-w-0 max-w-full flex-col items-center gap-1"
+              style={{ '--d': `${i * STEP_MS + 200}ms` } as React.CSSProperties}
+            >
+              <span className={cn('text-xs font-semibold', s.state === 'pending' || s.state === 'skipped' ? 'text-on-surface-variant' : 'text-on-surface')}>
+                {s.label}
+              </span>
+              <span className={cn('max-w-full truncate text-[11px]', HINT[s.state])} title={s.hint}>{s.hint}</span>
+            </span>
           </li>
         ))}
       </ol>
