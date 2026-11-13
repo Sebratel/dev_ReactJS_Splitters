@@ -104,22 +104,6 @@ export function GmudIndicatorsScreen() {
           ))}
         </div>
 
-        <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
-          {CATEGORIA_OPTIONS.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => setCategoria(c.key)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-semibold transition',
-                categoria === c.key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-
         <div className="ml-auto flex items-center gap-2">
           <p className="text-xs text-on-surface-variant">
             {range.from.split('-').reverse().join('/')} a {range.to.split('-').reverse().join('/')}
@@ -172,22 +156,53 @@ export function GmudIndicatorsScreen() {
             </div>
           ) : null}
 
-          <div role="tablist" aria-label="Seção dos indicadores" className="flex w-fit rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
-            {([['voalle', 'Histórico Voalle'], ['plataforma', 'Plataforma']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={aba === key}
-                onClick={() => setAba(key)}
-                className={cn(
-                  'rounded-md px-4 py-1.5 text-xs font-semibold transition',
-                  aba === key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
-                )}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div role="tablist" aria-label="Seção dos indicadores" className="flex w-fit rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+              {([['voalle', 'Histórico Voalle'], ['plataforma', 'Plataforma']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={aba === key}
+                  onClick={() => setAba(key)}
+                  className={cn(
+                    'rounded-md px-4 py-1.5 text-xs font-semibold transition',
+                    aba === key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {aba === 'plataforma' ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-on-surface-variant">Categoria</span>
+                <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
+                  {CATEGORIA_OPTIONS.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => setCategoria(c.key)}
+                      aria-pressed={categoria === c.key}
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-xs font-semibold transition',
+                        categoria === c.key ? 'bg-surface-container-lowest text-on-surface shadow-sm' : 'text-on-surface-variant hover:text-on-surface',
+                      )}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-on-surface-variant">
+                Os protocolos antigos do Voalle não têm categoria. O filtro por categoria vale na aba{' '}
+                <button type="button" onClick={() => setAba('plataforma')} className="font-semibold text-on-surface underline-offset-2 hover:underline">
+                  Plataforma
+                </button>
+                .
+              </p>
+            )}
           </div>
 
           {aba === 'voalle' ? (
