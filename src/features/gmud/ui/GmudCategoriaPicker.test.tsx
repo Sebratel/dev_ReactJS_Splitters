@@ -43,4 +43,37 @@ describe('GmudCategoriaPicker', () => {
       /Sistema e fornecedor.*Mudança prevista.*Impacto.*Contingência/,
     )
   })
+
+  it('acende o caminho do nó central até o cartão sob o mouse e apaga ao sair', async () => {
+    render(<GmudCategoriaPicker onEscolher={() => {}} />)
+    expect(screen.queryByTestId('caminho-haste')).toBeNull()
+    await userEvent.hover(screen.getByRole('button', { name: 'Sistemas externos' }))
+    for (const trecho of ['caminho-haste', 'caminho-barra', 'caminho-descida', 'caminho-porta']) {
+      expect(screen.getByTestId(trecho)).toHaveAttribute('data-categoria', 'sistemas_externos')
+      expect(screen.getByTestId(trecho)).toHaveAttribute('data-aceso', 'true')
+    }
+    await userEvent.unhover(screen.getByRole('button', { name: 'Sistemas externos' }))
+    for (const trecho of ['caminho-haste', 'caminho-barra', 'caminho-descida', 'caminho-porta']) {
+      expect(screen.getByTestId(trecho)).toHaveAttribute('data-aceso', 'false')
+    }
+  })
+
+  it('o caminho até o cartão do meio não tem trecho horizontal', async () => {
+    render(<GmudCategoriaPicker onEscolher={() => {}} />)
+    await userEvent.hover(screen.getByRole('button', { name: 'Sistemas internos' }))
+    expect(screen.getByTestId('caminho-haste')).toHaveAttribute('data-aceso', 'true')
+    expect(screen.getByTestId('caminho-descida')).toHaveAttribute('data-categoria', 'sistemas_internos')
+    expect(screen.queryByTestId('caminho-barra')).toBeNull()
+  })
+
+  it('acende o caminho pelo foco do teclado e troca de cartão ao avançar', async () => {
+    render(<GmudCategoriaPicker onEscolher={() => {}} />)
+    await userEvent.tab()
+    expect(screen.getByTestId('caminho-descida')).toHaveAttribute('data-categoria', 'rede_externa')
+    expect(screen.getByTestId('caminho-barra')).toHaveAttribute('data-aceso', 'true')
+    await userEvent.tab()
+    expect(screen.getAllByTestId('caminho-descida')).toHaveLength(1)
+    expect(screen.getByTestId('caminho-descida')).toHaveAttribute('data-categoria', 'sistemas_internos')
+    expect(screen.queryByTestId('caminho-barra')).toBeNull()
+  })
 })
