@@ -61,6 +61,15 @@ describe('cascata ponto de acesso → slot → PON → splitter', () => {
     expect(o.splitters.map((s) => s.code)).toEqual(['S2'])
   })
 
+  it('agrupa os splitters por PON (e por slot quando é o ponto de acesso inteiro)', () => {
+    const slot = buildEscopoRedeOptions(doSite, { ...emptyEscopoRede(), apCode: 'AP-1', slot: 1 })
+    expect(slot.splitterGroups.map((g) => g.label)).toEqual(['PON 1', 'PON 2'])
+    expect(slot.splitterGroups[0]?.items.map((s) => s.code)).toEqual(['S1'])
+    const ap = buildEscopoRedeOptions(doSite, { ...emptyEscopoRede(), apCode: 'AP-1' })
+    expect(ap.splitterGroups.map((g) => g.label)).toEqual(['Slot 1 · PON 1', 'Slot 1 · PON 2', 'Slot 2 · PON 4'])
+    expect(buildEscopoRedeOptions(doSite, emptyEscopoRede()).splitterGroups).toEqual([])
+  })
+
   it('remove da escolha PON e splitter que saíram do recorte', () => {
     const escopo = {
       ...emptyEscopoRede(),
