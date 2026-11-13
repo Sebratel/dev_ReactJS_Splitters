@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ClipboardList, Loader2, Zap } from 'lucide-react'
+import { Check, ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -50,6 +50,9 @@ import { GmudEscopoRedeField } from '@/features/gmud/ui/GmudEscopoRedeField'
 import { emptyEscopoRede, hasEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
+import { GmudFormTrail } from '@/features/gmud/ui/GmudFormTrail'
+import { pendenciasDaEtapa, primeiraEtapaPendente, wizardStates, wizardSteps } from '@/features/gmud/lib/gmudWizard'
+import { clearGmudDraft, draftHasContent, gmudDraftKey, loadGmudDraft, saveGmudDraft } from '@/features/gmud/lib/gmudDraft'
 import {
   buildGmudDescription,
   buildGmudTitle,
@@ -82,66 +85,17 @@ function sectionId(title: string): string {
   return 'gmud-sec-' + title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-/** Estado do acordeão do formulário: só uma seção fica aberta por vez; as outras mostram o status numa linha. */
-type FormAccordion = {
-  current: string
-  select: (title: string) => void
-  pending: Record<string, number>
-  summaries: Record<string, string>
-  next: (title: string) => string | null
-}
-const FormAccordionContext = createContext<FormAccordion | null>(null)
+/** Etapa atual do formulário: só os cartões das seções da etapa aparecem; os demais ficam montados e ocultos (não perdem o que foi digitado). */
+const FormStepContext = createContext<{ visible: ReadonlySet<string> } | null>(null)
 
 function FormCard({ title, children, hint, grid = true }: { title: string; children: React.ReactNode; hint?: string; grid?: boolean }) {
-  const acc = useContext(FormAccordionContext)
-  const open = acc ? acc.current === title : true
-  const pend = acc?.pending[title] ?? 0
-  const summary = acc?.summaries[title] ?? ''
-  const next = acc?.next(title) ?? null
-  const optional = title.includes('(opcional)')
-  const bodyId = sectionId(title) + '-corpo'
+  const ctx = useContext(FormStepContext)
+  const visible = ctx ? ctx.visible.has(title) : true
   return (
-    <div className={cn(CARD, 'scroll-mt-24 !p-0')} data-gmud-section={title} id={sectionId(title)}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => acc?.select(open ? '' : title)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5"
-      >
-        <span
-          className={cn(
-            'flex size-5 shrink-0 items-center justify-center rounded-full',
-            pend > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' : optional ? 'bg-surface-container-low text-on-surface-variant' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-          )}
-          aria-hidden
-        >
-          {pend > 0 ? <span className="text-[11px] font-bold">{pend}</span> : <Check size={12} strokeWidth={3} />}
-        </span>
-        <span className="text-sm font-bold text-on-surface">{title}</span>
-        {!open && summary !== '' ? <span className="min-w-0 flex-1 truncate text-xs text-on-surface-variant">{summary}</span> : <span className="flex-1" />}
-        {pend > 0 ? (
-          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-            {pend} pendência{pend === 1 ? '' : 's'}
-          </span>
-        ) : null}
-        <ChevronDown size={16} className={cn('shrink-0 text-on-surface-variant transition', open ? 'rotate-180' : '')} aria-hidden />
-      </button>
-      <div id={bodyId} hidden={!open} className="px-4 pb-4 sm:px-5 sm:pb-5">
-        {hint ? <p className="mb-3 text-xs text-on-surface-variant">{hint}</p> : null}
-        {grid ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div> : children}
-        {next ? (
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => acc?.select(next)}
-              className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/80 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
-            >
-              Próxima seção <ChevronDown size={13} aria-hidden />
-            </button>
-          </div>
-        ) : null}
-      </div>
+    <div className={cn(CARD, 'scroll-mt-24')} data-gmud-section={title} id={sectionId(title)} hidden={!visible}>
+      <p className="mb-3 text-sm font-bold text-on-surface">{title}</p>
+      {hint ? <p className="mb-3 text-xs text-on-surface-variant">{hint}</p> : null}
+      {grid ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div> : children}
     </div>
   )
 }
@@ -785,11 +739,24 @@ function SistemasExternosFields({
 export function GmudNewScreen() {
   const navigate = useNavigate()
   const profile = useAccessAuthStore((s) => s.profile)
-  const [form, setForm] = useState<GmudFormState>(() =>
-    emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
+  const rascunhoKey = gmudDraftKey(profile?.email ?? '')
+  // Rascunho guardado neste navegador: recupera na abertura (o aviso permite descartar).
+  const [rascunhoInicial] = useState(() =>
+    typeof window === 'undefined'
+      ? null
+      : loadGmudDraft(window.localStorage, rascunhoKey, {
+          form: emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
+          si: emptyGmudSistemasInternosData(),
+          se: emptyGmudSistemasExternosData(),
+        }),
   )
-  const [siData, setSiData] = useState<GmudSistemasInternosData>(emptyGmudSistemasInternosData)
-  const [seData, setSeData] = useState<GmudSistemasExternosData>(emptyGmudSistemasExternosData)
+  const [rascunhoRecuperadoEm, setRascunhoRecuperadoEm] = useState<string | null>(rascunhoInicial?.savedAt ?? null)
+  const enviadoRef = useRef(false)
+  const [form, setForm] = useState<GmudFormState>(() =>
+    rascunhoInicial?.form ?? emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''),
+  )
+  const [siData, setSiData] = useState<GmudSistemasInternosData>(() => rascunhoInicial?.si ?? emptyGmudSistemasInternosData())
+  const [seData, setSeData] = useState<GmudSistemasExternosData>(() => rascunhoInicial?.se ?? emptyGmudSistemasExternosData())
   const idempotencyKeyRef = useRef<string | null>(null)
 
   const { data: configLists, isLoading: listsLoading } = useQuery({
@@ -897,6 +864,8 @@ export function GmudNewScreen() {
       })
     },
     onSuccess: (protocols) => {
+      enviadoRef.current = true
+      clearGmudDraft(window.localStorage, rascunhoKey)
       idempotencyKeyRef.current = null
       serieIdRef.current = null
       // A lista e a agenda precisam mostrar a GMUD nova assim que a tela voltar.
@@ -927,8 +896,8 @@ export function GmudNewScreen() {
       form.categoria === 'sistemas_externos' ? seData : null,
     )
     if (miss.length > 0) {
-      const primeira = pendenciasDetalhe[0]?.section
-      if (primeira) irParaSecao(primeira)
+      const idx = primeiraEtapaPendente(passos, pendenciasDetalhe)
+      if (idx >= 0) irParaEtapa(idx)
       showFeedbackDialog({
         variant: 'warning',
         title: 'Corrija antes de enviar',
@@ -946,45 +915,74 @@ export function GmudNewScreen() {
     form.categoria === 'sistemas_internos' ? siData : null,
     form.categoria === 'sistemas_externos' ? seData : null,
   )
-  const pendencias = pendenciasDetalhe.map((p) => p.message)
-  const pendentesPorSecao: Record<string, number> = {}
-  for (const p of pendenciasDetalhe) pendentesPorSecao[p.section] = (pendentesPorSecao[p.section] ?? 0) + 1
-  const formRef = useRef<HTMLDivElement>(null)
-  const [secoes, setSecoes] = useState<string[]>([])
-  const [atual, setAtual] = useState('Identificação')
-  const secaoAtual = secoes.length === 0 || secoes.includes(atual) || atual === '' ? atual : (secoes[0] ?? '')
-  const irParaSecao = (titulo: string) => {
-    setAtual(titulo)
-    // Espera a seção abrir (o resto fecha) antes de rolar até ela.
-    window.setTimeout(() => document.getElementById(sectionId(titulo))?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  const passos = wizardSteps(form.categoria)
+  const ultimaEtapa = passos.length - 1
+  const [etapa, setEtapa] = useState(rascunhoInicial?.etapa ?? 0)
+  const [maxEtapa, setMaxEtapa] = useState(rascunhoInicial?.maxEtapa ?? 0)
+  const [aviso, setAviso] = useState<string[]>([])
+  const trailRef = useRef<HTMLDivElement>(null)
+  const irParaEtapa = (i: number) => {
+    const destino = Math.min(Math.max(i, 0), ultimaEtapa)
+    setEtapa(destino)
+    setMaxEtapa((m) => Math.max(m, destino))
+    setAviso([])
+    window.setTimeout(() => trailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30)
   }
-  const resumos: Record<string, string> = {
-    'Identificação': [form.tipo, form.titulo].filter((x) => x.trim() !== '').join(' · '),
-    'Ambiente afetado': collectAmbienteAfetado(form).join(', '),
-    'Janela de mudança':
-      form.dataInicio !== ''
-        ? `${form.dataInicio.split('-').reverse().slice(0, 2).join('/')} ${form.horaInicio} → ${form.dataFim.split('-').reverse().slice(0, 2).join('/')} ${form.horaFim}`.trim()
-        : '',
-    'Recursos administrativos': (() => {
-      const n = Object.values(form.recursosAdministrativos).filter((p) => p !== 'na').length
-      return n === 0 ? '' : `${n} área${n === 1 ? '' : 's'} aprova${n === 1 ? '' : 'm'}`
-    })(),
+  const proximaEtapa = () => {
+    const passo = passos[etapa]
+    const pend = passo ? pendenciasDaEtapa(pendenciasDetalhe, passo) : []
+    if (pend.length > 0) {
+      setAviso(pend.map((p) => p.message))
+      return
+    }
+    irParaEtapa(etapa + 1)
   }
-  const acordeao: FormAccordion = {
-    current: secaoAtual,
-    select: setAtual,
-    pending: pendentesPorSecao,
-    summaries: resumos,
-    next: (titulo) => {
-      const i = secoes.indexOf(titulo)
-      return i >= 0 && i < secoes.length - 1 ? (secoes[i + 1] ?? null) : null
-    },
-  }
+  // O aviso some sozinho conforme a pessoa resolve cada pendência.
+  const avisoAtual = aviso.filter((m) => pendenciasDetalhe.some((p) => p.message === m))
+  const estados = wizardStates(passos, etapa, maxEtapa, pendenciasDetalhe)
+  const contagens = passos.map((p) => pendenciasDaEtapa(pendenciasDetalhe, p).length)
+  const secoesVisiveis = new Set(passos[etapa]?.sections ?? [])
+
+  // Rascunho: guarda o que foi digitado (sem formulário em branco) e some ao enviar.
   useEffect(() => {
-    const els = formRef.current?.querySelectorAll<HTMLElement>('[data-gmud-section]')
-    const titulos = Array.from(els ?? []).map((e) => e.dataset.gmudSection ?? '').filter((t) => t !== '')
-    setSecoes((prev) => (prev.length === titulos.length && prev.every((t, i) => t === titulos[i]) ? prev : titulos))
-  }, [form.categoria, form.tipo, form.impactoParada, listsLoading])
+    if (enviadoRef.current) return
+    const t = window.setTimeout(() => {
+      if (enviadoRef.current) return
+      if (!draftHasContent(form, emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''))) {
+        clearGmudDraft(window.localStorage, rascunhoKey)
+        return
+      }
+      saveGmudDraft(window.localStorage, rascunhoKey, { etapa, maxEtapa, form, si: siData, se: seData })
+    }, 600)
+    return () => window.clearTimeout(t)
+  }, [form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
+
+  const descartarRascunho = () => {
+    clearGmudDraft(window.localStorage, rascunhoKey)
+    setForm(emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''))
+    setSiData(emptyGmudSistemasInternosData())
+    setSeData(emptyGmudSistemasExternosData())
+    setEtapa(0)
+    setMaxEtapa(0)
+    setAviso([])
+    setRascunhoRecuperadoEm(null)
+  }
+
+  const janelaResumo =
+    form.dataInicio !== ''
+      ? `${form.dataInicio.split('-').reverse().slice(0, 2).join('/')} ${form.horaInicio} → ${form.dataFim.split('-').reverse().slice(0, 2).join('/')} ${form.horaFim}`.trim()
+      : ''
+  const aprovam = Object.values(form.recursosAdministrativos).filter((p) => p !== 'na').length
+  const resumoEtapa = (i: number): string => {
+    if (i === 0) return [form.tipo, form.titulo].filter((x) => x.trim() !== '').join(' · ')
+    if (i === 1) {
+      if (form.categoria === 'rede_externa') return [form.popSite, collectAmbienteAfetado(form).join(', ')].filter((x) => x.trim() !== '').join(' · ')
+      return form.categoria === 'sistemas_internos' ? siData.sistemaAfetado : seData.sistemaExterno
+    }
+    if (i === 2) return form.impactoParada !== '' ? `Parada do serviço: ${form.impactoParada}` : ''
+    if (i === 3) return [janelaResumo, aprovam > 0 ? `${aprovam} área${aprovam === 1 ? '' : 's'} aprova${aprovam === 1 ? '' : 'm'}` : ''].filter((x) => x !== '').join(' · ')
+    return ''
+  }
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
@@ -1032,15 +1030,32 @@ export function GmudNewScreen() {
         </div>
       </div>
 
+      {rascunhoRecuperadoEm ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200/90 bg-surface-container-lowest px-4 py-2.5 text-xs text-on-surface-variant dark:border-white/10">
+          <span>
+            Rascunho recuperado, salvo em{' '}
+            {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.
+          </span>
+          <button type="button" onClick={descartarRascunho} className="font-semibold text-on-surface underline-offset-2 hover:underline">
+            Começar do zero
+          </button>
+        </div>
+      ) : null}
+
+      <div ref={trailRef} className="scroll-mt-24">
+        <GmudFormTrail steps={passos} states={estados} current={etapa} maxReached={maxEtapa} pendCounts={contagens} onSelect={irParaEtapa} />
+      </div>
+
       <form
         className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]"
         onSubmit={(e) => {
           e.preventDefault()
-          if (canSubmit) handleSubmit()
+          if (etapa < ultimaEtapa) proximaEtapa()
+          else if (canSubmit) handleSubmit()
         }}
       >
-        <FormAccordionContext.Provider value={acordeao}>
-        <div className="min-w-0 space-y-4" ref={formRef}>
+        <FormStepContext.Provider value={{ visible: secoesVisiveis }}>
+        <div className="min-w-0 space-y-4">
         {/* Campos comuns — Identificação + Solicitante */}
         <CamposComuns form={form} set={set} categoria={form.categoria} />
 
@@ -1096,56 +1111,92 @@ export function GmudNewScreen() {
 
         {/* Observações — comum a todas as categorias */}
         <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
+
+        {etapa === ultimaEtapa ? (
+          <div className={CARD}>
+            <p className="mb-1 text-sm font-bold text-on-surface">Revisão</p>
+            <p className="mb-2 text-xs text-on-surface-variant">Confira cada etapa. Para mudar algo, use Editar.</p>
+            <ul className="divide-y divide-neutral-200/60 dark:divide-white/5">
+              {passos.slice(0, ultimaEtapa).map((p, i) => {
+                const n = contagens[i] ?? 0
+                return (
+                  <li key={p.key} className="flex items-start gap-3 py-2.5">
+                    <span
+                      className={cn(
+                        'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full',
+                        n > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+                      )}
+                      aria-hidden
+                    >
+                      {n > 0 ? <span className="text-[11px] font-bold">{n}</span> : <Check size={12} strokeWidth={3} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-on-surface">{p.label}</p>
+                      <p className="truncate text-xs text-on-surface-variant">
+                        {n > 0 ? `${n} pendência${n === 1 ? '' : 's'}: ${pendenciasDaEtapa(pendenciasDetalhe, p).map((x) => x.message).join(', ')}` : resumoEtapa(i) || 'Sem dados para mostrar'}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => irParaEtapa(i)} className="shrink-0 text-xs font-semibold text-on-surface underline-offset-2 hover:underline">
+                      Editar
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {avisoAtual.length > 0 ? (
+          <div role="alert" className="rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="font-semibold">Falta preencher para continuar:</p>
+            <ul className="mt-1 list-inside list-disc">
+              {avisoAtual.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
+          <button
+            type="button"
+            onClick={() => navigate('/gmud')}
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+          >
+            Cancelar
+          </button>
+          <div className="flex items-center gap-2">
+            {etapa > 0 ? (
+              <button
+                type="button"
+                onClick={() => irParaEtapa(etapa - 1)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+              >
+                Voltar
+              </button>
+            ) : null}
+            {etapa < ultimaEtapa ? (
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90"
+              >
+                Próximo
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {mutation.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Zap className="size-4" aria-hidden />}
+                {mutation.isPending ? 'Abrindo no Elleven…' : 'Abrir GMUD no Elleven'}
+              </button>
+            )}
+          </div>
         </div>
-        </FormAccordionContext.Provider>
+        </div>
+        </FormStepContext.Provider>
 
         {/* Coluna lateral: pré-visualização + envio (no celular fica abaixo do formulário) */}
         <aside className="min-w-0 space-y-4 lg:sticky lg:top-20">
-        <div className={CARD}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-bold text-on-surface">Progresso</p>
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-bold',
-                pendencias.length === 0
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
-                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
-              )}
-            >
-              {pendencias.length === 0 ? 'Pronto para abrir' : `${pendencias.length} pendência${pendencias.length === 1 ? '' : 's'}`}
-            </span>
-          </div>
-          {pendencias.length > 0 ? (
-            <ul className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-on-surface-variant">
-              {pendenciasDetalhe.map((p) => (
-                <li key={p.message}>
-                  <button type="button" onClick={() => irParaSecao(p.section)} className="flex w-full gap-1.5 text-left hover:text-on-surface">
-                    <span aria-hidden>•</span>
-                    <span>{p.message}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {secoes.length > 0 ? (
-            <nav aria-label="Seções do formulário" className="mt-3 flex flex-wrap gap-1.5 border-t border-neutral-200/60 pt-3 dark:border-white/5">
-              {secoes.map((t) => (
-                <a
-                  key={t}
-                  href={`#${sectionId(t)}`}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    irParaSecao(t)
-                  }}
-                  className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-on-surface-variant ring-1 ring-neutral-200/80 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
-                >
-                  {t}
-                </a>
-              ))}
-            </nav>
-          ) : null}
-        </div>
-
         {/* Pré-visualização da máscara */}
         <div className={CARD}>
           <p className="mb-2 text-sm font-bold text-on-surface">
@@ -1173,27 +1224,6 @@ export function GmudNewScreen() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 pb-6">
-          <button
-            type="button"
-            onClick={() => navigate('/gmud')}
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {mutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-            ) : (
-              <Zap className="size-4" aria-hidden />
-            )}
-            {mutation.isPending ? 'Abrindo no Elleven…' : 'Abrir GMUD no Elleven'}
-          </button>
-        </div>
         </aside>
       </form>
     </div>
