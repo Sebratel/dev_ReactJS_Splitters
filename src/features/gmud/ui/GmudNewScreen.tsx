@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, CalendarClock, Check, ClipboardList, Cloud, Loader2, Monitor, Network, RadioTower, Repeat, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, Check, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
@@ -51,6 +51,7 @@ import { GmudClientesSemSplitterField } from '@/features/gmud/ui/GmudClientesSem
 import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
 import { GmudFormTrail } from '@/features/gmud/ui/GmudFormTrail'
+import { GmudCategoriaPicker } from '@/features/gmud/ui/GmudCategoriaPicker'
 import { pendenciasDaEtapa, primeiraEtapaPendente, wizardStates, wizardSteps } from '@/features/gmud/lib/gmudWizard'
 import { clearGmudDraft, draftHasContent, gmudDraftKey, loadGmudDraft, saveGmudDraft } from '@/features/gmud/lib/gmudDraft'
 import {
@@ -1028,57 +1029,7 @@ export function GmudNewScreen() {
         <div className={CARD}>
           <h2 className="text-lg font-bold text-on-surface">Qual é a categoria da GMUD?</h2>
           <p className="mt-1 text-sm text-on-surface-variant">Ela define as perguntas do formulário e quem aprova.</p>
-          {/* Mapa da rede: a GMUD no centro, ligada às três frentes (no celular vira uma lista de cartões). */}
-          <div role="group" aria-label="Categoria da GMUD" className="relative mt-4 flex flex-col gap-3 sm:block sm:h-[340px]">
-            <svg
-              aria-hidden
-              className="pointer-events-none absolute inset-0 hidden size-full text-neutral-400 dark:text-white/25 sm:block"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-            >
-              {[17, 50, 83].map((x) => (
-                <line key={x} x1="50" y1="24" x2={x} y2="76" stroke="currentColor" strokeWidth="1.5" strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
-              ))}
-            </svg>
-            <div className="flex items-center gap-3 rounded-xl border border-primary bg-primary px-4 py-3 text-neutral-900 shadow-sm sm:absolute sm:left-1/2 sm:top-[24%] sm:w-[300px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:justify-center sm:text-center">
-              <Network size={26} aria-hidden className="shrink-0" />
-              <span>
-                <span className="block text-base font-bold">Abrir GMUD</span>
-                <span className="block text-xs text-neutral-800">Escolha onde a mudança acontece</span>
-              </span>
-            </div>
-            {(['rede_externa', 'sistemas_internos', 'sistemas_externos'] as GmudCategoria[]).map((cat) => {
-              const Icone = cat === 'rede_externa' ? RadioTower : cat === 'sistemas_internos' ? Monitor : Cloud
-              const posicao =
-                cat === 'rede_externa'
-                  ? 'sm:left-[17%]'
-                  : cat === 'sistemas_internos'
-                    ? 'sm:left-[50%]'
-                    : 'sm:left-[83%]'
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => escolherCategoria(cat)}
-                  className={cn(
-                    'group rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-4 text-left transition hover:border-primary hover:bg-primary focus-visible:border-primary focus-visible:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/10',
-                    'sm:absolute sm:top-[76%] sm:w-[30%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:text-center',
-                    posicao,
-                  )}
-                >
-                  <span className="mb-2 flex size-10 items-center justify-center rounded-xl bg-surface-container-low text-on-surface transition group-hover:bg-neutral-900/10 group-hover:text-neutral-900 group-focus-visible:bg-neutral-900/10 group-focus-visible:text-neutral-900 sm:mx-auto" aria-hidden>
-                    <Icone size={22} />
-                  </span>
-                  <span className="block text-base font-bold text-on-surface transition group-hover:text-neutral-900 group-focus-visible:text-neutral-900">{GMUD_CATEGORIA_LABEL[cat]}</span>
-                  <span className="mt-1 block text-xs text-on-surface-variant transition group-hover:text-neutral-800 group-focus-visible:text-neutral-800">
-                    {cat === 'rede_externa' && 'Infraestrutura, OLTs, backbone, sites'}
-                    {cat === 'sistemas_internos' && 'Hub Apps, plataformas, sistemas Sebratel'}
-                    {cat === 'sistemas_externos' && 'Voalle, GeoGrid, Matrix, fornecedores'}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <GmudCategoriaPicker onEscolher={escolherCategoria} />
         </div>
       </div>
     )
