@@ -1,10 +1,12 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { ArrowRight, Network } from 'lucide-react'
 import { GMUD_CATEGORIA_LABEL, type GmudCategoria } from '@/features/gmud/model/gmudForm'
 import { previaDoFormulario } from '@/features/gmud/lib/gmudWizard'
 import { cn } from '@/shared/lib/utils'
 
 const CATEGORIAS: GmudCategoria[] = ['rede_externa', 'sistemas_internos', 'sistemas_externos']
+/** Coluna do meio: fica bem embaixo do nó central, então o caminho até ela não tem trecho horizontal. */
+const CENTRO = 1
 
 const DESCRICAO: Record<GmudCategoria, string> = {
   rede_externa: 'Infraestrutura, OLTs, backbone, sites',
@@ -93,12 +95,32 @@ const ILUSTRACAO: Record<GmudCategoria, () => React.JSX.Element> = {
 
 /** Linha da árvore (só a partir de `md`; no celular os cartões viram lista e a árvore some). */
 const LINHA = 'pointer-events-none absolute hidden bg-neutral-300 md:block dark:bg-white/20'
+/**
+ * Trecho do "caminho aceso" (nó central → cartão sob o mouse/foco), por cima das linhas cinza e um pouco
+ * mais grosso que elas. Ao sair, some em 120 ms; a animação de "ligando" fica nas classes gmud-wire-*.
+ */
+const ACESO = 'pointer-events-none absolute hidden bg-neutral-900 transition-opacity duration-[120ms] md:block dark:bg-white'
 
-function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indice: number; onEscolher: (cat: GmudCategoria) => void }) {
+/** Cartão cujo caminho está desenhado; `seq` muda a cada nova ligação, para a animação recomeçar do nó. */
+type Caminho = { cat: GmudCategoria; seq: number; aceso: boolean }
+
+function CartaoCategoria({
+  cat, indice, onEscolher, caminho, onHover, onFoco,
+}: {
+  cat: GmudCategoria
+  indice: number
+  onEscolher: (cat: GmudCategoria) => void
+  caminho: Caminho | null
+  onHover: (cat: GmudCategoria | null) => void
+  onFoco: (cat: GmudCategoria | null) => void
+}) {
   const id = useId()
   const Ilustracao = ILUSTRACAO[cat]
   const previa = previaDoFormulario(cat)
   const ultimo = indice === CATEGORIAS.length - 1
+  const meu = caminho?.cat === cat ? caminho : null
+  // Sem trecho horizontal (cartão do meio) a descida começa logo depois da haste.
+  const atrasoDescida = indice === CENTRO ? 100 : 250
 
   return (
     <div className="relative flex md:px-2 md:pt-7">
@@ -106,10 +128,14 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
         type="button"
         style={{ '--d': `${440 + indice * 30}ms` } as React.CSSProperties}
         onClick={() => onEscolher(cat)}
+        onMouseEnter={() => onHover(cat)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onFoco(cat)}
+        onBlur={() => onFoco(null)}
         aria-labelledby={`${id}-nome`}
         aria-describedby={`${id}-desc ${id}-previa`}
         className={cn(
-          'gmud-pick-card group peer flex w-full flex-col rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-3 text-left shadow-sm transition duration-200 sm:p-4 dark:border-white/10',
+          'gmud-pick-card group flex w-full flex-col rounded-xl border border-neutral-200/80 bg-surface-container-lowest p-3 text-left shadow-sm transition duration-200 sm:p-4 dark:border-white/10',
           'hover:shadow-md focus-visible:shadow-md motion-safe:hover:-translate-y-0.5 motion-safe:focus-visible:-translate-y-0.5 motion-reduce:transition-none',
           'hover:border-primary hover:bg-primary focus-visible:border-primary focus-visible:bg-primary',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest dark:focus-visible:ring-white',
@@ -166,12 +192,38 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
       />
       <span
         aria-hidden
-        className={cn(LINHA, 'gmud-pick-drop left-1/2 top-0 h-7 w-0.5 -translate-x-1/2 transition-colors peer-hover:bg-neutral-900 peer-focus-visible:bg-neutral-900 dark:peer-hover:bg-white dark:peer-focus-visible:bg-white')}
+        className={cn(LINHA, 'gmud-pick-drop left-1/2 top-0 h-7 w-0.5 -translate-x-1/2')}
       />
       <span
         aria-hidden
-        className="gmud-pick-dot pointer-events-none absolute left-1/2 top-7 hidden size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-400 bg-surface-container-lowest transition-colors peer-hover:border-neutral-900 peer-hover:bg-primary peer-focus-visible:border-neutral-900 peer-focus-visible:bg-primary md:block dark:border-white/40"
+        className="gmud-pick-dot pointer-events-none absolute left-1/2 top-7 hidden size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-400 bg-surface-container-lowest md:block dark:border-white/40"
       />
+      {/* Fim do caminho aceso: a descida desta coluna e o ponto de porta preenchido. */}
+      {meu ? (
+        <>
+          <span
+            key={`descida-${meu.seq}`}
+            aria-hidden
+            data-testid="caminho-descida"
+            data-categoria={cat}
+            data-aceso={meu.aceso}
+            style={{ '--d': `${atrasoDescida}ms` } as React.CSSProperties}
+            className={cn(ACESO, 'gmud-wire-y left-1/2 top-0 h-7 w-[3px] -translate-x-1/2', meu.aceso ? 'opacity-100' : 'opacity-0')}
+          />
+          <span
+            key={`porta-${meu.seq}`}
+            aria-hidden
+            data-testid="caminho-porta"
+            data-categoria={cat}
+            data-aceso={meu.aceso}
+            style={{ '--d': `${atrasoDescida + 100}ms` } as React.CSSProperties}
+            className={cn(
+              'gmud-wire-dot pointer-events-none absolute left-1/2 top-7 hidden size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900 bg-primary transition-opacity duration-[120ms] md:block dark:border-white',
+              meu.aceso ? 'opacity-100' : 'opacity-0',
+            )}
+          />
+        </>
+      ) : null}
     </div>
   )
 }
@@ -181,6 +233,26 @@ function CartaoCategoria({ cat, indice, onEscolher }: { cat: GmudCategoria; indi
  * Cada frente é um cartão ilustrado com a prévia do que o formulário vai pedir. No celular vira lista.
  */
 export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCategoria) => void }) {
+  // Só visual: qual cartão está sob o mouse e qual tem o foco (o mouse manda quando há os dois).
+  const [estado, setEstado] = useState<{ hover: GmudCategoria | null; foco: GmudCategoria | null; caminho: Caminho | null }>({
+    hover: null,
+    foco: null,
+    caminho: null,
+  })
+  const atualizar = (mudanca: { hover?: GmudCategoria | null; foco?: GmudCategoria | null }) =>
+    setEstado((prev) => {
+      const hover = mudanca.hover !== undefined ? mudanca.hover : prev.hover
+      const foco = mudanca.foco !== undefined ? mudanca.foco : prev.foco
+      const ativo = hover ?? foco
+      const antes = prev.caminho
+      let caminho = antes
+      if (ativo === null) caminho = antes ? { ...antes, aceso: false } : null
+      else if (!antes || !antes.aceso || antes.cat !== ativo) caminho = { cat: ativo, seq: (antes?.seq ?? 0) + 1, aceso: true }
+      return { hover, foco, caminho }
+    })
+  const { caminho } = estado
+  const indiceAtivo = caminho ? CATEGORIAS.indexOf(caminho.cat) : -1
+
   return (
     <div role="group" aria-label="Categoria da GMUD" className="mt-4">
       <div className="gmud-pick-node flex items-center gap-3 rounded-xl border border-primary bg-primary px-4 py-3 text-neutral-900 shadow-sm md:mx-auto md:w-fit md:px-6">
@@ -190,11 +262,47 @@ export function GmudCategoriaPicker({ onEscolher }: { onEscolher: (cat: GmudCate
           <span className="block text-xs text-neutral-800">Escolha onde a mudança acontece</span>
         </span>
       </div>
-      <span aria-hidden className="gmud-pick-stem mx-auto hidden h-6 w-0.5 bg-neutral-300 md:block dark:bg-white/20" />
-      <div className="mt-3 flex flex-col gap-3 md:mt-0 md:grid md:grid-cols-3 md:gap-0">
+      <span aria-hidden className="relative mx-auto hidden h-6 w-0.5 md:block">
+        <span className="gmud-pick-stem absolute inset-0 bg-neutral-300 dark:bg-white/20" />
+        {caminho ? (
+          <span
+            key={`haste-${caminho.seq}`}
+            data-testid="caminho-haste"
+            data-categoria={caminho.cat}
+            data-aceso={caminho.aceso}
+            className={cn(ACESO, 'gmud-wire-y inset-y-0 left-1/2 w-[3px] -translate-x-1/2', caminho.aceso ? 'opacity-100' : 'opacity-0')}
+          />
+        ) : null}
+      </span>
+      <div className="relative mt-3 flex flex-col gap-3 md:mt-0 md:grid md:grid-cols-3 md:gap-0">
         {CATEGORIAS.map((cat, i) => (
-          <CartaoCategoria key={cat} cat={cat} indice={i} onEscolher={onEscolher} />
+          <CartaoCategoria
+            key={cat}
+            cat={cat}
+            indice={i}
+            onEscolher={onEscolher}
+            caminho={caminho}
+            onHover={(c) => atualizar({ hover: c })}
+            onFoco={(c) => atualizar({ foco: c })}
+          />
         ))}
+        {/* Trecho horizontal do caminho aceso: do centro (embaixo do nó) até o meio da coluna do cartão.
+            As três colunas são iguais e sem espaço entre elas, então os meios ficam em 1/6, 1/2 e 5/6. */}
+        {caminho && indiceAtivo !== CENTRO ? (
+          <span
+            key={`barra-${caminho.seq}`}
+            aria-hidden
+            data-testid="caminho-barra"
+            data-categoria={caminho.cat}
+            data-aceso={caminho.aceso}
+            className={cn(
+              ACESO,
+              'gmud-wire-x top-0 h-[3px] -translate-y-[0.5px]',
+              indiceAtivo < CENTRO ? 'left-1/6 right-1/2 origin-right' : 'left-1/2 right-1/6 origin-left',
+              caminho.aceso ? 'opacity-100' : 'opacity-0',
+            )}
+          />
+        ) : null}
       </div>
     </div>
   )

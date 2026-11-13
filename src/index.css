@@ -307,6 +307,31 @@
   animation-delay: var(--d, 440ms);
 }
 
+/* Caminho aceso (nó central → cartão sob o mouse/foco): haste, barra, descida e ponto de porta, em sequência. */
+@keyframes gmud-wire-dot {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.gmud-wire-y {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 100ms linear both;
+  animation-delay: var(--d, 0ms);
+}
+
+.gmud-wire-x {
+  animation: gmud-pick-grow-x 150ms linear 100ms both;
+}
+
+.gmud-wire-dot {
+  animation: gmud-wire-dot 80ms ease-out both;
+  animation-delay: var(--d, 350ms);
+}
+
 /* Ilustrações dos cartões: movimento contínuo e discreto que conta o tema de cada categoria. */
 @keyframes gmud-fiber-trunk {
   0% {
@@ -381,6 +406,9 @@
   .gmud-pick-drop,
   .gmud-pick-dot,
   .gmud-pick-card,
+  .gmud-wire-y,
+  .gmud-wire-x,
+  .gmud-wire-dot,
   .gmud-fiber-trunk,
   .gmud-fiber-fan,
   .gmud-led,
