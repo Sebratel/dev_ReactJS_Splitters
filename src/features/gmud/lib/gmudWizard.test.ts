@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pendenciasDaEtapa, primeiraEtapaPendente, wizardSteps, wizardStates } from '@/features/gmud/lib/gmudWizard'
+import { pendenciasDaEtapa, previaDoFormulario, primeiraEtapaPendente, wizardSteps, wizardStates } from '@/features/gmud/lib/gmudWizard'
 import {
   emptyGmudForm,
   emptyGmudSistemasExternosData,
@@ -53,5 +53,16 @@ describe('pendências por etapa e estados', () => {
   it('estados: atual, completas, atenção e ainda não alcançadas', () => {
     expect(wizardStates(steps, 2, 2, pend)).toEqual(['done', 'attention', 'current', 'pending', 'pending'])
     expect(wizardStates(steps, 0, 3, [])).toEqual(['current', 'done', 'done', 'done', 'pending'])
+  })
+})
+
+describe('prévia do formulário na escolha da categoria', () => {
+  it('lista as seções próprias de cada categoria e as etapas finais comuns', () => {
+    expect(previaDoFormulario('rede_externa').especificas).toEqual(['Atividade', 'Ambiente afetado', 'Impacto', 'Execução'])
+    expect(previaDoFormulario('sistemas_internos').especificas).toEqual(['Sistema', 'Descrição', 'Impacto', 'Execução'])
+    expect(previaDoFormulario('sistemas_externos').especificas).toEqual(['Sistema e fornecedor', 'Mudança prevista', 'Impacto', 'Contingência'])
+    for (const cat of ['rede_externa', 'sistemas_internos', 'sistemas_externos'] as const) {
+      expect(previaDoFormulario(cat).comuns).toEqual(['Aprovadores e janela', 'Revisão'])
+    }
   })
 })
