@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList, Loader2, Zap } from 'lucide-react'
+import { Check, ClipboardList, Loader2, Zap } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -386,6 +386,65 @@ function RecursosAdministrativosCard({
   )
 }
 
+/** Agrupa as opções de ambiente pelo prefixo ("Serviço:", "Sistemas:"); o resto é rede e infraestrutura. */
+function groupAmbienteOptions(options: readonly string[]): Array<{ title: string; items: Array<{ value: string; label: string }> }> {
+  const groups: Array<{ title: string; prefix: string; items: Array<{ value: string; label: string }> }> = [
+    { title: 'Rede e infraestrutura', prefix: '', items: [] },
+    { title: 'Serviços', prefix: 'Serviço:', items: [] },
+    { title: 'Sistemas', prefix: 'Sistemas:', items: [] },
+  ]
+  for (const value of options) {
+    const g = groups.find((x) => x.prefix !== '' && value.startsWith(x.prefix)) ?? groups[0]
+    g?.items.push({ value, label: g.prefix !== '' ? value.slice(g.prefix.length).trim() : value })
+  }
+  return groups.filter((g) => g.items.length > 0)
+}
+
+/** Seleção do ambiente afetado: cartões agrupados, com marca de seleção bem visível. */
+function AmbienteAfetadoPicker({ options, selected, onToggle }: { options: readonly string[]; selected: string[]; onToggle: (value: string) => void }) {
+  const groups = groupAmbienteOptions(options)
+  return (
+    <div className="space-y-4" role="group" aria-label="Ambiente afetado">
+      {groups.map((g) => (
+        <div key={g.title} className="min-w-0 space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">{g.title}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+          {g.items.map((it) => {
+            const ativo = selected.includes(it.value)
+            return (
+              <button
+                key={it.value}
+                type="button"
+                role="checkbox"
+                aria-checked={ativo}
+                onClick={() => onToggle(it.value)}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  ativo
+                    ? 'border-primary bg-primary/10 font-semibold text-on-surface'
+                    : 'border-neutral-200/90 bg-surface-container-lowest text-on-surface hover:bg-surface-container-low dark:border-white/10',
+                )}
+              >
+                <span
+                  className={cn(
+                    'flex size-5 shrink-0 items-center justify-center rounded-md border transition',
+                    ativo ? 'border-primary bg-primary text-neutral-900' : 'border-neutral-300 bg-surface-container-lowest dark:border-white/25',
+                  )}
+                  aria-hidden
+                >
+                  {ativo ? <Check size={14} strokeWidth={3} /> : null}
+                </span>
+                <span className="min-w-0 break-words">{it.label}</span>
+              </button>
+            )
+          })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Seções específicas de Rede Externa
 // ---------------------------------------------------------------------------
@@ -433,27 +492,7 @@ function RedeExternaFields({
         <p className="mb-3 text-xs text-on-surface-variant">
           {form.ambienteAfetado.length === 0 ? 'Marque ao menos um.' : `${form.ambienteAfetado.length} selecionado${form.ambienteAfetado.length === 1 ? '' : 's'}`}
         </p>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Ambiente afetado">
-          {GMUD_AMBIENTE_OPTIONS.map((opt) => {
-            const ativo = form.ambienteAfetado.includes(opt)
-            return (
-              <button
-                key={opt}
-                type="button"
-                aria-pressed={ativo}
-                onClick={() => toggleAmbiente(opt)}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
-                  ativo
-                    ? 'bg-primary/20 text-on-surface ring-primary'
-                    : 'text-on-surface-variant ring-neutral-200/80 hover:bg-surface-container-low dark:ring-white/10',
-                )}
-              >
-                {opt}
-              </button>
-            )
-          })}
-        </div>
+        <AmbienteAfetadoPicker options={GMUD_AMBIENTE_OPTIONS} selected={form.ambienteAfetado} onToggle={toggleAmbiente} />
         <label className="mt-3 block">
           <span className={LABEL}>Outro (especificar)</span>
           <input
