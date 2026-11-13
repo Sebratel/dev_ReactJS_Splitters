@@ -597,6 +597,16 @@ export async function listRegisteredGmudProtocols(statusesComite = null) {
   return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
 }
 
+/** Protocolos registrados na plataforma com o tipo informado (Emergencial, Programada, Pré-aprovada). Só leitura. */
+export async function listRegisteredGmudProtocolsByTipo(tipo) {
+  const value = String(tipo ?? '').trim();
+  if (value === '') return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL AND tipo = ?`, [value]);
+  return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
+}
+
 /** GMUDs registradas na plataforma com created_at no período [from, to] (YYYY-MM-DD). */
 export async function listGmudRequestsCreatedBetween(from, to) {
   await ensureTable();

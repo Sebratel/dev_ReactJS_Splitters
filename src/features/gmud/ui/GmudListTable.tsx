@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom'
-import { ArrowDown, ArrowUp, ArrowUpDown, Link2 } from 'lucide-react'
+import {
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Ban, CalendarClock, CheckCheck, CircleCheck, CircleX, Hourglass, LayoutDashboard, Link2, Repeat,
+  type LucideIcon,
+} from 'lucide-react'
 import type { GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { gmudDisplayTitle } from '@/features/gmud/lib/gmudTitle'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
-import { GMUD_STATUS_COMITE_LABEL, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
 import { gmudCancelada, gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
-import { requesterInitials, shortRequesterName } from '@/features/gmud/lib/gmudRequester'
+import { gmudSituacao, type GmudSituacaoTone } from '@/features/gmud/lib/gmudSituacao'
+import { GMUD_TIPO_CRITICIDADE, type GmudTipoCriticidade } from '@/features/gmud/lib/gmudTipoCriticidade'
+import { requesterAvatarIndex, requesterInitials, shortRequesterName } from '@/features/gmud/lib/gmudRequester'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
 
@@ -19,13 +23,31 @@ const DEADLINE_STYLE: Record<GmudDeadlineTone, string> = {
   none: 'bg-surface-container-low text-on-surface-variant',
 }
 
-const COMITE_STYLE: Record<string, string> = {
-  aprovada: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
-  negada: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200',
-  pendente: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200',
+/** Selo da Situação: cor + ícone + texto. "voalle" (status vindo do Voalle) é texto simples, sem selo. */
+const SITUACAO_STYLE: Record<Exclude<GmudSituacaoTone, 'voalle'>, { tone: string; icon: LucideIcon }> = {
+  cancelada: { tone: 'bg-neutral-200 text-neutral-800 dark:bg-white/10 dark:text-neutral-200', icon: Ban },
+  concluida: { tone: 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900', icon: CheckCheck },
+  negada: { tone: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200', icon: CircleX },
+  liberada: { tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200', icon: CircleCheck },
+  aguardando: { tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200', icon: Hourglass },
 }
 
-const PILL = 'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold'
+const TIPO_ICON: Record<GmudTipoCriticidade['icon'], LucideIcon> = { alert: AlertTriangle, calendar: CalendarClock, repeat: Repeat }
+
+/** Cores do avatar do solicitante: fundo claro com texto bem escuro (e o inverso no tema escuro). */
+const AVATAR_TONES = [
+  'bg-sky-100 text-sky-900 dark:bg-sky-900/70 dark:text-sky-100',
+  'bg-violet-100 text-violet-900 dark:bg-violet-900/70 dark:text-violet-100',
+  'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/70 dark:text-emerald-100',
+  'bg-amber-100 text-amber-900 dark:bg-amber-900/70 dark:text-amber-100',
+  'bg-rose-100 text-rose-900 dark:bg-rose-900/70 dark:text-rose-100',
+  'bg-teal-100 text-teal-900 dark:bg-teal-900/70 dark:text-teal-100',
+]
+
+const PILL = 'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold'
+/** Cabeçalho fixo: fica no topo da área de rolagem da tabela (a linha de baixo é uma sombra, que acompanha o sticky). */
+const TH = 'sticky top-0 z-10 bg-surface-container-lowest px-4 py-2.5 shadow-[inset_0_-1px_0_rgb(0_0_0/0.12)] dark:shadow-[inset_0_-1px_0_rgb(255_255_255/0.18)]'
+const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-white'
 
 function fmtDate(iso: string | null): string {
   return iso ? formatBrazilDateTimeShortDisplay(iso, '—') : '—'
@@ -36,35 +58,43 @@ function SortHeader({
   column,
   sort,
   onSort,
-  className,
 }: {
   label: string
   column: GmudSortKey
   sort: GmudSort
   onSort: (key: GmudSortKey) => void
-  className?: string
 }) {
   const active = sort.key === column
   const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
   return (
-    <th className={cn('px-4 py-2', className)} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th scope="col" className={TH} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
         onClick={() => onSort(column)}
-        className={cn(
-          'inline-flex items-center gap-1 uppercase tracking-wide transition hover:text-on-surface',
-          active ? 'text-on-surface' : '',
-        )}
+        className={cn('inline-flex items-center gap-1 rounded uppercase tracking-wide transition-colors hover:text-on-surface', FOCO, active ? 'text-on-surface' : '')}
         title={`Ordenar por ${label.toLowerCase()}`}
       >
         {label}
-        <Icon size={12} className={active ? '' : 'opacity-50'} />
+        <Icon size={12} aria-hidden />
       </button>
     </th>
   )
 }
 
-/** Tabela do painel de GMUDs: título limpo, origem, prazo e Comitê, com link para o detalhe. */
+/** Selo do tipo da GMUD: nome do tipo com o ícone e a cor da criticidade. */
+function TipoSelo({ tipo }: { tipo: string }) {
+  const crit = GMUD_TIPO_CRITICIDADE[tipo]
+  if (!crit) return <span className="text-[11px] text-on-surface-variant">{tipo}</span>
+  const Icon = TIPO_ICON[crit.icon]
+  return (
+    <span className={cn(PILL, crit.tone)}>
+      <Icon size={12} aria-hidden />
+      {tipo}
+    </span>
+  )
+}
+
+/** Tabela do painel de GMUDs: tipo, origem, solicitante, prazo e situação, com link para o detalhe. */
 export function GmudListTable({
   items,
   canApprove,
@@ -81,49 +111,69 @@ export function GmudListTable({
   onSort: (key: GmudSortKey) => void
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[72vh] overflow-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant/70">
+          <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
             <SortHeader label="GMUD" column="protocolo" sort={sort} onSort={onSort} />
             <SortHeader label="Solicitante" column="solicitante" sort={sort} onSort={onSort} />
             <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} />
             <SortHeader label="Prazo" column="prazo" sort={sort} onSort={onSort} />
             <SortHeader label="Situação" column="status" sort={sort} onSort={onSort} />
-            <th className="px-4 py-2 text-right">Ações</th>
+            <th scope="col" className={cn(TH, 'text-right')}>Ações</th>
           </tr>
         </thead>
         <tbody>
           {items.map((g) => {
             const deadline = gmudDeadline(g)
             const plataforma = g.extra != null
-            const comite = g.extra?.statusComite ?? null
+            const cancelada = gmudCancelada(g)
+            const situacao = gmudSituacao(g)
+            const selo = situacao.tone === 'voalle' ? null : SITUACAO_STYLE[situacao.tone]
+            const SituacaoIcon = selo?.icon
+            const links = g.massivaLinksCount
             return (
-              <tr key={g.protocol} className="group/row border-t border-neutral-200/60 transition hover:bg-surface-container-low/60 dark:border-white/5">
+              <tr
+                key={g.protocol}
+                data-origem={plataforma ? 'plataforma' : 'legado'}
+                className="group/row border-t border-neutral-200/80 transition-colors hover:bg-surface-container-low focus-within:bg-surface-container-low dark:border-white/10"
+              >
                 <td className="max-w-[34rem] px-4 py-2.5">
-                  <Link to={`/gmud/${g.protocol}`} className="group block">
-                    <span className="flex items-center gap-2">
-                      <span className="font-mono text-xs tabular-nums text-on-surface-variant group-hover:text-primary">{g.protocol}</span>
-                      <span
-                        className={cn(
-                          PILL,
-                          'px-1.5 py-0 text-[10px] uppercase tracking-wide',
-                          plataforma ? 'bg-primary/15 text-primary' : 'bg-surface-container-low text-on-surface-variant/80',
-                        )}
-                        title={plataforma ? 'Aberta/registrada pela plataforma' : 'Protocolo antigo, só no Voalle'}
-                      >
-                        {plataforma ? 'Plataforma' : 'Legado'}
-                      </span>
-                      {g.extra?.tipo ? <span className="text-[11px] text-on-surface-variant">{g.extra.tipo}</span> : null}
+                  <Link to={`/gmud/${g.protocol}`} className={cn('group block rounded', FOCO)}>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-mono text-xs tabular-nums text-on-surface-variant">{g.protocol}</span>
+                      {plataforma ? (
+                        <span role="img" aria-label="Da plataforma" title="Da plataforma" className="inline-flex text-on-surface-variant">
+                          <LayoutDashboard size={13} aria-hidden />
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-on-surface-variant" title="Protocolo antigo, só no Voalle">
+                          Legado
+                        </span>
+                      )}
+                      {g.extra?.tipo ? <TipoSelo tipo={g.extra.tipo} /> : null}
                     </span>
-                    <span className="mt-0.5 line-clamp-2 font-medium text-on-surface group-hover:underline" title={g.title}>
+                    <span
+                      className={cn(
+                        'mt-0.5 line-clamp-2 group-hover:underline',
+                        // Legado e cancelada ficam mais discretos pelo tom do texto (não por opacidade: o contraste continua acima de 4,5:1).
+                        cancelada ? 'text-on-surface-variant line-through' : plataforma ? 'font-medium text-on-surface' : 'text-on-surface-variant',
+                      )}
+                      title={g.title}
+                    >
                       {gmudDisplayTitle({ title: g.title, protocol: g.protocol, requester: g.requester, descriptionText: htmlToPlainText(g.description) })}
                     </span>
                   </Link>
                 </td>
                 <td className="px-4 py-2.5">
                   <span className="flex items-center gap-2" title={g.requester || undefined}>
-                    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-container-low text-[10px] font-bold text-on-surface-variant ring-1 ring-neutral-200/70 dark:ring-white/10" aria-hidden>
+                    <span
+                      className={cn(
+                        'inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                        AVATAR_TONES[requesterAvatarIndex(g.requesterEmail || g.requester, AVATAR_TONES.length)],
+                      )}
+                      aria-hidden
+                    >
                       {requesterInitials(g.requester)}
                     </span>
                     <span className="whitespace-nowrap text-on-surface-variant">{shortRequesterName(g.requester)}</span>
@@ -137,28 +187,15 @@ export function GmudListTable({
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex flex-col items-start gap-0.5">
-                  {gmudCancelada(g) ? (
-                    <span className={cn(PILL, DEADLINE_STYLE.cancelled)} title="Cancelada: aprovações pendentes não valem mais.">
-                      Cancelada
-                    </span>
-                  ) : (comite === 'pendente' || comite === 'aprovada') && g.extra?.statusAreas === 'pendente' ? (
-                    <span
-                      className={cn(PILL, COMITE_STYLE.pendente)}
-                      title="O Comitê e as áreas decidem em paralelo; a GMUD só é liberada quando ambos aprovarem."
-                    >
-                      {comite === 'aprovada' ? 'Comitê aprovou · aguardando áreas' : 'Aguardando Comitê e áreas'}{' '}
-                      ({g.extra.areasAprovadas ?? 0}/{g.extra.areasTotal ?? 0})
-                    </span>
-                  ) : comite ? (
-                    <span className={cn(PILL, COMITE_STYLE[comite] ?? 'bg-surface-container-low text-on-surface-variant')}>
-                      {g.extra?.tipo === 'Pré-aprovada' && comite === 'aprovada'
-                        ? 'Pré-aprovada'
-                        : GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">{g.status || '—'}</span>
-                  )}
-                  {comite && g.status ? <span className="text-[11px] text-on-surface-variant/70">Voalle: {g.status}</span> : null}
+                    {selo && SituacaoIcon ? (
+                      <span className={cn(PILL, selo.tone)} title={situacao.hint}>
+                        <SituacaoIcon size={12} aria-hidden />
+                        {situacao.label}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-on-surface-variant">{situacao.label}</span>
+                    )}
+                    {situacao.voalle ? <span className="text-[11px] text-on-surface-variant">Voalle: {situacao.voalle}</span> : null}
                   </div>
                 </td>
                 <td className="px-4 py-2.5">
@@ -167,13 +204,17 @@ export function GmudListTable({
                       type="button"
                       onClick={() => onLink(g)}
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low focus-visible:opacity-100 dark:ring-white/10',
-                        g.massivaLinksCount > 0 ? '' : 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100',
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold ring-1 transition hover:bg-surface-container-low focus-visible:opacity-100',
+                        FOCO,
+                        links > 0
+                          ? 'text-on-surface ring-neutral-300 dark:ring-white/25'
+                          : 'text-on-surface-variant opacity-0 ring-neutral-200/70 group-hover/row:opacity-100 group-focus-within/row:opacity-100 dark:ring-white/15',
                       )}
-                      title="Massivas vinculadas"
+                      title={links > 0 ? 'Ver massivas vinculadas' : 'Vincular massiva'}
+                      aria-label={links > 0 ? `${links} massiva${links === 1 ? '' : 's'} vinculada${links === 1 ? '' : 's'}` : undefined}
                     >
-                      <Link2 size={13} />
-                      {g.massivaLinksCount > 0 ? g.massivaLinksCount : 'Vincular'}
+                      <Link2 size={13} aria-hidden />
+                      {links > 0 ? <span className="tabular-nums">{links}</span> : 'Vincular'}
                     </button>
                     {canApprove && gmudPodeAvaliar(g) ? (
                       <button

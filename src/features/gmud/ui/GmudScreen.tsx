@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
+import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
@@ -13,23 +13,54 @@ import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee
 import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
 import { GmudSummaryStrip } from '@/features/gmud/ui/GmudSummaryStrip'
 import { useGmudListSummary } from '@/features/gmud/api/fetchGmudListSummary'
-import type { GmudListFilter, GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
+import type { GmudListFilter, GmudListItem, GmudOrigemFiltro, GmudSort, GmudSortKey, GmudTipoFiltro } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
-  'rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
+  'rounded-2xl border border-neutral-200/90 dark:border-white/15 bg-surface-container-lowest'
 const PAGE_SIZE = 20
 
-const FILTERS: { key: GmudListFilter; label: string }[] = [
-  { key: 'todas', label: 'Todas' },
-  { key: 'abertas', label: 'Abertas' },
-  { key: 'vencidas', label: 'Prazo vencido' },
-  { key: 'comite_pendente', label: 'Aguardando Comitê' },
-  { key: 'aprovadas', label: 'Aprovadas' },
-  { key: 'vencem_semana', label: 'Vencem em 7 dias' },
-  { key: 'plataforma', label: 'Abertas pela plataforma' },
-  { key: 'minhas', label: 'Minhas' },
+// Os cartões do topo já filtram por situação (abertas, vencidas, Comitê, vencem em 7 dias). As pílulas
+// filtram por outra coisa — tipo, origem e "minhas" — e se combinam com o cartão escolhido.
+const TIPOS: { key: GmudTipoFiltro; label: string }[] = [
+  { key: 'todos', label: 'Todos' },
+  { key: 'emergencial', label: 'Emergencial' },
+  { key: 'programada', label: 'Programada' },
+  { key: 'pre_aprovada', label: 'Pré-aprovada' },
 ]
+const ORIGENS: { key: GmudOrigemFiltro; label: string }[] = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'plataforma', label: 'Plataforma' },
+  { key: 'legado', label: 'Legado' },
+]
+/** Nome do filtro do cartão, para o aviso "filtrando por" acima da tabela. */
+const FILTRO_CARTAO_LABEL: Partial<Record<GmudListFilter, string>> = {
+  abertas: 'Em aberto',
+  vencidas: 'Prazo vencido',
+  comite_pendente: 'Aguardando Comitê',
+  vencem_semana: 'Vencem em 7 dias',
+}
+
+/** Pílula de filtro: a escolhida fica no amarelo da marca, com texto escuro e um "check" (não só a cor). */
+function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-white',
+        active
+          ? 'bg-primary text-neutral-900 ring-neutral-900/40'
+          : 'text-on-surface-variant ring-neutral-300 hover:bg-surface-container-low hover:text-on-surface dark:ring-white/20',
+      )}
+    >
+      {active ? <Check size={12} aria-hidden /> : null}
+      {children}
+    </button>
+  )
+}
 
 export function GmudScreen() {
   const [searchInput, setSearchInput] = useState('')
@@ -39,6 +70,9 @@ export function GmudScreen() {
   const [linking, setLinking] = useState<GmudListItem | null>(null)
   const [view, setView] = useState<'all' | 'pending' | 'agenda'>('all')
   const [filter, setFilter] = useState<GmudListFilter>('todas')
+  const [tipo, setTipo] = useState<GmudTipoFiltro>('todos')
+  const [origem, setOrigem] = useState<GmudOrigemFiltro>('todas')
+  const [minhas, setMinhas] = useState(false)
   const [sort, setSort] = useState<GmudSort>({ key: 'protocolo', dir: 'desc' })
   // Clique na mesma coluna inverte a direção; em outra coluna começa pela ordem mais útil
   // (datas e protocolo: mais recentes primeiro; textos: A→Z).
@@ -70,6 +104,9 @@ export function GmudScreen() {
     offset: page * PAGE_SIZE,
     q: appliedSearch,
     filter,
+    tipo,
+    origem,
+    minhas,
     sort,
   })
 
@@ -78,6 +115,15 @@ export function GmudScreen() {
   const items = data?.items ?? []
   const firstShown = total === 0 ? 0 : page * PAGE_SIZE + 1
   const lastShown = Math.min(total, page * PAGE_SIZE + items.length)
+  const filtroCartao = FILTRO_CARTAO_LABEL[filter] ?? null
+  const temFiltro = filter !== 'todas' || tipo !== 'todos' || origem !== 'todas' || minhas
+  const limparFiltros = () => {
+    setFilter('todas')
+    setTipo('todos')
+    setOrigem('todas')
+    setMinhas(false)
+    setPage(0)
+  }
 
   const headerTrailing = useMemo(
     () => (
@@ -207,34 +253,71 @@ export function GmudScreen() {
         <GmudCalendar />
       ) : (
       <div className={cn(CARD, 'overflow-hidden')}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 p-4 dark:border-white/10">
-          <p className="text-sm font-bold text-on-surface">
-            Painel de GMUDs
-            <span className="ml-2 text-xs font-normal text-on-surface-variant">
-              {total.toLocaleString('pt-BR')} protocolo{total === 1 ? '' : 's'}
-              {appliedSearch !== '' || filter !== 'todas' ? ' (filtrado)' : ''}
-            </span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => (
+        <div className="space-y-3 border-b border-neutral-200/80 p-4 dark:border-white/15">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-on-surface">
+              Painel de GMUDs
+              <span className="ml-2 text-xs font-normal text-on-surface-variant" aria-live="polite">
+                {total.toLocaleString('pt-BR')} protocolo{total === 1 ? '' : 's'}
+                {appliedSearch !== '' || temFiltro ? ' (filtrado)' : ''}
+              </span>
+            </p>
+            {temFiltro ? (
               <button
-                key={f.key}
                 type="button"
-                onClick={() => {
-                  setFilter(f.key)
-                  setPage(0)
-                }}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
-                  filter === f.key
-                    ? 'bg-on-surface text-surface-container-lowest ring-on-surface'
-                    : 'text-on-surface-variant ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10',
-                )}
+                onClick={limparFiltros}
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-on-surface ring-1 ring-neutral-300 transition-colors hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:ring-white/20 dark:focus-visible:ring-white"
               >
-                {f.label}
+                <X size={13} aria-hidden /> Limpar filtros
               </button>
-            ))}
+            ) : null}
           </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div role="group" aria-label="Filtrar por tipo" className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-on-surface-variant">Tipo</span>
+              {TIPOS.map((t) => (
+                <FilterPill
+                  key={t.key}
+                  active={tipo === t.key}
+                  onClick={() => {
+                    setTipo(t.key)
+                    setPage(0)
+                  }}
+                >
+                  {t.label}
+                </FilterPill>
+              ))}
+            </div>
+            <div role="group" aria-label="Filtrar por origem" className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-on-surface-variant">Origem</span>
+              {ORIGENS.map((o) => (
+                <FilterPill
+                  key={o.key}
+                  active={origem === o.key}
+                  onClick={() => {
+                    setOrigem(o.key)
+                    setPage(0)
+                  }}
+                >
+                  {o.label}
+                </FilterPill>
+              ))}
+            </div>
+            <FilterPill
+              active={minhas}
+              onClick={() => {
+                setMinhas((m) => !m)
+                setPage(0)
+              }}
+            >
+              Minhas
+            </FilterPill>
+          </div>
+          {filtroCartao ? (
+            <p className="text-xs text-on-surface-variant">
+              Filtrando também pelo cartão <span className="font-semibold text-on-surface">{filtroCartao}</span>.
+            </p>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -247,13 +330,13 @@ export function GmudScreen() {
           </div>
         ) : items.length === 0 ? (
           <p className="py-10 text-center text-sm text-on-surface-variant">
-            {appliedSearch !== '' || filter !== 'todas' ? 'Nenhuma GMUD corresponde ao filtro.' : 'Nenhuma GMUD encontrada.'}
+            {appliedSearch !== '' || temFiltro ? 'Nenhuma GMUD corresponde ao filtro.' : 'Nenhuma GMUD encontrada.'}
           </p>
         ) : (
           <>
             <GmudListTable items={items} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} sort={sort} onSort={changeSort} />
             {pageCount > 1 ? (
-              <div className="flex items-center justify-between gap-2 border-t border-neutral-200/60 px-4 py-2.5 dark:border-white/5">
+              <div className="flex items-center justify-between gap-2 border-t border-neutral-200/80 px-4 py-2.5 dark:border-white/15">
                 <span className="text-xs text-on-surface-variant">
                   {firstShown}–{lastShown} de {total.toLocaleString('pt-BR')}
                 </span>

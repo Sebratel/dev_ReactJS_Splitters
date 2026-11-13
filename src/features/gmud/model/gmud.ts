@@ -49,6 +49,11 @@ export type GmudExtra = {
 /** Filtros rápidos do painel (abertas/vencidas/minhas vêm do Voalle; Comitê/plataforma do nosso banco). */
 export type GmudListFilter = 'todas' | 'abertas' | 'vencidas' | 'comite_pendente' | 'aprovadas' | 'plataforma' | 'minhas' | 'vencem_semana'
 
+/** Filtro por tipo da GMUD (só as registradas na plataforma têm tipo). O valor vai na URL, sem acento. */
+export type GmudTipoFiltro = 'todos' | 'emergencial' | 'programada' | 'pre_aprovada'
+/** Filtro por origem: registrada na plataforma ou legado (só no Voalle). */
+export type GmudOrigemFiltro = 'todas' | 'plataforma' | 'legado'
+
 /** Colunas ordenáveis do painel (ordenação feita no servidor, sobre toda a lista). */
 export type GmudSortKey = 'protocolo' | 'solicitante' | 'abertura' | 'prazo' | 'status'
 export type GmudSort = { key: GmudSortKey; dir: 'asc' | 'desc' }
