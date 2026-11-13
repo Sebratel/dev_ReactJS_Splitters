@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
-import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
@@ -136,11 +136,13 @@ export function GmudScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <GmudPageHeader
+      <AppPageHeader
+        badge="Gestão de Mudança de Rede"
         title="GMUD"
-        subtitle="Mudanças de rede, do pedido à aprovação — integrado ao Elleven"
+        description="Requisição, acompanhamento e aprovação de mudanças de rede — integrado ao Elleven."
         icon={ClipboardList}
-        actions={headerTrailing}
+        primaryAction={{ to: '/', label: 'Voltar ao painel' }}
+        trailing={headerTrailing}
       />
 
       <GmudSummaryStrip

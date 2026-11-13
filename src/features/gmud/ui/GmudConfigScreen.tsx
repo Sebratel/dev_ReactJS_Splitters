@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings2, Plus, Trash2, Loader2, UserPlus, Mail, X, Users } from 'lucide-react'
-import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import {
   fetchGmudConfigLists,
   addGmudConfigItem,
@@ -500,11 +500,12 @@ export function GmudConfigScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <GmudPageHeader
+      <AppPageHeader
+        badge="Módulo GMUD"
         title="Configurações"
-        subtitle="Comitê, áreas, processos e sistemas do formulário de GMUD"
+        description="Gerencie as listas de opções do formulário de GMUD: áreas, sistemas e processos."
         icon={Settings2}
-        backTo={{ to: '/gmud', label: 'GMUD' }}
+        primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
       />
 
       <div className="rounded-xl border border-amber-300/60 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-900 dark:text-amber-100">

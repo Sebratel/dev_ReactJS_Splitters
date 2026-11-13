@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardList, Loader2, Zap } from 'lucide-react'
-import { GmudPageHeader } from '@/features/gmud/ui/GmudPageHeader'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
 import { openGmudInElleven } from '@/features/gmud/api/openGmudInElleven'
@@ -894,11 +894,12 @@ export function GmudNewScreen() {
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
-      <GmudPageHeader
+      <AppPageHeader
+        badge="Gestão de Mudança de Rede"
         title="Abrir GMUD"
-        subtitle="Abre o protocolo no Elleven e registra na plataforma em um passo só"
+        description="Requisição de mudança — abre o protocolo no Elleven e registra na plataforma em um passo só."
         icon={ClipboardList}
-        backTo={{ to: '/gmud', label: 'GMUD' }}
+        primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
       />
 
       <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-xs text-on-surface-variant">
