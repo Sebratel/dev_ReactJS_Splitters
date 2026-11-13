@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ClipboardList, Loader2, Zap } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
+import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -213,6 +214,22 @@ function CamposComuns({
                     : 'border-neutral-200/80 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/10',
                 )}
               >
+                {GMUD_TIPO_CRITICIDADE[o] ? (
+                  <span className="mb-1.5 flex items-start justify-between gap-2">
+                    <span className={cn('flex size-7 items-center justify-center rounded-lg', GMUD_TIPO_CRITICIDADE[o].tone)} aria-hidden>
+                      {GMUD_TIPO_CRITICIDADE[o].icon === 'alert' ? (
+                        <AlertTriangle size={16} />
+                      ) : GMUD_TIPO_CRITICIDADE[o].icon === 'repeat' ? (
+                        <Repeat size={16} />
+                      ) : (
+                        <CalendarClock size={16} />
+                      )}
+                    </span>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', GMUD_TIPO_CRITICIDADE[o].tone)}>
+                      {GMUD_TIPO_CRITICIDADE[o].label}
+                    </span>
+                  </span>
+                ) : null}
                 <span className={cn('block text-sm font-semibold', ativo ? 'text-neutral-900' : 'text-on-surface')}>{o}</span>
                 <span className={cn('mt-0.5 block text-[11px]', ativo ? 'text-neutral-800' : 'text-on-surface-variant')}>
                   {bloqueada ? 'Só para Rede Externa' : (TIPO_DESCRICAO[o] ?? '')}
