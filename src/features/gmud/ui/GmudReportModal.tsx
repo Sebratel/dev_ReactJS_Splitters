@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { useMutation } from '@tanstack/react-query'
 import { Loader2, MessageSquarePlus, X } from 'lucide-react'
 import { sendGmudReport } from '@/features/gmud/api/gmudAgenda'
@@ -35,6 +36,7 @@ export function GmudReportModal({
   onClose: () => void
   onSent: () => void
 }) {
+  useEscapeKey(onClose)
   const [text, setText] = useState('')
   const profile = useAccessAuthStore((s) => s.profile)
   const currentUser = profile?.displayName || profile?.email || ''

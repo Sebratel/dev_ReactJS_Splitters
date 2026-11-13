@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { useMutation } from '@tanstack/react-query'
 import { Check, Loader2, X } from 'lucide-react'
 import { updateGmudApproval, type GmudStatusComite } from '@/features/gmud/api/updateGmudApproval'
@@ -40,6 +41,7 @@ export function GmudApprovalModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  useEscapeKey(onClose)
   const [statusComite, setStatusComite] = useState<GmudStatusComite>(
     (gmud.extra?.statusComite as GmudStatusComite) || 'pendente',
   )

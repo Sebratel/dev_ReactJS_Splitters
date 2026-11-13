@@ -19,7 +19,7 @@ function Field({ label, value }: { label: string; value: string | string[] | nul
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs font-bold uppercase tracking-widest text-primary/70">{title}</p>
+      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">{title}</p>
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
     </div>
   )

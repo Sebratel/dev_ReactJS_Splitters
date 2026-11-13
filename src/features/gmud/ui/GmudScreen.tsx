@@ -225,7 +225,7 @@ export function GmudScreen() {
                 className={cn(
                   'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
                   filter === f.key
-                    ? 'bg-primary text-white ring-primary'
+                    ? 'bg-on-surface text-surface-container-lowest ring-on-surface'
                     : 'text-on-surface-variant ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10',
                 )}
               >

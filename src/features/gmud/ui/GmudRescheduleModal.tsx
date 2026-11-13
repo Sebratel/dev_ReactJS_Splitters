@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { useMutation } from '@tanstack/react-query'
 import { CalendarClock, Loader2, X } from 'lucide-react'
 import { rescheduleGmud, sendGmudReport, type GmudAgendaItem } from '@/features/gmud/api/gmudAgenda'
@@ -34,6 +35,7 @@ export function GmudRescheduleModal({
   onClose: () => void
   onDone: () => void
 }) {
+  useEscapeKey(onClose)
   const profile = useAccessAuthStore((s) => s.profile)
   const user = profile?.displayName || profile?.email || ''
   const [win, setWin] = useState<GmudWindow>(initialWindow)

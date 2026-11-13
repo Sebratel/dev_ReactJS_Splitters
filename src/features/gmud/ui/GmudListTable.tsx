@@ -53,7 +53,7 @@ function SortHeader({
         onClick={() => onSort(column)}
         className={cn(
           'inline-flex items-center gap-1 uppercase tracking-wide transition hover:text-on-surface',
-          active ? 'text-primary' : '',
+          active ? 'text-on-surface' : '',
         )}
         title={`Ordenar por ${label.toLowerCase()}`}
       >
