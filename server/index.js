@@ -29,6 +29,14 @@ import { createCorListaSender, createGmudCorListaService, startGmudCorListaSched
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
+import {
+  GMUD_OPEN_SQL,
+  buildGmudListWhere,
+  buildGmudSummarySql,
+  gmudFilterComiteStatuses,
+  gmudSummaryFromRow,
+  parseGmudListFilters,
+} from './lib/gmudListFilters.js';
 import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
 import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
@@ -119,6 +127,7 @@ import {
   listGmudEventsBetween,
   getLinksWithAffected,
   listRegisteredGmudProtocols,
+  listRegisteredGmudProtocolsByTipo,
   getGmudConfigLists,
   addGmudConfigItem,
   deactivateGmudConfigItem,
@@ -4562,7 +4571,6 @@ app.get('/api/gmud/list', async (req, res) => {
     const rawOffset = Number.parseInt(String(req.query?.offset ?? ''), 10);
     const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
     const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
-    const filter = typeof req.query?.filter === 'string' ? req.query.filter : 'todas';
     // Ordenação por coluna (whitelist — o valor nunca entra cru no SQL).
     const SORT_COLUMNS = {
       protocolo: 'ai.protocol',
@@ -4575,29 +4583,22 @@ app.get('/api/gmud/list', async (req, res) => {
     const sortDir = String(req.query?.dir ?? '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const orderBy = `${sortColumn} ${sortDir} NULLS LAST${sortColumn === 'ai.protocol' ? '' : ', ai.protocol DESC'}`;
 
-    const params = [GMUD_INCIDENT_TYPE_ID];
-    let searchClause = '';
-    if (search !== '') {
-      params.push(`%${search}%`);
-      searchClause = ` AND (ai.protocol::text ILIKE $${params.length} OR a.title ILIKE $${params.length} OR pe.name ILIKE $${params.length})`;
-    }
-    // Filtros rápidos. Os do Voalle (abertas/vencidas/minhas) são SQL; os da plataforma
-    // (Comitê/registradas) usam a lista de protocolos do nosso MySQL.
-    const OPEN_SQL = ` AND a.conclusion_date IS NULL AND COALESCE(ist.title, '') NOT ILIKE '%cancel%'`;
-    if (filter === 'abertas') searchClause += OPEN_SQL;
-    else if (filter === 'vencidas') searchClause += `${OPEN_SQL} AND ai.responsible_final_date < now()`;
-    else if (filter === 'vencem_semana') searchClause += `${OPEN_SQL} AND ${GMUD_VENCE_EM_7_DIAS_SQL}`;
-    else if (filter === 'minhas') {
-      params.push(String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase());
-      searchClause += ` AND lower(pe.email) = $${params.length}`;
-    } else if (['comite_pendente', 'aprovadas', 'plataforma'].includes(filter)) {
-      const statuses = filter === 'comite_pendente' ? ['pendente'] : filter === 'aprovadas' ? ['aprovada'] : null;
-      const protocols = await listRegisteredGmudProtocols(statuses);
-      params.push(protocols.length > 0 ? protocols : [0]);
-      searchClause += ` AND ai.protocol = ANY($${params.length}::bigint[])`;
-      // Cancelada/concluída no Voalle não está mais aguardando ninguém.
-      if (filter === 'comite_pendente') searchClause += OPEN_SQL;
-    }
+    // Filtros. `filter` é o dos cartões do topo; `tipo`, `origem` e `minhas` se combinam com ele.
+    // Os do Voalle (abertas/vencidas/minhas) são SQL; os da plataforma (Comitê, tipo, origem) usam
+    // listas de protocolos do nosso MySQL, aplicadas como `ai.protocol = ANY(...)` (legado = NOT).
+    const filters = parseGmudListFilters(req.query);
+    const comiteStatuses = gmudFilterComiteStatuses(filters.filter);
+    const lists = {};
+    if (comiteStatuses !== undefined) lists.filter = await listRegisteredGmudProtocols(comiteStatuses);
+    if (filters.tipo) lists.tipo = await listRegisteredGmudProtocolsByTipo(filters.tipo);
+    if (filters.origem) lists.registered = await listRegisteredGmudProtocols(null);
+    const { clause: searchClause, params } = buildGmudListWhere({
+      typeId: GMUD_INCIDENT_TYPE_ID,
+      search,
+      ...filters,
+      email: String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase(),
+      lists,
+    });
 
     const countSql = `
       SELECT COUNT(*)::int AS total
@@ -4701,9 +4702,6 @@ app.get('/api/gmud/clientes-elleven', async (req, res) => {
   }
 });
 
-/** Aberta e ainda dentro do prazo, vencendo nos próximos 7 dias (mesma regra do filtro "vencem_semana"). */
-const GMUD_VENCE_EM_7_DIAS_SQL = `ai.responsible_final_date >= now() AND ai.responsible_final_date < now() + interval '7 days'`;
-
 /**
  * Números dos indicadores do topo do painel de GMUDs. Cada um usa a MESMA regra do filtro de mesmo nome
  * da lista, para o número do cartão ser igual ao total que aparece ao clicar nele.
@@ -4711,16 +4709,19 @@ const GMUD_VENCE_EM_7_DIAS_SQL = `ai.responsible_final_date >= now() AND ai.resp
 app.get('/api/gmud/list-summary', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
-    const OPEN_SQL = `a.conclusion_date IS NULL AND COALESCE(ist.title, '') NOT ILIKE '%cancel%'`;
+    const OPEN_SQL = GMUD_OPEN_SQL;
+    // Divisão Plataforma/Legado das abertas e vencidas: precisa dos protocolos registrados (MySQL).
+    // Best-effort: se a plataforma não responder, seguem só os totais (a divisão vai nula).
+    let registered = null;
+    try {
+      registered = await listRegisteredGmudProtocols(null);
+    } catch (e) {
+      logger.warn('[gmud] Falha ao listar GMUDs registradas para o resumo (segue sem a divisão por origem): %s', e?.message);
+    }
+    const withOrigem = registered !== null;
     const result = await pool.query(
-      `SELECT COUNT(*) FILTER (WHERE ${OPEN_SQL})::int AS abertas,
-              COUNT(*) FILTER (WHERE ${OPEN_SQL} AND ai.responsible_final_date < now())::int AS vencidas,
-              COUNT(*) FILTER (WHERE ${OPEN_SQL} AND ${GMUD_VENCE_EM_7_DIAS_SQL})::int AS vencem_semana
-         FROM erp.assignment_incidents ai
-         JOIN erp.assignments a ON a.id = ai.assignment_id
-         LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
-        WHERE ai.incident_type_id = $1`,
-      [GMUD_INCIDENT_TYPE_ID],
+      buildGmudSummarySql({ withOrigem }),
+      withOrigem ? [GMUD_INCIDENT_TYPE_ID, registered.length > 0 ? registered : [0]] : [GMUD_INCIDENT_TYPE_ID],
     );
     const row = result.rows?.[0] ?? {};
     let comitePendente = 0;
@@ -4742,12 +4743,7 @@ app.get('/api/gmud/list-summary', async (req, res) => {
     }
     return res.json({
       success: true,
-      data: {
-        abertas: row.abertas ?? 0,
-        vencidas: row.vencidas ?? 0,
-        vencemSemana: row.vencem_semana ?? 0,
-        comitePendente,
-      },
+      data: gmudSummaryFromRow(row, { comitePendente, withOrigem }),
     });
   } catch (error) {
     const statusCode = Number(error?.statusCode ?? 500);

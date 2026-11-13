@@ -33,3 +33,15 @@ export function requesterInitials(name: string | null | undefined): string {
   const last = tokens.length > 1 ? (tokens[tokens.length - 1] as string) : ''
   return (first.charAt(0) + last.charAt(0)).toLocaleUpperCase('pt-BR')
 }
+
+/**
+ * Posição da cor do avatar na paleta: sempre a mesma para a mesma pessoa (hash do e-mail ou do nome,
+ * sem diferenciar maiúsculas). `size` é o tamanho da paleta.
+ */
+export function requesterAvatarIndex(key: string | null | undefined, size: number): number {
+  if (!Number.isInteger(size) || size <= 0) return 0
+  const text = (key ?? '').trim().toLocaleLowerCase('pt-BR')
+  let hash = 5381
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 33 + text.charCodeAt(i)) >>> 0
+  return hash % size
+}
