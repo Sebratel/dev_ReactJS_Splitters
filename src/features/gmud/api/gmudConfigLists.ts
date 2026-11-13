@@ -8,6 +8,8 @@ export type GmudConfigLists = {
   processos: GmudConfigItem[]
   sistemas_internos: GmudConfigItem[]
   sistemas_externos: GmudConfigItem[]
+  /** Item fixo "Comitê" (os membros ficam em team-approvers, presos a este item). */
+  comite: GmudConfigItem[]
   [key: string]: GmudConfigItem[]
 }
 
@@ -37,6 +39,12 @@ export async function addGmudConfigItem(
     body: JSON.stringify({ listKey, label }),
   })
   return parse<GmudConfigItem>(response, 'Falha ao adicionar item.')
+}
+
+/** Cria (se ainda não existir) o item fixo "COR" que agrupa os destinatários da lista de clientes. */
+export async function ensureGmudCorItem(): Promise<{ id: number; created: boolean }> {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/cor/item`, { method: 'POST' })
+  return parse<{ id: number; created: boolean }>(response, 'Falha ao criar a lista do COR.')
 }
 
 export async function removeGmudConfigItem(id: number): Promise<void> {

@@ -8,6 +8,8 @@ import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDispl
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { cn } from '@/shared/lib/utils'
+import { describeSerie, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
+import { committeeLabelOverride, executionLabelOverride } from '@/features/gmud/lib/gmudApprovalText'
 
 const TONE: Record<GmudDeadlineTone, string> = {
   overdue: 'text-rose-600 dark:text-rose-300',
@@ -50,9 +52,9 @@ function ProtocolBadge({ protocol }: { protocol: number }) {
     ? env.ellevenProtocolUrlTemplate.replace('{protocol}', String(protocol))
     : ''
   const BTN =
-    'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10'
+    'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/80 transition hover:bg-surface-container-lowest dark:ring-white/15'
   return (
-    <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+    <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-neutral-200/80 bg-surface-container-low px-3 py-2.5 dark:border-white/10">
       <div className="min-w-0">
         <p className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Protocolo Voalle</p>
         <p className="font-mono text-2xl font-bold leading-tight tabular-nums text-on-surface">{protocol}</p>
@@ -85,6 +87,7 @@ function fmtWindow(r: GmudDetail['request']): string {
 export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; deadline: GmudDeadline }) {
   const r = detail.request
   const comite = r?.statusComite ?? null
+  const closed = Boolean(r?.ellevenEncerradoEm || detail.voalle.conclusionDate)
   return (
     <section className={cn(CARD, 'p-4')}>
       <CardTitle icon={<Info size={16} />}>Resumo</CardTitle>
@@ -106,14 +109,25 @@ export function GmudDetailSummary({ detail, deadline }: { detail: GmudDetail; de
               ? <Row label="Categoria">{r.categoria === 'sistemas_internos' ? 'Sistemas internos' : 'Sistemas externos'}</Row>
               : null}
             <Row label="Assunto">{r.assunto || '—'}</Row>
-            <Row label="Comitê">{comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—'}</Row>
+            <Row label="Comitê">
+              {committeeLabelOverride({ tipo: r.tipo, statusComite: comite, closed }) ??
+                (comite ? GMUD_STATUS_COMITE_LABEL[comite as GmudStatusComite] ?? comite : '—')}
+            </Row>
+            {describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie) ? (
+              <Row label="Série">{describeSerie((r.categoriaData as { serie?: GmudSerie } | null | undefined)?.serie)}</Row>
+            ) : null}
             {r.decididoEm ? (
               <Row label="Decisão">
                 {fmt(r.decididoEm)}
                 {r.aprovadoPor ? ` · ${r.aprovadoPor}` : ''}
               </Row>
             ) : null}
-            <Row label="Execução">{EXEC_LABEL[r.statusExec ?? ''] ?? r.statusExec ?? '—'}</Row>
+            <Row label="Execução">
+              {executionLabelOverride({ statusExec: r.statusExec, encerradaStatus: r.ellevenEncerradoStatus, closed }) ??
+                EXEC_LABEL[r.statusExec ?? ''] ??
+                r.statusExec ??
+                '—'}
+            </Row>
             {r.ellevenEncerradoStatus ? (
               <Row label="Encerrada no Elleven">
                 {ENCERR_LABEL[r.ellevenEncerradoStatus] ?? r.ellevenEncerradoStatus}

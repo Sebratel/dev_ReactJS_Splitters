@@ -59,6 +59,7 @@ export function useMassivaOpenReadiness(
   const affectedUsersQuantityAutoIspOverride = useMassivaOpenDraftStore(
     (s) => s.affectedUsersQuantityAutoIspOverride,
   )
+  const includeConflictingClients = useMassivaOpenDraftStore((s) => s.includeConflictingClients)
   const setAssignmentDescription = useMassivaOpenDraftStore((s) => s.setAssignmentDescription)
 
   const firebaseUserFallback =
@@ -250,6 +251,8 @@ export function useMassivaOpenReadiness(
       massivaAfetadosPath: afetadosPath,
       descriptionAutoSyncEnabled: descriptionAutoSync,
       affectedUsersQuantityOverride: affectedUsersQuantityAutoIspOverride,
+      skipAutoCloseWithoutClients: options?.isSistema === true,
+      includeConflictingClients,
     })
 
     return { status: 'ready-to-open', context }
@@ -271,6 +274,8 @@ export function useMassivaOpenReadiness(
     assignmentForecastTime,
     affectedUsersQuantityAutoIspOverride,
     eventIdentifiedBy,
+    options?.isSistema,
+    includeConflictingClients,
   ])
 
   const refetchPersonId = () => {

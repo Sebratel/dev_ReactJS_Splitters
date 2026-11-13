@@ -23,33 +23,44 @@ export type EscopoRedeOptions = {
   slots: number[]
   ports: number[]
   splitters: GmudEscopoSplitter[]
+  /** Os mesmos splitters agrupados por PON (e por slot, quando o recorte é o ponto de acesso inteiro). */
+  splitterGroups: { label: string; items: GmudEscopoSplitter[] }[]
 }
 
-/** Splitters alcançáveis pelo recorte atual: AP inteiro, um slot ou só as PONs marcadas. */
-function splittersInScope(catalog: MassivaRouteCatalog, escopo: GmudEscopoRede): GmudEscopoSplitter[] {
-  const codes = new Set<string>()
+/** Splitters alcançáveis pelo recorte atual (AP inteiro, um slot ou só as PONs marcadas), planos e agrupados por PON. */
+function splittersInScope(
+  catalog: MassivaRouteCatalog,
+  escopo: GmudEscopoRede,
+): { flat: GmudEscopoSplitter[]; groups: { label: string; items: GmudEscopoSplitter[] }[] } {
+  const bySplitterTitle = (a: GmudEscopoSplitter, b: GmudEscopoSplitter) => a.title.localeCompare(b.title, 'pt-BR', { numeric: true })
+  const seen = new Set<string>()
+  const groups: { label: string; items: GmudEscopoSplitter[] }[] = []
   const slots = escopo.slot === null ? listMassivaSlotsForAp(catalog, escopo.apCode) : [escopo.slot]
   for (const slot of slots) {
     const ports = escopo.slot !== null && escopo.ports.length > 0 ? escopo.ports : listMassivaPortsForApSlot(catalog, escopo.apCode, slot)
     for (const port of ports) {
-      for (const code of listMassivaSplittersForRoute(catalog, escopo.apCode, slot, port)) codes.add(code)
+      const items = listMassivaSplittersForRoute(catalog, escopo.apCode, slot, port)
+        .filter((code) => !seen.has(code) && seen.add(code))
+        .map((code) => ({ code, title: catalog.splitterTitles.get(code) ?? code }))
+        .sort(bySplitterTitle)
+      if (items.length > 0) groups.push({ label: escopo.slot === null ? `Slot ${slot} · PON ${port}` : `PON ${port}`, items })
     }
   }
-  return [...codes]
-    .map((code) => ({ code, title: catalog.splitterTitles.get(code) ?? code }))
-    .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR', { numeric: true }))
+  return { flat: groups.flatMap((g) => g.items).sort(bySplitterTitle), groups }
 }
 
 /** Opções de cada nível da cascata, a partir das rotas do site e da escolha feita até aqui. */
 export function buildEscopoRedeOptions(siteRows: MassivaRouteRow[], escopo: GmudEscopoRede): EscopoRedeOptions {
   const catalog = buildMassivaRouteCatalogFromRows(siteRows)
   const aps = listMassivaApCodes(catalog).map((code) => ({ code, title: catalog.apTitles.get(code) ?? code }))
-  if (escopo.apCode === '') return { aps, slots: [], ports: [], splitters: [] }
+  if (escopo.apCode === '') return { aps, slots: [], ports: [], splitters: [], splitterGroups: [] }
+  const inScope = splittersInScope(catalog, escopo)
   return {
     aps,
     slots: listMassivaSlotsForAp(catalog, escopo.apCode),
     ports: escopo.slot === null ? [] : listMassivaPortsForApSlot(catalog, escopo.apCode, escopo.slot),
-    splitters: splittersInScope(catalog, escopo),
+    splitters: inScope.flat,
+    splitterGroups: inScope.groups,
   }
 }
 

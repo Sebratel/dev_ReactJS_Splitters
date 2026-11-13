@@ -66,7 +66,7 @@ export function Panel({
 export function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface-variant">{eyebrow}</p>
       <h2 className="text-lg font-bold text-on-surface">{title}</h2>
       {description ? <p className="mt-0.5 max-w-3xl text-sm text-on-surface-variant">{description}</p> : null}
     </div>

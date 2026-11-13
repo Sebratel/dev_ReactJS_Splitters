@@ -814,7 +814,7 @@ export function GmudFlowchartSection({
                 type="button"
                 disabled={saveMutation.isPending || !editSource.trim()}
                 onClick={handleSave}
-                className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90')}
+                className={cn(ACTION, 'bg-primary text-neutral-900 ring-primary hover:bg-primary/90')}
               >
                 {saveMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Salvar
               </button>

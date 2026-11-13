@@ -1,6 +1,9 @@
 import { useAutoIspEvents } from '@/features/autoisp/hooks/useAutoIspEvents'
 import { useNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
+import { useMassivaConferenciaStatus } from '@/features/massiva/hooks/useMassivaConferenciaStatus'
 import { useMassivaTickets } from '@/features/massiva/hooks/useMassivaTickets'
+import { evaluateConferenciaHealth } from '@/features/massiva/lib/massivaConferenciaHealth'
+import type { MassivaConferenciaStatus } from '@/features/massiva/model/massivaConferenciaStatus'
 import { isAutoIspBrowserReady } from '@/shared/config/env'
 import { formatBrazilDateTimeDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
@@ -45,11 +48,47 @@ function toneDot(tone: RowTone): string {
   }
 }
 
+export type ConferenciaRowView = {
+  tone: RowTone
+  updated: string
+  interval: string
+  /** Texto curto sob o título quando algo merece atenção (null = tudo em dia). */
+  note: string | null
+}
+
+/**
+ * Linha "Conferência Elleven": verde se ativa e verificada há menos de 3x o intervalo; amarelo se
+ * desligada, só relatório ou carregando; vermelho se atrasada ou com erro; cinza se o endpoint falhou.
+ */
+export function buildConferenciaRowView(
+  status: MassivaConferenciaStatus | undefined,
+  state: { isPending: boolean; isError: boolean },
+  nowMs: number = Date.now(),
+): ConferenciaRowView {
+  if (status == null) {
+    if (state.isError) return { tone: 'idle', updated: '—', interval: '—', note: 'Indisponível no momento.' }
+    return { tone: state.isPending ? 'warn' : 'idle', updated: '—', interval: '—', note: null }
+  }
+  const health = evaluateConferenciaHealth(status, nowMs)
+  const ultima = status.ultimaExecucao
+  return {
+    tone: health.tone === 'err' ? 'err' : health.tone === 'warn' ? 'warn' : 'ok',
+    updated: ultima?.iniciadoEm ? formatUpdatedAt(ultima.iniciadoEm.getTime()) : '—',
+    interval: status.habilitada ? `${status.intervaloMinutos} min` : '—',
+    note: health.tone === 'ok' ? null : health.reason,
+  }
+}
+
 export function DashboardConnectionMonitor() {
   const statsQ = useNetworkStats()
   const { listConnectivity, refetch: refetchMassivas } = useMassivaTickets({ enabled: true })
   const autoIspQ = useAutoIspEvents()
   const autoIspConfigured = isAutoIspBrowserReady()
+  const conferenciaQ = useMassivaConferenciaStatus()
+  const conferencia = buildConferenciaRowView(conferenciaQ.data, {
+    isPending: conferenciaQ.isPending,
+    isError: conferenciaQ.isError,
+  })
 
   const statsTone: RowTone = statsQ.isPending
     ? 'warn'
@@ -79,9 +118,11 @@ export function DashboardConnectionMonitor() {
     void statsQ.refetch()
     void refetchMassivas()
     if (autoIspConfigured) void autoIspQ.refetch()
+    void conferenciaQ.refetch()
   }
 
-  const busy = statsQ.isFetching || listConnectivity.isFetching || autoIspQ.isFetching
+  const busy =
+    statsQ.isFetching || listConnectivity.isFetching || autoIspQ.isFetching || conferenciaQ.isFetching
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-stone-200/70 dark:border-white/10 bg-gradient-to-b from-white dark:from-surface-container-lowest via-stone-50/40 dark:via-white/5 to-amber-50/20 dark:to-amber-950/20 shadow-[0_12px_40px_-20px_rgba(15,23,42,0.15)] ring-1 ring-white/80 dark:ring-white/10">
@@ -190,6 +231,35 @@ export function DashboardConnectionMonitor() {
                     <dd className="shrink-0 font-medium text-on-surface">
                       {!autoIspConfigured ? '—' : formatRefetchEvery(AUTOISP_REFETCH_MS)}
                     </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </li>
+
+          <li
+            className="rounded-2xl border border-stone-100/90 dark:border-white/5 bg-surface-container-lowest/80 px-3.5 py-3 shadow-sm ring-1 ring-stone-900/[0.03] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md motion-reduce:hover:translate-y-0"
+            data-testid="saude-conferencia-elleven"
+            data-tone={conferencia.tone}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', toneDot(conferencia.tone))}
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold text-on-surface">Conferência Elleven</p>
+                {conferencia.note ? (
+                  <p className="mt-0.5 text-[11px] leading-snug text-on-surface-variant">{conferencia.note}</p>
+                ) : null}
+                <dl className="mt-2 space-y-1 text-[12px] text-on-surface-variant">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-on-surface-variant">Última atualização</dt>
+                    <dd className="shrink-0 font-medium tabular-nums text-on-surface">{conferencia.updated}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-on-surface-variant">Intervalo</dt>
+                    <dd className="shrink-0 font-medium text-on-surface">{conferencia.interval}</dd>
                   </div>
                 </dl>
               </div>

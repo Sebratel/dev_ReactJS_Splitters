@@ -37,4 +37,7 @@ export const massivaKeys = {
    */
   mttdMttrKpis: (months: number) =>
     [...massivaKeys.all, 'mttd-mttr-kpis', months] as const,
+
+  /** GET `/api/massiva/conferencia/status` — estado da conferência com o Elleven. */
+  conferenciaStatus: () => [...massivaKeys.all, 'conferencia-status'] as const,
 }

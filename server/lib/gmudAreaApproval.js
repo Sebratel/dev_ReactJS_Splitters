@@ -65,7 +65,9 @@ export function papelDaArea(recursosAdministrativos, areaLabel) {
 }
 
 export function deriveApprovalAreas(input = {}) {
-  if (String(input?.tipo ?? '').trim() === 'Emergencial') return [];
+  // Emergencial vai direto ao Comitê; Pré-aprovada não passa por aprovação nenhuma.
+  const tipo = String(input?.tipo ?? '').trim();
+  if (tipo === 'Emergencial' || tipo === 'Pré-aprovada') return [];
   return deriveNotificationAreas(input);
 }
 

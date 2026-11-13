@@ -1,8 +1,17 @@
-import { emptyEscopoRede, normalizeEscopoRede, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { normalizeEscopoRotas, type GmudEscopoRede } from '@/features/gmud/model/gmudEscopoRede'
+import { normalizeClientesSemSplitter, type GmudClienteSemSplitter } from '@/features/gmud/model/gmudClientesSemSplitter'
+import { parseRepeticao, type GmudSerie } from '@/features/gmud/lib/gmudRecurrence'
 
 /** Opções do formulário de GMUD (espelham o Google Form atual). */
 
-export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial'] as const
+export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial', 'Pré-aprovada'] as const
+
+/**
+ * Pré-aprovada: mesmo formulário da Rede Externa, sem aprovação (do Comitê nem das áreas) — o protocolo já nasce
+ * liberado. Pode ser aberta repetida (a cada N dias, M vezes): cada ocorrência vira uma GMUD independente.
+ * Só para Rede Externa.
+ */
+export const GMUD_TIPO_PRE_APROVADA = 'Pré-aprovada' as const
 
 // ---------------------------------------------------------------------------
 // CATEGORIA (área afetada) — selector principal do formulário dinâmico
@@ -108,12 +117,23 @@ export type GmudSistemasExternosData = {
   chamadoFornecedor: string
 }
 
+/** Tamanho máximo do texto de clientes ponto a ponto / fibra apagada. */
+export const GMUD_CLIENTES_MANUAIS_MAX = 2000
+
 /** Impacto de parada e abrangência da Rede Externa — persistido como JSON em `categoria_data`. */
 export type GmudRedeExternaImpactoData = {
   tipoIndisponibilidade: string
   duracaoEstimada: string
-  /** Afunilamento opcional por ponto de acesso/slot/PON/splitter dentro do POP/Site. */
+  /** Abrangência em rotas (ponto de acesso/slot/PON/splitter) dentro do POP/Site; ausente = site inteiro. */
+  escopoRotas?: GmudEscopoRede[]
+  /** Clientes corporativos ponto a ponto e de fibra apagada escolhidos no Elleven (entram nos afetados pelo contrato). */
+  clientesSemSplitter?: GmudClienteSemSplitter[]
+  /** Observação em texto livre sobre esses clientes. */
+  clientesManuais?: string
+  /** GMUDs antigas: um único afunilamento (lido como uma rota). */
   escopoRede?: GmudEscopoRede
+  /** Pré-aprovada repetida: ligação informativa entre as ocorrências da série. */
+  serie?: GmudSerie
 }
 
 /** Dados de impacto da Rede Externa para gravar; null quando não há impacto ou nada foi informado. */
@@ -126,15 +146,19 @@ export function redeExternaImpactoData(form: Pick<GmudFormState, 'impactoParada'
 
 /** `categoria_data` da Rede Externa: impacto de parada + afunilamento na rede; null quando não há nenhum. */
 export function redeExternaCategoriaData(
-  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRede'>,
+  form: Pick<GmudFormState, 'impactoParada' | 'tipoIndisponibilidade' | 'duracaoEstimada' | 'escopoRotas' | 'clientesManuais' | 'clientesSemSplitter'>,
 ): GmudRedeExternaImpactoData | null {
   const impacto = redeExternaImpactoData(form)
-  const escopo = normalizeEscopoRede(form.escopoRede)
-  if (!impacto && !escopo) return null
+  const rotas = normalizeEscopoRotas(form.escopoRotas)
+  const manuais = (form.clientesManuais ?? '').trim().slice(0, GMUD_CLIENTES_MANUAIS_MAX)
+  const semSplitter = normalizeClientesSemSplitter(form.clientesSemSplitter)
+  if (!impacto && rotas.length === 0 && manuais === '' && semSplitter.length === 0) return null
   return {
     tipoIndisponibilidade: impacto?.tipoIndisponibilidade ?? '',
     duracaoEstimada: impacto?.duracaoEstimada ?? '',
-    ...(escopo ? { escopoRede: escopo } : {}),
+    ...(rotas.length > 0 ? { escopoRotas: rotas } : {}),
+    ...(semSplitter.length > 0 ? { clientesSemSplitter: semSplitter } : {}),
+    ...(manuais !== '' ? { clientesManuais: manuais } : {}),
   }
 }
 
@@ -196,6 +220,10 @@ export type GmudFormState = {
   categoria: GmudCategoria
   voalleProtocol: string
   tipo: string
+  /** Pré-aprovada: quantos protocolos abrir (1 = sem repetição). Texto, como o campo da tela. */
+  repeticaoVezes: string
+  /** Pré-aprovada: intervalo em dias entre as ocorrências. */
+  repeticaoIntervaloDias: string
   /**
    * Para Rede Externa: natureza da mudança (persiste no DB como `assunto` para retrocompat).
    * Para Sistemas Internos/Externos: vazio (natureza fica em categoriaData.natureza).
@@ -205,13 +233,16 @@ export type GmudFormState = {
   descricao: string
   popSite: string
   /** Rede Externa: afunilamento opcional dentro do POP/Site (ponto de acesso, slot, PON, splitter). */
-  escopoRede: GmudEscopoRede
+  escopoRotas: GmudEscopoRede[]
   solicitanteNome: string
   solicitanteEmail: string
   areaSolicitante: string
   riscoNaoImplementacao: string
   ambienteAfetado: string[]
   comunicaCliente: string
+  /** Só Rede Externa: clientes escolhidos no Elleven e observação em texto livre. */
+  clientesSemSplitter: GmudClienteSemSplitter[]
+  clientesManuais: string
   impactoParada: string
   /** Rede Externa, quando há impacto de parada: 'Parcial' | 'Total'. Persistido em `categoria_data`. */
   tipoIndisponibilidade: string
@@ -297,52 +328,64 @@ function formatYmdBr(ymd: string): string {
 }
 
 /** Valida campos obrigatórios por categoria. Retorna rótulos dos campos faltando. */
-export function validateGmudForm(
+/** Pendência do formulário e a seção (título exato do cartão na tela) onde ela se resolve. */
+export type GmudPendencia = { section: string; message: string }
+
+export function validateGmudFormBySection(
   form: GmudFormState,
   siData?: GmudSistemasInternosData | null,
   seData?: GmudSistemasExternosData | null,
-): string[] {
-  const missing: string[] = []
-  const req = (ok: boolean, label: string) => { if (!ok) missing.push(label) }
+): GmudPendencia[] {
+  const missing: GmudPendencia[] = []
+  const req = (ok: boolean, message: string, section: string) => { if (!ok) missing.push({ section, message }) }
 
   // Campos comuns a todas as categorias
-  req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante')
-  req(form.tipo !== '', 'Tipo da GMUD')
-  req(form.titulo.trim() !== '', 'Título')
-  req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)')
-  req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)')
+  req(form.solicitanteEmail.trim() !== '', 'E-mail do solicitante', 'Identificação')
+  req(form.tipo !== '', 'Tipo da GMUD', 'Identificação')
+  req(form.titulo.trim() !== '', 'Título', 'Identificação')
+  req(form.dataInicio !== '' && form.horaInicio !== '', 'Janela de início (data e hora)', 'Janela de mudança')
+  req(form.dataFim !== '' && form.horaFim !== '', 'Janela de fim (data e hora)', 'Janela de mudança')
 
   if (form.dataInicio !== '' && form.dataFim !== '') {
     const inicio = `${form.dataInicio} ${form.horaInicio || '00:00'}`
     const fim = `${form.dataFim} ${form.horaFim || '00:00'}`
-    req(fim > inicio, 'Fim da janela deve ser depois do início')
+    req(fim > inicio, 'Fim da janela deve ser depois do início', 'Janela de mudança')
   }
 
-  if (form.tipo === 'Programada' && form.dataInicio !== '') {
+  if ((form.tipo === 'Programada' || form.tipo === GMUD_TIPO_PRE_APROVADA) && form.dataInicio !== '') {
     const minimo = minDataProgramada()
     req(
       form.dataInicio >= minimo,
-      `Data de início da GMUD Programada: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+      `Data de início da GMUD ${form.tipo}: a partir de ${formatYmdBr(minimo)} (apresentação na terça + 7 dias)`,
+      'Janela de mudança',
+    )
+  }
+
+  if (form.tipo === GMUD_TIPO_PRE_APROVADA) {
+    req(form.categoria === 'rede_externa', 'GMUD Pré-aprovada só está disponível para Rede Externa', 'Identificação')
+    req(
+      parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) !== null,
+      'Repetição: quantidade de 1 a 12 e, repetindo, intervalo de 1 a 365 dias',
+      'Identificação',
     )
   }
 
   if (form.categoria === 'rede_externa') {
     // Campos obrigatórios de Rede Externa (comportamento original preservado)
-    req(form.assunto !== '', 'Natureza da mudança')
-    req(form.descricao.trim() !== '', 'Descrição da atividade')
-    req(form.popSite.trim() !== '', 'POP/Site')
-    req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação')
-    req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado')
-    req(form.comunicaCliente !== '', 'Comunica cliente?')
-    req(form.impactoParada !== '', 'Impacto de parada?')
-    req(form.planoExecucao.trim() !== '', 'Plano de execução')
-    req(form.riscoExecucao.trim() !== '', 'Risco durante a execução')
+    req(form.assunto !== '', 'Natureza da mudança', 'Identificação')
+    req(form.descricao.trim() !== '', 'Descrição da atividade', 'Atividade')
+    req(form.popSite.trim() !== '', 'POP/Site', 'Atividade')
+    req(form.riscoNaoImplementacao.trim() !== '', 'Risco da não implementação', 'Atividade')
+    req(collectAmbienteAfetado(form).length > 0, 'Ambiente afetado', 'Ambiente afetado')
+    req(form.impactoParada !== '', 'Impacto de parada?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução', 'Execução')
+    req(form.riscoExecucao.trim() !== '', 'Risco durante a execução', 'Execução')
     req(
       Object.values(form.recursosAdministrativos).some((papel) => papel === 'executor' || papel === 'validador'),
       'Recursos administrativos (ao menos uma área como Executor ou Validador)',
+      'Recursos administrativos',
     )
-    req(form.planoRollback.trim() !== '', 'Plano de rollback')
-    req(form.listaClientesCor !== '', 'Lista de clientes ao COR')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback', 'Execução')
   }
 
   if (form.categoria === 'sistemas_internos' && siData) {
@@ -350,14 +393,14 @@ export function validateGmudForm(
     const sistema = si.sistemaAfetado === 'Outro (especificar)'
       ? si.sistemaAfetadoOutro.trim()
       : si.sistemaAfetado.trim()
-    req(sistema !== '', 'Sistema afetado')
-    req(si.natureza !== '', 'Natureza da mudança')
-    req(si.ambiente !== '', 'Ambiente')
-    req(si.areasImpactadas.length > 0, 'Áreas impactadas (quem será avisado)')
-    req(form.descricao.trim() !== '', 'Objetivo / Descrição')
-    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
-    req(form.planoExecucao.trim() !== '', 'Plano de execução')
-    req(form.planoRollback.trim() !== '', 'Plano de rollback')
+    req(sistema !== '', 'Sistema afetado', 'Sistema')
+    req(si.natureza !== '', 'Natureza da mudança', 'Sistema')
+    req(si.ambiente !== '', 'Ambiente', 'Sistema')
+    req(si.areasImpactadas.length > 0, 'Áreas impactadas (quem será avisado)', 'Impacto')
+    req(form.descricao.trim() !== '', 'Objetivo / Descrição', 'Descrição')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de execução', 'Execução')
+    req(form.planoRollback.trim() !== '', 'Plano de rollback', 'Execução')
   }
 
   if (form.categoria === 'sistemas_externos' && seData) {
@@ -365,15 +408,23 @@ export function validateGmudForm(
     const sistema = se.sistemaExterno === 'Outro (especificar)'
       ? se.sistemaExternoOutro.trim()
       : se.sistemaExterno.trim()
-    req(sistema !== '', 'Sistema externo')
-    req(se.natureza !== '', 'Natureza da mudança')
-    req(se.areasAfetadas.length > 0, 'Áreas afetadas (quem será avisado)')
-    req(form.descricao.trim() !== '', 'Mudança prevista')
-    req(form.impactoParada !== '', 'Haverá indisponibilidade?')
-    req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução')
+    req(sistema !== '', 'Sistema externo', 'Sistema e fornecedor')
+    req(se.natureza !== '', 'Natureza da mudança', 'Sistema e fornecedor')
+    req(se.areasAfetadas.length > 0, 'Áreas afetadas (quem será avisado)', 'Impacto')
+    req(form.descricao.trim() !== '', 'Mudança prevista', 'Mudança prevista')
+    req(form.impactoParada !== '', 'Haverá indisponibilidade?', 'Impacto')
+    req(form.planoExecucao.trim() !== '', 'Plano de contingência/execução', 'Contingência')
   }
 
   return missing
+}
+
+export function validateGmudForm(
+  form: GmudFormState,
+  siData?: GmudSistemasInternosData | null,
+  seData?: GmudSistemasExternosData | null,
+): string[] {
+  return validateGmudFormBySection(form, siData, seData).map((p) => p.message)
 }
 
 // ---------------------------------------------------------------------------
@@ -385,17 +436,21 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     categoria: 'rede_externa',
     voalleProtocol: '',
     tipo: '',
+    repeticaoVezes: '1',
+    repeticaoIntervaloDias: '15',
     assunto: '',
     titulo: '',
     descricao: '',
     popSite: '',
-    escopoRede: emptyEscopoRede(),
+    escopoRotas: [],
     solicitanteNome: prefillName,
     solicitanteEmail: prefillEmail,
     areaSolicitante: '',
     riscoNaoImplementacao: '',
     ambienteAfetado: [],
     comunicaCliente: '',
+    clientesSemSplitter: [],
+    clientesManuais: '',
     impactoParada: '',
     tipoIndisponibilidade: '',
     duracaoEstimada: '',

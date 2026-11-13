@@ -1298,6 +1298,13 @@ const { data: recentOpenTickets = [] } = useQuery({
               O cancelamento marca o protocolo como <strong>Cancelado</strong> na Voalle (não é
               encerramento). Use para aberturas equivocadas ou duplicadas.
             </p>
+            {selectedCancellingTicket.infraProtocol != null ? (
+              <p className="mt-2 rounded-lg border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-950 dark:text-amber-100">
+                O protocolo de infraestrutura{' '}
+                <span className="font-mono font-semibold">{selectedCancellingTicket.infraProtocol}</span>, aberto junto com
+                esta massiva, <strong>também será cancelado</strong>.
+              </p>
+            ) : null}
 
             {selectedCancellingTicket.assignmentId === null ? (
               <p className="mt-3 text-sm text-red-700 dark:text-red-200">
@@ -1359,6 +1366,8 @@ const { data: recentOpenTickets = [] } = useQuery({
                     protocol: selectedCancellingTicket.protocol,
                     cancelDescription: cancelDescription.trim(),
                     cancelledBy: closedByLabel,
+                    infraProtocol: selectedCancellingTicket.infraProtocol ?? null,
+                    infraAssignmentId: selectedCancellingTicket.infraAssignmentId ?? null,
                   })
                 }}
               >

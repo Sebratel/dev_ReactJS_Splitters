@@ -4,6 +4,7 @@ import { useMassivaLocalPreview } from '@/features/massiva/hooks/useMassivaLocal
 import { useMassivaOpenReadiness } from '@/features/massiva/hooks/useMassivaOpenReadiness'
 import { useMassivaOpenMutation } from '@/features/massiva/hooks/useMassivaOpenMutation'
 import { explainMassivaPostBlocked } from '@/features/massiva/lib/explainMassivaPostBlocked'
+import { buildMassivaSistemaTitle } from '@/features/massiva/lib/buildMassivaSistemaTitle'
 import { MASSIVA_API_GATEWAY_DEFAULTS } from '@/features/massiva/model/massivaApiGatewayConstants'
 import { env } from '@/shared/config/env'
 import {
@@ -123,6 +124,8 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
     subjectLabel: selectedSubject?.tipo === 'rede' ? selectedSubject.label : undefined,
   })
 
+  const sistemaAfetado = useMassivaOpenDraftStore((s) => s.sistemaAfetado)
+
   // Preparation sintética para assuntos do tipo sistema (sem rota de rede)
   const sistemaOpeningPreparation = useMemo<MassivaOpeningPreparationView>(() => {
     if (!selectedSubject || selectedSubject.tipo !== 'sistema') {
@@ -149,7 +152,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         apiDefaults: MASSIVA_API_GATEWAY_DEFAULTS,
         requests: [{
           authenticationAccessPointCode: MASSIVA_SISTEMA_AP_CODE,
-          assignmentTitle: selectedSubject.label,
+          assignmentTitle: buildMassivaSistemaTitle(selectedSubject.label, sistemaAfetado),
         }],
         pendingBeforePost: ['personId', 'assignmentDescription', 'assignmentFinalDateLocal'],
         // O gateway rejeita affectedUsersQuantity <= 0; para chamados de sistema usamos 1 como mínimo.
@@ -158,7 +161,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         routeUniqueAuthenticationIdCount: 0,
       },
     }
-  }, [selectedSubject])
+  }, [selectedSubject, sistemaAfetado])
 
   const isSistema = selectedSubject?.tipo === 'sistema'
 

@@ -22,6 +22,10 @@ export type MassivaOpenMutationSuccessPayload = {
   /** Protocolo de infraestrutura aberto junto (1 por evento), quando o operador selecionou um tipo. */
   infraProtocol?: number | null
   infraAssignmentId?: number | null
+  /** Clientes deixados de fora por já estarem em outro evento aberto. */
+  excludedClientsCount?: number
+  /** Protocolos dos outros eventos onde esses clientes já estavam. */
+  excludedClientsEventProtocols?: number[]
 }
 
 /**

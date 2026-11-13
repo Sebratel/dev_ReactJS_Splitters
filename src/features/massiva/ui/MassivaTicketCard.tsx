@@ -13,6 +13,7 @@ import {
   Megaphone,
   Network,
   Pencil,
+  RefreshCw,
   ScrollText,
   UserPlus,
   Users,
@@ -676,6 +677,16 @@ export function MassivaTicketCard({
                 >
                   <Wrench size={11} strokeWidth={2.2} aria-hidden />
                   Infra #{ticket.infraProtocol}
+                </span>
+              ) : null}
+              {ticket.recoveredFromElleven ? (
+                <span
+                  className="inline-flex w-fit items-center gap-1 rounded-md border border-violet-300/70 bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-200"
+                  title="Esta massiva estava só no Elleven e foi registrada automaticamente pela conferência. Alguns dados (operador, clientes afetados) podem estar em branco."
+                  data-testid="selo-recuperada-elleven"
+                >
+                  <RefreshCw size={11} strokeWidth={2.2} aria-hidden />
+                  Recuperada do Elleven
                 </span>
               ) : null}
             </div>

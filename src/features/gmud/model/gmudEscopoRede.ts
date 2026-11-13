@@ -43,6 +43,40 @@ export function normalizeEscopoRede(escopo: GmudEscopoRede | null | undefined): 
   }
 }
 
+/** Chave estável de uma rota (para não repetir na lista). */
+export function escopoRotaKey(escopo: GmudEscopoRede): string {
+  return JSON.stringify(normalizeEscopoRede(escopo))
+}
+
+/** Lista de rotas limpa para gravar: sem vazias nem repetidas. Vazia = site inteiro. */
+export function normalizeEscopoRotas(rotas: readonly GmudEscopoRede[] | null | undefined): GmudEscopoRede[] {
+  const seen = new Set<string>()
+  const out: GmudEscopoRede[] = []
+  for (const r of rotas ?? []) {
+    const n = normalizeEscopoRede(r)
+    if (!n) continue
+    const key = JSON.stringify(n)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(n)
+  }
+  return out
+}
+
+/** Rotas de uma GMUD já gravada: `escopoRotas` (lista) ou, nas antigas, o `escopoRede` único. */
+export function rotasFromCategoriaData(
+  data: { escopoRotas?: GmudEscopoRede[]; escopoRede?: GmudEscopoRede } | null | undefined,
+): GmudEscopoRede[] {
+  if (!data) return []
+  if (Array.isArray(data.escopoRotas)) return normalizeEscopoRotas(data.escopoRotas)
+  return normalizeEscopoRotas(data.escopoRede ? [data.escopoRede] : [])
+}
+
+/** Uma frase por rota, separadas por "; ". */
+export function formatEscopoRotas(rotas: readonly GmudEscopoRede[] | null | undefined): string {
+  return normalizeEscopoRotas(rotas).map((r) => formatEscopoRede(r)).filter((t) => t !== '').join('; ')
+}
+
 /** Texto curto para telas, e-mail e máscara do Elleven. Ex.: "OLT-01 · Slot 2 · PON 4, 5 · Splitters: A, B". */
 export function formatEscopoRede(escopo: GmudEscopoRede | null | undefined): string {
   const e = normalizeEscopoRede(escopo)

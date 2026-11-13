@@ -17,6 +17,10 @@ import { GmudRescheduleModal } from '@/features/gmud/ui/GmudRescheduleModal'
 import { GmudLinkedMassivasCard, GmudScopeCard, GmudTimelineCard, GmudWindowHistoryCard } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { GmudDetailSummary } from '@/features/gmud/ui/detail/GmudDetailSummary'
 import { GmudAreaApprovalsCard } from '@/features/gmud/ui/detail/GmudAreaApprovalsCard'
+import { GmudStatusTrail } from '@/features/gmud/ui/detail/GmudStatusTrail'
+import { buildStatusTrail, closedPendingNotice } from '@/features/gmud/lib/gmudStatusTrail'
+import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
+import { GmudClientImpactCard } from '@/features/gmud/ui/detail/GmudClientImpactCard'
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
 import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
 import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
@@ -25,6 +29,8 @@ import type { GmudRedeExternaImpactoData, GmudSistemasExternosData, GmudSistemas
 import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/api/closeGmudInElleven'
 import { updateGmudApproval } from '@/features/gmud/api/updateGmudApproval'
 import { gmudEncerrada, gmudPodeAvaliar, gmudPodeCancelar, gmudPodeConcluir } from '@/features/gmud/lib/gmudLifecycle'
+import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
+import { isGmudDisponivel } from '@/features/gmud/model/gmud'
 import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
 import { GmudEllevenStatusAlert } from '@/features/gmud/ui/GmudEllevenStatusAlert'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
@@ -97,6 +103,8 @@ export function GmudDetailScreen() {
   const { protocol: raw } = useParams()
   const protocol = Number.parseInt(String(raw ?? ''), 10)
   const canApprove = useAccessAuthStore((s) => s.hasPermission('canApproveGmud'))
+  // Decidir (avaliar/override) é do Comitê: só quem está na lista de membros (Configurações).
+  const isCommitteeMember = useIsGmudCommitteeMember()
   const [modal, setModal] = useState<'approve' | 'links' | 'reschedule' | 'report' | null>(null)
   const [presenting, setPresenting] = useState(false)
 
@@ -190,10 +198,33 @@ export function GmudDetailScreen() {
   const title = d ? (d.request?.titulo || gmudDisplayTitle({ title: d.voalle.title, protocol, requester: d.voalle.requester, descriptionText: htmlToPlainText(d.voalle.description) })) : `GMUD ${protocol}`
   const listItem = d ? toListItem(d) : null
   const agendaItem = d ? toAgendaItem(d) : null
-  const approved = d?.request?.statusComite === 'aprovada'
+  const approved = isGmudDisponivel(d?.request?.statusComite, d?.request?.statusAreas)
   const closed = Boolean(d?.request?.ellevenEncerradoEm || d?.voalle.conclusionDate)
   const statusAreas = d?.request?.statusAreas ?? 'nao_aplicavel'
   const aguardandoAreas = statusAreas === 'pendente'
+  const trailSteps = d?.request
+    ? buildStatusTrail({
+        tipo: d.request.tipo,
+        statusAreas: d.request.statusAreas,
+        statusComite: d.request.statusComite,
+        statusExec: d.request.statusExec,
+        closed,
+        encerradaStatus: d.request.ellevenEncerradoStatus,
+        createdLabel: d.request.createdAt ? formatBrazilDateTimeShortDisplay(d.request.createdAt, '').slice(0, 5) : '',
+        windowLabel: d.request.dataInicio
+          ? `${d.request.dataInicio.split('-').reverse().slice(0, 2).join('/')}${d.request.horaInicio ? ` ${d.request.horaInicio}` : ''}`
+          : '',
+      })
+    : null
+  const trailNotice = d?.request
+    ? closedPendingNotice({
+        closed,
+        statusComite: d.request.statusComite,
+        statusAreas: d.request.statusAreas,
+        encerradaStatus: d.request.ellevenEncerradoStatus,
+        closedAtLabel: formatBrazilDateTimeShortDisplay(d.request.ellevenEncerradoEm ?? d.voalle.conclusionDate, '').slice(0, 10),
+      })
+    : null
 
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
@@ -214,13 +245,12 @@ export function GmudDetailScreen() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            {canApprove && gmudPodeAvaliar(listItem) ? (
+            {isCommitteeMember && gmudPodeAvaliar(listItem) ? (
               <button
                 type="button"
                 onClick={() => setModal('approve')}
-                disabled={aguardandoAreas}
-                title={aguardandoAreas ? 'Aguardando a aprovação das áreas (ou aprove em nome da área abaixo)' : undefined}
-                className={cn(ACTION, 'bg-primary text-white ring-primary hover:bg-primary/90 disabled:opacity-50')}
+                title={aguardandoAreas ? 'O Comitê decide em paralelo às áreas; a GMUD só é liberada quando ambos aprovarem.' : undefined}
+                className={cn(ACTION, 'bg-primary text-neutral-900 ring-primary hover:bg-primary/90 disabled:opacity-50')}
               >
                 <Gavel size={14} /> Avaliar
               </button>
@@ -254,7 +284,7 @@ export function GmudDetailScreen() {
                 type="button"
                 onClick={() => setModal('reschedule')}
                 disabled={!approved || closed}
-                title={!approved ? 'Só GMUD aprovada pode ser reagendada' : closed ? 'GMUD encerrada' : undefined}
+                title={!approved ? 'Só GMUD aprovada pelo Comitê e pelas áreas pode ser reagendada' : closed ? 'GMUD encerrada' : undefined}
                 className={cn(ACTION, 'text-on-surface ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10')}
               >
                 <CalendarClock size={14} /> Reagendar
@@ -283,6 +313,8 @@ export function GmudDetailScreen() {
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
           </div>
+
+          {trailSteps ? <GmudStatusTrail steps={trailSteps} notice={trailNotice} /> : null}
 
           <GmudEllevenStatusAlert
             statusComite={d.request?.statusComite}
@@ -333,9 +365,13 @@ export function GmudDetailScreen() {
                 protocol={protocol}
                 areas={d.areaApprovals}
                 statusAreas={statusAreas}
-                canOverride={canApprove && !closed}
+                statusComite={d.request?.statusComite}
+                committee={d.request && d.request.tipo !== 'Pré-aprovada' ? { decididoEm: d.request.decididoEm, aprovadoPor: d.request.aprovadoPor } : null}
+                closed={closed}
+                canOverride={isCommitteeMember && !closed}
                 onChanged={refreshGmud}
               />
+              <GmudClientImpactCard protocol={protocol} />
               <GmudWindowHistoryCard request={d.request} events={d.events} />
               <GmudTimelineCard items={timeline} />
             </div>

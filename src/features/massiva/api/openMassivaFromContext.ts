@@ -1,4 +1,10 @@
 import { closeMassivaTicket } from '@/features/massiva/api/closeMassivaTicket'
+import { excludeClientsInOtherEvents, type ClientExclusionResult } from '@/features/massiva/api/excludeClientsInOtherEvents'
+import {
+  parseSkippedContractIds,
+  recordExcludedClients,
+  type ExcludedClientInput,
+} from '@/features/massiva/api/recordExcludedClients'
 import {
   buildMassivaAfetadosRequestBody,
   collectMapeableAfetadosClientes,
@@ -31,7 +37,7 @@ import {
 } from '@/features/massiva/model/massivaOpenMutation'
 import type { MassivaOpenFinalContext } from '@/features/massiva/model/massivaOpenReadiness'
 import { bffClient } from '@/shared/api/bffClient'
-import { ApiError } from '@/shared/api/apiError'
+import { ApiError, NetworkError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import type { SplitterCliente } from '@/features/splitters/model/splitterCliente'
@@ -91,6 +97,27 @@ function describeAfetadosFailure(error: unknown): string {
     }
   }
   return formatQueryError(error)
+}
+
+/**
+ * Timeout da gravação antecipada do histórico (ver `registerOpenedHistoryEarly`). Curto de
+ * propósito: essa chamada é feita em série dentro do loop de abertura dos APs — sem um limite
+ * próprio, um MySQL/BFF travado prende a abertura inteira (ela já é best-effort e nunca lança,
+ * mas sem timeout ficaria pendurada até o timeout genérico de 30s do `fetchWithSessionAuth`).
+ */
+const EARLY_HISTORY_TIMEOUT_MS = 5_000
+
+/**
+ * Timeout/queda no POST de abertura é um resultado AMBÍGUO: o Elleven pode ter recebido e criado
+ * o protocolo mesmo sem o navegador confirmar (proxy/gateway caiu na volta, ou a conexão caiu
+ * antes da resposta chegar). Diferente de um 4xx de validação, onde o Elleven certamente recusou.
+ * Essa é justamente a janela que a gravação antecipada NÃO cobre (ela só roda depois de um
+ * resultado parseado com sucesso) — avisamos o operador em vez de deixar um "falha no AP" genérico.
+ */
+function isAmbiguousMassivaOpenFailure(error: unknown): boolean {
+  if (error instanceof NetworkError) return true
+  if (error instanceof ApiError) return error.status === 408 || error.status >= 500
+  return false
 }
 
 function normalizeAp(value: string | null | undefined): string {
@@ -279,6 +306,76 @@ async function openInfraProtocolIfSelected(
 }
 
 /**
+ * Grava a linha do histórico local logo após o Elleven abrir o protocolo de um AP, antes dos
+ * afetados e da infra. Sem isso, qualquer interrupção entre a abertura e a gravação final (aba
+ * fechada, timeout do proxy, falha em outro AP) deixa o protocolo só no Elleven.
+ *
+ * O servidor faz upsert por assignment/protocolo, então a gravação final continua valendo e só
+ * completa a mesma linha (infra, afetados, encerramento automático). O estado aqui é sempre
+ * "aberta": só a gravação final marca "encerrada", depois que o Elleven confirma o encerramento.
+ * Best-effort: nunca lança, para não transformar um protocolo já aberto em falha do AP.
+ */
+async function registerOpenedHistoryEarly(
+  context: MassivaOpenFinalContext,
+  opened: MassivaOpenSingleResult,
+): Promise<void> {
+  try {
+    await registerOpenedMassivaHistoryInLocalDb(
+      context,
+      { results: [opened] },
+      {
+        complete: false,
+        keepalive: true,
+        signal: AbortSignal.timeout(EARLY_HISTORY_TIMEOUT_MS),
+      },
+    )
+  } catch (error) {
+    console.warn(
+      `[Massiva] Falha na gravação antecipada do histórico (AP ${opened.accessPointCode}); será tentada de novo ao final.`,
+      error,
+    )
+  }
+}
+
+/**
+ * Registra os clientes que ficaram de fora deste AP por já estarem em outro evento: os que o próprio front
+ * deixou de fora (conhecem o evento que os segurou) e os que o gateway recusou na hora de gravar (sem o evento).
+ * Melhor esforço: nunca lança.
+ */
+async function recordExcludedForAp(
+  context: MassivaOpenFinalContext,
+  exclusion: ClientExclusionResult,
+  accessPointCode: string,
+  ids: { protocol: number; assignmentId: number },
+  gatewaySkipped: readonly number[],
+  sentEntities: readonly UsuarioAfetadoEntity[] = [],
+): Promise<void> {
+  const clients: ExcludedClientInput[] = []
+  const seen = new Set<number>()
+  for (const c of clientesForAccessPoint(exclusion.excludedClientes, accessPointCode)) {
+    const contractId = c.contract?.id
+    if (contractId == null || seen.has(contractId)) continue
+    seen.add(contractId)
+    const blocker = exclusion.blockedBy.get(contractId)
+    clients.push({ contractId, pppoe: c.user.trim(), corporate: c.isCorporate === true, blockedByProtocol: blocker?.protocol ?? null, blockedByType: blocker?.type ?? null })
+  }
+  for (const contractId of gatewaySkipped) {
+    if (seen.has(contractId)) continue
+    seen.add(contractId)
+    const sent = sentEntities.find((e) => e.contractId === contractId)
+    clients.push({ contractId, pppoe: sent?.pppoe ?? '', corporate: false })
+  }
+  if (clients.length === 0) return
+  await recordExcludedClients({
+    protocol: ids.protocol,
+    assignmentId: ids.assignmentId,
+    reason: context.assignmentDescription,
+    finishDate: context.assignmentFinalDateLocal,
+    clients,
+  })
+}
+
+/**
  * Um POST por entrada em `context.plan.requests` — paridade sequência em `_openMassiva`.
  * Em seguida: POST de afetados (seleção da rota) ou encerramento automático se não houver clientes mapeáveis.
  */
@@ -286,7 +383,10 @@ export async function openMassivaFromContext(
   inputContext: MassivaOpenFinalContext,
   signal?: AbortSignal,
 ): Promise<MassivaOpenMutationSuccessPayload> {
-  const context = await withFullCollectedClientes(inputContext)
+  const fullContext = await withFullCollectedClientes(inputContext)
+  // Cliente que já está em outro evento aberto não entra de novo (não duplica): fica de fora deste.
+  const exclusion = await excludeClientsInOtherEvents(fullContext, signal)
+  const context = exclusion.context
   const path = context.massivaOpenPath.trim()
   if (path === '') {
     throw new Error('Path de abertura vazio no contexto.')
@@ -318,11 +418,15 @@ export async function openMassivaFromContext(
       })
       const parsed = parseMassivaOpenHttpResult(data, req.authenticationAccessPointCode)
       successes.push(parsed)
+      await registerOpenedHistoryEarly(context, parsed)
     } catch (e) {
       console.error(`[Massiva] Falha no AP: ${req.authenticationAccessPointCode}`, e)
+      const message = isAmbiguousMassivaOpenFailure(e)
+        ? `${formatMassivaOpenApiFailure(e)} — resposta não confirmada: o Elleven pode ter criado o protocolo mesmo assim. Verifique manualmente no Elleven antes de tentar reabrir este AP.`
+        : formatMassivaOpenApiFailure(e)
       failures.push({
         accessPointCode: req.authenticationAccessPointCode,
-        message: formatMassivaOpenApiFailure(e),
+        message,
       })
     }
   }
@@ -336,6 +440,45 @@ export async function openMassivaFromContext(
   const ids = primary != null ? resolveProtocolAndAssignment(primary) : null
   const mapeableCount = collectMapeableAfetadosClientes(context.basis.collectedClientes).length
 
+  if (mapeableCount === 0 && context.skipAutoCloseWithoutClients === true) {
+    // Assunto de sistema: não há clientes por natureza. O protocolo fica ABERTO (sem POST de
+    // afetados e sem encerramento automático); o operador encerra pelo fluxo normal.
+    let payload: MassivaOpenMutationSuccessPayload = base
+    try {
+      // `complete: true`: não há afetados a gravar, então a linha já nasce completa (a reconciliação
+      // de history_complete=0 não deve tentar "completar" uma massiva de sistema).
+      await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
+    } catch (localError) {
+      console.warn('[Massiva] Falha ao registrar histórico local após abertura de sistema.', localError)
+      payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+    }
+    return payload
+  }
+
+  if (mapeableCount === 0 && exclusion.excludedCount > 0) {
+    // Todos os clientes da seleção já estão em outro evento aberto: este evento abre, mas sem
+    // afetados próprios — e NÃO é encerrado automaticamente (a queda é real, só o aviso ao cliente
+    // já está coberto pelo outro evento).
+    for (const opened of successes) {
+      const opIds = resolveProtocolAndAssignment(opened)
+      if (opIds != null) await recordExcludedForAp(context, exclusion, opened.accessPointCode, opIds, [])
+    }
+    let payload: MassivaOpenMutationSuccessPayload = {
+      ...base,
+      excludedClientsCount: exclusion.excludedCount,
+      excludedClientsEventProtocols: exclusion.eventProtocols,
+      followUpWarning: `Todos os ${exclusion.excludedCount} clientes da seleção já fazem parte de outro evento aberto (protocolo ${exclusion.eventProtocols.join(', ')}). Esta massiva foi aberta sem clientes próprios.`,
+    }
+    try {
+      // `complete: true`: sem afetados próprios a gravar, a linha já nasce completa.
+      await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
+    } catch (localError) {
+      console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
+      payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
+    }
+    return payload
+  }
+
   if (mapeableCount === 0) {
     if (ids != null && closePathConfigured()) {
       try {
@@ -346,7 +489,7 @@ export async function openMassivaFromContext(
         })
         let payload: MassivaOpenMutationSuccessPayload = { ...base, autoClosedWithoutClients: true }
         try {
-          await registerOpenedMassivaHistoryInLocalDb(context, payload)
+          await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
         } catch (localError) {
           console.warn('[Massiva] Falha ao registrar histórico local após autoencerramento.', localError)
           payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
@@ -371,7 +514,7 @@ export async function openMassivaFromContext(
       : base
 
     try {
-      await registerOpenedMassivaHistoryInLocalDb(context, payload)
+      await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
     } catch (localError) {
       console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
       payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)
@@ -411,19 +554,24 @@ export async function openMassivaFromContext(
       scopedClientes,
     )
 
+    let gatewaySkipped: number[] = []
     try {
-      await bffClient.request({
+      const afetadosResponse: unknown = await bffClient.request({
         path: afetadosPath,
         method: 'POST',
         body: afetadosBody,
         signal,
       })
-      afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length
+      gatewaySkipped = parseSkippedContractIds(afetadosResponse)
+      afetadosPostedCount += afetadosBody.usuarioAfetadoEntities.length - gatewaySkipped.length
     } catch (afetadosError) {
       const msg = describeAfetadosFailure(afetadosError)
       console.warn(`[Massiva] Falha ao registrar afetados para AP ${opened.accessPointCode}.`, afetadosError)
       afetadosWarnings.push(`AP ${opened.accessPointCode}: falha ao registrar afetados — ${msg}.`)
     }
+
+    // Quem ficou de fora (já em outro evento): vira histórico deste evento e fila de reinclusão.
+    await recordExcludedForAp(context, exclusion, opened.accessPointCode, ids, gatewaySkipped, afetadosBody.usuarioAfetadoEntities)
 
     // Cópia local (nosso MySQL) da mesma lista de afetados, independente do gateway —
     // viabiliza a verificação "ainda sem sinal?" pós-encerramento sem depender do DELETE
@@ -438,6 +586,12 @@ export async function openMassivaFromContext(
   let payload: MassivaOpenMutationSuccessPayload = {
     ...base,
     afetadosPostedCount,
+    ...(exclusion.excludedCount > 0
+      ? {
+          excludedClientsCount: exclusion.excludedCount,
+          excludedClientsEventProtocols: exclusion.eventProtocols,
+        }
+      : {}),
   }
 
   if (afetadosWarnings.length > 0) {
@@ -461,7 +615,7 @@ export async function openMassivaFromContext(
   }
 
   try {
-    await registerOpenedMassivaHistoryInLocalDb(context, payload)
+    await registerOpenedMassivaHistoryInLocalDb(context, payload, { complete: true })
   } catch (localError) {
     console.warn('[Massiva] Falha ao registrar histórico local após abertura.', localError)
     payload = appendFollowUpWarning(payload, LOCAL_HISTORY_WARNING)

@@ -32,6 +32,16 @@ export type MassivaOpenFinalContext = {
   affectedUsersQuantityFlutterParity: number
   descriptionAutoSyncEnabled: boolean
   /**
+   * Assuntos de sistema nunca têm clientes mapeáveis: o protocolo deve ficar aberto em vez de
+   * ser encerrado automaticamente por "nenhum cliente na seleção" (regra só de massiva de rede).
+   */
+  skipAutoCloseWithoutClients?: boolean
+  /**
+   * Clientes que já estão em OUTRO evento aberto ficam de fora deste (padrão: false = excluir).
+   * Verdadeiro quando o operador escolheu incluí-los mesmo assim.
+   */
+  includeConflictingClients?: boolean
+  /**
    * Chave de idempotência da tentativa de abertura (estável entre retries, rotacionada
    * a cada sucesso). Enviada como header `Idempotency-Key` nos POSTs de abertura, para o
    * gateway deduplicar (retry após timeout / duplo clique não gera protocolo duplicado).
