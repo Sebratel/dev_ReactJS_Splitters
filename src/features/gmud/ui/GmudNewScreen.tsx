@@ -52,7 +52,8 @@ import { GmudMultiSelect } from '@/features/gmud/ui/GmudMultiSelect'
 import { GmudDropdownMultiSelect } from '@/features/gmud/ui/GmudDropdownMultiSelect'
 import { GmudFormTrail } from '@/features/gmud/ui/GmudFormTrail'
 import { GmudCategoriaPicker } from '@/features/gmud/ui/GmudCategoriaPicker'
-import { pendenciasDaEtapa, primeiraEtapaPendente, wizardStates, wizardSteps } from '@/features/gmud/lib/gmudWizard'
+import { GmudDiscardDraftButton } from '@/features/gmud/ui/GmudDiscardDraftButton'
+import { etapaAoEscolherCategoria, pendenciasDaEtapa, primeiraEtapaPendente, wizardStates, wizardSteps } from '@/features/gmud/lib/gmudWizard'
 import { clearGmudDraft, draftHasContent, gmudDraftKey, loadGmudDraft, saveGmudDraft } from '@/features/gmud/lib/gmudDraft'
 import {
   buildGmudDescription,
@@ -777,8 +778,9 @@ export function GmudNewScreen() {
   const [siData, setSiData] = useState<GmudSistemasInternosData>(() => rascunhoInicial?.si ?? emptyGmudSistemasInternosData())
   const [seData, setSeData] = useState<GmudSistemasExternosData>(() => rascunhoInicial?.se ?? emptyGmudSistemasExternosData())
   const idempotencyKeyRef = useRef<string | null>(null)
-  // A escolha da categoria vem primeiro, sozinha na tela. Com rascunho recuperado a categoria já foi escolhida.
-  const [categoriaEscolhida, setCategoriaEscolhida] = useState(rascunhoInicial !== null)
+  // A escolha da categoria vem sempre primeiro, sozinha na tela — mesmo com rascunho recuperado, para a pessoa
+  // lembrar em qual categoria estava. Escolher a mesma do rascunho leva direto à etapa onde parou.
+  const [categoriaEscolhida, setCategoriaEscolhida] = useState(false)
 
   const { data: configLists, isLoading: listsLoading } = useQuery({
     queryKey: ['gmud-config-lists'],
@@ -965,8 +967,9 @@ export function GmudNewScreen() {
   const secoesVisiveis = new Set(passos[etapa]?.sections ?? [])
 
   // Rascunho: guarda o que foi digitado (sem formulário em branco) e some ao enviar.
+  // Não regrava enquanto a pessoa ainda está na tela inicial: senão "Salvo em" mostraria a hora da visita, não a do preenchimento.
   useEffect(() => {
-    if (enviadoRef.current) return
+    if (enviadoRef.current || !categoriaEscolhida) return
     const t = window.setTimeout(() => {
       if (enviadoRef.current) return
       if (!draftHasContent(form, emptyGmudForm(profile?.email ?? '', profile?.displayName ?? ''))) {
@@ -976,13 +979,14 @@ export function GmudNewScreen() {
       saveGmudDraft(window.localStorage, rascunhoKey, { etapa, maxEtapa, form, si: siData, se: seData })
     }, 600)
     return () => window.clearTimeout(t)
-  }, [form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
+  }, [categoriaEscolhida, form, siData, seData, etapa, maxEtapa, rascunhoKey, profile?.email, profile?.displayName])
 
   /** Escolha na tela inicial: o que já foi preenchido é mantido; trocar de categoria volta ao primeiro passo. */
   const escolherCategoria = (cat: GmudCategoria) => {
-    if (cat !== form.categoria) {
+    const destino = etapaAoEscolherCategoria(form.categoria, cat, etapa)
+    if (destino.trocou) {
       handleCategoriaChange(cat)
-      setEtapa(0)
+      setEtapa(destino.etapa)
       setAviso([])
     }
     setCategoriaEscolhida(true)
@@ -1029,7 +1033,15 @@ export function GmudNewScreen() {
         <div className={CARD}>
           <h2 className="text-lg font-bold text-on-surface">Qual é a categoria da GMUD?</h2>
           <p className="mt-1 text-sm text-on-surface-variant">Ela define as perguntas do formulário e quem aprova.</p>
-          <GmudCategoriaPicker onEscolher={escolherCategoria} />
+          <GmudCategoriaPicker
+            onEscolher={escolherCategoria}
+            rascunho={
+              rascunhoRecuperadoEm
+                ? { categoria: form.categoria, salvoEm: rascunhoRecuperadoEm, etapaLabel: passos[etapa]?.label ?? '' }
+                : undefined
+            }
+            onDescartarRascunho={descartarRascunho}
+          />
         </div>
       </div>
     )
@@ -1070,14 +1082,18 @@ export function GmudNewScreen() {
       </div>
 
       {rascunhoRecuperadoEm ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200/90 bg-surface-container-lowest px-4 py-2.5 text-xs text-on-surface-variant dark:border-white/10">
+        <div
+          aria-live="polite"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-neutral-200/90 bg-surface-container-lowest px-4 py-2.5 text-sm text-on-surface-variant dark:border-white/10"
+        >
           <span>
             Rascunho recuperado, salvo em{' '}
-            {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.
+            <span className="font-semibold text-on-surface">
+              {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+            </span>
+            .
           </span>
-          <button type="button" onClick={descartarRascunho} className="font-semibold text-on-surface underline-offset-2 hover:underline">
-            Começar do zero
-          </button>
+          <GmudDiscardDraftButton rotulo="Limpar tudo e começar do zero" onConfirmar={descartarRascunho} />
         </div>
       ) : null}
 

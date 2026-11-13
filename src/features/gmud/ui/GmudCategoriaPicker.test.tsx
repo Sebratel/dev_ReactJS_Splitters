@@ -76,4 +76,58 @@ describe('GmudCategoriaPicker', () => {
     expect(screen.getByTestId('caminho-descida')).toHaveAttribute('data-categoria', 'sistemas_internos')
     expect(screen.queryByTestId('caminho-barra')).toBeNull()
   })
+
+  it('sem rascunho não mostra aviso, selo nem botão de descartar', () => {
+    render(<GmudCategoriaPicker onEscolher={() => {}} />)
+    expect(screen.queryByTestId('aviso-rascunho')).toBeNull()
+    expect(screen.queryByText(/Rascunho aqui/)).toBeNull()
+    expect(screen.queryByText('Continuar de onde parou')).toBeNull()
+    expect(screen.getAllByRole('button')).toHaveLength(3)
+  })
+
+  describe('com rascunho em andamento', () => {
+    const rascunho = { categoria: 'sistemas_internos' as const, salvoEm: '2026-11-13T15:30:00.000Z', etapaLabel: 'Impacto e execução' }
+
+    it('mostra o aviso com a categoria, a etapa e a data, e marca só o cartão do rascunho', () => {
+      render(<GmudCategoriaPicker onEscolher={() => {}} rascunho={rascunho} onDescartarRascunho={() => {}} />)
+      const aviso = screen.getByTestId('aviso-rascunho')
+      expect(aviso).toHaveTextContent('Você tem um rascunho em andamento')
+      expect(aviso).toHaveTextContent('Categoria: Sistemas internos')
+      expect(aviso).toHaveTextContent('Parou em: Impacto e execução')
+      expect(aviso).toHaveTextContent(new Date(rascunho.salvoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))
+
+      const doRascunho = screen.getByRole('button', { name: 'Sistemas internos' })
+      expect(doRascunho).toHaveAccessibleDescription(/Rascunho aqui · continuar/)
+      expect(doRascunho).toHaveTextContent('Continuar de onde parou')
+      expect(screen.getAllByText(/Rascunho aqui/)).toHaveLength(1)
+      expect(screen.getByRole('button', { name: 'Rede externa' })).not.toHaveTextContent('Continuar de onde parou')
+      expect(screen.getByRole('button', { name: 'Rede externa' })).toHaveTextContent('Escolher')
+    })
+
+    it('escolher o cartão do rascunho chama onEscolher com a categoria dele', async () => {
+      const onEscolher = vi.fn()
+      render(<GmudCategoriaPicker onEscolher={onEscolher} rascunho={rascunho} onDescartarRascunho={() => {}} />)
+      await userEvent.click(screen.getByRole('button', { name: 'Sistemas internos' }))
+      expect(onEscolher).toHaveBeenCalledWith('sistemas_internos')
+    })
+
+    it('só descarta depois da confirmação; Cancelar não descarta', async () => {
+      const onDescartar = vi.fn()
+      render(<GmudCategoriaPicker onEscolher={() => {}} rascunho={rascunho} onDescartarRascunho={onDescartar} />)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Descartar rascunho' }))
+      expect(onDescartar).not.toHaveBeenCalled()
+      expect(screen.getByText('Apagar tudo?')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+      expect(onDescartar).not.toHaveBeenCalled()
+      expect(screen.queryByText('Apagar tudo?')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Descartar rascunho' })).toHaveFocus()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Descartar rascunho' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Sim, apagar' }))
+      expect(onDescartar).toHaveBeenCalledTimes(1)
+    })
+  })
 })

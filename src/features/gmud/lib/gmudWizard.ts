@@ -58,6 +58,18 @@ export function previaDoFormulario(categoria: WizardCategoria): { especificas: s
   }
 }
 
+/**
+ * Etapa em que o formulário abre depois da tela de escolha da categoria: a mesma categoria que já estava
+ * em preenchimento (rascunho) continua de onde parou; outra categoria começa no primeiro passo.
+ */
+export function etapaAoEscolherCategoria(
+  atual: WizardCategoria,
+  escolhida: WizardCategoria,
+  etapa: number,
+): { trocou: boolean; etapa: number } {
+  return escolhida === atual ? { trocou: false, etapa } : { trocou: true, etapa: 0 }
+}
+
 /** Pendências que pertencem às seções de uma etapa. */
 export function pendenciasDaEtapa(pendencias: GmudPendencia[], step: WizardStep): GmudPendencia[] {
   return pendencias.filter((p) => step.sections.includes(p.section))
