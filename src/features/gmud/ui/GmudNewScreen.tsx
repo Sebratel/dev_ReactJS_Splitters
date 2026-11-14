@@ -4,6 +4,7 @@ import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, CalendarClock, Check, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
+import { GmudAvisoModal } from '@/features/gmud/ui/GmudAvisoModal'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -1202,12 +1203,7 @@ export function GmudNewScreen() {
         ) : null}
 
         {avisoAtual.length > 0 ? (
-          <div role="alert" className="rounded-xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-100">
-            <p className="font-semibold">Falta preencher para continuar:</p>
-            <ul className="mt-1 list-inside list-disc">
-              {avisoAtual.map((m) => <li key={m}>{m}</li>)}
-            </ul>
-          </div>
+          <GmudAvisoModal titulo="Falta preencher para continuar" itens={avisoAtual} onClose={() => setAviso([])} />
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
