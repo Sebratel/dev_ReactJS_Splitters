@@ -1,5 +1,5 @@
-import { useId } from 'react'
-import { AlertTriangle, ArrowDown, ArrowRight, CalendarClock, Check, Clock, MoonStar, Repeat } from 'lucide-react'
+import { useId, useRef } from 'react'
+import { AlertTriangle, ArrowDown, ArrowRight, CalendarClock, Check, Clock, Eraser, MoonStar, Repeat } from 'lucide-react'
 import type { GmudRepeticao } from '@/features/gmud/lib/gmudRecurrence'
 import {
   ATALHOS_DE_DURACAO,
@@ -216,6 +216,24 @@ function Lado({
   )
 }
 
+/** [8] Botão para zerar as datas e horários da janela e recomeçar. Só aparece quando há algo preenchido. */
+function BotaoLimparJanela({ onLimpar }: { onLimpar: () => void }) {
+  return (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={onLimpar}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface transition hover:bg-surface-container-low dark:border-white/15',
+          FOCO,
+        )}
+      >
+        <Eraser size={14} aria-hidden /> Limpar datas
+      </button>
+    </div>
+  )
+}
+
 /**
  * Janela de mudança da GMUD: início e fim lado a lado, com aviso da data mínima, atalhos de duração, resumo
  * e barra do dia. Só apresentação: o estado (dataInicio/horaInicio/dataFim/horaFim) continua no formulário,
@@ -237,10 +255,18 @@ export function GmudJanelaField({ janela, onChange, tipo, minInicio, repeticao }
     const fim = somarDuracao(janela.dataInicio, janela.horaInicio, min)
     if (fim) emitir({ ...janela, ...fim })
   }
+  // [8] Limpar datas: zera início e fim para a pessoa recomeçar; o foco volta à data de início (o botão some ao limpar).
+  const raiz = useRef<HTMLDivElement>(null)
+  const algoPreenchido = Object.values(janela).some((v) => v !== '')
+  const limpar = () => {
+    emitir({ dataInicio: '', horaInicio: '', dataFim: '', horaFim: '' })
+    window.requestAnimationFrame(() => raiz.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus())
+  }
 
   return (
-    <div className="space-y-3 sm:col-span-2">
+    <div ref={raiz} className="space-y-3 sm:col-span-2">
       {minInicio ? <AvisoDataMinima tipo={tipo} minInicio={minInicio} dataInicio={janela.dataInicio} onUsar={() => mudar('dataInicio')(minInicio)} /> : null}
+      {algoPreenchido ? <BotaoLimparJanela onLimpar={limpar} /> : null}
 
       <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
         <Lado
