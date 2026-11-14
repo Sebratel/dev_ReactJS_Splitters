@@ -28,7 +28,7 @@ import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
 import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
 import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
-import { isPreAprovada, preAprovadaCreateError } from './lib/gmudPreAprovada.js';
+import { isPreAprovada } from './lib/gmudPreAprovada.js';
 import {
   GMUD_OPEN_SQL,
   buildGmudListWhere,
@@ -4880,9 +4880,6 @@ app.post('/api/gmud/create', async (req, res) => {
     if (!existing && body.dataInicio && body.dataFim && fimJanela <= inicioJanela) {
       return res.status(400).json({ success: false, message: 'O fim da janela deve ser depois do início.' });
     }
-
-    const preAprovadaError = preAprovadaCreateError({ tipo: body.tipo, categoria: body.categoria });
-    if (preAprovadaError) return res.status(400).json({ success: false, message: preAprovadaError });
 
     if (!existing && (String(body.tipo ?? '').trim() === 'Programada' || isPreAprovada(body.tipo))) {
       const dataInicio = String(body.dataInicio ?? '').slice(0, 10);

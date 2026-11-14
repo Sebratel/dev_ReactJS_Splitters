@@ -7,9 +7,8 @@ import { parseRepeticao, type GmudSerie } from '@/features/gmud/lib/gmudRecurren
 export const GMUD_TIPO_OPTIONS = ['Programada', 'Emergencial', 'Pré-aprovada'] as const
 
 /**
- * Pré-aprovada: mesmo formulário da Rede Externa, sem aprovação (do Comitê nem das áreas) — o protocolo já nasce
- * liberado. Pode ser aberta repetida (a cada N dias, M vezes): cada ocorrência vira uma GMUD independente.
- * Só para Rede Externa.
+ * Pré-aprovada: sem aprovação (do Comitê nem das áreas) — o protocolo já nasce liberado. Disponível nas três
+ * categorias. Pode ser aberta repetida (a cada N dias, M vezes): cada ocorrência vira uma GMUD independente.
  */
 export const GMUD_TIPO_PRE_APROVADA = 'Pré-aprovada' as const
 
@@ -362,7 +361,6 @@ export function validateGmudFormBySection(
   }
 
   if (form.tipo === GMUD_TIPO_PRE_APROVADA) {
-    req(form.categoria === 'rede_externa', 'GMUD Pré-aprovada só está disponível para Rede Externa', 'Identificação')
     req(
       parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) !== null,
       'Repetição: quantidade de 1 a 12 e, repetindo, intervalo de 1 a 365 dias',
