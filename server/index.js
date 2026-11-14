@@ -31,12 +31,19 @@ import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada } from './lib/gmudPreAprovada.js';
 import {
   GMUD_OPEN_SQL,
-  buildGmudListWhere,
   buildGmudSummarySql,
-  gmudFilterComiteStatuses,
   gmudSummaryFromRow,
-  parseGmudListFilters,
 } from './lib/gmudListFilters.js';
+import {
+  agruparSituacoes,
+  buildGmudPainelCountsSql,
+  buildGmudPainelWhere,
+  buildGmudSolicitantesSql,
+  gmudPainelCountsFromRow,
+  gmudPainelNeeds,
+  parseGmudPainelFilters,
+  semanaAtual,
+} from './lib/gmudPainelFiltros.js';
 import { buildReuniaoSemanal, parseReuniaoSemanalQuery, reagendadasParaFora } from './lib/gmudReuniaoSemanal.js';
 import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
 import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
@@ -128,7 +135,8 @@ import {
   listGmudEventsBetween,
   getLinksWithAffected,
   listRegisteredGmudProtocols,
-  listRegisteredGmudProtocolsByTipo,
+  listRegisteredGmudProtocolsByTipos,
+  listGmudSituacaoRows,
   listGmudsWithWindowBetween,
   listGmudRequestsByProtocols,
   listGmudReagendadaEvents,
@@ -4566,6 +4574,62 @@ app.get('/api/usage-events/summary', async (req, res) => {
 // campos do formulário (nosso MySQL) vem em etapa posterior.
 const GMUD_INCIDENT_TYPE_ID = 1084;
 
+/** Listas de protocolos (do nosso MySQL, só leitura) que os filtros do painel de GMUDs precisam. */
+async function loadGmudPainelLists(filters, todasAsAbas) {
+  const need = gmudPainelNeeds(filters, { todasAsAbas });
+  const lists = {};
+  if (need.filter !== undefined) lists.filter = await listRegisteredGmudProtocols(need.filter);
+  if (need.registered) lists.registered = await listRegisteredGmudProtocols(null);
+  if (need.tipos) lists.tipos = await listRegisteredGmudProtocolsByTipos(filters.tipos);
+  if (need.situacao) lists.situacao = agruparSituacoes(await listGmudSituacaoRows());
+  if (need.comitePendente) lists.comitePendente = await listRegisteredGmudProtocols(['pendente']);
+  if (need.semana) {
+    // Aba "Esta semana": janela de execução cruzando a semana atual (segunda a domingo, hora de Brasília).
+    const semana = semanaAtual(brazilNowNaive());
+    lists.semana = semana ? (await listGmudsWithWindowBetween(semana.de, semana.ate)).map((r) => r.voalleProtocol) : [];
+  }
+  return lists;
+}
+
+/**
+ * Contagem de cada aba rápida do painel de GMUDs com os mesmos filtros da lista (menos a própria aba) e o
+ * número de canceladas na aba atual. Só leitura; aceita os mesmos parâmetros de filtro de /api/gmud/list.
+ */
+app.get('/api/gmud/list-counts', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const filters = parseGmudPainelFilters(req.query);
+    const email = String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase();
+    const lists = await loadGmudPainelLists(filters, true);
+    const { sql, params } = buildGmudPainelCountsSql({ typeId: GMUD_INCIDENT_TYPE_ID, search, filters, email, lists });
+    const result = await pool.query(sql, params);
+    return res.json({ success: true, data: gmudPainelCountsFromRow(result.rows?.[0]) });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar as contagens das GMUDs.'),
+    });
+  }
+});
+
+/** Nomes dos solicitantes das GMUDs, para as opções do filtro "Solicitante" do painel. Só leitura. */
+app.get('/api/gmud/list-solicitantes', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const result = await pool.query(buildGmudSolicitantesSql(), [GMUD_INCIDENT_TYPE_ID]);
+    const items = (result.rows ?? []).map((r) => String(r.name ?? '').trim()).filter((n) => n !== '');
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar os solicitantes das GMUDs.'),
+    });
+  }
+});
+
 app.get('/api/gmud/list', async (req, res) => {
   try {
     const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
@@ -4587,22 +4651,13 @@ app.get('/api/gmud/list', async (req, res) => {
     const sortDir = String(req.query?.dir ?? '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const orderBy = `${sortColumn} ${sortDir} NULLS LAST${sortColumn === 'ai.protocol' ? '' : ', ai.protocol DESC'}`;
 
-    // Filtros. `filter` é o dos cartões do topo; `tipo`, `origem` e `minhas` se combinam com ele.
-    // Os do Voalle (abertas/vencidas/minhas) são SQL; os da plataforma (Comitê, tipo, origem) usam
-    // listas de protocolos do nosso MySQL, aplicadas como `ai.protocol = ANY(...)` (legado = NOT).
-    const filters = parseGmudListFilters(req.query);
-    const comiteStatuses = gmudFilterComiteStatuses(filters.filter);
-    const lists = {};
-    if (comiteStatuses !== undefined) lists.filter = await listRegisteredGmudProtocols(comiteStatuses);
-    if (filters.tipo) lists.tipo = await listRegisteredGmudProtocolsByTipo(filters.tipo);
-    if (filters.origem) lists.registered = await listRegisteredGmudProtocols(null);
-    const { clause: searchClause, params } = buildGmudListWhere({
-      typeId: GMUD_INCIDENT_TYPE_ID,
-      search,
-      ...filters,
-      email: String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase(),
-      lists,
-    });
+    // Filtros do painel: o `filter` dos cartões do topo, as abas rápidas e os filtros do construtor
+    // (situação, abertura, tipo, origem, solicitante, canceladas ocultas) se combinam. Os do Voalle são SQL;
+    // os da plataforma usam listas de protocolos do nosso MySQL, aplicadas como `ai.protocol = ANY(...)`.
+    const filters = parseGmudPainelFilters(req.query);
+    const email = String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase();
+    const lists = await loadGmudPainelLists(filters, false);
+    const { clause: searchClause, params } = buildGmudPainelWhere({ typeId: GMUD_INCIDENT_TYPE_ID, search, filters, email, lists });
 
     const countSql = `
       SELECT COUNT(*)::int AS total

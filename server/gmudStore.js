@@ -607,6 +607,37 @@ export async function listRegisteredGmudProtocolsByTipo(tipo) {
   return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
 }
 
+/** Protocolos registrados na plataforma com algum dos tipos informados. Só leitura. */
+export async function listRegisteredGmudProtocolsByTipos(tipos) {
+  const values = [...new Set((Array.isArray(tipos) ? tipos : []).map((t) => String(t ?? '').trim()).filter((t) => t !== ''))];
+  if (values.length === 0) return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL AND tipo IN (?)`, [values]);
+  return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/**
+ * Campos de situação de todas as GMUDs registradas (para o filtro "Situação" e para esconder as canceladas
+ * no painel). Só leitura.
+ */
+export async function listGmudSituacaoRows() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, status_comite, status_areas, status_exec, elleven_encerrado_em, elleven_encerrado_status
+       FROM ${TABLE} WHERE voalle_protocol IS NOT NULL`,
+  );
+  return rows.map((r) => ({
+    voalleProtocol: Number(r.voalle_protocol),
+    statusComite: r.status_comite ?? null,
+    statusAreas: r.status_areas ?? AREA_STATUS.NAO_APLICAVEL,
+    statusExec: r.status_exec ?? null,
+    ellevenEncerradoEm: r.elleven_encerrado_em ? new Date(r.elleven_encerrado_em).toISOString() : null,
+    ellevenEncerradoStatus: r.elleven_encerrado_status ?? null,
+  }));
+}
+
 /** GMUDs registradas na plataforma com created_at no período [from, to] (YYYY-MM-DD). */
 export async function listGmudRequestsCreatedBetween(from, to) {
   await ensureTable();

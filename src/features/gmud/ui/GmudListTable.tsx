@@ -31,29 +31,37 @@ const AVATAR_TONES = [
 ]
 
 const PILL = 'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold'
-/** Cabeçalho fixo: fica no topo da área de rolagem da tabela (a linha de baixo é uma sombra, que acompanha o sticky). */
-const TH = 'sticky top-0 z-10 bg-surface-container-lowest px-4 py-2.5 shadow-[inset_0_-1px_0_rgb(0_0_0/0.12)] dark:shadow-[inset_0_-1px_0_rgb(255_255_255/0.18)]'
+/**
+ * Cabeçalho fixo: a tabela rola junto com a página (sem rolagem própria) e o cabeçalho gruda logo abaixo da
+ * barra do topo do app (3,5rem). A linha de baixo é uma sombra, que acompanha o sticky.
+ */
+const TH = 'sticky top-14 z-10 bg-surface-container-lowest px-4 py-2.5 shadow-[inset_0_-1px_0_rgb(0_0_0/0.12)] dark:shadow-[inset_0_-1px_0_rgb(255_255_255/0.18)]'
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-white'
 
 function fmtDate(iso: string | null): string {
   return iso ? formatBrazilDateTimeShortDisplay(iso, '—') : '—'
 }
 
+/** Colunas secundárias (solicitante e abertura) somem em tela estreita, para a tabela caber sem rolar de lado. */
+const SECUNDARIA = 'hidden md:table-cell'
+
 function SortHeader({
   label,
   column,
   sort,
   onSort,
+  className,
 }: {
   label: string
   column: GmudSortKey
   sort: GmudSort
   onSort: (key: GmudSortKey) => void
+  className?: string
 }) {
   const active = sort.key === column
   const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
   return (
-    <th scope="col" className={TH} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th scope="col" className={cn(TH, className)} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
         onClick={() => onSort(column)}
@@ -84,13 +92,13 @@ export function GmudListTable({
   onSort: (key: GmudSortKey) => void
 }) {
   return (
-    <div className="max-h-[72vh] overflow-auto">
+    <div>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
             <SortHeader label="GMUD" column="protocolo" sort={sort} onSort={onSort} />
-            <SortHeader label="Solicitante" column="solicitante" sort={sort} onSort={onSort} />
-            <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} />
+            <SortHeader label="Solicitante" column="solicitante" sort={sort} onSort={onSort} className={SECUNDARIA} />
+            <SortHeader label="Abertura" column="abertura" sort={sort} onSort={onSort} className={SECUNDARIA} />
             <SortHeader label="Prazo" column="prazo" sort={sort} onSort={onSort} />
             <SortHeader label="Situação" column="status" sort={sort} onSort={onSort} />
             <th scope="col" className={cn(TH, 'text-right')}>Ações</th>
@@ -101,12 +109,14 @@ export function GmudListTable({
             const deadline = gmudDeadline(g)
             const plataforma = g.extra != null
             const cancelada = gmudCancelada(g)
+            const semPrazo = cancelada || deadline.tone === 'cancelled' || deadline.tone === 'done'
             const situacao = gmudSituacao(g)
             const links = g.massivaLinksCount
             return (
               <tr
                 key={g.protocol}
                 data-origem={plataforma ? 'plataforma' : 'legado'}
+                data-cancelada={cancelada ? 'true' : undefined}
                 className="group/row border-t border-neutral-200/80 transition-colors hover:bg-surface-container-low focus-within:bg-surface-container-low dark:border-white/10"
               >
                 <td className="max-w-[34rem] px-4 py-2.5">
@@ -127,8 +137,8 @@ export function GmudListTable({
                     <span
                       className={cn(
                         'mt-0.5 line-clamp-2 group-hover:underline',
-                        // Legado e cancelada ficam mais discretos pelo tom do texto (não por opacidade: o contraste continua acima de 4,5:1).
-                        cancelada ? 'text-on-surface-variant line-through' : plataforma ? 'font-medium text-on-surface' : 'text-on-surface-variant',
+                        // Legado e cancelada ficam mais discretos pelo tom do texto (não por opacidade nem risco: o contraste continua acima de 4,5:1).
+                        cancelada ? 'text-on-surface-variant' : plataforma ? 'font-medium text-on-surface' : 'text-on-surface-variant',
                       )}
                       title={g.title}
                     >
@@ -136,7 +146,7 @@ export function GmudListTable({
                     </span>
                   </Link>
                 </td>
-                <td className="px-4 py-2.5">
+                <td className={cn(SECUNDARIA, 'px-4 py-2.5')}>
                   <span className="flex items-center gap-2" title={g.requester || undefined}>
                     <span
                       className={cn(
@@ -150,11 +160,19 @@ export function GmudListTable({
                     <span className="whitespace-nowrap text-on-surface-variant">{shortRequesterName(g.requester)}</span>
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-4 py-2.5 text-xs text-on-surface-variant">{fmtDate(g.openedAt)}</td>
+                <td className={cn(SECUNDARIA, 'whitespace-nowrap px-4 py-2.5 text-xs text-on-surface-variant')}>{fmtDate(g.openedAt)}</td>
                 <td className="px-4 py-2.5">
-                  <span className={cn(PILL, DEADLINE_STYLE[deadline.tone])} title={g.slaDate ? `Prazo: ${fmtDate(g.slaDate)}` : undefined}>
-                    {deadline.label}
-                  </span>
+                  {semPrazo ? (
+                    // Cancelada ou encerrada: não há mais prazo a acompanhar (a situação já diz o que houve).
+                    <span className="text-on-surface-variant" title={g.slaDate ? `Prazo era: ${fmtDate(g.slaDate)}` : undefined}>
+                      <span aria-hidden>—</span>
+                      <span className="sr-only">Sem prazo a acompanhar</span>
+                    </span>
+                  ) : (
+                    <span className={cn(PILL, DEADLINE_STYLE[deadline.tone])} title={g.slaDate ? `Prazo: ${fmtDate(g.slaDate)}` : undefined}>
+                      {deadline.label}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex flex-col items-start gap-0.5">

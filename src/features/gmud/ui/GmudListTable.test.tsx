@@ -73,12 +73,43 @@ describe('GmudListTable', () => {
     expect(linha(202)).toHaveAttribute('data-origem', 'legado')
   })
 
-  it('cancelada: título riscado e selo Cancelada', () => {
-    renderTable([item({ protocol: 303, title: 'Manutenção no POP', status: 'Cancelado', extra: extra() })])
+  it('cancelada: título em cinza SEM risco, selo Cancelada e prazo "—"', () => {
+    renderTable([item({ protocol: 303, title: 'Manutenção no POP', status: 'Cancelado', slaDate: '2026-11-20T12:00:00.000Z', extra: extra() })])
     const tr = within(linha(303))
-    // O prazo também diz "Cancelada"; o selo da situação é o que traz a explicação.
+    // O selo da situação diz "Cancelada"; a coluna Prazo não repete.
+    expect(tr.getAllByText('Cancelada')).toHaveLength(1)
     expect(tr.getByTitle('Cancelada: aprovações pendentes não valem mais.')).toHaveTextContent('Cancelada')
-    expect(tr.getByTitle('Manutenção no POP')).toHaveClass('line-through')
+    expect(tr.getByText('Sem prazo a acompanhar')).toBeInTheDocument()
+    const titulo = tr.getByTitle('Manutenção no POP')
+    expect(titulo).not.toHaveClass('line-through')
+    expect(titulo).toHaveClass('text-on-surface-variant')
+    expect(linha(303)).toHaveAttribute('data-cancelada', 'true')
+  })
+
+  it('encerrada também mostra "—" no prazo; aberta continua com o selo do prazo', () => {
+    renderTable([
+      item({ protocol: 606, conclusionDate: '2026-11-02T12:00:00.000Z', status: 'Encerrado' }),
+      item({ protocol: 707, slaDate: '2020-01-01T12:00:00.000Z' }),
+    ])
+    expect(within(linha(606)).getByText('Sem prazo a acompanhar')).toBeInTheDocument()
+    expect(within(linha(606)).queryByText('Encerrada')).toBeNull()
+    expect(within(linha(707)).getByText(/Vencida há/)).toBeInTheDocument()
+    expect(linha(707)).not.toHaveAttribute('data-cancelada')
+  })
+
+  it('a tabela não tem rolagem própria e as colunas secundárias somem em tela estreita', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <GmudListTable items={[item({ protocol: 808 })]} canApprove={false} onLink={() => {}} onApprove={() => {}} sort={{ key: 'protocolo', dir: 'desc' }} onSort={() => {}} />
+      </MemoryRouter>,
+    )
+    const envoltorio = container.querySelector('table')?.parentElement as HTMLElement
+    expect(envoltorio.className).not.toMatch(/overflow|max-h/)
+    const cabecalhos = screen.getAllByRole('columnheader')
+    expect(cabecalhos.every((th) => th.className.includes('sticky'))).toBe(true)
+    expect(screen.getByRole('columnheader', { name: /Solicitante/ })).toHaveClass('hidden', 'md:table-cell')
+    expect(screen.getByRole('columnheader', { name: /Abertura/ })).toHaveClass('hidden', 'md:table-cell')
+    expect(screen.getByRole('columnheader', { name: /Prazo/ })).not.toHaveClass('hidden')
   })
 
   it('vínculos: contagem fixa quando há massivas; "Vincular" quando não há', async () => {

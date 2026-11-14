@@ -20,15 +20,17 @@ function origemSupport(plataforma: number | null | undefined, legado: number | n
   return typeof plataforma === 'number' && typeof legado === 'number' ? `Plataforma ${n(plataforma)} · Legado ${n(legado)}` : fallback
 }
 
-/** Quatro números do topo do painel; cada um é um filtro da lista (clicar aplica, clicar de novo limpa). */
+/** Quatro números do topo do painel; cada um é um atalho da lista (clicar aplica, clicar de novo desfaz). */
 export function GmudSummaryStrip({
   summary,
-  filter,
-  onSelect,
+  ativos,
+  onToggle,
 }: {
   summary: GmudListSummary | undefined
-  filter: GmudListFilter
-  onSelect: (next: GmudListFilter) => void
+  /** Cartões cujo atalho está aplicado na lista. */
+  ativos: ReadonlySet<GmudListFilter>
+  /** Liga ou desliga o atalho do cartão. */
+  onToggle: (key: GmudListFilter) => void
 }) {
   const cards: Card[] = [
     {
@@ -52,7 +54,7 @@ export function GmudSummaryStrip({
   return (
     <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
       {cards.map((c) => {
-        const active = filter === c.key
+        const active = ativos.has(c.key)
         const alarming = Boolean(c.danger) && (c.value ?? 0) > 0
         const Icon = c.icon
         return (
@@ -61,7 +63,7 @@ export function GmudSummaryStrip({
             type="button"
             aria-pressed={active}
             title={active ? 'Clique para tirar este filtro' : 'Clique para filtrar a lista'}
-            onClick={() => onSelect(active ? 'todas' : c.key)}
+            onClick={() => onToggle(c.key)}
             className={cn(
               'flex items-start gap-3 rounded-xl border px-3 py-3 text-left shadow-sm transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface dark:focus-visible:ring-white',
