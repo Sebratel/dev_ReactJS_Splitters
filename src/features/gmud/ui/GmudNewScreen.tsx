@@ -61,6 +61,7 @@ import {
   buildGmudTitle,
 } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
+import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
@@ -288,23 +289,19 @@ function JanelaDeMudanca({
   const minInicio = form.tipo === 'Programada' || form.tipo === GMUD_TIPO_PRE_APROVADA ? minDataProgramada() : undefined
   return (
     <Section title="Janela de mudança">
-      <Field label="Data início" required>
-        <input type="date" className={FIELD} value={form.dataInicio} min={minInicio} onChange={(e) => set('dataInicio', e.target.value)} />
-        {minInicio ? (
-          <p className="mt-1 text-[11px] text-on-surface-variant">
-            {form.tipo}: a partir de {minInicio.split('-').reverse().join('/')} (apresentação na terça + 7 dias).
-          </p>
-        ) : null}
-      </Field>
-      <Field label="Horário início" required>
-        <input type="time" className={FIELD} value={form.horaInicio} onChange={(e) => set('horaInicio', e.target.value)} />
-      </Field>
-      <Field label="Data fim" required>
-        <input type="date" className={FIELD} value={form.dataFim} min={form.dataInicio || undefined} onChange={(e) => set('dataFim', e.target.value)} />
-      </Field>
-      <Field label="Horário fim (deadline)" required>
-        <input type="time" className={FIELD} value={form.horaFim} onChange={(e) => set('horaFim', e.target.value)} />
-      </Field>
+      <GmudJanelaField
+        janela={{ dataInicio: form.dataInicio, horaInicio: form.horaInicio, dataFim: form.dataFim, horaFim: form.horaFim }}
+        onChange={(patch) => {
+          // O estado continua nos mesmos quatro campos do formulário; o componente só diz o que mudou.
+          if (patch.dataInicio !== undefined) set('dataInicio', patch.dataInicio)
+          if (patch.horaInicio !== undefined) set('horaInicio', patch.horaInicio)
+          if (patch.dataFim !== undefined) set('dataFim', patch.dataFim)
+          if (patch.horaFim !== undefined) set('horaFim', patch.horaFim)
+        }}
+        tipo={form.tipo}
+        minInicio={minInicio}
+        repeticao={form.tipo === GMUD_TIPO_PRE_APROVADA ? parseRepeticao(form.repeticaoVezes, form.repeticaoIntervaloDias) : null}
+      />
     </Section>
   )
 }
