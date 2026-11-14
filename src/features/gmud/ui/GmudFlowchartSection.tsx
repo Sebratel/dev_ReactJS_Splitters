@@ -40,6 +40,7 @@ import {
 } from '@/features/gmud/api/gmudAttachments'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
@@ -797,7 +798,16 @@ export function GmudFlowchartSection({
                 <button
                   type="button"
                   disabled={deleteMutation.isPending}
-                  onClick={() => window.confirm('Remover o fluxograma desta GMUD?') && deleteMutation.mutate()}
+                  onClick={() => {
+                    void gmudConfirm({
+                      titulo: 'Remover o fluxograma desta GMUD?',
+                      confirmar: 'Remover',
+                      cancelar: 'Manter',
+                      tom: 'destrutivo',
+                    }).then(({ confirmado }) => {
+                      if (confirmado) deleteMutation.mutate()
+                    })
+                  }}
                   className={cn(ACTION, 'text-rose-600 ring-rose-200/70 hover:bg-rose-50 dark:text-rose-300 dark:ring-rose-800/40')}
                 >
                   {deleteMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Remover

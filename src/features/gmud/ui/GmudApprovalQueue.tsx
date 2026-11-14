@@ -11,6 +11,7 @@ import { GMUD_RECURSO_PAPEIS, type GmudRedeExternaImpactoData, type GmudSistemas
 import type { GmudPendingItem } from '@/features/gmud/api/gmudApprovals'
 import { GmudRedeExternaImpactoCard, GmudSistemasInternosCard, GmudSistemasExternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
@@ -193,10 +194,14 @@ export function GmudApprovalQueue() {
         const jaEncerrado = Boolean(gmud.ellevenEncerradoEm)
         const assignmentId = gmud.assignmentId
         if (!jaEncerrado && assignmentId != null) {
-          const ok = window.confirm(
-            `Negar esta GMUD vai ENCERRAR o protocolo ${protocol} no Elleven (cancelamento). Confirmar?`,
-          )
-          if (!ok) return { aborted: true }
+          const { confirmado } = await gmudConfirm({
+            titulo: 'Negar esta GMUD?',
+            mensagem: `Negar esta GMUD vai ENCERRAR o protocolo ${protocol} no Elleven (cancelamento).`,
+            confirmar: 'Negar GMUD',
+            cancelar: 'Voltar',
+            tom: 'destrutivo',
+          })
+          if (!confirmado) return { aborted: true }
           await closeGmudInElleven({
             assignmentId,
             mode: 'negada',
@@ -210,13 +215,17 @@ export function GmudApprovalQueue() {
           return { aborted: false }
         }
         // Sem assignmentId (GMUD antiga/só no Voalle) ou já encerrado: só registra a decisão.
-        const ok = window.confirm(
-          jaEncerrado
-            ? `O protocolo ${protocol} já foi encerrado no Elleven. Marcar a GMUD como negada?`
+        const { confirmado } = await gmudConfirm({
+          titulo: 'Marcar a GMUD como negada?',
+          mensagem: jaEncerrado
+            ? `O protocolo ${protocol} já foi encerrado no Elleven.`
             : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
-                `A GMUD será marcada como negada, mas o protocolo deve ser encerrado manualmente no Elleven. Continuar?`,
-        )
-        if (!ok) return { aborted: true }
+              `A GMUD será marcada como negada, mas o protocolo deve ser encerrado manualmente no Elleven.`,
+          confirmar: 'Negar GMUD',
+          cancelar: 'Voltar',
+          tom: 'destrutivo',
+        })
+        if (!confirmado) return { aborted: true }
         await updateGmudApproval({ voalleProtocol: protocol, statusComite: 'negada' })
         return { aborted: false }
       }

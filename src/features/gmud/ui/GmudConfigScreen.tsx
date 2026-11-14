@@ -20,6 +20,7 @@ import type { SplittersUserProfile } from '@/features/access/model/access.types'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { GMUD_COMMITTEE_QUERY_KEY } from '@/features/gmud/hooks/useGmudCommittee'
 import { requesterInitials } from '@/features/gmud/lib/gmudRequester'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 
 const LIST_META: Record<string, { label: string; hint: string }> = {
@@ -174,9 +175,15 @@ function TeamApproversModal({
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm(`Remover "${a.userEmail}" como aprovador?`)) {
-                        removeMutation.mutate(a.id)
-                      }
+                      void gmudConfirm({
+                        titulo: 'Remover aprovador?',
+                        mensagem: `Remover "${a.userEmail}" como aprovador?`,
+                        confirmar: 'Remover',
+                        cancelar: 'Manter',
+                        tom: 'destrutivo',
+                      }).then(({ confirmado }) => {
+                        if (confirmado) removeMutation.mutate(a.id)
+                      })
                     }}
                     disabled={removeMutation.isPending}
                     className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-on-surface-variant ring-1 ring-neutral-200/70 dark:ring-white/10 transition hover:text-error hover:ring-error/40 disabled:opacity-40"
@@ -401,9 +408,15 @@ function ListPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Remover "${item.label}" da lista "${meta.label}"?`)) {
-                          removeMutation.mutate(item.id)
-                        }
+                        void gmudConfirm({
+                          titulo: 'Remover item da lista?',
+                          mensagem: `Remover "${item.label}" da lista "${meta.label}"?`,
+                          confirmar: 'Remover',
+                          cancelar: 'Manter',
+                          tom: 'destrutivo',
+                        }).then(({ confirmado }) => {
+                          if (confirmado) removeMutation.mutate(item.id)
+                        })
                       }}
                       disabled={removeMutation.isPending}
                       className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition hover:bg-surface-container-low hover:text-error disabled:opacity-40"

@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react
 import { overrideAreaApproval, type GmudAreaApproval, type GmudAreasStatus } from '@/features/gmud/api/gmudAreaApprovals'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { describeAreasSummary } from '@/features/gmud/lib/gmudApprovalText'
@@ -114,9 +115,14 @@ export function GmudAreaApprovalsCard({
                   type="button"
                   disabled={override.isPending}
                   onClick={() => {
-                    if (window.confirm(`Aprovar em nome da área "${a.areaLabel}"? Isso fica registrado na linha do tempo.`)) {
-                      override.mutate(a.areaId)
-                    }
+                    void gmudConfirm({
+                      titulo: `Aprovar em nome da área "${a.areaLabel}"?`,
+                      mensagem: 'Isso fica registrado na linha do tempo.',
+                      confirmar: 'Aprovar',
+                      cancelar: 'Voltar',
+                    }).then(({ confirmado }) => {
+                      if (confirmado) override.mutate(a.areaId)
+                    })
                   }}
                   className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:opacity-60 dark:ring-white/10"
                 >

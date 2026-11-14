@@ -34,6 +34,7 @@ import { isGmudDisponivel } from '@/features/gmud/model/gmud'
 import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
 import { GmudEllevenStatusAlert } from '@/features/gmud/ui/GmudEllevenStatusAlert'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
@@ -157,23 +158,23 @@ export function GmudDetailScreen() {
       const assignmentId = data.request?.assignmentId ?? data.voalle.assignmentId ?? null
       const verbo = mode === 'concluida' ? 'CONCLUIR' : 'CANCELAR'
       const efeito = mode === 'concluida' ? 'ENCERRAR' : 'CANCELAR'
-      // window.prompt dupla como confirmação (null = cancelar) e captura um relato opcional
-      // que vai junto no encerramento do protocolo no Elleven.
-      const nota =
-        assignmentId != null
-          ? window.prompt(
-              `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven.\n\n` +
-                `(Opcional) Escreva um relato que vai junto no protocolo — ou deixe em branco.\n` +
-                `Clique OK para confirmar, ou Cancelar para desistir.`,
-              '',
-            )
-          : window.prompt(
-              `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
-                `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven.\n\n` +
-                `Clique OK para confirmar, ou Cancelar para desistir.`,
-              '',
-            )
-      if (nota === null) return { aborted: true }
+      // Confirmação em pop-up da plataforma (desistir = não faz nada). Com o atendimento identificado, dá para
+      // escrever um relato opcional, que vai junto no encerramento do protocolo no Elleven.
+      const concluir = mode === 'concluida'
+      const { confirmado, texto: nota } = await gmudConfirm({
+        titulo: concluir ? 'Concluir esta GMUD?' : 'Cancelar esta GMUD?',
+        mensagem:
+          assignmentId != null
+            ? `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven.`
+            : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
+              `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven.`,
+        confirmar: concluir ? 'Concluir GMUD' : 'Cancelar GMUD',
+        cancelar: 'Voltar',
+        tom: concluir ? 'neutro' : 'destrutivo',
+        campoTexto:
+          assignmentId != null ? { rotulo: 'Relato (opcional)', ajuda: 'Vai junto no protocolo. Pode deixar em branco.' } : undefined,
+      })
+      if (!confirmado) return { aborted: true }
       if (assignmentId != null) {
         const base = buildGmudCloseDescription(mode, currentUser)
         const description = nota.trim() !== '' ? `${base}\n${nota.trim()}` : base

@@ -10,6 +10,7 @@ import {
 } from '@/features/gmud/api/gmudAttachments'
 import { CardTitle } from '@/features/gmud/ui/detail/GmudDetailCards'
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
@@ -130,8 +131,15 @@ export function GmudAttachmentsSection({ protocol, canUpload, canDelete }: Props
   }
 
   function handleDelete(id: number) {
-    if (!window.confirm('Remover este anexo? Esta ação não pode ser desfeita.')) return
-    deleteMutation.mutate(id)
+    void gmudConfirm({
+      titulo: 'Remover este anexo?',
+      mensagem: 'Esta ação não pode ser desfeita.',
+      confirmar: 'Remover',
+      cancelar: 'Manter',
+      tom: 'destrutivo',
+    }).then(({ confirmado }) => {
+      if (confirmado) deleteMutation.mutate(id)
+    })
   }
 
   return (
