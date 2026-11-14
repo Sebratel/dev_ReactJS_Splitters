@@ -241,6 +241,40 @@
   animation: gmud-enter 0.28s ease-out both;
 }
 
+/* Transições do módulo de GMUD: entrada de página, troca de aba/conteúdo e esqueleto de carregamento. */
+@keyframes gmud-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gmud-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Página do módulo entrando (lista, detalhe, indicadores, configurações, aprovação da área). */
+.gmud-page-enter {
+  animation: gmud-page-enter 200ms ease-out both;
+}
+
+/* Fade curto de um bloco que acabou de aparecer (aba, conteúdo carregado). Sem "forwards": depois do
+   fade vale a opacidade normal do elemento (que pode estar esmaecido enquanto atualiza). */
+.gmud-fade {
+  animation: gmud-fade 180ms ease-out backwards;
+}
+
+/* Esqueleto de carregamento: só aparece se a espera passar de 150 ms. */
+.gmud-skeleton {
+  animation: gmud-fade 200ms ease-out 150ms backwards;
+}
+
 /* Tela de escolha da categoria da GMUD: entrada em sequência (nó → árvore → cartões), no máximo ~700 ms. */
 @keyframes gmud-pick-rise {
   from {
@@ -400,6 +434,9 @@
   .gmud-trail-label,
   .gmud-trail-halo,
   .gmud-enter,
+  .gmud-page-enter,
+  .gmud-fade,
+  .gmud-skeleton,
   .gmud-pick-node,
   .gmud-pick-stem,
   .gmud-pick-bar,

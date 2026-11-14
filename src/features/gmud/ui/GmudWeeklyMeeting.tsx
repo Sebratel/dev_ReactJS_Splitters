@@ -31,6 +31,7 @@ import { gmudSituacao } from '@/features/gmud/lib/gmudSituacao'
 import { GMUD_CATEGORIA_LABEL, type GmudCategoria } from '@/features/gmud/model/gmudForm'
 import type { GmudExtra } from '@/features/gmud/model/gmud'
 import { GmudSituacaoSelo, GmudTipoSelo } from '@/features/gmud/ui/GmudSelos'
+import { GmudBusy } from '@/features/gmud/ui/GmudTransitions'
 import { cn } from '@/shared/lib/utils'
 
 const CARD = 'rounded-2xl border border-neutral-200/90 bg-surface-container-lowest dark:border-white/15'
@@ -255,6 +256,7 @@ export function GmudWeeklyMeetingView({
   onSegunda,
   data,
   isLoading = false,
+  isBusy = false,
   error = null,
   onRetry,
 }: {
@@ -265,6 +267,8 @@ export function GmudWeeklyMeetingView({
   onSegunda: (segunda: string) => void
   data: GmudReuniaoSemanal | undefined
   isLoading?: boolean
+  /** Mostrando a semana anterior enquanto a nova carrega. */
+  isBusy?: boolean
   error?: string | null
   onRetry?: () => void
 }) {
@@ -352,7 +356,7 @@ export function GmudWeeklyMeetingView({
           <Loader2 size={16} aria-hidden className="animate-spin motion-reduce:animate-none" /> Carregando a reunião…
         </p>
       ) : (
-        <>
+        <GmudBusy busy={isBusy} enter contentClassName="space-y-4">
           <Bloco numero={1} id="reuniao-feito" titulo="O que foi feito" intervalo={formatarIntervalo(semanas.feitoDe, semanas.feitoAte)}>
             <Resumo
               numeros={[
@@ -404,7 +408,7 @@ export function GmudWeeklyMeetingView({
               </div>
             )}
           </Bloco>
-        </>
+        </GmudBusy>
       )}
 
       <p className="flex items-start gap-2 px-1 text-xs text-on-surface-variant">
@@ -430,6 +434,7 @@ export function GmudWeeklyMeeting() {
       onSegunda={setSegunda}
       data={query.data}
       isLoading={query.isLoading}
+      isBusy={query.isPlaceholderData}
       error={query.isError ? (query.error instanceof Error ? query.error.message : 'Falha ao carregar a reunião semanal de GMUDs.') : null}
       onRetry={() => void query.refetch()}
     />

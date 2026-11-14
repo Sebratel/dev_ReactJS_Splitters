@@ -123,4 +123,19 @@ describe('GmudWeeklyMeetingView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
+
+  it('trocando de semana: a semana anterior continua na tela, com aria-busy, até a nova chegar', () => {
+    renderView({ isBusy: true })
+    const ocupado = screen.getByRole('region', { name: /O que foi feito/ }).closest('[aria-busy]')
+    expect(ocupado).toHaveAttribute('aria-busy', 'true')
+    // O conteúdo anterior não some.
+    expect(screen.getByRole('link', { name: /GMUD 12/ })).toBeInTheDocument()
+    expect(screen.queryByText('Carregando a reunião…')).toBeNull()
+    expect(screen.getByText('Atualizando…')).toBeInTheDocument()
+  })
+
+  it('sem troca em andamento não fica marcado como ocupado', () => {
+    renderView()
+    expect(screen.getByRole('region', { name: /O que foi feito/ }).closest('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+  })
 })

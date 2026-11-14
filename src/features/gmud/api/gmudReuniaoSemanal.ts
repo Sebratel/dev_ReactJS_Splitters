@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { GmudReuniaoSemanal, GmudReuniaoSemanas } from '@/features/gmud/lib/gmudReuniaoSemana'
@@ -21,6 +21,8 @@ export function useGmudReuniaoSemanal(semanas: GmudReuniaoSemanas) {
   return useQuery({
     queryKey: ['gmud', 'reuniao-semanal', semanas.feitoDe, semanas.feitoAte, semanas.vemDe, semanas.vemAte],
     queryFn: () => fetchGmudReuniaoSemanal(semanas),
+    // Ao trocar de semana, a semana anterior fica na tela até a nova chegar (sem piscar).
+    placeholderData: keepPreviousData,
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,

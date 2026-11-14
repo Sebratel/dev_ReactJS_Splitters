@@ -243,7 +243,7 @@ export function GmudDetailScreen() {
           {query.error instanceof Error ? query.error.message : 'Falha ao carregar a GMUD.'}
         </div>
       ) : (
-        <>
+        <div className="gmud-fade space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {isCommitteeMember && gmudPodeAvaliar(listItem) ? (
               <button
@@ -422,7 +422,7 @@ export function GmudDetailScreen() {
               onDone={refreshGmud}
             />
           ) : null}
-        </>
+        </div>
       )}
 
       {presenting && flowchart ? (
