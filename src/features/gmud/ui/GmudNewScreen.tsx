@@ -62,8 +62,9 @@ import {
 } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
 import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
-import { GmudConfirmarAbertura, GmudRevisao } from '@/features/gmud/ui/GmudRevisao'
-import { numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
+import { GmudConfirmarAbertura, GmudRevisao, GmudRevisaoBarra } from '@/features/gmud/ui/GmudRevisao'
+import { GmudRevisaoTopo } from '@/features/gmud/ui/GmudRevisaoTopo'
+import { atencoesDoFormulario, numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
@@ -1056,36 +1057,48 @@ export function GmudNewScreen() {
         </span>
       </div>
 
-      {/* Categoria escolhida: sempre visível, com volta para a tela inicial (o que foi preenchido é mantido) */}
-      <div className={`${CARD} ${CATEGORIA_COLORS[form.categoria]} flex flex-wrap items-center justify-between gap-3 !py-3`}>
-        <p className="flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
-          Categoria da GMUD
-          <span className="rounded-full bg-primary px-3 py-1 text-sm font-bold text-neutral-900">{GMUD_CATEGORIA_LABEL[form.categoria]}</span>
-        </p>
-        <button
-          type="button"
-          onClick={() => setCategoriaEscolhida(false)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface transition hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/15"
-        >
-          <ArrowLeft size={13} aria-hidden /> Trocar categoria
-        </button>
-      </div>
-
-      {rascunhoRecuperadoEm ? (
-        <div
-          aria-live="polite"
-          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-neutral-200/90 bg-surface-container-lowest px-4 py-2.5 text-sm text-on-surface-variant dark:border-white/10"
-        >
-          <span>
-            Rascunho recuperado, salvo em{' '}
-            <span className="font-semibold text-on-surface">
-              {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-            </span>
-            . Expira hoje às 23:59.
-          </span>
-          <GmudDiscardDraftButton rotulo="Limpar tudo e começar do zero" onConfirmar={descartarRascunho} />
+      {/* [Revisão compacta, item 5] Na Revisão, a categoria e o aviso de rascunho viram uma linha só. */}
+      {etapa === ultimaEtapa ? (
+        <GmudRevisaoTopo
+          categoriaLabel={GMUD_CATEGORIA_LABEL[form.categoria]}
+          rascunhoSalvoEm={rascunhoRecuperadoEm}
+          onTrocarCategoria={() => setCategoriaEscolhida(false)}
+          onDescartarRascunho={descartarRascunho}
+        />
+      ) : (
+        <>
+        {/* Categoria escolhida: sempre visível, com volta para a tela inicial (o que foi preenchido é mantido) */}
+        <div className={`${CARD} ${CATEGORIA_COLORS[form.categoria]} flex flex-wrap items-center justify-between gap-3 !py-3`}>
+          <p className="flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+            Categoria da GMUD
+            <span className="rounded-full bg-primary px-3 py-1 text-sm font-bold text-neutral-900">{GMUD_CATEGORIA_LABEL[form.categoria]}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => setCategoriaEscolhida(false)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface transition hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:border-white/15"
+          >
+            <ArrowLeft size={13} aria-hidden /> Trocar categoria
+          </button>
         </div>
-      ) : null}
+
+        {rascunhoRecuperadoEm ? (
+          <div
+            aria-live="polite"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-neutral-200/90 bg-surface-container-lowest px-4 py-2.5 text-sm text-on-surface-variant dark:border-white/10"
+          >
+            <span>
+              Rascunho recuperado, salvo em{' '}
+              <span className="font-semibold text-on-surface">
+                {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+              </span>
+              . Expira hoje às 23:59.
+            </span>
+            <GmudDiscardDraftButton rotulo="Limpar tudo e começar do zero" onConfirmar={descartarRascunho} />
+          </div>
+        ) : null}
+        </>
+      )}
 
       <div ref={trailRef} className="scroll-mt-24">
         <GmudFormTrail steps={passos} states={estados} current={etapa} maxReached={maxEtapa} pendCounts={contagens} onSelect={irParaEtapa} />
@@ -1183,6 +1196,7 @@ export function GmudNewScreen() {
           <GmudAvisoModal titulo="Falta preencher para continuar" itens={avisoAtual} onClose={() => setAviso([])} />
         ) : null}
 
+        {etapa === ultimaEtapa ? null : (
         <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
           <button
             type="button"
@@ -1220,6 +1234,7 @@ export function GmudNewScreen() {
             )}
           </div>
         </div>
+        )}
         </div>
         </FormStepContext.Provider>
 
@@ -1253,6 +1268,18 @@ export function GmudNewScreen() {
         </div>
 
         </aside>
+        {/* [Revisão compacta, item 2] Barra de ações presa na base da tela, só na Revisão. */}
+        {etapa === ultimaEtapa ? (
+          <GmudRevisaoBarra
+            pendencias={pendenciasDetalhe.length}
+            atencoes={atencoesDoFormulario(form)}
+            textoBotao={textoDoBotaoAbrir(protocolosAAbrir)}
+            enviando={mutation.isPending}
+            podeEnviar={canSubmit}
+            onCancelar={() => navigate('/gmud')}
+            onVoltar={() => irParaEtapa(etapa - 1)}
+          />
+        ) : null}
       </form>
     </div>
   )

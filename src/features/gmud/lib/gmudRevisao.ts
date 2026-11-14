@@ -143,3 +143,17 @@ export function motivosDeAtencao({
   if (tipo.trim() === PRE_APROVADA && protocolos > 1) motivos.push(`Serão abertos ${protocolos} protocolos agora, já liberados.`)
   return motivos
 }
+
+/** Motivos de atenção de um formulário (usado na faixa da Revisão e na barra de ações). */
+export function atencoesDoFormulario(
+  form: { tipo: string; impactoParada: string; dataInicio: string; horaInicio: string; repeticaoVezes: string | number; repeticaoIntervaloDias: string | number },
+  agora: Date = new Date(),
+): string[] {
+  return motivosDeAtencao({
+    tipo: form.tipo,
+    impactoParada: form.impactoParada,
+    janela: form,
+    protocolos: numeroDeProtocolos(form.tipo, form.repeticaoVezes, form.repeticaoIntervaloDias),
+    agora,
+  })
+}

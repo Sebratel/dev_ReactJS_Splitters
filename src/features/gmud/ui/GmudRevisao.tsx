@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Check, CircleCheck, ListOrdered, Mail, Pencil, PowerOff, Users, Zap } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ListOrdered, Loader2, Pencil, PowerOff, Zap } from 'lucide-react'
 import { useEscapeKey } from '@/features/gmud/hooks/useEscapeKey'
 import { duracaoEmMinutos, resumoDaJanela, rotuloDaDuracao, type GmudJanela } from '@/features/gmud/lib/gmudJanela'
 import {
-  motivosDeAtencao,
+  atencoesDoFormulario,
   numeroDeProtocolos,
   passosAoAbrirGmud,
   quemAprovaAGmud,
@@ -21,8 +21,8 @@ import {
 import { GmudTipoSelo } from '@/features/gmud/ui/GmudSelos'
 import { cn } from '@/shared/lib/utils'
 
-const CARD = 'rounded-2xl border border-neutral-200/90 bg-surface-container-lowest p-4 dark:border-white/15 sm:p-5'
-const SELO = 'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold'
+const CARD = 'rounded-2xl border border-neutral-200/90 bg-surface-container-lowest dark:border-white/15'
+const SELO = 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold'
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-white'
 const OUTRO = 'Outro (especificar)'
 
@@ -34,55 +34,37 @@ function janelaDoForm(form: GmudFormState): GmudJanela {
 
 const protocolosDoForm = (form: GmudFormState) => numeroDeProtocolos(form.tipo, form.repeticaoVezes, form.repeticaoIntervaloDias)
 
-/** Texto longo encurtado para caber no cartão (o texto inteiro fica no title). */
-function curto(texto: string, max = 160): string {
-  const t = texto.trim().replace(/\s+/g, ' ')
-  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t
-}
+// ---------------------------------------------------------------------------
+// [item 1] Uma linha por etapa: os dados principais em texto curto, na mesma linha
+// ---------------------------------------------------------------------------
 
-/** Valor de um par rótulo/valor; vazio vira "Não informado" em tom fraco (nunca quebra). */
-function Valor({ children }: { children: React.ReactNode }) {
-  const vazio = children == null || children === false || (typeof children === 'string' && children.trim() === '')
-  return vazio ? <span className="text-on-surface-variant">Não informado</span> : <>{children}</>
-}
-
-function Par({ rotulo, children, largo = false }: { rotulo: string; children: React.ReactNode; largo?: boolean }) {
+/**
+ * Um dado da linha: "Rótulo: valor". O valor é cortado com reticências (o texto inteiro fica no title) e,
+ * vazio, vira "Não informado" em tom fraco. `children` serve para selos (tipo, parada, duração).
+ */
+function Dado({ rotulo, valor, children }: { rotulo?: string; valor?: string; children?: React.ReactNode }) {
+  const texto = (valor ?? '').trim().replace(/\s+/g, ' ')
   return (
-    <div className={cn('min-w-0', largo ? 'sm:col-span-2' : '')}>
-      <dt className="text-xs font-semibold text-on-surface-variant">{rotulo}</dt>
-      <dd className="mt-0.5 break-words text-sm text-on-surface">
-        <Valor>{children}</Valor>
-      </dd>
-    </div>
-  )
-}
-
-function Etiquetas({ itens }: { itens: readonly string[] }) {
-  if (itens.length === 0) return null
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      {itens.map((item) => (
-        <span key={item} className="rounded-md border border-neutral-300 bg-surface-container-low px-2 py-0.5 text-xs font-semibold text-on-surface dark:border-white/20">
-          {item}
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1 sm:max-w-[22rem]">
+      {rotulo ? <span className="shrink-0 text-on-surface-variant">{rotulo}:</span> : null}
+      {children ?? (texto !== '' ? (
+        <span className="min-w-0 truncate text-on-surface" title={texto}>
+          {texto}
         </span>
+      ) : (
+        <span className="shrink-0 text-on-surface-variant">Não informado</span>
       ))}
     </span>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Conteúdo de cada cartão [item 1]
-// ---------------------------------------------------------------------------
-
 function DadosIdentificacao({ form, siData, seData }: Dados) {
   const natureza = form.categoria === 'rede_externa' ? form.assunto : form.categoria === 'sistemas_internos' ? siData.natureza : seData.natureza
   return (
     <>
-      <Par rotulo="Tipo">{form.tipo.trim() !== '' ? <GmudTipoSelo tipo={form.tipo} /> : null}</Par>
-      <Par rotulo="Natureza da mudança">{natureza}</Par>
-      <Par rotulo="Título" largo>
-        {form.titulo}
-      </Par>
+      <Dado rotulo="Tipo">{form.tipo.trim() !== '' ? <GmudTipoSelo tipo={form.tipo} /> : undefined}</Dado>
+      <Dado rotulo="Natureza" valor={natureza} />
+      <Dado rotulo="Título" valor={form.titulo} />
     </>
   )
 }
@@ -91,32 +73,27 @@ function DadosOQueSeraFeito({ form, siData, seData }: Dados) {
   if (form.categoria === 'sistemas_internos') {
     return (
       <>
-        <Par rotulo="Sistema">{siData.sistemaAfetado === OUTRO ? siData.sistemaAfetadoOutro : siData.sistemaAfetado}</Par>
-        <Par rotulo="Ambiente">{siData.ambiente}</Par>
+        <Dado rotulo="Sistema" valor={siData.sistemaAfetado === OUTRO ? siData.sistemaAfetadoOutro : siData.sistemaAfetado} />
+        <Dado rotulo="Ambiente" valor={siData.ambiente} />
       </>
     )
   }
   if (form.categoria === 'sistemas_externos') {
     return (
       <>
-        <Par rotulo="Sistema externo">{seData.sistemaExterno === OUTRO ? seData.sistemaExternoOutro : seData.sistemaExterno}</Par>
-        <Par rotulo="Fornecedor">{seData.fornecedor}</Par>
+        <Dado rotulo="Sistema externo" valor={seData.sistemaExterno === OUTRO ? seData.sistemaExternoOutro : seData.sistemaExterno} />
+        <Dado rotulo="Fornecedor" valor={seData.fornecedor} />
       </>
     )
   }
-  const ambiente = collectAmbienteAfetado(form)
   const escopo = formatEscopoRotas(form.escopoRotas)
   const clientes = form.clientesSemSplitter.length
   return (
     <>
-      <Par rotulo="POP/site">{form.popSite}</Par>
-      <Par rotulo="Abrangência">{escopo !== '' ? escopo : form.popSite.trim() !== '' ? 'POP/site inteiro' : ''}</Par>
-      <Par rotulo="Ambiente afetado" largo>
-        {ambiente.length > 0 ? <Etiquetas itens={ambiente} /> : null}
-      </Par>
-      <Par rotulo="Clientes ponto a ponto ou fibra apagada" largo>
-        {clientes > 0 ? `${clientes} escolhido${clientes === 1 ? '' : 's'}` : 'Nenhum escolhido'}
-      </Par>
+      <Dado rotulo="POP/site" valor={form.popSite} />
+      <Dado rotulo="Abrangência" valor={escopo !== '' ? escopo : form.popSite.trim() !== '' ? 'POP/site inteiro' : ''} />
+      <Dado rotulo="Ambiente afetado" valor={collectAmbienteAfetado(form).join(', ')} />
+      <Dado rotulo="Ponto a ponto ou fibra apagada" valor={clientes > 0 ? `${clientes} escolhido${clientes === 1 ? '' : 's'}` : 'Nenhum escolhido'} />
     </>
   )
 }
@@ -125,7 +102,7 @@ function DadosImpacto({ form, siData, seData }: Dados) {
   const detalhe = form.categoria === 'rede_externa' ? form : form.categoria === 'sistemas_internos' ? siData : seData
   return (
     <>
-      <Par rotulo="Parada do serviço">
+      <Dado rotulo="Parada do serviço">
         {form.impactoParada === 'Sim' ? (
           <span className={cn(SELO, 'bg-rose-700 text-white dark:bg-rose-300 dark:text-rose-950')}>
             <PowerOff size={12} aria-hidden />
@@ -133,21 +110,17 @@ function DadosImpacto({ form, siData, seData }: Dados) {
           </span>
         ) : form.impactoParada !== '' ? (
           <span className={cn(SELO, 'bg-surface-container-low text-on-surface ring-1 ring-neutral-300 dark:ring-white/20')}>{form.impactoParada}</span>
-        ) : null}
-      </Par>
-      {detalhe.tipoIndisponibilidade.trim() !== '' ? <Par rotulo="Tipo de indisponibilidade">{detalhe.tipoIndisponibilidade}</Par> : null}
-      {detalhe.duracaoEstimada.trim() !== '' ? <Par rotulo="Duração estimada">{detalhe.duracaoEstimada}</Par> : null}
-      {form.riscoExecucao.trim() !== '' ? (
-        <Par rotulo="Risco durante a execução" largo>
-          <span title={form.riscoExecucao}>{curto(form.riscoExecucao)}</span>
-        </Par>
-      ) : null}
+        ) : undefined}
+      </Dado>
+      {detalhe.tipoIndisponibilidade.trim() !== '' ? <Dado rotulo="Indisponibilidade" valor={detalhe.tipoIndisponibilidade} /> : null}
+      {detalhe.duracaoEstimada.trim() !== '' ? <Dado rotulo="Duração estimada" valor={detalhe.duracaoEstimada} /> : null}
+      {form.riscoExecucao.trim() !== '' ? <Dado rotulo="Risco na execução" valor={form.riscoExecucao} /> : null}
     </>
   )
 }
 
-/** [item 2] Quem aprova, pela regra do servidor (ver lib/gmudRevisao.ts). Para tirar: apagar a linha em DadosAprovadores. */
-function QuemAprova({ form, siData, seData }: Dados) {
+/** [item 2 da revisão anterior] Quem aprova, pela regra do servidor (lib/gmudRevisao.ts), em texto curto. */
+function DadosQuemAprova({ form, siData, seData }: Dados) {
   const quem = quemAprovaAGmud({
     tipo: form.tipo,
     categoria: form.categoria,
@@ -155,54 +128,27 @@ function QuemAprova({ form, siData, seData }: Dados) {
     areasAfetadas: seData.areasAfetadas,
     recursosAdministrativos: form.recursosAdministrativos,
   })
+  const aprova = !quem.comite
+    ? 'Ninguém: a Pré-aprovada já nasce liberada'
+    : quem.areasQueAprovam.length > 0
+      ? `Comitê e, em paralelo, ${quem.areasQueAprovam.join(', ')}`
+      : 'Só o Comitê'
   return (
-    <div className="min-w-0 sm:col-span-2">
-      <dt className="text-xs font-semibold text-on-surface-variant">Quem aprova</dt>
-      <dd className="mt-1 space-y-2 text-sm text-on-surface">
-        {quem.comite ? (
-          <p className="flex flex-wrap items-center gap-2">
-            <span className={cn(SELO, 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900')}>
-              <Users size={12} aria-hidden />
-              Comitê
-            </span>
-            {quem.areasQueAprovam.length > 0 ? <span className="text-on-surface-variant">e as áreas abaixo, em paralelo:</span> : null}
-          </p>
-        ) : (
-          <p className="flex items-start gap-2">
-            <CircleCheck size={16} aria-hidden className="mt-0.5 shrink-0" />
-            Ninguém: a Pré-aprovada já nasce liberada.
-          </p>
-        )}
-        <Etiquetas itens={quem.areasQueAprovam} />
-        {quem.areasSoAvisadas.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="flex items-start gap-2 text-on-surface-variant">
-              <Mail size={15} aria-hidden className="mt-0.5 shrink-0" />
-              Só recebem e-mail de aviso, sem aprovar:
-            </p>
-            <Etiquetas itens={quem.areasSoAvisadas} />
-          </div>
-        ) : null}
-      </dd>
-    </div>
+    <>
+      <Dado rotulo="Quem aprova" valor={aprova} />
+      {quem.areasSoAvisadas.length > 0 ? <Dado rotulo="Só recebem e-mail de aviso, sem aprovar" valor={quem.areasSoAvisadas.join(', ')} /> : null}
+    </>
   )
 }
 
 function DadosAprovadores(dados: Dados) {
   const janela = janelaDoForm(dados.form)
-  const resumo = resumoDaJanela(janela)
   const duracao = duracaoEmMinutos(janela)
   return (
     <>
-      <Par rotulo="Janela" largo>
-        {resumo !== '' ? (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {resumo}
-            {duracao !== null && duracao > 0 ? <span className={cn(SELO, 'bg-primary text-neutral-900')}>{rotuloDaDuracao(duracao)} de duração</span> : null}
-          </span>
-        ) : null}
-      </Par>
-      <QuemAprova {...dados} />
+      <Dado rotulo="Janela" valor={resumoDaJanela(janela)} />
+      {duracao !== null && duracao > 0 ? <span className={cn(SELO, 'bg-primary text-neutral-900')}>{rotuloDaDuracao(duracao)} de duração</span> : null}
+      <DadosQuemAprova {...dados} />
     </>
   )
 }
@@ -214,7 +160,7 @@ const CONTEUDO: Partial<Record<WizardStep['key'], (dados: Dados) => React.JSX.El
   aprovadores: DadosAprovadores,
 }
 
-/** [item 5] Editar como botão visível. Para voltar ao link pequeno, trocar as classes aqui. */
+/** Editar como botão visível (lápis + texto), com o nome da etapa para leitor de tela. */
 function BotaoEditar({ etapa, onClick }: { etapa: string; onClick: () => void }) {
   return (
     <button
@@ -222,93 +168,129 @@ function BotaoEditar({ etapa, onClick }: { etapa: string; onClick: () => void })
       onClick={onClick}
       aria-label={`Editar ${etapa}`}
       className={cn(
-        'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-low dark:border-white/20 sm:min-h-9',
+        'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-surface-container-lowest px-3 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-low dark:border-white/20 sm:min-h-8 sm:px-2.5 sm:text-xs',
         FOCO,
       )}
     >
-      <Pencil size={14} aria-hidden />
+      <Pencil size={13} aria-hidden />
       Editar
     </button>
   )
 }
 
-/** [item 1] Cartão de uma etapa: situação, dados principais e Editar. */
-function CartaoDaEtapa({ step, dados, pendencias, onEditar }: { step: WizardStep; dados: Dados; pendencias: GmudPendencia[]; onEditar: () => void }) {
+/**
+ * [item 1] Linha de uma etapa: nome com a situação, dados na mesma linha e Editar.
+ * No celular quebra em duas: nome + Editar em cima, dados embaixo.
+ */
+function LinhaDaEtapa({ step, dados, pendencias, onEditar }: { step: WizardStep; dados: Dados; pendencias: GmudPendencia[]; onEditar: () => void }) {
   const id = useId()
   const Conteudo = CONTEUDO[step.key]
   const n = pendencias.length
+  const faltando = pendencias.map((p) => p.message).join('; ')
   return (
-    <section aria-labelledby={id} className={CARD}>
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-          <h3 id={id} className="text-base font-bold text-on-surface">
-            {step.label}
-          </h3>
-          {n > 0 ? (
+    <li
+      aria-labelledby={id}
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 sm:grid-cols-[12.5rem_minmax(0,1fr)_auto] sm:px-4"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden
+          className={cn(
+            'flex size-5 shrink-0 items-center justify-center rounded-full',
+            n > 0 ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+          )}
+        >
+          {n > 0 ? <AlertTriangle size={12} /> : <Check size={12} strokeWidth={3} />}
+        </span>
+        <h3 id={id} className="min-w-0 truncate text-sm font-bold text-on-surface" title={step.label}>
+          {step.label}
+        </h3>
+        <span className="sr-only">{n > 0 ? '' : 'Completa'}</span>
+      </div>
+      <div className="col-span-2 row-start-2 min-w-0 text-sm sm:col-span-1 sm:col-start-2 sm:row-start-1">
+        {n > 0 ? (
+          <p className="flex min-w-0 items-center gap-1.5 text-amber-900 dark:text-amber-200">
             <span className={cn(SELO, 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200')}>
-              <AlertTriangle size={12} aria-hidden />
               {n} pendência{n === 1 ? '' : 's'}
             </span>
-          ) : (
-            <span className={cn(SELO, 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200')}>
-              <Check size={12} aria-hidden strokeWidth={3} />
-              Completa
+            <span className="min-w-0 truncate" title={faltando}>
+              Falta: {faltando}
             </span>
-          )}
-        </div>
+          </p>
+        ) : null}
+        {Conteudo ? (
+          <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+            <Conteudo {...dados} />
+          </p>
+        ) : null}
+      </div>
+      <div className="col-start-2 row-start-1 sm:col-start-3">
         <BotaoEditar etapa={step.label} onClick={onEditar} />
       </div>
-      {n > 0 ? (
-        <ul className="mt-2 list-inside list-disc text-sm text-amber-900 dark:text-amber-200">
-          {pendencias.map((p) => (
-            <li key={p.message}>{p.message}</li>
-          ))}
-        </ul>
-      ) : null}
-      {Conteudo ? (
-        <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
-          <Conteudo {...dados} />
-        </dl>
-      ) : null}
-    </section>
+    </li>
   )
 }
 
-/** [item 4] Atenção antes de abrir: faixa vermelha, não bloqueia. Para tirar: apagar a linha em GmudRevisao. */
-function AtencaoAntesDeAbrir({ form, agora }: { form: GmudFormState; agora: Date }) {
-  const motivos = motivosDeAtencao({ tipo: form.tipo, impactoParada: form.impactoParada, janela: form, protocolos: protocolosDoForm(form), agora })
+/**
+ * [item 4] Atenção antes de abrir, em uma faixa compacta: com um motivo, uma linha só; com vários, lista
+ * curta na mesma faixa. Não bloqueia. Para tirar: apagar a linha em GmudRevisao.
+ */
+function AtencaoAntesDeAbrir({ motivos }: { motivos: string[] }) {
   if (motivos.length === 0) return null
+  const minuscula = (m: string) => m.charAt(0).toLocaleLowerCase('pt-BR') + m.slice(1)
   return (
     <section
       aria-label="Atenção antes de abrir"
-      className="flex items-start gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-red-900 dark:border-red-500/50 dark:bg-red-950/40 dark:text-red-100"
+      className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-500/50 dark:bg-red-950/40 dark:text-red-100"
     >
-      <AlertTriangle size={20} aria-hidden className="mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-sm font-bold">Atenção antes de abrir</p>
-        <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm">
-          {motivos.map((m) => (
-            <li key={m}>{m}</li>
-          ))}
-        </ul>
-      </div>
+      <AlertTriangle size={16} aria-hidden className="mt-0.5 shrink-0" />
+      {motivos.length === 1 ? (
+        <p>
+          <span className="font-bold">Atenção:</span> {minuscula(motivos[0] as string)}
+        </p>
+      ) : (
+        <div className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
+          <span className="font-bold">Atenção:</span>
+          <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5">
+            {motivos.map((m) => (
+              <li key={m}>{minuscula(m)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }
 
-/** [item 3] O que acontece ao clicar em abrir, em passos. Para tirar: apagar a linha em GmudRevisao. */
+/**
+ * [item 3] O que acontece ao abrir: recolhido por padrão, em uma linha clicável que abre os passos.
+ * Para deixar sempre aberto, iniciar o estado em `true`; para tirar, apagar a linha em GmudRevisao.
+ */
 function OQueAconteceAoAbrir({ form }: { form: GmudFormState }) {
   const id = useId()
+  const [aberto, setAberto] = useState(false)
   const passos = passosAoAbrirGmud({ tipo: form.tipo, categoria: form.categoria, protocolos: protocolosDoForm(form) })
   return (
-    <section aria-labelledby={id} className={cn(CARD, 'bg-surface-container-low')}>
-      <h3 id={id} className="flex items-center gap-2 text-base font-bold text-on-surface">
-        <ListOrdered size={18} aria-hidden className="shrink-0" />O que acontece ao clicar em abrir
+    <section className={cn(CARD, 'bg-surface-container-low')}>
+      <h3>
+        <button
+          type="button"
+          aria-expanded={aberto}
+          aria-controls={id}
+          onClick={() => setAberto((a) => !a)}
+          className={cn('flex min-h-11 w-full items-center gap-2 rounded-2xl px-3 text-left text-sm font-bold text-on-surface sm:min-h-10 sm:px-4', FOCO)}
+        >
+          <ListOrdered size={16} aria-hidden className="shrink-0" />
+          <span className="min-w-0 flex-1">
+            O que acontece ao abrir <span className="font-normal text-on-surface-variant">· {passos.length} passos</span>
+          </span>
+          <ChevronDown size={16} aria-hidden className={cn('shrink-0 transition-transform duration-150 motion-reduce:transition-none', aberto ? 'rotate-180' : '')} />
+        </button>
       </h3>
-      <ol className="mt-3 space-y-2.5">
+      <ol id={id} hidden={!aberto} className="space-y-2 px-3 pb-3 sm:px-4">
         {passos.map((passo, i) => (
-          <li key={passo} className="flex items-start gap-3 text-sm text-on-surface">
-            <span aria-hidden className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-neutral-900">
+          <li key={passo} className="flex items-start gap-2.5 text-sm text-on-surface">
+            <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-neutral-900">
               {i + 1}
             </span>
             <span>
@@ -323,8 +305,8 @@ function OQueAconteceAoAbrir({ form }: { form: GmudFormState }) {
 }
 
 /**
- * Etapa de revisão do formulário de nova GMUD: um cartão por etapa com os dados principais, o aviso de
- * atenção e o que acontece ao abrir. Só mostra: não valida, não envia e não muda o formulário.
+ * Etapa de revisão do formulário de nova GMUD, compacta: uma linha por etapa com os dados principais, a faixa
+ * de atenção e o "o que acontece ao abrir" recolhido. Só mostra: não valida, não envia e não muda o formulário.
  */
 export function GmudRevisao({
   form,
@@ -345,22 +327,94 @@ export function GmudRevisao({
 }) {
   const dados = { form, siData, seData }
   return (
-    <div className="space-y-4">
-      <div className="px-1">
-        <h2 className="text-lg font-bold text-on-surface">Revisão</h2>
-        <p className="text-sm text-on-surface-variant">Confira cada etapa. Para mudar algo, use Editar.</p>
-      </div>
-      <AtencaoAntesDeAbrir form={form} agora={agora ?? new Date()} />
-      {passos.map((step, i) => (
-        <CartaoDaEtapa key={step.key} step={step} dados={dados} pendencias={pendenciasDaEtapa(pendencias, step)} onEditar={() => onEditar(i)} />
-      ))}
+    <div className="space-y-2.5">
+      <p className="px-1 text-sm text-on-surface-variant">
+        <span className="text-base font-bold text-on-surface">Revisão</span> · Confira cada etapa. Para mudar algo, use Editar.
+      </p>
+      <AtencaoAntesDeAbrir motivos={atencoesDoFormulario(form, agora)} />
+      {passos.length > 0 ? (
+        <ul className={cn(CARD, 'divide-y divide-neutral-200/80 dark:divide-white/10')}>
+          {passos.map((step, i) => (
+            <LinhaDaEtapa key={step.key} step={step} dados={dados} pendencias={pendenciasDaEtapa(pendencias, step)} onEditar={() => onEditar(i)} />
+          ))}
+        </ul>
+      ) : null}
       <OQueAconteceAoAbrir form={form} />
     </div>
   )
 }
 
 /**
- * [item 7] Confirmação final, só para os casos de maior risco (Emergencial e Pré-aprovada com repetição).
+ * [item 2] Barra de ações da Revisão, presa na base da tela (sticky): resumo à esquerda e Cancelar, Voltar e
+ * o botão final à direita. Fica dentro do <form> (o botão final é o submit) e na coluna do conteúdo, então
+ * não cobre o menu lateral nem o conteúdo: ocupa o próprio espaço no fim e só "gruda" enquanto se rola.
+ */
+export function GmudRevisaoBarra({
+  pendencias,
+  atencoes,
+  textoBotao,
+  enviando,
+  podeEnviar,
+  onCancelar,
+  onVoltar,
+}: {
+  /** Quantas pendências faltam no formulário inteiro. */
+  pendencias: number
+  atencoes: string[]
+  textoBotao: string
+  enviando: boolean
+  podeEnviar: boolean
+  onCancelar: () => void
+  onVoltar: () => void
+}) {
+  const BOTAO = 'rounded-lg px-3.5 py-2 text-sm font-semibold ring-1 ring-neutral-300 transition-colors hover:bg-surface-container-low dark:ring-white/20'
+  return (
+    <div
+      role="group"
+      aria-label="Ações da revisão"
+      className="sticky bottom-0 z-30 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-t-2xl border border-b-0 border-neutral-300 bg-surface-container-lowest px-3 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-6px_16px_-8px_rgb(0_0_0/0.25)] dark:border-white/20 sm:px-4 lg:col-span-2"
+    >
+      <p aria-live="polite" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+        {pendencias > 0 ? (
+          <span className="inline-flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-200">
+            <AlertTriangle size={15} aria-hidden />
+            {pendencias} pendência{pendencias === 1 ? '' : 's'}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-800 dark:text-emerald-200">
+            <Check size={15} aria-hidden strokeWidth={3} />
+            Tudo preenchido
+          </span>
+        )}
+        {atencoes.length > 0 ? (
+          <span className="font-semibold text-red-800 dark:text-red-200" title={atencoes.join(' ')}>
+            · {atencoes.length} {atencoes.length === 1 ? 'atenção' : 'atenções'}
+            <span className="sr-only">: {atencoes.join(' ')}</span>
+          </span>
+        ) : null}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onCancelar} className={cn(BOTAO, 'text-on-surface-variant', FOCO)}>
+          Cancelar
+        </button>
+        <button type="button" onClick={onVoltar} className={cn(BOTAO, 'text-on-surface', FOCO)}>
+          Voltar
+        </button>
+        <button
+          type="submit"
+          disabled={!podeEnviar}
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {enviando ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Zap className="size-4" aria-hidden />}
+          {enviando ? 'Abrindo no Elleven…' : textoBotao}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Confirmação final, só para os casos de maior risco (Emergencial e Pré-aprovada com repetição).
  * Mesmo padrão do GmudAvisoModal: portal no body, foco em Cancelar ao abrir, Esc e clique fora fecham.
  */
 export function GmudConfirmarAbertura({ form, onConfirmar, onCancelar }: { form: GmudFormState; onConfirmar: () => void; onCancelar: () => void }) {

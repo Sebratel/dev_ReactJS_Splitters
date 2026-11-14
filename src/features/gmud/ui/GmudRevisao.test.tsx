@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { GmudConfirmarAbertura, GmudRevisao } from '@/features/gmud/ui/GmudRevisao'
-import { precisaConfirmarAbertura, numeroDeProtocolos } from '@/features/gmud/lib/gmudRevisao'
+import { GmudConfirmarAbertura, GmudRevisao, GmudRevisaoBarra } from '@/features/gmud/ui/GmudRevisao'
+import { GmudRevisaoTopo } from '@/features/gmud/ui/GmudRevisaoTopo'
+import { atencoesDoFormulario, numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
 import { wizardSteps } from '@/features/gmud/lib/gmudWizard'
 import {
   emptyGmudForm,
@@ -36,10 +37,10 @@ function form(over: Partial<GmudFormState> = {}): GmudFormState {
   }
 }
 
-function renderRevisao(f: GmudFormState, opts: { pendencias?: GmudPendencia[]; siData?: GmudSistemasInternosData } = {}) {
+function renderRevisao(f: GmudFormState, opts: { pendencias?: GmudPendencia[]; siData?: GmudSistemasInternosData; agora?: Date } = {}) {
   const onEditar = vi.fn()
   const passos = wizardSteps(f.categoria).slice(0, -1)
-  render(
+  const view = render(
     <GmudRevisao
       form={f}
       siData={opts.siData ?? emptyGmudSistemasInternosData()}
@@ -47,55 +48,72 @@ function renderRevisao(f: GmudFormState, opts: { pendencias?: GmudPendencia[]; s
       passos={passos}
       pendencias={opts.pendencias ?? []}
       onEditar={onEditar}
-      agora={AGORA}
+      agora={opts.agora ?? AGORA}
     />,
   )
-  return onEditar
+  return { onEditar, ...view }
 }
-const cartao = (nome: string) => within(screen.getByRole('region', { name: nome }))
+const linha = (nome: string) => screen.getByRole('listitem', { name: nome })
+const naLinha = (nome: string) => within(linha(nome))
 
-describe('GmudRevisao', () => {
-  it('um cartão por etapa, com os dados principais', () => {
+describe('GmudRevisao (compacta)', () => {
+  it('uma linha por etapa, com os dados principais na própria linha', () => {
     renderRevisao(form())
-    const ident = cartao('Identificação')
+    expect(screen.getAllByRole('heading', { level: 3 }).slice(0, 4).map((h) => h.textContent)).toEqual([
+      'Identificação', 'O que será feito', 'Impacto e execução', 'Aprovadores e janela',
+    ])
+    const ident = naLinha('Identificação')
     expect(ident.getByText('Programada')).toBeInTheDocument()
     expect(ident.getByText('Troca de OLT')).toBeInTheDocument()
     expect(ident.getByText('Manutenção preventiva')).toBeInTheDocument()
     expect(ident.getByText('Completa')).toBeInTheDocument()
 
-    const feito = cartao('O que será feito')
+    const feito = naLinha('O que será feito')
     expect(feito.getByText('POP Centro')).toBeInTheDocument()
     expect(feito.getByText('POP/site inteiro')).toBeInTheDocument()
-    expect(feito.getByText('OLT')).toBeInTheDocument()
-    expect(feito.getByText('Backbone')).toBeInTheDocument()
+    expect(feito.getByText('OLT, Backbone')).toBeInTheDocument()
     expect(feito.getByText('Nenhum escolhido')).toBeInTheDocument()
 
-    const impacto = cartao('Impacto e execução')
+    const impacto = naLinha('Impacto e execução')
     expect(impacto.getByText('Não')).toBeInTheDocument()
     expect(impacto.getByText('Baixo')).toBeInTheDocument()
 
-    const aprov = cartao('Aprovadores e janela')
-    expect(aprov.getByText(/Terça 24\/11, 22:00 até quarta 25\/11, 01:00/)).toBeInTheDocument()
+    const aprov = naLinha('Aprovadores e janela')
+    expect(aprov.getByText('Terça 24/11, 22:00 até quarta 25/11, 01:00')).toBeInTheDocument()
     expect(aprov.getByText('3 h de duração')).toBeInTheDocument()
+    expect(aprov.getByText('Comitê e, em paralelo, T&TI/COR, T&TI/CGR')).toBeInTheDocument()
+  })
+
+  it('valor longo é cortado na tela e fica inteiro no title', () => {
+    const titulo = 'Substituição do cartão de linha da OLT principal do POP Centro com migração das PONs'
+    renderRevisao(form({ titulo }))
+    const valor = naLinha('Identificação').getByText(titulo)
+    expect(valor).toHaveClass('truncate')
+    expect(valor).toHaveAttribute('title', titulo)
   })
 
   it('valores vazios aparecem como "Não informado", sem quebrar', () => {
     renderRevisao({ ...emptyGmudForm(), categoria: 'rede_externa' })
-    expect(cartao('Identificação').getAllByText('Não informado').length).toBeGreaterThanOrEqual(3)
-    expect(cartao('Aprovadores e janela').getByText('Não informado')).toBeInTheDocument()
+    expect(naLinha('Identificação').getAllByText('Não informado').length).toBeGreaterThanOrEqual(3)
+    expect(naLinha('Aprovadores e janela').getByText('Não informado')).toBeInTheDocument()
   })
 
-  it('pendências: o cartão mostra a contagem e a lista em vez de "Completa"', () => {
-    renderRevisao(form({ titulo: '' }), { pendencias: [{ section: 'Identificação', message: 'Título' }] })
-    const ident = cartao('Identificação')
-    expect(ident.getByText('1 pendência')).toBeInTheDocument()
-    expect(ident.getByText('Título', { selector: 'li' })).toBeInTheDocument()
+  it('pendências: selo com a contagem e o que falta, visível e no title', () => {
+    renderRevisao(form({ titulo: '' }), {
+      pendencias: [
+        { section: 'Identificação', message: 'Título' },
+        { section: 'Identificação', message: 'Tipo de GMUD' },
+      ],
+    })
+    const ident = naLinha('Identificação')
+    expect(ident.getByText('2 pendências')).toBeInTheDocument()
+    expect(ident.getByText('Falta: Título; Tipo de GMUD')).toHaveAttribute('title', 'Título; Tipo de GMUD')
     expect(ident.queryByText('Completa')).toBeNull()
-    expect(cartao('O que será feito').getByText('Completa')).toBeInTheDocument()
+    expect(naLinha('O que será feito').getByText('Completa')).toBeInTheDocument()
   })
 
   it('Editar é um botão com o nome da etapa e leva à etapa certa', async () => {
-    const onEditar = renderRevisao(form())
+    const { onEditar } = renderRevisao(form())
     await userEvent.click(screen.getByRole('button', { name: 'Editar Impacto e execução' }))
     expect(onEditar).toHaveBeenLastCalledWith(2)
     await userEvent.click(screen.getByRole('button', { name: 'Editar Identificação' }))
@@ -104,106 +122,113 @@ describe('GmudRevisao', () => {
     expect(onEditar).toHaveBeenLastCalledWith(3)
   })
 
-  it('quem aprova: Programada = Comitê e áreas (sem as N/A); Emergencial = só Comitê; Pré-aprovada = ninguém', () => {
-    renderRevisao(form())
-    const aprov = cartao('Aprovadores e janela')
-    expect(aprov.getByText('Comitê')).toBeInTheDocument()
-    expect(aprov.getByText(/em paralelo/)).toBeInTheDocument()
-    expect(aprov.getByText('T&TI/COR')).toBeInTheDocument()
-    expect(aprov.getByText('T&TI/CGR')).toBeInTheDocument()
-    expect(aprov.queryByText('Dir/Projetos')).toBeNull()
-    expect(aprov.queryByText(/Só recebem e-mail/)).toBeNull()
-  })
+  it('quem aprova: Programada sem as N/A; Emergencial só o Comitê; Pré-aprovada ninguém', () => {
+    const programada = renderRevisao(form())
+    expect(naLinha('Aprovadores e janela').queryByText(/Dir\/Projetos/)).toBeNull()
+    expect(naLinha('Aprovadores e janela').queryByText(/Só recebem e-mail/)).toBeNull()
+    programada.unmount()
 
-  it('quem aprova na Emergencial e na Pré-aprovada', () => {
-    const emergencial = render(
-      <GmudRevisao form={form({ tipo: 'Emergencial' })} siData={emptyGmudSistemasInternosData()} seData={emptyGmudSistemasExternosData()} passos={wizardSteps('rede_externa').slice(0, -1)} pendencias={[]} onEditar={() => {}} agora={AGORA} />,
-    )
-    let aprov = cartao('Aprovadores e janela')
-    expect(aprov.getByText('Comitê')).toBeInTheDocument()
-    expect(aprov.queryByText(/em paralelo/)).toBeNull()
-    expect(aprov.getByText(/Só recebem e-mail de aviso, sem aprovar/)).toBeInTheDocument()
-    expect(aprov.getByText('T&TI/COR')).toBeInTheDocument()
+    const emergencial = renderRevisao(form({ tipo: 'Emergencial' }))
+    let aprov = naLinha('Aprovadores e janela')
+    expect(aprov.getByText('Só o Comitê')).toBeInTheDocument()
+    expect(aprov.getByText('Só recebem e-mail de aviso, sem aprovar:')).toBeInTheDocument()
+    expect(aprov.getByText('T&TI/COR, T&TI/CGR')).toBeInTheDocument()
     emergencial.unmount()
 
     renderRevisao(form({ tipo: 'Pré-aprovada', repeticaoVezes: '1' }))
-    aprov = cartao('Aprovadores e janela')
-    expect(aprov.getByText(/Ninguém: a Pré-aprovada já nasce liberada/)).toBeInTheDocument()
-    expect(aprov.queryByText('Comitê')).toBeNull()
-    expect(aprov.getByText(/Só recebem e-mail de aviso/)).toBeInTheDocument()
+    aprov = naLinha('Aprovadores e janela')
+    expect(aprov.getByText('Ninguém: a Pré-aprovada já nasce liberada')).toBeInTheDocument()
+    expect(aprov.getByText('T&TI/COR, T&TI/CGR')).toBeInTheDocument()
   })
 
-  it('sistemas internos: sistema, áreas impactadas aprovam e não há passo de clientes/COR', () => {
+  it('sistemas internos: sistema, ambiente e as áreas impactadas aprovando', () => {
     const si = { ...emptyGmudSistemasInternosData(), sistemaAfetado: 'Hub Apps', ambiente: 'Produção', natureza: 'Atualização', areasImpactadas: ['Comercial'] }
     renderRevisao(form({ categoria: 'sistemas_internos', recursosAdministrativos: {} }), { siData: si })
-    expect(cartao('O que será feito').getByText('Hub Apps')).toBeInTheDocument()
-    expect(cartao('Identificação').getByText('Atualização')).toBeInTheDocument()
-    expect(cartao('Aprovadores e janela').getByText('Comercial')).toBeInTheDocument()
-    const passos = within(screen.getByRole('region', { name: 'O que acontece ao clicar em abrir' })).getAllByRole('listitem')
-    expect(passos).toHaveLength(2)
-    expect(passos.map((li) => li.textContent).join(' ')).not.toMatch(/clientes|COR/)
+    expect(naLinha('O que será feito').getByText('Hub Apps')).toBeInTheDocument()
+    expect(naLinha('O que será feito').getByText('Produção')).toBeInTheDocument()
+    expect(naLinha('Identificação').getByText('Atualização')).toBeInTheDocument()
+    expect(naLinha('Aprovadores e janela').getByText('Comitê e, em paralelo, Comercial')).toBeInTheDocument()
   })
 
-  it('o que acontece: muda por tipo; na rede externa tem o passo dos clientes e do COR', () => {
-    const { unmount } = render(
-      <GmudRevisao form={form()} siData={emptyGmudSistemasInternosData()} seData={emptyGmudSistemasExternosData()} passos={[]} pendencias={[]} onEditar={() => {}} agora={AGORA} />,
-    )
-    let passos = within(screen.getByRole('region', { name: 'O que acontece ao clicar em abrir' })).getAllByRole('listitem')
-    expect(passos).toHaveLength(3)
-    expect(passos[1]).toHaveTextContent(/em paralelo/)
-    expect(passos[2]).toHaveTextContent(/quando essas rotinas estão ativadas/)
-    unmount()
-    render(
-      <GmudRevisao form={form({ tipo: 'Pré-aprovada', repeticaoVezes: '3', repeticaoIntervaloDias: '7' })} siData={emptyGmudSistemasInternosData()} seData={emptyGmudSistemasExternosData()} passos={[]} pendencias={[]} onEditar={() => {}} agora={AGORA} />,
-    )
-    passos = within(screen.getByRole('region', { name: 'O que acontece ao clicar em abrir' })).getAllByRole('listitem')
-    expect(passos[0]).toHaveTextContent(/Abre 3 protocolos no Elleven agora/)
-  })
-
-  it('atenção antes de abrir só aparece quando algum caso se aplica', () => {
-    const semAviso = render(
-      <GmudRevisao form={form()} siData={emptyGmudSistemasInternosData()} seData={emptyGmudSistemasExternosData()} passos={[]} pendencias={[]} onEditar={() => {}} agora={AGORA} />,
-    )
-    expect(screen.queryByRole('region', { name: 'Atenção antes de abrir' })).toBeNull()
-    semAviso.unmount()
-
-    render(
-      <GmudRevisao
-        form={form({ tipo: 'Emergencial', impactoParada: 'Sim' })}
-        siData={emptyGmudSistemasInternosData()}
-        seData={emptyGmudSistemasExternosData()}
-        passos={[]}
-        pendencias={[]}
-        onEditar={() => {}}
-        agora={new Date(2026, 10, 23, 10, 0)}
-      />,
-    )
-    const itens = within(screen.getByRole('region', { name: 'Atenção antes de abrir' })).getAllByRole('listitem')
-    expect(itens.map((li) => li.textContent)).toEqual([
-      'Há parada do serviço durante a execução.',
-      'A janela começa em menos de 48 horas.',
-      'É uma GMUD emergencial: só o Comitê decide.',
-    ])
-  })
-
-  it('parada do serviço "Sim" aparece em destaque no cartão de impacto', () => {
+  it('parada do serviço "Sim" em destaque, com indisponibilidade e duração estimada', () => {
     renderRevisao(form({ impactoParada: 'Sim', tipoIndisponibilidade: 'Parcial', duracaoEstimada: '30 min' }))
-    const impacto = cartao('Impacto e execução')
+    const impacto = naLinha('Impacto e execução')
     expect(impacto.getByText('Sim')).toHaveClass('bg-rose-700')
     expect(impacto.getByText('Parcial')).toBeInTheDocument()
     expect(impacto.getByText('30 min')).toBeInTheDocument()
   })
+
+  it('"O que acontece ao abrir" começa recolhido e abre ao clicar', async () => {
+    renderRevisao(form())
+    const botao = screen.getByRole('button', { name: /O que acontece ao abrir · 3 passos/ })
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    const lista = document.getElementById(botao.getAttribute('aria-controls') ?? '') as HTMLElement
+    expect(lista).not.toBeVisible()
+
+    await userEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'true')
+    expect(lista).toBeVisible()
+    const passos = within(lista).getAllByRole('listitem')
+    expect(passos).toHaveLength(3)
+    expect(passos[1]).toHaveTextContent(/em paralelo/)
+    expect(passos[2]).toHaveTextContent(/quando essas rotinas estão ativadas/)
+
+    await userEvent.click(botao)
+    expect(botao).toHaveAttribute('aria-expanded', 'false')
+    expect(lista).not.toBeVisible()
+  })
+
+  it('sistemas internos: dois passos, sem clientes nem COR; Pré-aprovada diz quantos protocolos', async () => {
+    const si = renderRevisao(form({ categoria: 'sistemas_internos' }))
+    expect(screen.getByRole('button', { name: /O que acontece ao abrir · 2 passos/ })).toBeInTheDocument()
+    si.unmount()
+    renderRevisao(form({ tipo: 'Pré-aprovada', repeticaoVezes: '3', repeticaoIntervaloDias: '7' }))
+    await userEvent.click(screen.getByRole('button', { name: /O que acontece ao abrir/ }))
+    expect(screen.getByText(/Abre 3 protocolos no Elleven agora/)).toBeInTheDocument()
+  })
+
+  it('atenção: não aparece sem motivo; com um motivo é uma linha só', () => {
+    const sem = renderRevisao(form())
+    expect(screen.queryByRole('region', { name: 'Atenção antes de abrir' })).toBeNull()
+    sem.unmount()
+    renderRevisao(form({ impactoParada: 'Sim' }))
+    const faixa = screen.getByRole('region', { name: 'Atenção antes de abrir' })
+    expect(faixa).toHaveTextContent('Atenção: há parada do serviço durante a execução.')
+    expect(within(faixa).queryByRole('list')).toBeNull()
+  })
+
+  it('atenção: com vários motivos, lista curta na mesma faixa', () => {
+    renderRevisao(form({ tipo: 'Emergencial', impactoParada: 'Sim' }), { agora: new Date(2026, 10, 23, 10, 0) })
+    const faixa = screen.getByRole('region', { name: 'Atenção antes de abrir' })
+    expect(within(faixa).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'há parada do serviço durante a execução.',
+      'a janela começa em menos de 48 horas.',
+      'é uma GMUD emergencial: só o Comitê decide.',
+    ])
+  })
 })
 
-/** Reproduz a ligação do formulário: o botão final só envia direto quando não precisa de confirmação. */
-function BotaoFinal({ f, onEnviar }: { f: GmudFormState; onEnviar: () => void }) {
+/** Reproduz a ligação do formulário: barra dentro do <form>, envio com a confirmação nos casos de risco. */
+function Formulario({ f, pendencias = 0, enviando = false, onEnviar }: { f: GmudFormState; pendencias?: number; enviando?: boolean; onEnviar: () => void }) {
   const [confirmando, setConfirmando] = useState(false)
   const protocolos = numeroDeProtocolos(f.tipo, f.repeticaoVezes, f.repeticaoIntervaloDias)
   return (
-    <>
-      <button type="button" onClick={() => (precisaConfirmarAbertura(f.tipo, protocolos) ? setConfirmando(true) : onEnviar())}>
-        Abrir
-      </button>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (precisaConfirmarAbertura(f.tipo, protocolos)) setConfirmando(true)
+        else onEnviar()
+      }}
+    >
+      <GmudRevisaoBarra
+        pendencias={pendencias}
+        atencoes={atencoesDoFormulario(f, AGORA)}
+        textoBotao={textoDoBotaoAbrir(protocolos)}
+        enviando={enviando}
+        podeEnviar={!enviando}
+        onCancelar={() => {}}
+        onVoltar={() => {}}
+      />
       {confirmando ? (
         <GmudConfirmarAbertura
           form={f}
@@ -214,53 +239,111 @@ function BotaoFinal({ f, onEnviar }: { f: GmudFormState; onEnviar: () => void })
           }}
         />
       ) : null}
-    </>
+    </form>
   )
 }
 
-describe('GmudConfirmarAbertura', () => {
-  it('Programada envia direto, sem diálogo', async () => {
+describe('GmudRevisaoBarra', () => {
+  it('resumo "Tudo preenchido", um botão de cada e o botão final envia', async () => {
     const onEnviar = vi.fn()
-    render(<BotaoFinal f={form()} onEnviar={onEnviar} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
+    render(<Formulario f={form()} onEnviar={onEnviar} />)
+    const barra = within(screen.getByRole('group', { name: 'Ações da revisão' }))
+    expect(barra.getByText('Tudo preenchido')).toBeInTheDocument()
+    expect(barra.queryByText(/atenç/)).toBeNull()
+    expect(barra.getAllByRole('button').map((b) => b.textContent)).toEqual(['Cancelar', 'Voltar', 'Abrir GMUD no Elleven'])
+    await userEvent.click(barra.getByRole('button', { name: 'Abrir GMUD no Elleven' }))
     expect(onEnviar).toHaveBeenCalledTimes(1)
   })
 
-  it('Pré-aprovada de um protocolo também envia direto', async () => {
-    const onEnviar = vi.fn()
-    render(<BotaoFinal f={form({ tipo: 'Pré-aprovada', repeticaoVezes: '1' })} onEnviar={onEnviar} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(onEnviar).toHaveBeenCalledTimes(1)
+  it('mostra as pendências e as atenções (com o texto no title)', () => {
+    render(<Formulario f={form({ impactoParada: 'Sim', tipo: 'Emergencial' })} pendencias={2} onEnviar={() => {}} />)
+    const barra = within(screen.getByRole('group', { name: 'Ações da revisão' }))
+    expect(barra.getByText('2 pendências')).toBeInTheDocument()
+    expect(barra.queryByText('Tudo preenchido')).toBeNull()
+    expect(barra.getByText(/· 2 atenções/)).toHaveAttribute(
+      'title',
+      'Há parada do serviço durante a execução. É uma GMUD emergencial: só o Comitê decide.',
+    )
   })
 
-  it('Emergencial: abre o diálogo, Cancelar não envia e "Sim, abrir" envia', async () => {
+  it('Cancelar e Voltar chamam as ações', async () => {
+    const onCancelar = vi.fn()
+    const onVoltar = vi.fn()
+    render(<GmudRevisaoBarra pendencias={0} atencoes={[]} textoBotao="Abrir GMUD no Elleven" enviando={false} podeEnviar onCancelar={onCancelar} onVoltar={onVoltar} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar' }))
+    expect(onCancelar).toHaveBeenCalledTimes(1)
+    expect(onVoltar).toHaveBeenCalledTimes(1)
+  })
+
+  it('enquanto abre: "Abrindo no Elleven…" e o botão fica desabilitado', async () => {
     const onEnviar = vi.fn()
-    render(<BotaoFinal f={form({ tipo: 'Emergencial' })} onEnviar={onEnviar} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }))
+    render(<Formulario f={form()} enviando onEnviar={onEnviar} />)
+    const botao = screen.getByRole('button', { name: 'Abrindo no Elleven…' })
+    expect(botao).toBeDisabled()
+    await userEvent.click(botao)
+    expect(onEnviar).not.toHaveBeenCalled()
+  })
+
+  it('Pré-aprovada com repetição: o botão diz quantos protocolos e pede confirmação', async () => {
+    const onEnviar = vi.fn()
+    render(<Formulario f={form({ tipo: 'Pré-aprovada', repeticaoVezes: '4', repeticaoIntervaloDias: '15' })} onEnviar={onEnviar} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir 4 protocolos no Elleven' }))
+    expect(screen.getByRole('alertdialog', { name: 'Abrir 4 protocolos no Elleven?' })).toBeInTheDocument()
+    expect(onEnviar).not.toHaveBeenCalled()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(onEnviar).not.toHaveBeenCalled()
+  })
+
+  it('Emergencial: Cancelar não envia e "Sim, abrir" envia', async () => {
+    const onEnviar = vi.fn()
+    render(<Formulario f={form({ tipo: 'Emergencial' })} onEnviar={onEnviar} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir GMUD no Elleven' }))
     const dialogo = screen.getByRole('alertdialog', { name: 'Abrir 1 protocolo no Elleven?' })
     expect(dialogo).toHaveTextContent('Emergencial · Troca de OLT · Terça 24/11, 22:00 até quarta 25/11, 01:00')
-    expect(onEnviar).not.toHaveBeenCalled()
     expect(within(dialogo).getByRole('button', { name: 'Cancelar' })).toHaveFocus()
-
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(onEnviar).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir GMUD no Elleven' }))
     await userEvent.click(screen.getByRole('button', { name: 'Sim, abrir' }))
     expect(onEnviar).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('Pré-aprovada com repetição: o título diz quantos protocolos; Esc fecha sem enviar', async () => {
+  it('Programada e Pré-aprovada de um protocolo enviam direto, sem diálogo', async () => {
     const onEnviar = vi.fn()
-    render(<BotaoFinal f={form({ tipo: 'Pré-aprovada', repeticaoVezes: '4', repeticaoIntervaloDias: '15' })} onEnviar={onEnviar} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }))
-    expect(screen.getByRole('alertdialog', { name: 'Abrir 4 protocolos no Elleven?' })).toBeInTheDocument()
-    await userEvent.keyboard('{Escape}')
+    render(<Formulario f={form({ tipo: 'Pré-aprovada', repeticaoVezes: '1' })} onEnviar={onEnviar} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir GMUD no Elleven' }))
     expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(onEnviar).not.toHaveBeenCalled()
+    expect(onEnviar).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('GmudRevisaoTopo', () => {
+  it('sem rascunho: só a categoria e "Trocar categoria"', async () => {
+    const onTrocar = vi.fn()
+    render(<GmudRevisaoTopo categoriaLabel="Rede externa" rascunhoSalvoEm={null} onTrocarCategoria={onTrocar} onDescartarRascunho={() => {}} />)
+    expect(screen.getByText('Rede externa')).toBeInTheDocument()
+    expect(screen.queryByText(/Rascunho/)).toBeNull()
+    expect(screen.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['Trocar categoria'])
+    await userEvent.click(screen.getByRole('button', { name: 'Trocar categoria' }))
+    expect(onTrocar).toHaveBeenCalledTimes(1)
+  })
+
+  it('com rascunho: hora em que foi salvo, validade e o descarte com confirmação em dois passos', async () => {
+    const onDescartar = vi.fn()
+    const salvoEm = new Date(2026, 10, 14, 9, 5).toISOString()
+    render(<GmudRevisaoTopo categoriaLabel="Sistemas internos" rascunhoSalvoEm={salvoEm} onTrocarCategoria={() => {}} onDescartarRascunho={onDescartar} />)
+    expect(screen.getByText(/Rascunho de hoje/)).toHaveTextContent('· Rascunho de hoje 09:05, expira 23:59')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar tudo e começar do zero' }))
+    expect(onDescartar).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(onDescartar).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar tudo e começar do zero' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Sim, apagar' }))
+    expect(onDescartar).toHaveBeenCalledTimes(1)
   })
 })
