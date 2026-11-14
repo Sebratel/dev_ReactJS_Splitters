@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2, X } from 'lucide-react'
+import { BarChart3, CalendarDays, Check, ChevronLeft, ChevronRight, ClipboardList, Plus, Presentation, RefreshCw, Search, Settings2, X } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
 import { GmudApprovalQueue } from '@/features/gmud/ui/GmudApprovalQueue'
 import { GmudCalendar } from '@/features/gmud/ui/GmudCalendar'
+import { GmudWeeklyMeeting } from '@/features/gmud/ui/GmudWeeklyMeeting'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
@@ -68,7 +69,7 @@ export function GmudScreen() {
   const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
   const [linking, setLinking] = useState<GmudListItem | null>(null)
-  const [view, setView] = useState<'all' | 'pending' | 'agenda'>('all')
+  const [view, setView] = useState<'all' | 'pending' | 'agenda' | 'reuniao'>('all')
   const [filter, setFilter] = useState<GmudListFilter>('todas')
   const [tipo, setTipo] = useState<GmudTipoFiltro>('todos')
   const [origem, setOrigem] = useState<GmudOrigemFiltro>('todas')
@@ -226,6 +227,18 @@ export function GmudScreen() {
           >
             <CalendarDays size={14} /> Agenda
           </button>
+          <button
+            type="button"
+            onClick={() => setView('reuniao')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              view === 'reuniao'
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+          >
+            <Presentation size={14} aria-hidden /> Reunião semanal
+          </button>
           {canApprove ? (
           <button
             type="button"
@@ -251,6 +264,8 @@ export function GmudScreen() {
         <GmudApprovalQueue />
       ) : view === 'agenda' ? (
         <GmudCalendar />
+      ) : view === 'reuniao' ? (
+        <GmudWeeklyMeeting />
       ) : (
       <div className={cn(CARD, 'overflow-hidden')}>
         <div className="space-y-3 border-b border-neutral-200/80 p-4 dark:border-white/15">

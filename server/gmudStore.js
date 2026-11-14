@@ -918,6 +918,63 @@ export async function listScheduledGmuds(input) {
 }
 
 /**
+ * Reunião semanal: GMUDs cuja janela (data_inicio..data_fim) cruza [from, to], em QUALQUER situação de
+ * aprovação (a reunião também decide as pendentes). Só leitura.
+ */
+export async function listGmudsWithWindowBetween(from, to) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const de = toCleanString(from);
+  const ate = toCleanString(to);
+  if (!DATE_RE.test(de) || !DATE_RE.test(ate)) throw buildError('Intervalo de datas inválido.', 400);
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE}
+      WHERE voalle_protocol IS NOT NULL
+        AND data_inicio IS NOT NULL
+        AND data_inicio <= ?
+        AND COALESCE(data_fim, data_inicio) >= ?
+      ORDER BY data_inicio, hora_inicio
+      LIMIT 500`,
+    [ate, de],
+  );
+  return rows.map(mapGmudRow);
+}
+
+/** GMUDs registradas na plataforma, pelos protocolos informados. Só leitura. */
+export async function listGmudRequestsByProtocols(protocols) {
+  const ids = [...new Set((Array.isArray(protocols) ? protocols : []).map(normalizePositiveInt).filter(Boolean))];
+  if (ids.length === 0) return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE voalle_protocol IN (?)`, [ids]);
+  return rows.map(mapGmudRow);
+}
+
+/**
+ * Eventos de reagendamento (do mais recente para o mais antigo), com a janela anterior e a nova.
+ * Só leitura. Devolve [{ voalleProtocol, previous, next, at }].
+ */
+export async function listGmudReagendadaEvents(limit = 5000) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const max = Number.isInteger(limit) && limit > 0 && limit <= 5000 ? limit : 5000;
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, payload, created_at FROM ${EVENTS_TABLE}
+      WHERE event_type = 'reagendada' ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [max],
+  );
+  return rows.map((r) => {
+    const payload = parseJsonColumn(r.payload);
+    return {
+      voalleProtocol: Number(r.voalle_protocol),
+      previous: payload?.previous ?? null,
+      next: payload?.next ?? null,
+      at: r.created_at ? new Date(r.created_at).toISOString() : null,
+    };
+  });
+}
+
+/**
  * Reagenda a janela de uma GMUD (só no nosso banco). Exige GMUD aprovada e não encerrada no
  * Elleven. Retorna a janela anterior e a nova — o frontend registra o relato no protocolo.
  */
