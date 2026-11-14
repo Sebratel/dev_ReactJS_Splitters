@@ -285,7 +285,7 @@ export function GmudCategoriaPicker({
         {rascunho ? (
           <div
             data-testid="aviso-rascunho"
-            className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl border-2 border-neutral-900 bg-surface-container-low px-4 py-3 dark:border-white/70"
+            className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl border border-neutral-200/80 bg-surface-container-low px-4 py-3 dark:border-white/15"
           >
             <div className="flex min-w-0 items-start gap-3">
               <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-neutral-900">
