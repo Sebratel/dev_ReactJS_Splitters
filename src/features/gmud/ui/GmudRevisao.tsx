@@ -18,6 +18,7 @@ import {
   type GmudSistemasExternosData,
   type GmudSistemasInternosData,
 } from '@/features/gmud/model/gmudForm'
+import { GmudRevisaoStatus } from '@/features/gmud/ui/GmudRevisaoStatus'
 import { GmudTipoSelo } from '@/features/gmud/ui/GmudSelos'
 import { cn } from '@/shared/lib/utils'
 
@@ -190,7 +191,11 @@ function LinhaDaEtapa({ step, dados, pendencias, onEditar }: { step: WizardStep;
   return (
     <li
       aria-labelledby={id}
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 sm:grid-cols-[12.5rem_minmax(0,1fr)_auto] sm:px-4"
+      // Etapa com pendência: flash âmbar curto ao chegar na Revisão (só destaque; o "Falta: …" continua).
+      className={cn(
+        'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 sm:grid-cols-[12.5rem_minmax(0,1fr)_auto] sm:px-4',
+        n > 0 ? 'gmud-rv-flash' : '',
+      )}
     >
       <div className="flex min-w-0 items-center gap-2">
         <span
@@ -331,6 +336,8 @@ export function GmudRevisao({
       <p className="px-1 text-sm text-on-surface-variant">
         <span className="text-base font-bold text-on-surface">Revisão</span> · Confira cada etapa. Para mudar algo, use Editar.
       </p>
+      {/* Faixa de situação animada; a contagem é a mesma da barra de ações (todas as pendências do formulário). */}
+      <GmudRevisaoStatus pendencias={pendencias.length} />
       <AtencaoAntesDeAbrir motivos={atencoesDoFormulario(form, agora)} />
       {passos.length > 0 ? (
         <ul className={cn(CARD, 'divide-y divide-neutral-200/80 dark:divide-white/10')}>
