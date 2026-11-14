@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { fetchGmudAgenda, type GmudAgendaItem } from '@/features/gmud/api/gmudAgenda'
 import {
@@ -47,6 +47,8 @@ export function GmudCalendar() {
   const agendaQuery = useQuery({
     queryKey: ['gmud', 'agenda', from, to],
     queryFn: () => fetchGmudAgenda(from, to),
+    // Ao trocar de mês, a agenda anterior fica na tela até a nova chegar (sem piscar).
+    placeholderData: keepPreviousData,
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
@@ -135,7 +137,10 @@ export function GmudCalendar() {
         ))}
       </div>
 
-      <div className="grid grid-cols-7">
+      <div
+        aria-busy={agendaQuery.isPlaceholderData}
+        className={`grid grid-cols-7 transition-opacity duration-200 ease-out motion-reduce:transition-none ${agendaQuery.isPlaceholderData ? 'opacity-60' : 'opacity-100'}`}
+      >
         {weeks.flat().map((date) => {
           const day = localDayKey(date)
           const inMonth = date.getMonth() === cursor.month
@@ -204,7 +209,7 @@ export function GmudCalendar() {
         ))}
       </div>
 
-      {!agendaQuery.isLoading && items.length === 0 && !agendaQuery.isError ? (
+      {!agendaQuery.isLoading && !agendaQuery.isPlaceholderData && items.length === 0 && !agendaQuery.isError ? (
         <p className="border-t border-neutral-200/70 p-4 text-center text-sm text-on-surface-variant dark:border-white/10">
           Nenhuma GMUD liberada com janela neste mês. Só aparecem na agenda as GMUDs aprovadas pelo Comitê e pelas áreas.
         </p>

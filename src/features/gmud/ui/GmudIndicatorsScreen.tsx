@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { AlarmClock, AlertTriangle, BarChart3, CheckCircle2, Download, FolderOpen, Hourglass, Inbox, RefreshCw, TrendingUp } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { cn } from '@/shared/lib/utils'
@@ -8,6 +8,7 @@ import { localDayKey } from '@/features/gmud/lib/gmudSchedule'
 import { GmudHistorySection } from '@/features/gmud/ui/indicators/GmudHistorySection'
 import { GmudPlatformSection } from '@/features/gmud/ui/indicators/GmudPlatformSection'
 import { KpiCard, SectionTitle } from '@/features/gmud/ui/indicators/IndicatorPrimitives'
+import { GmudBusy } from '@/features/gmud/ui/GmudTransitions'
 import { CARD, formatHours } from '@/features/gmud/ui/indicators/indicatorTheme'
 
 type PeriodKey = '3m' | '6m' | '12m' | 'ano' | 'tudo'
@@ -60,6 +61,8 @@ export function GmudIndicatorsScreen() {
   const query = useQuery({
     queryKey: ['gmud', 'indicators', range.from, range.to, categoriaFilter],
     queryFn: () => fetchGmudIndicators(range.from, range.to, categoriaFilter),
+    // Ao trocar período ou categoria, os números anteriores ficam na tela até os novos chegarem (sem piscar).
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
   })
   const data = query.data
@@ -126,7 +129,7 @@ export function GmudIndicatorsScreen() {
           {query.error instanceof Error ? query.error.message : 'Falha ao carregar os indicadores.'}
         </div>
       ) : (
-        <>
+        <GmudBusy busy={query.isPlaceholderData} enter contentClassName="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <KpiCard label="Em aberto agora" value={String(data.voalle.snapshot.openNow)} hint={`de ${data.voalle.snapshot.total} no histórico`} Icon={FolderOpen} tone="warning" />
             <KpiCard label="Prazo vencido" value={String(data.voalle.snapshot.overdueNow)} hint="abertas com SLA estourado" Icon={AlarmClock} tone="danger" />
@@ -228,7 +231,7 @@ export function GmudIndicatorsScreen() {
           <p className="pb-2 text-right text-[11px] text-on-surface-variant">
             Atualizado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
           </p>
-        </>
+        </GmudBusy>
       )}
     </div>
   )

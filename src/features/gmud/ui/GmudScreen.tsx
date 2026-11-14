@@ -13,6 +13,7 @@ import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
 import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
 import { GmudSummaryStrip } from '@/features/gmud/ui/GmudSummaryStrip'
+import { GmudBusy } from '@/features/gmud/ui/GmudTransitions'
 import { useGmudListSummary } from '@/features/gmud/api/fetchGmudListSummary'
 import type { GmudListFilter, GmudListItem, GmudOrigemFiltro, GmudSort, GmudSortKey, GmudTipoFiltro } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
@@ -63,13 +64,22 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   )
 }
 
+type GmudView = 'all' | 'pending' | 'agenda' | 'reuniao'
+
 export function GmudScreen() {
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
   const [linking, setLinking] = useState<GmudListItem | null>(null)
-  const [view, setView] = useState<'all' | 'pending' | 'agenda' | 'reuniao'>('all')
+  const [view, setView] = useState<GmudView>('all')
+  // Abas já abertas continuam montadas (só escondidas): voltar para uma aba não remonta nem rebusca à toa,
+  // e ela mantém o que a pessoa estava vendo (mês da agenda, semana da reunião).
+  const [visited, setVisited] = useState<ReadonlySet<GmudView>>(() => new Set<GmudView>(['all']))
+  const openView = (next: GmudView) => {
+    setView(next)
+    setVisited((prev) => (prev.has(next) ? prev : new Set(prev).add(next)))
+  }
   const [filter, setFilter] = useState<GmudListFilter>('todas')
   const [tipo, setTipo] = useState<GmudTipoFiltro>('todos')
   const [origem, setOrigem] = useState<GmudOrigemFiltro>('todas')
@@ -100,7 +110,7 @@ export function GmudScreen() {
     return () => window.clearTimeout(t)
   }, [searchInput])
 
-  const { data, isLoading, isError, error, isFetching, refetch } = useGmudList({
+  const { data, isLoading, isError, error, isFetching, isPlaceholderData, refetch } = useGmudList({
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
     q: appliedSearch,
@@ -117,6 +127,8 @@ export function GmudScreen() {
   const firstShown = total === 0 ? 0 : page * PAGE_SIZE + 1
   const lastShown = Math.min(total, page * PAGE_SIZE + items.length)
   const filtroCartao = FILTRO_CARTAO_LABEL[filter] ?? null
+  // Sem permissão de aprovar, a aba de pendentes não existe: mostra a lista.
+  const mostraLista = view === 'all' || (view === 'pending' && !canApprove)
   const temFiltro = filter !== 'todas' || tipo !== 'todos' || origem !== 'todas' || minhas
   const limparFiltros = () => {
     setFilter('todas')
@@ -196,7 +208,7 @@ export function GmudScreen() {
         summary={summaryQuery.data}
         filter={filter}
         onSelect={(next) => {
-          setView('all')
+          openView('all')
           setFilter(next)
           setPage(0)
         }}
@@ -205,7 +217,7 @@ export function GmudScreen() {
       <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
           <button
             type="button"
-            onClick={() => setView('all')}
+            onClick={() => openView('all')}
             className={cn(
               'rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'all'
@@ -217,7 +229,7 @@ export function GmudScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setView('agenda')}
+            onClick={() => openView('agenda')}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'agenda'
@@ -229,7 +241,7 @@ export function GmudScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setView('reuniao')}
+            onClick={() => openView('reuniao')}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'reuniao'
@@ -242,7 +254,7 @@ export function GmudScreen() {
           {canApprove ? (
           <button
             type="button"
-            onClick={() => setView('pending')}
+            onClick={() => openView('pending')}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'pending'
@@ -260,14 +272,23 @@ export function GmudScreen() {
           ) : null}
       </div>
 
-      {view === 'pending' && canApprove ? (
-        <GmudApprovalQueue />
-      ) : view === 'agenda' ? (
-        <GmudCalendar />
-      ) : view === 'reuniao' ? (
-        <GmudWeeklyMeeting />
-      ) : (
-      <div className={cn(CARD, 'overflow-hidden')}>
+      {/* Painéis das abas: o escondido usa `hidden`; ao reaparecer, a classe gmud-fade refaz o fade curto. */}
+      {canApprove && visited.has('pending') ? (
+        <div hidden={view !== 'pending'} className="gmud-fade">
+          <GmudApprovalQueue />
+        </div>
+      ) : null}
+      {visited.has('agenda') ? (
+        <div hidden={view !== 'agenda'} className="gmud-fade">
+          <GmudCalendar />
+        </div>
+      ) : null}
+      {visited.has('reuniao') ? (
+        <div hidden={view !== 'reuniao'} className="gmud-fade">
+          <GmudWeeklyMeeting />
+        </div>
+      ) : null}
+      <div hidden={!mostraLista} className={cn(CARD, 'gmud-fade overflow-hidden')}>
         <div className="space-y-3 border-b border-neutral-200/80 p-4 dark:border-white/15">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-on-surface">
@@ -335,6 +356,8 @@ export function GmudScreen() {
           ) : null}
         </div>
 
+        {/* Trocar filtro/ordem/página mantém a lista anterior, esmaecida, até a nova chegar. */}
+        <GmudBusy busy={isPlaceholderData} enter key={isLoading ? 'carregando' : 'conteudo'}>
         {isLoading ? (
           <p className="py-10 text-center text-sm text-on-surface-variant">Carregando GMUDs…</p>
         ) : isError ? (
@@ -382,8 +405,8 @@ export function GmudScreen() {
             ) : null}
           </>
         )}
+        </GmudBusy>
       </div>
-      )}
 
       {approving ? (
         <GmudApprovalModal

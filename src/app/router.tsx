@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { GmudRoute } from '@/features/gmud/ui/GmudTransitions'
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
 import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
@@ -67,6 +68,7 @@ const GmudConfigPage = lazy(() =>
   import('@/pages/GmudConfigPage').then((m) => ({ default: m.GmudConfigPage })),
 )
 
+// As telas de GMUD usam GmudRoute (esqueleto no carregamento + transição de página).
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
 }
@@ -83,7 +85,7 @@ export const router = createBrowserRouter([
   {
     // Pública de propósito: a pessoa da área decide pelo link do e-mail, sem login.
     path: '/gmud/aprovar-area',
-    element: <Page><GmudAreaApprovalPage /></Page>,
+    element: <GmudRoute variant="publica"><GmudAreaApprovalPage /></GmudRoute>,
   },
   {
     // Painel de parede (CGR/COR) — rota isolada, fora do RootLayout/Sidebar de
@@ -162,7 +164,7 @@ export const router = createBrowserRouter([
                 allowAdmin
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
-                <Page><GmudPage /></Page>
+                <GmudRoute><GmudPage /></GmudRoute>
               </PermissionGuard>
             ),
           },
@@ -174,7 +176,7 @@ export const router = createBrowserRouter([
                 allowAdmin
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
-                <Page><GmudNewPage /></Page>
+                <GmudRoute animate={false}><GmudNewPage /></GmudRoute>
               </PermissionGuard>
             ),
           },
@@ -186,7 +188,7 @@ export const router = createBrowserRouter([
                 allowAdmin
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
-                <Page><GmudIndicatorsPage /></Page>
+                <GmudRoute><GmudIndicatorsPage /></GmudRoute>
               </PermissionGuard>
             ),
           },
@@ -198,7 +200,7 @@ export const router = createBrowserRouter([
                 allowAdmin
                 description="Seu perfil não possui permissão para configurar o módulo de GMUD."
               >
-                <Page><GmudConfigPage /></Page>
+                <GmudRoute><GmudConfigPage /></GmudRoute>
               </PermissionGuard>
             ),
           },
@@ -210,7 +212,7 @@ export const router = createBrowserRouter([
                 allowAdmin
                 description="Seu perfil não possui acesso ao módulo de GMUD."
               >
-                <Page><GmudDetailPage /></Page>
+                <GmudRoute><GmudDetailPage /></GmudRoute>
               </PermissionGuard>
             ),
           },
