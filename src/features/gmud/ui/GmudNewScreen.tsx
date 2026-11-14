@@ -63,7 +63,6 @@ import {
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
 import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
 import { GmudConfirmarAbertura, GmudRevisao, GmudRevisaoBarra } from '@/features/gmud/ui/GmudRevisao'
-import { GmudRevisaoTopo } from '@/features/gmud/ui/GmudRevisaoTopo'
 import { atencoesDoFormulario, numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
@@ -1057,15 +1056,8 @@ export function GmudNewScreen() {
         </span>
       </div>
 
-      {/* [Revisão compacta, item 5] Na Revisão, a categoria e o aviso de rascunho viram uma linha só. */}
-      {etapa === ultimaEtapa ? (
-        <GmudRevisaoTopo
-          categoriaLabel={GMUD_CATEGORIA_LABEL[form.categoria]}
-          rascunhoSalvoEm={rascunhoRecuperadoEm}
-          onTrocarCategoria={() => setCategoriaEscolhida(false)}
-          onDescartarRascunho={descartarRascunho}
-        />
-      ) : (
+      {/* Mesmo topo em todas as etapas (inclusive a Revisão), para manter o padrão. */}
+      {(
         <>
         {/* Categoria escolhida: sempre visível, com volta para a tela inicial (o que foi preenchido é mantido) */}
         <div className={`${CARD} ${CATEGORIA_COLORS[form.categoria]} flex flex-wrap items-center justify-between gap-3 !py-3`}>
