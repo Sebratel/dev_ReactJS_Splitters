@@ -37,6 +37,7 @@ import {
   gmudSummaryFromRow,
   parseGmudListFilters,
 } from './lib/gmudListFilters.js';
+import { buildReuniaoSemanal, parseReuniaoSemanalQuery, reagendadasParaFora } from './lib/gmudReuniaoSemanal.js';
 import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
 import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
@@ -128,6 +129,9 @@ import {
   getLinksWithAffected,
   listRegisteredGmudProtocols,
   listRegisteredGmudProtocolsByTipo,
+  listGmudsWithWindowBetween,
+  listGmudRequestsByProtocols,
+  listGmudReagendadaEvents,
   getGmudConfigLists,
   addGmudConfigItem,
   deactivateGmudConfigItem,
@@ -5851,6 +5855,48 @@ app.get('/api/gmud/agenda', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: safeErrorMessage(error, 'Falha ao carregar a agenda de GMUDs.'),
+    });
+  }
+});
+
+/**
+ * Reunião semanal de GMUDs (só leitura): o que foi feito numa semana (`feitoDe`..`feitoAte`) e o que vem na
+ * outra (`vemDe`..`vemAte`), datas AAAA-MM-DD. Só GMUDs registradas na plataforma — a janela fica no nosso
+ * banco; as legadas (só no Voalle) não têm janela. Regras em lib/gmudReuniaoSemanal.js.
+ */
+app.get('/api/gmud/reuniao-semanal', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const range = parseReuniaoSemanalQuery(req.query);
+    const [feitoRows, vemRows, events] = await Promise.all([
+      listGmudsWithWindowBetween(range.feitoDe, range.feitoAte),
+      listGmudsWithWindowBetween(range.vemDe, range.vemAte),
+      listGmudReagendadaEvents(),
+    ]);
+    // Reagendadas para fora da semana do "feito": estavam marcadas para ela e a janela atual não cruza mais.
+    const moved = reagendadasParaFora(events, new Set(feitoRows.map((r) => r.voalleProtocol)), range.feitoDe, range.feitoAte);
+    const movedRows = moved.size > 0 ? await listGmudRequestsByProtocols([...moved.keys()]) : [];
+    const protocols = [...new Set([...feitoRows, ...vemRows, ...movedRows].map((r) => r.voalleProtocol))];
+    const [ellevenByProtocol, extrasByProtocol] = await Promise.all([
+      fetchGmudEllevenStatus(protocols),
+      getGmudExtrasByProtocols(protocols),
+    ]);
+    const data = buildReuniaoSemanal({
+      feitoRows,
+      vemRows,
+      moved,
+      movedRows,
+      ellevenByProtocol,
+      extrasByProtocol,
+      reagendadas: new Set(events.map((e) => e.voalleProtocol)),
+      agoraNaive: brazilNowNaive(),
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar a reunião semanal de GMUDs.'),
     });
   }
 });

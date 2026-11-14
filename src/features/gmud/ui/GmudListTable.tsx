@@ -1,15 +1,12 @@
 import { Link } from 'react-router-dom'
-import {
-  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Ban, CalendarClock, CheckCheck, CircleCheck, CircleX, Hourglass, LayoutDashboard, Link2, Repeat,
-  type LucideIcon,
-} from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, LayoutDashboard, Link2 } from 'lucide-react'
 import type { GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
 import { gmudDisplayTitle } from '@/features/gmud/lib/gmudTitle'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { gmudDeadline, type GmudDeadlineTone } from '@/features/gmud/lib/gmudDeadline'
 import { gmudCancelada, gmudPodeAvaliar } from '@/features/gmud/lib/gmudLifecycle'
-import { gmudSituacao, type GmudSituacaoTone } from '@/features/gmud/lib/gmudSituacao'
-import { GMUD_TIPO_CRITICIDADE, type GmudTipoCriticidade } from '@/features/gmud/lib/gmudTipoCriticidade'
+import { gmudSituacao } from '@/features/gmud/lib/gmudSituacao'
+import { GmudSituacaoSelo, GmudTipoSelo } from '@/features/gmud/ui/GmudSelos'
 import { requesterAvatarIndex, requesterInitials, shortRequesterName } from '@/features/gmud/lib/gmudRequester'
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { cn } from '@/shared/lib/utils'
@@ -22,17 +19,6 @@ const DEADLINE_STYLE: Record<GmudDeadlineTone, string> = {
   cancelled: 'bg-neutral-200 text-neutral-700 dark:bg-white/10 dark:text-neutral-300',
   none: 'bg-surface-container-low text-on-surface-variant',
 }
-
-/** Selo da Situação: cor + ícone + texto. "voalle" (status vindo do Voalle) é texto simples, sem selo. */
-const SITUACAO_STYLE: Record<Exclude<GmudSituacaoTone, 'voalle'>, { tone: string; icon: LucideIcon }> = {
-  cancelada: { tone: 'bg-neutral-200 text-neutral-800 dark:bg-white/10 dark:text-neutral-200', icon: Ban },
-  concluida: { tone: 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900', icon: CheckCheck },
-  negada: { tone: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200', icon: CircleX },
-  liberada: { tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200', icon: CircleCheck },
-  aguardando: { tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200', icon: Hourglass },
-}
-
-const TIPO_ICON: Record<GmudTipoCriticidade['icon'], LucideIcon> = { alert: AlertTriangle, calendar: CalendarClock, repeat: Repeat }
 
 /** Cores do avatar do solicitante: fundo claro com texto bem escuro (e o inverso no tema escuro). */
 const AVATAR_TONES = [
@@ -81,19 +67,6 @@ function SortHeader({
   )
 }
 
-/** Selo do tipo da GMUD: nome do tipo com o ícone e a cor da criticidade. */
-function TipoSelo({ tipo }: { tipo: string }) {
-  const crit = GMUD_TIPO_CRITICIDADE[tipo]
-  if (!crit) return <span className="text-[11px] text-on-surface-variant">{tipo}</span>
-  const Icon = TIPO_ICON[crit.icon]
-  return (
-    <span className={cn(PILL, crit.tone)}>
-      <Icon size={12} aria-hidden />
-      {tipo}
-    </span>
-  )
-}
-
 /** Tabela do painel de GMUDs: tipo, origem, solicitante, prazo e situação, com link para o detalhe. */
 export function GmudListTable({
   items,
@@ -129,8 +102,6 @@ export function GmudListTable({
             const plataforma = g.extra != null
             const cancelada = gmudCancelada(g)
             const situacao = gmudSituacao(g)
-            const selo = situacao.tone === 'voalle' ? null : SITUACAO_STYLE[situacao.tone]
-            const SituacaoIcon = selo?.icon
             const links = g.massivaLinksCount
             return (
               <tr
@@ -151,7 +122,7 @@ export function GmudListTable({
                           Legado
                         </span>
                       )}
-                      {g.extra?.tipo ? <TipoSelo tipo={g.extra.tipo} /> : null}
+                      {g.extra?.tipo ? <GmudTipoSelo tipo={g.extra.tipo} /> : null}
                     </span>
                     <span
                       className={cn(
@@ -187,14 +158,7 @@ export function GmudListTable({
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex flex-col items-start gap-0.5">
-                    {selo && SituacaoIcon ? (
-                      <span className={cn(PILL, selo.tone)} title={situacao.hint}>
-                        <SituacaoIcon size={12} aria-hidden />
-                        {situacao.label}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-on-surface-variant">{situacao.label}</span>
-                    )}
+                    <GmudSituacaoSelo situacao={situacao} />
                     {situacao.voalle ? <span className="text-[11px] text-on-surface-variant">Voalle: {situacao.voalle}</span> : null}
                   </div>
                 </td>
