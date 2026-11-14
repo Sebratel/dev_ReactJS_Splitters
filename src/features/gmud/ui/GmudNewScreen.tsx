@@ -200,7 +200,6 @@ function CamposComuns({
         <span className={LABEL}>Tipo da GMUD *</span>
         <div role="radiogroup" aria-label="Tipo da GMUD" className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {GMUD_TIPO_OPTIONS.map((o) => {
-            const bloqueada = o === GMUD_TIPO_PRE_APROVADA && categoria !== 'rede_externa'
             const ativo = form.tipo === o
             return (
               <button
@@ -208,10 +207,9 @@ function CamposComuns({
                 type="button"
                 role="radio"
                 aria-checked={ativo}
-                disabled={bloqueada}
                 onClick={() => set('tipo', o)}
                 className={cn(
-                  'rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50',
+                  'rounded-lg border px-3 py-2.5 text-left transition',
                   ativo
                     ? 'border-primary bg-primary shadow-sm ring-1 ring-primary'
                     : 'border-neutral-200/80 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/10',
@@ -235,7 +233,7 @@ function CamposComuns({
                 ) : null}
                 <span className={cn('block text-sm font-semibold', ativo ? 'text-neutral-900' : 'text-on-surface')}>{o}</span>
                 <span className={cn('mt-0.5 block text-[11px]', ativo ? 'text-neutral-800' : 'text-on-surface-variant')}>
-                  {bloqueada ? 'Só para Rede Externa' : (TIPO_DESCRICAO[o] ?? '')}
+                  {TIPO_DESCRICAO[o] ?? ''}
                 </span>
               </button>
             )
