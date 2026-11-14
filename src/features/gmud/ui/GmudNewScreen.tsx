@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, CalendarClock, Check, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { GmudAvisoModal } from '@/features/gmud/ui/GmudAvisoModal'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
@@ -62,6 +62,8 @@ import {
 } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
 import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
+import { GmudConfirmarAbertura, GmudRevisao } from '@/features/gmud/ui/GmudRevisao'
+import { numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 import { showFeedbackDialog } from '@/shared/store/feedbackDialogStore'
@@ -908,7 +910,9 @@ export function GmudNewScreen() {
     },
   })
 
-  const handleSubmit = () => {
+  // [Revisão, item 7] Emergencial e Pré-aprovada com repetição pedem confirmação antes de abrir.
+  const [confirmandoAbertura, setConfirmandoAbertura] = useState(false)
+  const handleSubmit = (confirmado = false) => {
     const miss = validateGmudForm(
       form,
       form.categoria === 'sistemas_internos' ? siData : null,
@@ -925,10 +929,16 @@ export function GmudNewScreen() {
       })
       return
     }
+    if (!confirmado && precisaConfirmarAbertura(form.tipo, protocolosAAbrir)) {
+      setConfirmandoAbertura(true)
+      return
+    }
     mutation.mutate()
   }
 
   const canSubmit = !mutation.isPending
+  // [Revisão, item 6] Quantos protocolos o botão final abre (N da repetição na Pré-aprovada).
+  const protocolosAAbrir = numeroDeProtocolos(form.tipo, form.repeticaoVezes, form.repeticaoIntervaloDias)
   const pendenciasDetalhe = validateGmudFormBySection(
     form,
     form.categoria === 'sistemas_internos' ? siData : null,
@@ -998,22 +1008,6 @@ export function GmudNewScreen() {
     setMaxEtapa(0)
     setAviso([])
     setRascunhoRecuperadoEm(null)
-  }
-
-  const janelaResumo =
-    form.dataInicio !== ''
-      ? `${form.dataInicio.split('-').reverse().slice(0, 2).join('/')} ${form.horaInicio} → ${form.dataFim.split('-').reverse().slice(0, 2).join('/')} ${form.horaFim}`.trim()
-      : ''
-  const aprovam = Object.values(form.recursosAdministrativos).filter((p) => p !== 'na').length
-  const resumoEtapa = (i: number): string => {
-    if (i === 0) return [form.tipo, form.titulo].filter((x) => x.trim() !== '').join(' · ')
-    if (i === 1) {
-      if (form.categoria === 'rede_externa') return [form.popSite, collectAmbienteAfetado(form).join(', ')].filter((x) => x.trim() !== '').join(' · ')
-      return form.categoria === 'sistemas_internos' ? siData.sistemaAfetado : seData.sistemaExterno
-    }
-    if (i === 2) return form.impactoParada !== '' ? `Parada do serviço: ${form.impactoParada}` : ''
-    if (i === 3) return [janelaResumo, aprovam > 0 ? `${aprovam} área${aprovam === 1 ? '' : 's'} aprova${aprovam === 1 ? '' : 'm'}` : ''].filter((x) => x !== '').join(' · ')
-    return ''
   }
 
   if (!categoriaEscolhida) {
@@ -1164,37 +1158,25 @@ export function GmudNewScreen() {
         <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />
 
         {etapa === ultimaEtapa ? (
-          <div className={CARD}>
-            <p className="mb-1 text-sm font-bold text-on-surface">Revisão</p>
-            <p className="mb-2 text-xs text-on-surface-variant">Confira cada etapa. Para mudar algo, use Editar.</p>
-            <ul className="divide-y divide-neutral-200/60 dark:divide-white/5">
-              {passos.slice(0, ultimaEtapa).map((p, i) => {
-                const n = contagens[i] ?? 0
-                return (
-                  <li key={p.key} className="flex items-start gap-3 py-2.5">
-                    <span
-                      className={cn(
-                        'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full',
-                        n > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
-                      )}
-                      aria-hidden
-                    >
-                      {n > 0 ? <span className="text-[11px] font-bold">{n}</span> : <Check size={12} strokeWidth={3} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-on-surface">{p.label}</p>
-                      <p className="truncate text-xs text-on-surface-variant">
-                        {n > 0 ? `${n} pendência${n === 1 ? '' : 's'}: ${pendenciasDaEtapa(pendenciasDetalhe, p).map((x) => x.message).join(', ')}` : resumoEtapa(i) || 'Sem dados para mostrar'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={() => irParaEtapa(i)} className="shrink-0 text-xs font-semibold text-on-surface underline-offset-2 hover:underline">
-                      Editar
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
+          <GmudRevisao
+            form={form}
+            siData={siData}
+            seData={seData}
+            passos={passos.slice(0, ultimaEtapa)}
+            pendencias={pendenciasDetalhe}
+            onEditar={irParaEtapa}
+          />
+        ) : null}
+
+        {confirmandoAbertura ? (
+          <GmudConfirmarAbertura
+            form={form}
+            onCancelar={() => setConfirmandoAbertura(false)}
+            onConfirmar={() => {
+              setConfirmandoAbertura(false)
+              handleSubmit(true)
+            }}
+          />
         ) : null}
 
         {avisoAtual.length > 0 ? (
@@ -1233,7 +1215,7 @@ export function GmudNewScreen() {
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {mutation.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Zap className="size-4" aria-hidden />}
-                {mutation.isPending ? 'Abrindo no Elleven…' : 'Abrir GMUD no Elleven'}
+                {mutation.isPending ? 'Abrindo no Elleven…' : textoDoBotaoAbrir(protocolosAAbrir)}
               </button>
             )}
           </div>
