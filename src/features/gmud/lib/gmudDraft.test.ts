@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clearGmudDraft, draftHasContent, gmudDraftKey, loadGmudDraft, saveGmudDraft } from '@/features/gmud/lib/gmudDraft'
+import { clearGmudDraft, draftHasContent, gmudDraftExpirado, gmudDraftKey, loadGmudDraft, saveGmudDraft } from '@/features/gmud/lib/gmudDraft'
 import { emptyGmudForm, emptyGmudSistemasExternosData, emptyGmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
 
 function memoryStorage() {
@@ -10,6 +10,7 @@ function memoryStorage() {
     removeItem: (k: string) => void m.delete(k),
   }
 }
+const MESMO_DIA = new Date('2026-11-13T15:00:00Z')
 const defaults = () => ({ form: emptyGmudForm('a@b.com', 'A'), si: emptyGmudSistemasInternosData(), se: emptyGmudSistemasExternosData() })
 
 describe('rascunho da GMUD', () => {
@@ -19,7 +20,7 @@ describe('rascunho da GMUD', () => {
     const key = gmudDraftKey(' A@B.com ')
     expect(key).toBe('gmud:rascunho:v1:a@b.com')
     saveGmudDraft(st, key, { etapa: 2, maxEtapa: 3, form: { ...d.form, titulo: 'Limpeza' }, si: d.si, se: d.se }, new Date('2026-11-13T10:00:00Z'))
-    const back = loadGmudDraft(st, key, defaults())
+    const back = loadGmudDraft(st, key, defaults(), MESMO_DIA)
     expect(back?.form.titulo).toBe('Limpeza')
     expect(back?.etapa).toBe(2)
     expect(back?.maxEtapa).toBe(3)
@@ -30,7 +31,7 @@ describe('rascunho da GMUD', () => {
     const st = memoryStorage()
     const d = defaults()
     st.setItem('k', JSON.stringify({ v: 1, savedAt: '2026-11-13T10:00:00Z', etapa: 1, maxEtapa: 1, form: { titulo: 'X' } }))
-    const back = loadGmudDraft(st, 'k', d)
+    const back = loadGmudDraft(st, 'k', d, MESMO_DIA)
     expect(back?.form.titulo).toBe('X')
     expect(back?.form.ambienteAfetado).toEqual(d.form.ambienteAfetado)
     expect(back?.si).toEqual(d.si)
@@ -40,11 +41,11 @@ describe('rascunho da GMUD', () => {
     const st = memoryStorage()
     st.setItem('a', 'não é json')
     st.setItem('b', JSON.stringify({ v: 2, form: {} }))
-    st.setItem('c', JSON.stringify({ v: 1, etapa: 99, maxEtapa: -3, form: {} }))
+    st.setItem('c', JSON.stringify({ v: 1, savedAt: '2026-11-13T10:00:00Z', etapa: 99, maxEtapa: -3, form: {} }))
     expect(loadGmudDraft(st, 'a', defaults())).toBeNull()
     expect(loadGmudDraft(st, 'b', defaults())).toBeNull()
     expect(loadGmudDraft(st, 'nada', defaults())).toBeNull()
-    const c = loadGmudDraft(st, 'c', defaults())
+    const c = loadGmudDraft(st, 'c', defaults(), MESMO_DIA)
     expect(c?.etapa).toBe(4)
     expect(c?.maxEtapa).toBe(4)
   })
@@ -62,6 +63,29 @@ describe('rascunho da GMUD', () => {
     expect(() => saveGmudDraft(quebrado, 'k', { etapa: 0, maxEtapa: 0, form: d.form, si: d.si, se: d.se })).not.toThrow()
     expect(loadGmudDraft(quebrado, 'k', d)).toBeNull()
     expect(() => clearGmudDraft(quebrado, 'k')).not.toThrow()
+  })
+
+  it('o rascunho vale só no dia em que foi salvo (horário de Brasília)', () => {
+    const salvo = '2026-11-13T10:00:00Z' // 07:00 de 13/11 em Brasília
+    expect(gmudDraftExpirado(salvo, new Date('2026-11-13T15:00:00Z'))).toBe(false)
+    // 22:30 de 13/11 em Brasília ainda é o mesmo dia (já é 14/11 em UTC)
+    expect(gmudDraftExpirado(salvo, new Date('2026-11-14T01:30:00Z'))).toBe(false)
+    // 00:30 de 14/11 em Brasília: dia seguinte
+    expect(gmudDraftExpirado(salvo, new Date('2026-11-14T03:30:00Z'))).toBe(true)
+    expect(gmudDraftExpirado(salvo, new Date('2026-11-20T15:00:00Z'))).toBe(true)
+  })
+
+  it('data ausente ou inválida conta como vencido', () => {
+    expect(gmudDraftExpirado(undefined)).toBe(true)
+    expect(gmudDraftExpirado('lixo')).toBe(true)
+  })
+
+  it('no dia seguinte o rascunho não carrega e é apagado do navegador', () => {
+    const st = memoryStorage()
+    const d = defaults()
+    saveGmudDraft(st, 'k', { etapa: 1, maxEtapa: 1, form: { ...d.form, titulo: 'Velho' }, si: d.si, se: d.se }, new Date('2026-11-13T15:00:00Z'))
+    expect(loadGmudDraft(st, 'k', defaults(), new Date('2026-11-14T15:00:00Z'))).toBeNull()
+    expect(st.getItem('k')).toBeNull()
   })
 
   it('draftHasContent: formulário em branco não vira rascunho', () => {

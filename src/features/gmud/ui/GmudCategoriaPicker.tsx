@@ -295,7 +295,7 @@ export function GmudCategoriaPicker({
                 <p className="text-sm font-bold text-on-surface">Você tem um rascunho em andamento</p>
                 <p className="mt-0.5 text-sm text-on-surface-variant">
                   Categoria: <strong className="font-bold text-on-surface">{GMUD_CATEGORIA_LABEL[rascunho.categoria]}</strong>
-                  {salvoEm !== '' ? <> · Salvo em {salvoEm}</> : null}
+                  {salvoEm !== '' ? <> · Salvo em {salvoEm} · Expira hoje às 23:59</> : null}
                   {rascunho.etapaLabel !== '' ? (
                     <>
                       {' '}· Parou em: <span className="font-semibold text-on-surface">{rascunho.etapaLabel}</span>
