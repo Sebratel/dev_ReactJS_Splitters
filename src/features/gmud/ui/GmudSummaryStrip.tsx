@@ -66,11 +66,11 @@ export function GmudSummaryStrip({
             onClick={() => onToggle(c.key)}
             className={cn(
               'flex items-start gap-3 rounded-xl border px-3 py-3 text-left shadow-sm transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-surface dark:focus-visible:ring-white',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
               alarming
                 ? 'border-rose-300 bg-rose-50 hover:bg-rose-100 dark:border-rose-500/50 dark:bg-rose-950/40 dark:hover:bg-rose-950/60'
                 : 'border-neutral-200/90 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/15',
-              active ? 'border-neutral-900 ring-2 ring-primary dark:border-white' : '',
+              active ? 'border-primary ring-2 ring-primary/60' : '',
             )}
           >
             <span
