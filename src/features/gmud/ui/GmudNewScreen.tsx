@@ -1092,7 +1092,7 @@ export function GmudNewScreen() {
             <span className="font-semibold text-on-surface">
               {new Date(rascunhoRecuperadoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
             </span>
-            .
+            . Expira hoje às 23:59.
           </span>
           <GmudDiscardDraftButton rotulo="Limpar tudo e começar do zero" onConfirmar={descartarRascunho} />
         </div>
