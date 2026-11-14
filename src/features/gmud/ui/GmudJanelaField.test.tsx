@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
@@ -21,6 +21,31 @@ function Formulario({ inicial = VAZIA, minInicio, tipo, repeticao }: { inicial?:
 const estado = (): GmudJanela => JSON.parse(screen.getByTestId('estado').textContent ?? '{}') as GmudJanela
 const campo = (nome: string) => screen.getByLabelText(nome)
 const digitar = (nome: string, valor: string) => fireEvent.change(campo(nome), { target: { value: valor } })
+
+describe('GmudJanelaField: limpar datas', () => {
+  const PREENCHIDA: GmudJanela = { dataInicio: '2026-11-24', horaInicio: '22:00', dataFim: '2026-11-25', horaFim: '01:00' }
+
+  it('não aparece com a janela vazia', () => {
+    render(<Formulario />)
+    expect(screen.queryByRole('button', { name: 'Limpar datas' })).toBeNull()
+  })
+
+  it('aparece com algo preenchido, zera os quatro campos e leva o foco à data de início', async () => {
+    render(<Formulario inicial={PREENCHIDA} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar datas' }))
+    expect(estado()).toEqual({ dataInicio: '', horaInicio: '', dataFim: '', horaFim: '' })
+    expect(campo('Data início')).toHaveValue('')
+    expect(campo('Horário fim')).toHaveValue('')
+    // o botão some e o foco não se perde
+    expect(screen.queryByRole('button', { name: 'Limpar datas' })).toBeNull()
+    await vi.waitFor(() => expect(campo('Data início')).toHaveFocus())
+  })
+
+  it('aparece também quando só um campo foi preenchido', () => {
+    render(<Formulario inicial={{ ...VAZIA, horaFim: '03:00' }} />)
+    expect(screen.getByRole('button', { name: 'Limpar datas' })).toBeInTheDocument()
+  })
+})
 
 describe('GmudJanelaField', () => {
   it('mostra os dois blocos com data e horário rotulados', () => {
