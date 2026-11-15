@@ -22,7 +22,10 @@ import { buildStatusTrail, closedPendingNotice } from '@/features/gmud/lib/gmudS
 import { formatBrazilDateTimeShortDisplay } from '@/shared/lib/formatBrazilDisplayDate'
 import { GmudClientImpactCard } from '@/features/gmud/ui/detail/GmudClientImpactCard'
 import { GmudAttachmentsSection } from '@/features/gmud/ui/GmudAttachmentsSection'
-import { GmudFlowchartSection, GmudPresentationModal } from '@/features/gmud/ui/GmudFlowchartSection'
+import { GmudFlowchartSection } from '@/features/gmud/ui/GmudFlowchartSection'
+import { GmudPresentationModal } from '@/features/gmud/ui/GmudPresentation'
+import { fetchGmudAttachments } from '@/features/gmud/api/gmudAttachments'
+import { podeApresentar } from '@/features/gmud/lib/gmudApresentacao'
 import { fetchGmudFlowchart } from '@/features/gmud/api/gmudFlowchart'
 import { GmudRedeExternaImpactoCard, GmudSistemasExternosCard, GmudSistemasInternosCard } from '@/features/gmud/ui/detail/GmudCategoryDataCards'
 import type { GmudRedeExternaImpactoData, GmudSistemasExternosData, GmudSistemasInternosData } from '@/features/gmud/model/gmudForm'
@@ -34,6 +37,7 @@ import { isGmudDisponivel } from '@/features/gmud/model/gmud'
 import { GmudReportModal } from '@/features/gmud/ui/GmudReportModal'
 import { GmudEllevenStatusAlert } from '@/features/gmud/ui/GmudEllevenStatusAlert'
 import { CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
@@ -130,6 +134,14 @@ export function GmudDetailScreen() {
     enabled: Number.isFinite(protocol) && protocol > 0,
   })
   const flowchart = flowchartQuery.data ?? null
+  // Anexos (mesmo cache da seção de anexos e da apresentação): a apresentação abre com fluxograma OU anexo.
+  const attachmentsQuery = useQuery({
+    queryKey: ['gmud', 'attachments', protocol],
+    queryFn: () => fetchGmudAttachments(protocol),
+    staleTime: 60_000,
+    enabled: Number.isFinite(protocol) && protocol > 0,
+  })
+  const apresentavel = podeApresentar(flowchart?.mermaidSource, attachmentsQuery.data?.length ?? 0)
   const d = query.data
   const timeline = useMemo(
     () =>
@@ -157,23 +169,23 @@ export function GmudDetailScreen() {
       const assignmentId = data.request?.assignmentId ?? data.voalle.assignmentId ?? null
       const verbo = mode === 'concluida' ? 'CONCLUIR' : 'CANCELAR'
       const efeito = mode === 'concluida' ? 'ENCERRAR' : 'CANCELAR'
-      // window.prompt dupla como confirmação (null = cancelar) e captura um relato opcional
-      // que vai junto no encerramento do protocolo no Elleven.
-      const nota =
-        assignmentId != null
-          ? window.prompt(
-              `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven.\n\n` +
-                `(Opcional) Escreva um relato que vai junto no protocolo — ou deixe em branco.\n` +
-                `Clique OK para confirmar, ou Cancelar para desistir.`,
-              '',
-            )
-          : window.prompt(
-              `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
-                `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven.\n\n` +
-                `Clique OK para confirmar, ou Cancelar para desistir.`,
-              '',
-            )
-      if (nota === null) return { aborted: true }
+      // Confirmação em pop-up da plataforma (desistir = não faz nada). Com o atendimento identificado, dá para
+      // escrever um relato opcional, que vai junto no encerramento do protocolo no Elleven.
+      const concluir = mode === 'concluida'
+      const { confirmado, texto: nota } = await gmudConfirm({
+        titulo: concluir ? 'Concluir esta GMUD?' : 'Cancelar esta GMUD?',
+        mensagem:
+          assignmentId != null
+            ? `${verbo} esta GMUD vai ${efeito} o protocolo ${protocol} no Elleven.`
+            : `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${protocol}. ` +
+              `A GMUD será marcada como ${mode}, mas encerre o protocolo manualmente no Elleven.`,
+        confirmar: concluir ? 'Concluir GMUD' : 'Cancelar GMUD',
+        cancelar: 'Voltar',
+        tom: concluir ? 'neutro' : 'destrutivo',
+        campoTexto:
+          assignmentId != null ? { rotulo: 'Relato (opcional)', ajuda: 'Vai junto no protocolo. Pode deixar em branco.' } : undefined,
+      })
+      if (!confirmado) return { aborted: true }
       if (assignmentId != null) {
         const base = buildGmudCloseDescription(mode, currentUser)
         const description = nota.trim() !== '' ? `${base}\n${nota.trim()}` : base
@@ -243,7 +255,7 @@ export function GmudDetailScreen() {
           {query.error instanceof Error ? query.error.message : 'Falha ao carregar a GMUD.'}
         </div>
       ) : (
-        <>
+        <div className="gmud-fade space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {isCommitteeMember && gmudPodeAvaliar(listItem) ? (
               <button
@@ -300,15 +312,22 @@ export function GmudDetailScreen() {
                 <MessageSquarePlus size={14} /> Adicionar relato
               </button>
             ) : null}
-            {flowchart ? (
-              <button
-                type="button"
-                onClick={() => setPresenting(true)}
-                className={cn(ACTION, 'bg-violet-600 text-white ring-violet-600 hover:bg-violet-700')}
-              >
-                <Maximize2 size={14} /> Apresentar ao Comitê
-              </button>
-            ) : null}
+            {/* Apresentação: visualizador do fluxograma e dos anexos. Sem nenhum dos dois, fica indisponível e diz por quê. */}
+            <button
+              type="button"
+              onClick={() => setPresenting(true)}
+              disabled={!apresentavel}
+              title={apresentavel ? 'Abre o fluxograma e os anexos em tela cheia' : 'Adicione um fluxograma ou um anexo para apresentar'}
+              aria-describedby={apresentavel ? undefined : 'gmud-apresentar-motivo'}
+              className={cn(ACTION, 'bg-primary text-neutral-900 ring-primary hover:bg-primary/90')}
+            >
+              <Maximize2 size={14} aria-hidden /> Apresentar ao Comitê
+            </button>
+            {apresentavel ? null : (
+              <span id="gmud-apresentar-motivo" className="text-xs text-on-surface-variant">
+                Adicione um fluxograma ou um anexo para apresentar.
+              </span>
+            )}
             <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-on-surface-variant">
               <ListTree size={14} /> {d.events.length} evento{d.events.length === 1 ? '' : 's'} na trilha
             </span>
@@ -422,10 +441,10 @@ export function GmudDetailScreen() {
               onDone={refreshGmud}
             />
           ) : null}
-        </>
+        </div>
       )}
 
-      {presenting && flowchart ? (
+      {presenting && apresentavel ? (
         <GmudPresentationModal
           protocol={protocol}
           flowchart={flowchart}

@@ -225,11 +225,388 @@
   animation-delay: var(--d, 0ms);
 }
 
+@keyframes gmud-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Entrada suave das telas do formulário de GMUD (escolha da categoria → preenchimento). */
+.gmud-enter {
+  animation: gmud-enter 0.28s ease-out both;
+}
+
+/* Transições do módulo de GMUD: entrada de página, troca de aba/conteúdo e esqueleto de carregamento. */
+@keyframes gmud-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gmud-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Página do módulo entrando (lista, detalhe, indicadores, configurações, aprovação da área). */
+.gmud-page-enter {
+  animation: gmud-page-enter 200ms ease-out both;
+}
+
+/* Fade curto de um bloco que acabou de aparecer (aba, conteúdo carregado). Sem "forwards": depois do
+   fade vale a opacidade normal do elemento (que pode estar esmaecido enquanto atualiza). */
+.gmud-fade {
+  animation: gmud-fade 180ms ease-out backwards;
+}
+
+/* Esqueleto de carregamento: só aparece se a espera passar de 150 ms. */
+.gmud-skeleton {
+  animation: gmud-fade 200ms ease-out 150ms backwards;
+}
+
+/* Tela de escolha da categoria da GMUD: entrada em sequência (nó → árvore → cartões), no máximo ~700 ms. */
+@keyframes gmud-pick-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes gmud-pick-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gmud-pick-node {
+  animation: gmud-pick-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gmud-pick-stem {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 120ms ease-out 180ms both;
+}
+
+.gmud-pick-bar {
+  animation: gmud-pick-grow-x 140ms ease-out 280ms both;
+}
+
+.gmud-pick-drop {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 120ms ease-out 400ms both;
+}
+
+.gmud-pick-dot {
+  animation: gmud-pick-fade 120ms ease-out 480ms both;
+}
+
+.gmud-pick-card {
+  animation: gmud-pick-rise 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 440ms);
+}
+
+/* Caminho aceso (nó central → cartão sob o mouse/foco): haste, barra, descida e ponto de porta, em sequência. */
+@keyframes gmud-wire-dot {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.gmud-wire-y {
+  transform-origin: top;
+  animation: gmud-pick-grow-y 100ms linear both;
+  animation-delay: var(--d, 0ms);
+}
+
+.gmud-wire-x {
+  animation: gmud-pick-grow-x 150ms linear 100ms both;
+}
+
+.gmud-wire-dot {
+  animation: gmud-wire-dot 80ms ease-out both;
+  animation-delay: var(--d, 350ms);
+}
+
+/* Ilustrações dos cartões: movimento contínuo e discreto que conta o tema de cada categoria. */
+@keyframes gmud-fiber-trunk {
+  0% {
+    stroke-dashoffset: 12;
+  }
+  25%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes gmud-fiber-fan {
+  0%,
+  25% {
+    stroke-dashoffset: 12;
+  }
+  60%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes gmud-led {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes gmud-link {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+
+/* Pulso de luz na fibra: um traço curto (pathLength 100) que fica escondido fora da animação. */
+.gmud-fiber-trunk,
+.gmud-fiber-fan {
+  stroke-dasharray: 12 112;
+  stroke-dashoffset: 12;
+}
+
+.gmud-fiber-trunk {
+  animation: gmud-fiber-trunk 3.6s linear 0.9s infinite;
+}
+
+.gmud-fiber-fan {
+  animation: gmud-fiber-fan 3.6s linear 0.9s infinite;
+}
+
+.gmud-led {
+  animation: gmud-led 2.4s ease-in-out infinite;
+  animation-delay: var(--d, 0ms);
+}
+
+.gmud-link {
+  animation: gmud-link 1.4s linear infinite;
+}
+
+/* Faixa de situação da Revisão da GMUD (GmudRevisaoStatus): roda uma vez ao chegar na etapa.
+   Os keyframes só definem o início ("from"): sem animação (movimento reduzido), vale o estado final. */
+@keyframes gmud-rv-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes gmud-rv-pop-forte {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.22);
+  }
+  80% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes gmud-rv-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+
+@keyframes gmud-rv-pulse {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@keyframes gmud-rv-particle {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.4);
+  }
+}
+
+@keyframes gmud-rv-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-9deg);
+  }
+  45% {
+    transform: rotate(7deg);
+  }
+  70% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes gmud-rv-text {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes gmud-rv-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  25% {
+    background-color: rgb(251 191 36 / 0.32);
+  }
+}
+
+.gmud-rv-pop,
+.gmud-rv-pulse,
+.gmud-rv-wiggle,
+.gmud-rv-particle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.gmud-rv-pop {
+  animation: gmud-rv-pop 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.gmud-rv-pop-forte {
+  animation: gmud-rv-pop-forte 460ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.gmud-rv-ring {
+  animation: gmud-rv-draw 450ms ease-out 150ms backwards;
+}
+
+.gmud-rv-check {
+  animation: gmud-rv-draw 300ms ease-out 450ms backwards;
+}
+
+/* Pulso e partículas ficam invisíveis fora da animação. */
+.gmud-rv-pulse {
+  opacity: 0;
+  animation: gmud-rv-pulse 700ms ease-out 300ms 1;
+}
+
+.gmud-rv-pulse-2x {
+  animation-iteration-count: 2;
+}
+
+.gmud-rv-particle {
+  opacity: 0;
+  animation: gmud-rv-particle 600ms ease-out 380ms 1;
+}
+
+.gmud-rv-wiggle {
+  transform-origin: 50% 85%;
+  animation: gmud-rv-wiggle 520ms ease-in-out 480ms 1;
+}
+
+.gmud-rv-mark {
+  animation: gmud-fade 200ms ease-out 320ms backwards;
+}
+
+.gmud-rv-text {
+  animation: gmud-rv-text 320ms ease-out 550ms backwards;
+}
+
+/* Linha de etapa com pendência: um destaque âmbar curto, que termina transparente. */
+.gmud-rv-flash {
+  animation: gmud-rv-flash 1s ease-out 900ms 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .gmud-trail-dot,
   .gmud-trail-line,
   .gmud-trail-label,
-  .gmud-trail-halo {
+  .gmud-trail-halo,
+  .gmud-enter,
+  .gmud-rv-pop,
+  .gmud-rv-pop-forte,
+  .gmud-rv-ring,
+  .gmud-rv-check,
+  .gmud-rv-pulse,
+  .gmud-rv-particle,
+  .gmud-rv-wiggle,
+  .gmud-rv-mark,
+  .gmud-rv-text,
+  .gmud-rv-flash,
+  .gmud-page-enter,
+  .gmud-fade,
+  .gmud-skeleton,
+  .gmud-pick-node,
+  .gmud-pick-stem,
+  .gmud-pick-bar,
+  .gmud-pick-drop,
+  .gmud-pick-dot,
+  .gmud-pick-card,
+  .gmud-wire-y,
+  .gmud-wire-x,
+  .gmud-wire-dot,
+  .gmud-fiber-trunk,
+  .gmud-fiber-fan,
+  .gmud-led,
+  .gmud-link {
     animation: none;
   }
 }

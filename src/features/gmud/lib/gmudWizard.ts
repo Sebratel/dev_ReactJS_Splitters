@@ -46,6 +46,30 @@ export function wizardSteps(categoria: WizardCategoria): WizardStep[] {
   ]
 }
 
+/**
+ * Prévia do formulário para a tela de escolha da categoria: as seções que mudam conforme a categoria
+ * (o miolo) e as etapas finais, iguais para todas.
+ */
+export function previaDoFormulario(categoria: WizardCategoria): { especificas: string[]; comuns: string[] } {
+  const steps = wizardSteps(categoria)
+  return {
+    especificas: steps.filter((s) => s.key === 'oQueSeraFeito' || s.key === 'impacto').flatMap((s) => s.sections),
+    comuns: steps.filter((s) => s.key === 'aprovadores' || s.key === 'revisao').map((s) => s.label),
+  }
+}
+
+/**
+ * Etapa em que o formulário abre depois da tela de escolha da categoria: a mesma categoria que já estava
+ * em preenchimento (rascunho) continua de onde parou; outra categoria começa no primeiro passo.
+ */
+export function etapaAoEscolherCategoria(
+  atual: WizardCategoria,
+  escolhida: WizardCategoria,
+  etapa: number,
+): { trocou: boolean; etapa: number } {
+  return escolhida === atual ? { trocou: false, etapa } : { trocou: true, etapa: 0 }
+}
+
 /** Pendências que pertencem às seções de uma etapa. */
 export function pendenciasDaEtapa(pendencias: GmudPendencia[], step: WizardStep): GmudPendencia[] {
   return pendencias.filter((p) => step.sections.includes(p.section))

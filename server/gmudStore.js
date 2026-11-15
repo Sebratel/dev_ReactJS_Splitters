@@ -597,6 +597,47 @@ export async function listRegisteredGmudProtocols(statusesComite = null) {
   return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
 }
 
+/** Protocolos registrados na plataforma com o tipo informado (Emergencial, Programada, Pré-aprovada). Só leitura. */
+export async function listRegisteredGmudProtocolsByTipo(tipo) {
+  const value = String(tipo ?? '').trim();
+  if (value === '') return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL AND tipo = ?`, [value]);
+  return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/** Protocolos registrados na plataforma com algum dos tipos informados. Só leitura. */
+export async function listRegisteredGmudProtocolsByTipos(tipos) {
+  const values = [...new Set((Array.isArray(tipos) ? tipos : []).map((t) => String(t ?? '').trim()).filter((t) => t !== ''))];
+  if (values.length === 0) return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT voalle_protocol FROM ${TABLE} WHERE voalle_protocol IS NOT NULL AND tipo IN (?)`, [values]);
+  return rows.map((r) => Number(r.voalle_protocol)).filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/**
+ * Campos de situação de todas as GMUDs registradas (para o filtro "Situação" e para esconder as canceladas
+ * no painel). Só leitura.
+ */
+export async function listGmudSituacaoRows() {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, status_comite, status_areas, status_exec, elleven_encerrado_em, elleven_encerrado_status
+       FROM ${TABLE} WHERE voalle_protocol IS NOT NULL`,
+  );
+  return rows.map((r) => ({
+    voalleProtocol: Number(r.voalle_protocol),
+    statusComite: r.status_comite ?? null,
+    statusAreas: r.status_areas ?? AREA_STATUS.NAO_APLICAVEL,
+    statusExec: r.status_exec ?? null,
+    ellevenEncerradoEm: r.elleven_encerrado_em ? new Date(r.elleven_encerrado_em).toISOString() : null,
+    ellevenEncerradoStatus: r.elleven_encerrado_status ?? null,
+  }));
+}
+
 /** GMUDs registradas na plataforma com created_at no período [from, to] (YYYY-MM-DD). */
 export async function listGmudRequestsCreatedBetween(from, to) {
   await ensureTable();
@@ -905,6 +946,63 @@ export async function listScheduledGmuds(input) {
     [to, from],
   );
   return rows.map(mapGmudRow);
+}
+
+/**
+ * Reunião semanal: GMUDs cuja janela (data_inicio..data_fim) cruza [from, to], em QUALQUER situação de
+ * aprovação (a reunião também decide as pendentes). Só leitura.
+ */
+export async function listGmudsWithWindowBetween(from, to) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const de = toCleanString(from);
+  const ate = toCleanString(to);
+  if (!DATE_RE.test(de) || !DATE_RE.test(ate)) throw buildError('Intervalo de datas inválido.', 400);
+  const [rows] = await pool.query(
+    `SELECT * FROM ${TABLE}
+      WHERE voalle_protocol IS NOT NULL
+        AND data_inicio IS NOT NULL
+        AND data_inicio <= ?
+        AND COALESCE(data_fim, data_inicio) >= ?
+      ORDER BY data_inicio, hora_inicio
+      LIMIT 500`,
+    [ate, de],
+  );
+  return rows.map(mapGmudRow);
+}
+
+/** GMUDs registradas na plataforma, pelos protocolos informados. Só leitura. */
+export async function listGmudRequestsByProtocols(protocols) {
+  const ids = [...new Set((Array.isArray(protocols) ? protocols : []).map(normalizePositiveInt).filter(Boolean))];
+  if (ids.length === 0) return [];
+  await ensureTable();
+  const pool = getMysqlPool();
+  const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE voalle_protocol IN (?)`, [ids]);
+  return rows.map(mapGmudRow);
+}
+
+/**
+ * Eventos de reagendamento (do mais recente para o mais antigo), com a janela anterior e a nova.
+ * Só leitura. Devolve [{ voalleProtocol, previous, next, at }].
+ */
+export async function listGmudReagendadaEvents(limit = 5000) {
+  await ensureTable();
+  const pool = getMysqlPool();
+  const max = Number.isInteger(limit) && limit > 0 && limit <= 5000 ? limit : 5000;
+  const [rows] = await pool.query(
+    `SELECT voalle_protocol, payload, created_at FROM ${EVENTS_TABLE}
+      WHERE event_type = 'reagendada' ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [max],
+  );
+  return rows.map((r) => {
+    const payload = parseJsonColumn(r.payload);
+    return {
+      voalleProtocol: Number(r.voalle_protocol),
+      previous: payload?.previous ?? null,
+      next: payload?.next ?? null,
+      at: r.created_at ? new Date(r.created_at).toISOString() : null,
+    };
+  });
 }
 
 /**

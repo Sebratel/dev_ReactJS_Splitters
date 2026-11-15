@@ -1,109 +1,82 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, Settings2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useIsFetching, useQueryClient } from '@tanstack/react-query'
+import { BarChart3, CalendarDays, ClipboardList, Plus, Presentation, RefreshCw, Settings2 } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
-import { useGmudList } from '@/features/gmud/hooks/useGmudList'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
 import { GmudApprovalQueue } from '@/features/gmud/ui/GmudApprovalQueue'
 import { GmudCalendar } from '@/features/gmud/ui/GmudCalendar'
+import { GmudWeeklyMeeting } from '@/features/gmud/ui/GmudWeeklyMeeting'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
-import { GmudListTable } from '@/features/gmud/ui/GmudListTable'
+import { GmudPainelLista } from '@/features/gmud/ui/GmudPainelLista'
 import { GmudSummaryStrip } from '@/features/gmud/ui/GmudSummaryStrip'
 import { useGmudListSummary } from '@/features/gmud/api/fetchGmudListSummary'
-import type { GmudListFilter, GmudListItem, GmudSort, GmudSortKey } from '@/features/gmud/model/gmud'
+import { filtrosDaUrl, filtrosParaUrl, type GmudPainelFiltros } from '@/features/gmud/lib/gmudPainelFiltros'
+import type { GmudListFilter, GmudListItem } from '@/features/gmud/model/gmud'
 import { cn } from '@/shared/lib/utils'
 
 const CARD =
-  'rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
-const PAGE_SIZE = 20
-
-const FILTERS: { key: GmudListFilter; label: string }[] = [
-  { key: 'todas', label: 'Todas' },
-  { key: 'abertas', label: 'Abertas' },
-  { key: 'vencidas', label: 'Prazo vencido' },
-  { key: 'comite_pendente', label: 'Aguardando Comitê' },
-  { key: 'aprovadas', label: 'Aprovadas' },
-  { key: 'vencem_semana', label: 'Vencem em 7 dias' },
-  { key: 'plataforma', label: 'Abertas pela plataforma' },
-  { key: 'minhas', label: 'Minhas' },
-]
+  'rounded-2xl border border-neutral-200/90 dark:border-white/15 bg-surface-container-lowest'
+type GmudView = 'all' | 'pending' | 'agenda' | 'reuniao'
 
 export function GmudScreen() {
-  const [searchInput, setSearchInput] = useState('')
-  const [appliedSearch, setAppliedSearch] = useState('')
-  const [page, setPage] = useState(0)
   const [approving, setApproving] = useState<GmudListItem | null>(null)
   const [linking, setLinking] = useState<GmudListItem | null>(null)
-  const [view, setView] = useState<'all' | 'pending' | 'agenda'>('all')
-  const [filter, setFilter] = useState<GmudListFilter>('todas')
-  const [sort, setSort] = useState<GmudSort>({ key: 'protocolo', dir: 'desc' })
-  // Clique na mesma coluna inverte a direção; em outra coluna começa pela ordem mais útil
-  // (datas e protocolo: mais recentes primeiro; textos: A→Z).
-  const changeSort = (key: GmudSortKey) => {
-    setSort((s) =>
-      s.key === key
-        ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: key === 'solicitante' || key === 'status' || key === 'prazo' ? 'asc' : 'desc' },
-    )
-    setPage(0)
+  const [view, setView] = useState<GmudView>('all')
+  // Abas já abertas continuam montadas (só escondidas): voltar para uma aba não remonta nem rebusca à toa,
+  // e ela mantém o que a pessoa estava vendo (mês da agenda, semana da reunião).
+  const [visited, setVisited] = useState<ReadonlySet<GmudView>>(() => new Set<GmudView>(['all']))
+  const openView = (next: GmudView) => {
+    setView(next)
+    setVisited((prev) => (prev.has(next) ? prev : new Set(prev).add(next)))
   }
+  // Filtros do painel: o estado mora na URL (dá para compartilhar o link e voltar com o navegador).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filtros = useMemo(() => filtrosDaUrl(searchParams), [searchParams])
+  const mudarFiltros = (next: GmudPainelFiltros, opts?: { substituir?: boolean }) => setSearchParams(filtrosParaUrl(next), { replace: opts?.substituir === true })
+  // Cartões do topo como atalhos: "Prazo vencido" e "Aguardando Comitê" são as abas Vencidas e Aguardando
+  // decisão; "Em aberto" e "Vencem em 7 dias" são filtros próprios. O segundo clique desfaz.
+  const cartoesAtivos = useMemo(() => {
+    const ativos = new Set<GmudListFilter>()
+    if (filtros.aba === 'vencidas') ativos.add('vencidas')
+    if (filtros.aba === 'aguardando') ativos.add('comite_pendente')
+    if (filtros.kpi === 'abertas') ativos.add('abertas')
+    if (filtros.kpi === 'vence7') ativos.add('vencem_semana')
+    return ativos
+  }, [filtros.aba, filtros.kpi])
+  const alternarCartao = (key: GmudListFilter) => {
+    const base = { ...filtros, pagina: 0 }
+    if (key === 'vencidas') mudarFiltros({ ...base, aba: filtros.aba === 'vencidas' ? 'todas' : 'vencidas' })
+    else if (key === 'comite_pendente') mudarFiltros({ ...base, aba: filtros.aba === 'aguardando' ? 'todas' : 'aguardando' })
+    else if (key === 'abertas') mudarFiltros({ ...base, kpi: filtros.kpi === 'abertas' ? null : 'abertas' })
+    else if (key === 'vencem_semana') mudarFiltros({ ...base, kpi: filtros.kpi === 'vence7' ? null : 'vence7' })
+  }
+  const queryClient = useQueryClient()
+  const atualizando = useIsFetching({ queryKey: ['gmud', 'list'] }) > 0
+  const atualizarLista = () => void queryClient.invalidateQueries({ queryKey: ['gmud', 'list'] })
   // "Aprovar" (avaliar e fila de pendentes) é do Comitê: só quem está na lista de membros.
   const canApprove = useIsGmudCommitteeMember()
   const canConfigure = useAccessAuthStore((s) => s.hasPermission('canConfigureGmud') || s.hasPermission('isAdmin'))
   const pendingCount = useGmudPendingCount()
   const summaryQuery = useGmudListSummary()
 
-  // Debounce simples da busca (reseta pra página 0 quando muda).
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setAppliedSearch(searchInput.trim())
-      setPage(0)
-    }, 400)
-    return () => window.clearTimeout(t)
-  }, [searchInput])
-
-  const { data, isLoading, isError, error, isFetching, refetch } = useGmudList({
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-    q: appliedSearch,
-    filter,
-    sort,
-  })
-
-  const total = data?.total ?? 0
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const items = data?.items ?? []
-  const firstShown = total === 0 ? 0 : page * PAGE_SIZE + 1
-  const lastShown = Math.min(total, page * PAGE_SIZE + items.length)
+  // Sem permissão de aprovar, a aba de pendentes não existe: mostra a lista.
+  const mostraLista = view === 'all' || (view === 'pending' && !canApprove)
 
   const headerTrailing = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/60"
-          />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Buscar protocolo, título ou solicitante…"
-            className="h-9 w-64 rounded-lg bg-surface-container-lowest pl-8 pr-2.5 text-xs text-on-surface ring-1 ring-neutral-200/70 focus:outline-none focus:ring-primary dark:ring-white/10"
-            aria-label="Buscar GMUD"
-          />
-        </div>
         <button
           type="button"
-          onClick={() => void refetch()}
+          onClick={atualizarLista}
           className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
           aria-label="Atualizar"
           title="Atualizar"
         >
-          <RefreshCw size={16} className={isFetching ? 'animate-spin' : ''} />
+          <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
         </button>
         <Link
           to="/gmud/indicadores"
@@ -131,7 +104,8 @@ export function GmudScreen() {
         </Link>
       </div>
     ),
-    [searchInput, isFetching, refetch],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [atualizando, canConfigure],
   )
 
   return (
@@ -147,18 +121,17 @@ export function GmudScreen() {
 
       <GmudSummaryStrip
         summary={summaryQuery.data}
-        filter={filter}
-        onSelect={(next) => {
-          setView('all')
-          setFilter(next)
-          setPage(0)
+        ativos={cartoesAtivos}
+        onToggle={(key) => {
+          openView('all')
+          alternarCartao(key)
         }}
       />
 
       <div className="flex rounded-lg bg-surface-container-low p-0.5 ring-1 ring-neutral-200/70 dark:ring-white/10">
           <button
             type="button"
-            onClick={() => setView('all')}
+            onClick={() => openView('all')}
             className={cn(
               'rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'all'
@@ -170,7 +143,7 @@ export function GmudScreen() {
           </button>
           <button
             type="button"
-            onClick={() => setView('agenda')}
+            onClick={() => openView('agenda')}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'agenda'
@@ -180,10 +153,22 @@ export function GmudScreen() {
           >
             <CalendarDays size={14} /> Agenda
           </button>
+          <button
+            type="button"
+            onClick={() => openView('reuniao')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
+              view === 'reuniao'
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface',
+            )}
+          >
+            <Presentation size={14} aria-hidden /> Reunião semanal
+          </button>
           {canApprove ? (
           <button
             type="button"
-            onClick={() => setView('pending')}
+            onClick={() => openView('pending')}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
               view === 'pending'
@@ -201,91 +186,26 @@ export function GmudScreen() {
           ) : null}
       </div>
 
-      {view === 'pending' && canApprove ? (
-        <GmudApprovalQueue />
-      ) : view === 'agenda' ? (
-        <GmudCalendar />
-      ) : (
-      <div className={cn(CARD, 'overflow-hidden')}>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200/70 p-4 dark:border-white/10">
-          <p className="text-sm font-bold text-on-surface">
-            Painel de GMUDs
-            <span className="ml-2 text-xs font-normal text-on-surface-variant">
-              {total.toLocaleString('pt-BR')} protocolo{total === 1 ? '' : 's'}
-              {appliedSearch !== '' || filter !== 'todas' ? ' (filtrado)' : ''}
-            </span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => {
-                  setFilter(f.key)
-                  setPage(0)
-                }}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-semibold ring-1 transition',
-                  filter === f.key
-                    ? 'bg-on-surface text-surface-container-lowest ring-on-surface'
-                    : 'text-on-surface-variant ring-neutral-200/70 hover:bg-surface-container-low dark:ring-white/10',
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+      {/* Painéis das abas: o escondido usa `hidden`; ao reaparecer, a classe gmud-fade refaz o fade curto. */}
+      {canApprove && visited.has('pending') ? (
+        <div hidden={view !== 'pending'} className="gmud-fade">
+          <GmudApprovalQueue />
         </div>
-
-        {isLoading ? (
-          <p className="py-10 text-center text-sm text-on-surface-variant">Carregando GMUDs…</p>
-        ) : isError ? (
-          <div className="p-8 text-center">
-            <p className="text-sm font-semibold text-red-600 dark:text-red-300">
-              {error instanceof Error ? error.message : 'Falha ao carregar as GMUDs.'}
-            </p>
-          </div>
-        ) : items.length === 0 ? (
-          <p className="py-10 text-center text-sm text-on-surface-variant">
-            {appliedSearch !== '' || filter !== 'todas' ? 'Nenhuma GMUD corresponde ao filtro.' : 'Nenhuma GMUD encontrada.'}
-          </p>
-        ) : (
-          <>
-            <GmudListTable items={items} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} sort={sort} onSort={changeSort} />
-            {pageCount > 1 ? (
-              <div className="flex items-center justify-between gap-2 border-t border-neutral-200/60 px-4 py-2.5 dark:border-white/5">
-                <span className="text-xs text-on-surface-variant">
-                  {firstShown}–{lastShown} de {total.toLocaleString('pt-BR')}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="inline-flex size-7 items-center justify-center rounded-md text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40 dark:ring-white/10"
-                    aria-label="Página anterior"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="px-1 text-xs font-semibold tabular-nums text-on-surface">
-                    {page + 1}/{pageCount}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-                    disabled={page >= pageCount - 1}
-                    className="inline-flex size-7 items-center justify-center rounded-md text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40 dark:ring-white/10"
-                    aria-label="Próxima página"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </>
-        )}
+      ) : null}
+      {visited.has('agenda') ? (
+        <div hidden={view !== 'agenda'} className="gmud-fade">
+          <GmudCalendar />
+        </div>
+      ) : null}
+      {visited.has('reuniao') ? (
+        <div hidden={view !== 'reuniao'} className="gmud-fade">
+          <GmudWeeklyMeeting />
+        </div>
+      ) : null}
+      {/* Sem `overflow` no cartão: a tabela rola com a página e o cabeçalho dela fica fixo (sticky). */}
+      <div hidden={!mostraLista} className={cn(CARD, 'gmud-fade')}>
+        <GmudPainelLista filtros={filtros} onChange={mudarFiltros} canApprove={canApprove} onLink={setLinking} onApprove={setApproving} />
       </div>
-      )}
 
       {approving ? (
         <GmudApprovalModal
@@ -293,7 +213,7 @@ export function GmudScreen() {
           onClose={() => setApproving(null)}
           onSaved={() => {
             setApproving(null)
-            void refetch()
+            atualizarLista()
           }}
         />
       ) : null}

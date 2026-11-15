@@ -7,6 +7,7 @@ import { buildGmudCloseDescription, closeGmudInElleven } from '@/features/gmud/a
 import { sendGmudReport } from '@/features/gmud/api/gmudAgenda'
 import type { GmudListItem } from '@/features/gmud/model/gmud'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
 import { cn } from '@/shared/lib/utils'
 import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
 
@@ -64,10 +65,14 @@ export function GmudApprovalModal({
       const vaiNegar = statusComite === 'negada' && prevComite !== 'negada'
 
       if (vaiNegar && !jaEncerrado && assignmentId != null) {
-        const ok = window.confirm(
-          `Negar esta GMUD vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (cancelamento). Confirmar?`,
-        )
-        if (!ok) return { aborted: true }
+        const { confirmado } = await gmudConfirm({
+          titulo: 'Negar esta GMUD?',
+          mensagem: `Negar esta GMUD vai ENCERRAR o protocolo ${gmud.protocol} no Elleven (cancelamento).`,
+          confirmar: 'Negar GMUD',
+          cancelar: 'Voltar',
+          tom: 'destrutivo',
+        })
+        if (!confirmado) return { aborted: true }
         // Encerra com o relato da decisão (inclui Data CAB/RNC/observações).
         await closeGmudInElleven({
           assignmentId,
@@ -85,11 +90,16 @@ export function GmudApprovalModal({
       }
 
       if (vaiNegar && !jaEncerrado && assignmentId == null) {
-        const ok = window.confirm(
-          `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${gmud.protocol}. ` +
-            `A decisão será salva, mas encerre o protocolo manualmente no Elleven. Continuar?`,
-        )
-        if (!ok) return { aborted: true }
+        const { confirmado } = await gmudConfirm({
+          titulo: 'Negar esta GMUD?',
+          mensagem:
+            `Não identifiquei o atendimento no Elleven (assignmentId) do protocolo ${gmud.protocol}. ` +
+            `A decisão será salva, mas encerre o protocolo manualmente no Elleven.`,
+          confirmar: 'Negar GMUD',
+          cancelar: 'Voltar',
+          tom: 'destrutivo',
+        })
+        if (!confirmado) return { aborted: true }
       }
       await updateGmudApproval({
         voalleProtocol: gmud.protocol,

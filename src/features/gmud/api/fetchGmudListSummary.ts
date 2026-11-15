@@ -8,6 +8,11 @@ export type GmudListSummary = {
   vencidas: number
   vencemSemana: number
   comitePendente: number
+  /** Divisão das abertas/vencidas por origem. Ausente em servidor antigo e nula se a plataforma não respondeu. */
+  abertasPlataforma?: number | null
+  abertasLegado?: number | null
+  vencidasPlataforma?: number | null
+  vencidasLegado?: number | null
 }
 
 export async function fetchGmudListSummary(): Promise<GmudListSummary> {

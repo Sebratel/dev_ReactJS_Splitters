@@ -54,9 +54,14 @@ describe('GMUD Pré-aprovada no formulário', () => {
     expect(msgs.some((m) => m.includes('GMUD Pré-aprovada') && m.includes('a partir de'))).toBe(true)
   })
 
-  it('só está disponível para Rede Externa', () => {
-    const msgs = faltas(redeExternaCompleta({ categoria: 'sistemas_internos' }))
-    expect(msgs.some((m) => /só está disponível para Rede Externa/.test(m))).toBe(true)
+  it('está disponível nas três categorias (sem erro de categoria; só vale a repetição)', () => {
+    for (const categoria of ['rede_externa', 'sistemas_internos', 'sistemas_externos'] as const) {
+      const msgs = faltas(redeExternaCompleta({ categoria }))
+      expect(msgs.some((m) => /Pré-aprovada só está disponível|só está disponível/.test(m)), categoria).toBe(false)
+    }
+    // a validação de repetição continua valendo fora da Rede Externa
+    const invalida = faltas(redeExternaCompleta({ categoria: 'sistemas_externos', repeticaoVezes: '13', repeticaoIntervaloDias: '15' }))
+    expect(invalida.some((m) => /Repetição/.test(m))).toBe(true)
   })
 
   it('Programada e Emergencial não são afetadas pelos campos de repetição', () => {

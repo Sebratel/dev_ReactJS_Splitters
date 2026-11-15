@@ -1,6 +1,6 @@
 import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
-import type { GmudListFilter, GmudListResult, GmudSort } from '@/features/gmud/model/gmud'
+import type { GmudListFilter, GmudListResult, GmudOrigemFiltro, GmudSort, GmudTipoFiltro } from '@/features/gmud/model/gmud'
 
 /** Lista as GMUDs (somente admin/permissão) direto do Voalle, via BFF local. */
 export async function fetchGmudList(params: {
@@ -8,6 +8,10 @@ export async function fetchGmudList(params: {
   offset?: number
   q?: string
   filter?: GmudListFilter
+  /** Filtros que se combinam com o `filter` dos cartões. */
+  tipo?: GmudTipoFiltro
+  origem?: GmudOrigemFiltro
+  minhas?: boolean
   sort?: GmudSort
 }): Promise<GmudListResult> {
   const qs = new URLSearchParams()
@@ -15,6 +19,9 @@ export async function fetchGmudList(params: {
   if (params.offset) qs.set('offset', String(params.offset))
   if (params.q && params.q.trim() !== '') qs.set('q', params.q.trim())
   if (params.filter && params.filter !== 'todas') qs.set('filter', params.filter)
+  if (params.tipo && params.tipo !== 'todos') qs.set('tipo', params.tipo)
+  if (params.origem && params.origem !== 'todas') qs.set('origem', params.origem)
+  if (params.minhas) qs.set('minhas', '1')
   if (params.sort) {
     qs.set('sort', params.sort.key)
     qs.set('dir', params.sort.dir)
