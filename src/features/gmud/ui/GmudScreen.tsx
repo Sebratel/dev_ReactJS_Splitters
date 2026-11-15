@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useIsFetching, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, CalendarDays, ClipboardList, Plus, Presentation, RefreshCw, Settings2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { CalendarDays, ClipboardList, Presentation } from 'lucide-react'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { GmudApprovalModal } from '@/features/gmud/ui/GmudApprovalModal'
@@ -11,6 +11,7 @@ import { GmudWeeklyMeeting } from '@/features/gmud/ui/GmudWeeklyMeeting'
 import { GmudLinksModal } from '@/features/gmud/ui/GmudLinksModal'
 import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { useIsGmudCommitteeMember } from '@/features/gmud/hooks/useGmudCommittee'
+import { GmudHeaderActions } from '@/features/gmud/ui/GmudHeaderActions'
 import { GmudPainelLista } from '@/features/gmud/ui/GmudPainelLista'
 import { GmudSummaryStrip } from '@/features/gmud/ui/GmudSummaryStrip'
 import { useGmudListSummary } from '@/features/gmud/api/fetchGmudListSummary'
@@ -55,7 +56,6 @@ export function GmudScreen() {
     else if (key === 'vencem_semana') mudarFiltros({ ...base, kpi: filtros.kpi === 'vence7' ? null : 'vence7' })
   }
   const queryClient = useQueryClient()
-  const atualizando = useIsFetching({ queryKey: ['gmud', 'list'] }) > 0
   const atualizarLista = () => void queryClient.invalidateQueries({ queryKey: ['gmud', 'list'] })
   // "Aprovar" (avaliar e fila de pendentes) é do Comitê: só quem está na lista de membros.
   const canApprove = useIsGmudCommitteeMember()
@@ -66,48 +66,6 @@ export function GmudScreen() {
   // Sem permissão de aprovar, a aba de pendentes não existe: mostra a lista.
   const mostraLista = view === 'all' || (view === 'pending' && !canApprove)
 
-  const headerTrailing = useMemo(
-    () => (
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={atualizarLista}
-          className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
-          aria-label="Atualizar"
-          title="Atualizar"
-        >
-          <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
-        </button>
-        <Link
-          to="/gmud/indicadores"
-          className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
-          aria-label="Indicadores"
-          title="Indicadores"
-        >
-          <BarChart3 size={16} />
-        </Link>
-        {canConfigure ? (
-          <Link
-            to="/gmud/configuracoes"
-            className="inline-flex size-9 items-center justify-center rounded-lg text-on-surface-variant ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low hover:text-on-surface dark:ring-white/10"
-            aria-label="Configurações do módulo GMUD"
-            title="Configurações do módulo GMUD"
-          >
-            <Settings2 size={16} />
-          </Link>
-        ) : null}
-        <Link
-          to="/gmud/nova"
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90"
-        >
-          <Plus size={15} /> Nova GMUD
-        </Link>
-      </div>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [atualizando, canConfigure],
-  )
-
   return (
     <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
       <AppPageHeader
@@ -116,7 +74,7 @@ export function GmudScreen() {
         description="Requisição, acompanhamento e aprovação de mudanças de rede — integrado ao Elleven."
         icon={ClipboardList}
         primaryAction={{ to: '/', label: 'Voltar ao painel' }}
-        trailing={headerTrailing}
+        trailing={<GmudHeaderActions canConfigure={canConfigure} />}
       />
 
       <GmudSummaryStrip
