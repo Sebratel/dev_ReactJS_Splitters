@@ -20,13 +20,33 @@ const PAGE_SIZE = 20
 const FOCO = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 dark:focus-visible:ring-white'
 const n = (v: number) => v.toLocaleString('pt-BR')
 
-/** Abas rápidas do painel, cada uma com a contagem considerando os filtros ativos. */
+/** Tom do contador de uma aba inativa: alerta suave em "Vencidas" e "Aguardando decisão" quando há itens. */
+function tomDoContador(aba: GmudAba, total: number | undefined): 'alerta' | 'atencao' | 'neutro' {
+  if (!total) return 'neutro'
+  if (aba === 'vencidas') return 'alerta'
+  if (aba === 'aguardando') return 'atencao'
+  return 'neutro'
+}
+const CONTADOR_TOM = {
+  ativa: 'bg-neutral-900/10 text-neutral-900',
+  alerta: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-200',
+  atencao: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200',
+  neutro: 'bg-surface-container-low text-on-surface-variant group-hover:bg-surface-container-lowest group-hover:text-on-surface',
+} as const
+
+/**
+ * Abas rápidas do painel, cada uma com a contagem considerando os filtros ativos.
+ * A ativa fica no amarelo da marca com texto escuro e o contador em pílula translúcida (sem preto sólido);
+ * as inativas, em texto secundário com contador cinza suave. O contador tem largura mínima fixa e números
+ * tabulares, para a aba não mudar de tamanho quando o número muda.
+ */
 export function GmudPainelAbas({ aba, contagens, onChange }: { aba: GmudAba; contagens: GmudPainelContagens | undefined; onChange: (aba: GmudAba) => void }) {
   return (
     <div role="group" aria-label="Atalhos da lista" className="flex flex-wrap gap-1">
       {ABAS.map((a) => {
         const ativa = aba === a.key
         const total = contagens?.[a.key]
+        const tom = ativa ? 'ativa' : tomDoContador(a.key, total)
         return (
           <button
             key={a.key}
@@ -34,17 +54,15 @@ export function GmudPainelAbas({ aba, contagens, onChange }: { aba: GmudAba; con
             aria-pressed={ativa}
             onClick={() => onChange(a.key)}
             className={cn(
-              'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors',
+              'group inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm transition-colors duration-150 motion-reduce:transition-none',
               FOCO,
-              ativa ? 'bg-primary text-neutral-900' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface',
+              ativa ? 'bg-primary font-bold text-neutral-900 shadow-sm' : 'font-semibold text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface',
             )}
           >
             {a.label}
             <span
-              className={cn(
-                'min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums',
-                ativa ? 'bg-neutral-900 text-white' : 'bg-surface-container-low text-on-surface ring-1 ring-neutral-300 dark:ring-white/20',
-              )}
+              data-tom={tom}
+              className={cn('inline-flex h-5 min-w-7 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums transition-colors duration-150 motion-reduce:transition-none', CONTADOR_TOM[tom])}
             >
               {total === undefined ? '–' : n(total)}
             </span>
