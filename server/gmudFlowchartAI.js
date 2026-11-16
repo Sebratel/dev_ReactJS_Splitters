@@ -9,6 +9,7 @@
 
 import { callGeminiRaw, isPlanningAssistantConfigured } from './planningAssistant.js';
 import logger from './logger.js';
+import { quoteMermaidLabels } from './lib/mermaidLabels.js';
 
 export { isPlanningAssistantConfigured };
 
@@ -68,6 +69,7 @@ REGRAS OBRIGATÓRIAS:
 7. Quando faltarem informações para detalhar uma etapa, use nós genéricos como [Validar resultado] em vez de inventar procedimentos.
 8. Limite a 30 nós no máximo.
 9. NUNCA inclua informações de segurança, credenciais ou dados sensíveis nos nós.
+10. Escreva SEMPRE o texto de cada nó entre aspas duplas, por exemplo A["Validar conectividade (Ping, VLANs)"] e C{"Passou?"}, para que parênteses e símbolos não quebrem a sintaxe.
 
 DESCRIÇÃO DO PROCEDIMENTO:
 ${description}${ctx}
@@ -119,6 +121,9 @@ export async function generateGmudFlowchart(description, gmudContext = null) {
       throw error;
     }
   }
+
+  // Parênteses e símbolos soltos no texto de um nó quebram o Mermaid; entre aspas ficam válidos.
+  mermaidSource = quoteMermaidLabels(mermaidSource);
 
   if (!validateMermaid(mermaidSource)) {
     warnings.push('Fluxograma gerado pode conter erros de sintaxe Mermaid — revise antes de salvar.');
