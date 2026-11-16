@@ -118,6 +118,12 @@ services:
       # ambiente, senão perde a comparação entre eles). Em testes: ELASTIC_APM_ENVIRONMENT=staging.
       ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
+      # Anexos de GMUD (PDF e imagens). O banco guarda só o registro; o arquivo vive nesta pasta,
+      # que precisa estar num volume. Sem ele, cada redeploy recria o container e os anexos somem
+      # (a tela mostra "Não foi possível abrir este anexo" e a rota devolve 404).
+      GMUD_UPLOADS_DIR: /data/gmud-uploads
+    volumes:
+      - gmud-uploads:/data/gmud-uploads
     ports:
       - "${BACKEND_PORT:-3004}:3001"
     expose:
@@ -218,3 +224,8 @@ services:
 networks:
   nexaview-network:
     driver: bridge
+
+# Volume nomeado: sobrevive à recriação do container (redeploy pelo Portainer). Faça backup dele
+# junto com o banco: os anexos de GMUD só existem aqui.
+volumes:
+  gmud-uploads:
