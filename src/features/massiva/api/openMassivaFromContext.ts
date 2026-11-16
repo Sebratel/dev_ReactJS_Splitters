@@ -44,6 +44,9 @@ import type { SplitterCliente } from '@/features/splitters/model/splitterCliente
 
 const AUTO_CLOSE_NO_CLIENTS = 'Não foi acionado nenhum cliente na abertura.'
 
+const LOCAL_AFFECTED_WARNING =
+  'A massiva foi aberta, mas a lista de clientes afetados nao foi gravada localmente. A verificacao "clientes ainda sem sinal" nao funcionara para este protocolo.'
+
 const LOCAL_HISTORY_WARNING =
   'A massiva foi aberta, mas o historico local por splitter nao foi registrado. O painel da rede e os indicadores locais podem ficar inconsistentes ate corrigir essa gravacao.'
 
@@ -631,6 +634,7 @@ export async function openMassivaFromContext(
         `[Massiva] Falha ao gravar cópia local dos afetados (protocolo ${copy.protocol}).`,
         localAffectedError,
       )
+      payload = appendFollowUpWarning(payload, `${LOCAL_AFFECTED_WARNING} (protocolo ${copy.protocol})`)
     }
   }
 

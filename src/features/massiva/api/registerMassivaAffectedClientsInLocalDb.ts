@@ -40,4 +40,12 @@ export async function registerMassivaAffectedClientsInLocalDb(input: {
   if (!parsed?.success) {
     throw new Error('Resposta inesperada ao registrar clientes afetados localmente.')
   }
+
+  // O servidor responde success:true mesmo quando nada foi gravado (tabela ausente,
+  // histórico não encontrado, lista vazia). Sem esta checagem a falha passava em silêncio.
+  const inserted = Number(parsed?.data?.inserted ?? 0)
+  if (inserted <= 0) {
+    const reason = typeof parsed?.data?.reason === 'string' ? parsed.data.reason : 'nenhuma linha gravada'
+    throw new Error(`Nenhum cliente afetado foi gravado localmente (${reason}).`)
+  }
 }

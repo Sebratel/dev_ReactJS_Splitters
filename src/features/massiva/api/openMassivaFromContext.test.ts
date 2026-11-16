@@ -111,6 +111,16 @@ describe('openMassivaFromContext — gravação antecipada do histórico', () =>
     expect(early.results[0]?.protocol).toBe(1001)
   })
 
+  it('falha ao gravar a cópia local dos afetados não derruba a abertura, mas avisa na tela', async () => {
+    registerAffectedCopy.mockRejectedValue(new Error('Nenhum cliente afetado foi gravado localmente (not-found).'))
+
+    const result = await openMassivaFromContext(makeContext(['AP-1']))
+
+    expect(result.results.map((r) => r.protocol)).toEqual([1001])
+    expect(result.followUpWarning ?? '').toMatch(/clientes afetados nao foi gravada localmente/i)
+    expect(result.followUpWarning ?? '').toMatch(/1001/)
+  })
+
   it('mantém a gravação final com todos os APs depois da antecipada', async () => {
     await openMassivaFromContext(makeContext(['AP-1', 'AP-2']))
 
