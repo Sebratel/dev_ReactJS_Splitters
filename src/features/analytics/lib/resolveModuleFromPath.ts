@@ -10,6 +10,7 @@ export type UsageModuleKey =
   | 'intelligence'
   | 'redistribuicao'
   | 'sugestoes'
+  | 'gmud'
   | 'usuarios'
   | 'isa-config'
   | 'radar-uso'
@@ -27,6 +28,7 @@ export const USAGE_MODULE_LABEL: Record<UsageModuleKey, string> = {
   intelligence: 'Painel da rede',
   redistribuicao: 'Redistribuição',
   sugestoes: 'Sugestões',
+  gmud: 'GMUD',
   usuarios: 'Usuários',
   'isa-config': 'Config. ISA',
   'radar-uso': 'Radar de uso',
@@ -47,6 +49,7 @@ export function resolveModuleFromPath(pathname: string): UsageModuleKey {
   if (path.startsWith('/intelligence')) return 'intelligence'
   if (path.startsWith('/redistribuicao')) return 'redistribuicao'
   if (path.startsWith('/sugestoes')) return 'sugestoes'
+  if (path.startsWith('/gmud')) return 'gmud'
   if (path.startsWith('/usuarios')) return 'usuarios'
   if (path.startsWith('/isa-config')) return 'isa-config'
   if (path.startsWith('/radar-uso')) return 'radar-uso'

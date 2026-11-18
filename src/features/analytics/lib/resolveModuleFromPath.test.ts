@@ -11,6 +11,11 @@ describe('resolveModuleFromPath', () => {
     expect(resolveModuleFromPath('/usuarios')).toBe('usuarios')
     expect(resolveModuleFromPath('/isa-config')).toBe('isa-config')
     expect(resolveModuleFromPath('/radar-uso')).toBe('radar-uso')
+    expect(resolveModuleFromPath('/gmud')).toBe('gmud')
+    expect(resolveModuleFromPath('/gmud/nova')).toBe('gmud')
+    expect(resolveModuleFromPath('/gmud/indicadores')).toBe('gmud')
+    expect(resolveModuleFromPath('/gmud/configuracoes')).toBe('gmud')
+    expect(resolveModuleFromPath('/gmud/1234')).toBe('gmud')
   })
 
   it('distingue detalhe de listagem por prefixo', () => {
