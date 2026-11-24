@@ -237,9 +237,11 @@ services:
 
 # Rede EXTERNA, de propósito: o host de produção esgotou os pools de endereços do Docker e não
 # consegue mais criar redes bridge novas ("all predefined address pools have been fully subnetted").
-# A stack reaproveita uma rede que já existe no host, e o nome vem de SPLITTERS_NETWORK_NAME:
-#   - produção: SPLITTERS_NETWORK_NAME=splitters-monitoring_nexaview-network (rede da stack anterior)
-#   - staging e CI: o padrão abaixo (a rede já existe na staging; o CI a cria antes de subir a stack)
+# A stack usa uma rede criada à parte, com o nome padrão abaixo (nome do repositório):
+#   - produção: rede `dev_reactjs_splitters_nexaview-network` criada pelo Portainer (Networks → Add network)
+#   - staging: a mesma rede, que já existe no host
+#   - CI: o job de imagens cria a rede antes de subir a stack
+# Só defina SPLITTERS_NETWORK_NAME para usar outra rede num host específico.
 # Uma rede externa precisa existir ANTES do deploy; se não existir, o deploy falha.
 # O APM é alcançado pelo endereço público (ELASTIC_APM_SERVER_URL), sem depender de rede interna.
 networks:
