@@ -2,10 +2,12 @@
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
+  onIdTokenChanged,
   signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth'
+import { checkHubOnlyAccess, fetchAuthConfig } from '@/features/session/lib/hubSso'
 import {
   beginGoogleLoginRedirect,
   clearSilentRefreshFailure,
@@ -52,7 +54,38 @@ function displayNameFromFirebaseUser(user: User): string {
 }
 
 let unsubscribeAuthListener: null | (() => void) = null
+let unsubscribeHubTokenListener: null | (() => void) = null
+/**
+ * Motivo de um signOut feito por nós (ex.: HUB_ONLY). O `onAuthStateChanged(null)` que vem
+ * depois zeraria o erro da tela; assim ele mostra o motivo, em qualquer ordem que chegue.
+ */
+let signOutReason: string | null = null
 const googleProvider = new GoogleAuthProvider()
+
+/**
+ * Sessão aberta pelo Hub (claim `hub` do token personalizado): o Bearer das chamadas passa a
+ * ser o ID token do Firebase — o BFF já o aceita — e acompanha a renovação automática do SDK.
+ */
+function adoptHubFirebaseSession(idToken: string, expirationTime: string): void {
+  const session = useSessionStore.getState()
+  session.setViaHub(true)
+  session.setSessionTokenWithExpiry(idToken, Date.parse(expirationTime) || null)
+
+  if (unsubscribeHubTokenListener !== null || !firebaseAuth) return
+  unsubscribeHubTokenListener = onIdTokenChanged(firebaseAuth, (user) => {
+    if (!user) {
+      unsubscribeHubTokenListener?.()
+      unsubscribeHubTokenListener = null
+      return
+    }
+    void user.getIdTokenResult().then((result) => {
+      if (result.claims.hub !== true) return
+      useSessionStore
+        .getState()
+        .setSessionTokenWithExpiry(result.token, Date.parse(result.expirationTime) || null)
+    })
+  })
+}
 
 function isAllowedFirebaseEmail(email: string | null | undefined): boolean {
   const normalized = (email ?? '').trim().toLowerCase()
@@ -131,7 +164,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           status: 'unauthenticated',
           user: null,
           profile: null,
-          error: null,
+          error: signOutReason,
         })
         return
       }
@@ -159,7 +192,30 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           photoURL: firebaseUser.photoURL ?? null,
         })
 
-        if (profile.isActive) {
+        const tokenResult = await firebaseUser.getIdTokenResult()
+        const viaHub = tokenResult.claims.hub === true
+
+        if (viaHub) {
+          adoptHubFirebaseSession(tokenResult.token, tokenResult.expirationTime)
+        } else if ((await fetchAuthConfig()).hubOnly) {
+          // Login direto com HUB_ONLY ligado: só os e-mails de emergência da stack seguem.
+          const access = await checkHubOnlyAccess(tokenResult.token)
+          if (access.blocked) {
+            signOutReason = access.message
+            if (firebaseAuth) await signOut(firebaseAuth)
+            useSessionStore.getState().clearSession()
+            set({
+              initialized: true,
+              status: 'unauthenticated',
+              user: null,
+              profile: null,
+              error: access.message,
+            })
+            return
+          }
+        }
+
+        if (profile.isActive && !viaHub) {
           beginSilentGoogleBffTokenRefreshIfNeeded()
         }
 
@@ -187,6 +243,7 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
       throw new Error('Firebase Auth nao configurado.')
     }
 
+    signOutReason = null
     set({ status: 'loading', error: null })
 
     try {
@@ -216,7 +273,8 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
           'Nao foi possivel obter o token Google para o gateway. Confirme VITE_GOOGLE_CLIENT_ID e tente de novo.',
         )
       }
-      set({ error: null })
+      // O listener pode ter recusado o login enquanto isto rodava (HUB_ONLY): não apagar o motivo.
+      if (signOutReason === null) set({ error: null })
     } catch (error) {
       set({
         status: 'unauthenticated',

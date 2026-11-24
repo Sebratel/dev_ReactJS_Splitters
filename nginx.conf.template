@@ -85,6 +85,10 @@ http {
             add_header Cache-Control "no-cache, no-store, must-revalidate";
             add_header Pragma        "no-cache";
             add_header Expires       "0";
+            # Só o próprio Splitters e o Hub Apps podem abrir a tela num iframe. Só a página
+            # precisa do cabeçalho (os assets não são documentos). O Nginx Proxy Manager ignora
+            # add_header na aba Advanced, por isso a regra mora aqui.
+            add_header Content-Security-Policy "frame-ancestors 'self' https://hub-apps.sebratel.net.br https://hub-apps-staging.sebratel.net.br" always;
         }
     }
 }

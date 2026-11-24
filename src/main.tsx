@@ -4,6 +4,7 @@ import './index.css'
 import '@/shared/config/i18n'
 import App from '@/app/App'
 import { bootstrapSession } from '@/features/session/lib/bootstrapSession'
+import { consumeHubSsoToken } from '@/features/session/lib/hubSso'
 import { preloadAccessRequestFabImage, preloadIsaHeroImage } from '@/shared/lib/accessRequestFabImage'
 import { initApmRum } from '@/shared/lib/apmRum'
 import { applyInitialTheme } from '@/shared/lib/theme'
@@ -23,13 +24,19 @@ window.addEventListener('vite:preloadError', (event) => {
 // APM RUM primeiro (sem bloquear): a métrica de page load depende de arrancar cedo.
 void initApmRum()
 
-bootstrapSession()
-preloadAccessRequestFabImage()
-preloadIsaHeroImage()
+function start(): void {
+  bootstrapSession()
+  preloadAccessRequestFabImage()
+  preloadIsaHeroImage()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+// Aberto pelo Hub Apps (`?sso_token=`): entra no Firebase antes do React montar. Sem o
+// parâmetro, resolve na hora e nada muda. Falha vira mensagem na tela de login.
+void consumeHubSsoToken().finally(start)
 
