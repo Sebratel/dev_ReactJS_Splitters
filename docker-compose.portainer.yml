@@ -235,13 +235,17 @@ services:
       - nexaview-network
     restart: unless-stopped
 
-# Sem rede externa de propósito: este compose corre em hosts diferentes (produção e testes) e
-# uma rede `external: true` que não exista no host faz o deploy FALHAR. O APM é alcançado pelo
-# endereço público. Para usar a rede interna do `elk` num host onde ela exista, junte-a aqui e
-# defina ELASTIC_APM_SERVER_URL=http://apm-server:8200 no painel Environment dessa stack.
+# Rede EXTERNA, de propósito: o host de produção esgotou os pools de endereços do Docker e não
+# consegue mais criar redes bridge novas ("all predefined address pools have been fully subnetted").
+# A stack reaproveita uma rede que já existe no host, e o nome vem de SPLITTERS_NETWORK_NAME:
+#   - produção: SPLITTERS_NETWORK_NAME=splitters-monitoring_nexaview-network (rede da stack anterior)
+#   - staging e CI: o padrão abaixo (a rede já existe na staging; o CI a cria antes de subir a stack)
+# Uma rede externa precisa existir ANTES do deploy; se não existir, o deploy falha.
+# O APM é alcançado pelo endereço público (ELASTIC_APM_SERVER_URL), sem depender de rede interna.
 networks:
   nexaview-network:
-    driver: bridge
+    external: true
+    name: ${SPLITTERS_NETWORK_NAME:-dev_reactjs_splitters_nexaview-network}
 
 # Volume nomeado: sobrevive à recriação do container (redeploy pelo Portainer). Faça backup dele
 # junto com o banco: os anexos de GMUD só existem aqui.
