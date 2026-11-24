@@ -90,6 +90,24 @@ services:
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
       GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
       GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
+      # Envio dos clientes da GMUD ao banco de usuários afetados (gateway /api/v1/afetados), no início da janela.
+      # O servidor só enxerga o que está listado aqui: sem estas linhas, ligar a variável no Portainer não
+      # tinha efeito e o agendador ficava "desativado". Padrão seguro: desligado e, se ligado, em simulação.
+      # Para enviar de verdade: GMUD_CLIENTES_SYNC_ENABLED=true e GMUD_CLIENTES_SYNC_DRY_RUN=false.
+      GMUD_CLIENTES_SYNC_ENABLED: ${GMUD_CLIENTES_SYNC_ENABLED:-false}
+      GMUD_CLIENTES_SYNC_DRY_RUN: ${GMUD_CLIENTES_SYNC_DRY_RUN:-true}
+      GMUD_CLIENTES_SYNC_INTERVAL_MINUTES: ${GMUD_CLIENTES_SYNC_INTERVAL_MINUTES:-5}
+      GMUD_CLIENTES_SYNC_MAX_CLIENTES: ${GMUD_CLIENTES_SYNC_MAX_CLIENTES:-5000}
+      # Reinclusão de quem ficou de fora de um evento por já estar em outro (mesmo padrão: desligada/simulação).
+      EVENT_REINCLUSION_ENABLED: ${EVENT_REINCLUSION_ENABLED:-false}
+      EVENT_REINCLUSION_DRY_RUN: ${EVENT_REINCLUSION_DRY_RUN:-true}
+      EVENT_REINCLUSION_INTERVAL_MINUTES: ${EVENT_REINCLUSION_INTERVAL_MINUTES:-5}
+      # Lista de clientes ao COR antes da janela (e-mail via N8N). Mesmo padrão: desligada/simulação.
+      GMUD_COR_LISTA_ENABLED: ${GMUD_COR_LISTA_ENABLED:-false}
+      GMUD_COR_LISTA_DRY_RUN: ${GMUD_COR_LISTA_DRY_RUN:-true}
+      GMUD_COR_LISTA_INTERVAL_MINUTES: ${GMUD_COR_LISTA_INTERVAL_MINUTES:-10}
+      GMUD_COR_LISTA_LEMBRETE_HORAS: ${GMUD_COR_LISTA_LEMBRETE_HORAS:-24}
+      N8N_GMUD_COR_LISTA_WEBHOOK_URL: ${N8N_GMUD_COR_LISTA_WEBHOOK_URL:-}
       # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
