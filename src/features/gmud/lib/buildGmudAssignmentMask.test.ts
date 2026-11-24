@@ -37,6 +37,15 @@ describe('relato da GMUD no protocolo', () => {
     expect(t).toContain('🔴 Impacto: COM PARADA DE SERVIÇO')
   })
 
+  it('valor investido entra no relato quando preenchido e some quando vazio', () => {
+    for (const categoria of ['rede_externa', 'sistemas_internos', 'sistemas_externos'] as const) {
+      const com = buildGmudDescription({ ...base, valorInvestido: '1.234,56', categoria })
+      expect(com).toContain('Valor investido: R$ 1.234,56')
+      const sem = buildGmudDescription({ ...base, valorInvestido: '', categoria })
+      expect(sem).not.toContain('Valor investido')
+    }
+  })
+
   it('seção vazia não aparece', () => {
     const t = buildGmudDescription({ ...base, observacoes: '', categoria: 'rede_externa' })
     expect(t).not.toContain('OBSERVAÇÕES')

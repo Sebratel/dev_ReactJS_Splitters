@@ -2,6 +2,7 @@ import mysql from 'mysql2/promise';
 import { instrumentMysqlPool } from './lib/mysqlPoolObservability.js';
 import { formatEscopoRotas, normalizeEscopoRotas } from './lib/gmudEscopoRede.js';
 import { composeClientesTexto } from './lib/gmudClientesSemSplitter.js';
+import { parseValorInvestido } from './lib/gmudMoney.js';
 import {
   AREA_STATUS,
   computeAreasStatus,
@@ -340,6 +341,8 @@ async function ensureTable() {
     await ensureColumn(pool, TABLE, 'categoria_data', 'JSON NULL');
     // GMUDs anteriores à aprovação por área ficam 'nao_aplicavel' e seguem direto ao Comitê.
     await ensureColumn(pool, TABLE, 'status_areas', "VARCHAR(16) NOT NULL DEFAULT 'nao_aplicavel' COMMENT 'nao_aplicavel | pendente | aprovada | negada'");
+    // Valor investido na mudança (R$), opcional.
+    await ensureColumn(pool, TABLE, 'valor_investido', 'DECIMAL(14,2) NULL');
     await ensureColumn(pool, TABLE, 'equipe_responsavel_id', 'BIGINT UNSIGNED NULL COMMENT \'ID da equipe responsável (gmud_config_lists) — usada no fluxo de aprovação por e-mail\'');
   })().catch((error) => {
     readyPromise = null;
@@ -428,6 +431,7 @@ export async function createGmudRequest(input) {
     data_fim: toCleanString(input.dataFim) || null,
     hora_fim: toCleanString(input.horaFim) || null,
     lista_clientes_cor: toCleanString(input.listaClientesCor) || null,
+    valor_investido: parseValorInvestido(input.valorInvestido),
     created_by_email: toCleanString(input.createdByEmail) || null,
   };
 
@@ -865,6 +869,7 @@ function mapGmudRow(r) {
     dataFim: toDateStr(r.data_fim),
     horaFim: toTimeStr(r.hora_fim),
     listaClientesCor: r.lista_clientes_cor ?? null,
+    valorInvestido: r.valor_investido == null ? null : Number(r.valor_investido),
     statusComite: r.status_comite ?? null,
     aprovadoPor: r.aprovado_por ?? null,
     decididoEm: r.decidido_em ? new Date(r.decidido_em).toISOString() : null,

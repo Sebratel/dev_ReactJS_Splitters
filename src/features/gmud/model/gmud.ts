@@ -31,6 +31,8 @@ export type GmudExtra = {
   popSite: string | null
   impactoParada: string | null
   comunicaCliente: string | null
+  /** Valor investido (R$), opcional. */
+  valorInvestido?: number | null
   statusComite: string | null
   /** Situação das áreas: 'nao_aplicavel' | 'pendente' | 'aprovada' | 'negada'. */
   statusAreas?: string | null

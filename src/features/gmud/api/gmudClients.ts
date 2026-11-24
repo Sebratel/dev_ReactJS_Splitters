@@ -42,6 +42,29 @@ export async function fetchGmudClientImpact(protocol: number): Promise<GmudClien
   return parse<GmudClientImpact>(response, 'Falha ao carregar os clientes impactados.')
 }
 
+/** Estimativa ao vivo (formulário em preenchimento): a GMUD ainda não existe, só o escopo. */
+export type GmudClientImpactEstimate = {
+  applicable: boolean
+  /** false enquanto falta o POP/Site ou a busca não conseguiu calcular. */
+  pronto: boolean
+  total?: number
+  corporativos?: number
+  erro?: string
+}
+
+export async function estimateGmudClientImpact(
+  input: { popSite: string; escopoRotas: unknown[]; clientesSemSplitter: unknown[] },
+  signal?: AbortSignal,
+): Promise<GmudClientImpactEstimate> {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/clientes-impactados/estimativa`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    signal,
+  })
+  return parse<GmudClientImpactEstimate>(response, 'Falha ao estimar os clientes impactados.')
+}
+
 export async function fetchGmudActiveClients(): Promise<GmudActiveClient[]> {
   const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud-clientes/ativos`)
   const data = await parse<{ items: GmudActiveClient[] }>(response, 'Falha ao carregar os clientes de GMUD.')

@@ -6278,6 +6278,41 @@ app.get('/api/gmud-clientes/ativos', async (_req, res) => {
   }
 });
 
+// Estimativa de clientes impactados ENQUANTO o formulário é preenchido (a GMUD ainda não existe): recebe o
+// escopo (POP/Site, afunilamento e clientes escolhidos à mão) e conta quem seria afetado. Só leitura.
+app.post('/api/gmud/clientes-impactados/estimativa', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const body = req.body ?? {};
+    const popSite = typeof body.popSite === 'string' ? body.popSite.trim() : '';
+    if (popSite === '') return res.json({ success: true, data: { applicable: true, pronto: false } });
+    const { clientsSource } = getGmudClientSync();
+    const found = await clientsSource.listClients({
+      popSite,
+      categoriaData: {
+        escopoRotas: Array.isArray(body.escopoRotas) ? body.escopoRotas : [],
+        clientesSemSplitter: Array.isArray(body.clientesSemSplitter) ? body.clientesSemSplitter : [],
+      },
+    });
+    if (!found.ok) return res.json({ success: true, data: { applicable: true, pronto: false, erro: found.reason } });
+    return res.json({
+      success: true,
+      data: {
+        applicable: true,
+        pronto: true,
+        total: found.clients.length,
+        corporativos: found.clients.filter((c) => c.corporate).length,
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao estimar os clientes impactados.'),
+    });
+  }
+});
+
 // Impacto de uma GMUD em clientes: do histórico (se já foi incluída) ou estimado pelo escopo (cache de 5 min).
 const gmudImpactEstimateCache = new Map();
 app.get('/api/gmud/:protocol/clientes-impactados', async (req, res) => {

@@ -7,6 +7,7 @@ import { formatWindow, type GmudWindow } from '@/features/gmud/lib/gmudSchedule'
 import { GMUD_RECURSO_PAPEIS } from '@/features/gmud/model/gmudForm'
 import { htmlToPlainText } from '@/features/gmud/lib/gmudText'
 import { cn } from '@/shared/lib/utils'
+import { formatValorInvestido } from '@/features/gmud/lib/gmudValor'
 
 import { CARD as DETAIL_CARD } from '@/features/gmud/ui/indicators/indicatorTheme'
 
@@ -107,6 +108,7 @@ export function GmudScopeCard({ request, voalleDescription }: { request: GmudDet
         <Field label="Risco da não implementação" value={request.riscoNaoImplementacao} wide />
         <Field label="Recursos administrativos" value={recursos(request.recursosAdministrativos)} wide />
         <Field label="Lista de clientes ao COR?" value={request.listaClientesCor} />
+        <Field label="Valor investido" value={formatValorInvestido(request.valorInvestido)} />
         <Field label="Área do solicitante" value={request.areaSolicitante} />
       </div>
     </section>
