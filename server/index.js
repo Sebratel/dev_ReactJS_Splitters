@@ -28,7 +28,7 @@ import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
 import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
 import { isNetworkGmud as isGmudNetwork, readClientSyncConfig as readGmudClientSyncConfig } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
-import { isPreAprovada } from './lib/gmudPreAprovada.js';
+import { isPreAprovada, podeAbrirPreAprovada, MSG_SEM_PERMISSAO_PRE_APROVADA } from './lib/gmudPreAprovada.js';
 import {
   GMUD_OPEN_SQL,
   buildGmudSummarySql,
@@ -4926,6 +4926,11 @@ app.post('/api/gmud/create', async (req, res) => {
     }
     if (String(body.titulo ?? '').trim() === '') {
       return res.status(400).json({ success: false, message: 'Informe o título da GMUD.' });
+    }
+
+    // Pré-aprovada não passa por aprovação nenhuma: só abre quem tem a permissão própria (ou é admin).
+    if (isPreAprovada(body.tipo) && !podeAbrirPreAprovada(actor)) {
+      return res.status(403).json({ success: false, message: MSG_SEM_PERMISSAO_PRE_APROVADA });
     }
 
     // F-02: verifica que o protocolo existe no Voalle antes de criar o registro local.
