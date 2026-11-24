@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Building2, Loader2, Users } from 'lucide-react'
+import { AlertTriangle, Building2, ListChecks, Loader2, Users } from 'lucide-react'
 import { useGmudClientImpactEstimate } from '@/features/gmud/hooks/useGmudClients'
+import { GmudClientesImpactadosModal } from '@/features/gmud/ui/GmudClientesImpactadosModal'
 
 const DEBOUNCE_MS = 600
 const COUNT_UP_MS = 700
@@ -60,6 +61,7 @@ export function GmudClientesEstimativa(props: Escopo) {
   const corporativos = data?.pronto ? (data.corporativos ?? 0) : 0
   const limite = data?.limite ?? 0
   const animado = useContagemAnimada(total)
+  const [verLista, setVerLista] = useState(false)
 
   if (props.popSite.trim() === '') return null
 
@@ -84,7 +86,20 @@ export function GmudClientesEstimativa(props: Escopo) {
               Não foi possível estimar agora{data?.erro ? ` — ${data.erro}` : ''}.
             </p>
           ) : data?.pronto ? (
-            <p className="text-3xl font-extrabold leading-none tabular-nums text-on-surface">{fmt(animado)}</p>
+            <p className="flex items-center gap-2">
+              <span className="text-3xl font-extrabold leading-none tabular-nums text-on-surface">{fmt(animado)}</span>
+              {total > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setVerLista(true)}
+                  className="rounded-lg p-1.5 text-primary transition hover:bg-primary/10"
+                  aria-label="Ver clientes impactados"
+                  title="Ver clientes impactados"
+                >
+                  <ListChecks size={18} aria-hidden />
+                </button>
+              ) : null}
+            </p>
           ) : (
             <p className="text-xs text-on-surface-variant">Calculando…</p>
           )}
@@ -122,6 +137,8 @@ export function GmudClientesEstimativa(props: Escopo) {
           </span>
         </p>
       ) : null}
+
+      {verLista ? <GmudClientesImpactadosModal escopo={escopo} onClose={() => setVerLista(false)} /> : null}
     </section>
   )
 }

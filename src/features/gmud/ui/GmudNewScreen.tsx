@@ -62,8 +62,10 @@ import { clearGmudDraft, draftHasContent, gmudDraftKey, loadGmudDraft, saveGmudD
 import {
   buildGmudDescription,
   buildGmudTitle,
+  type GmudImpactoClientes,
 } from '@/features/gmud/lib/buildGmudAssignmentMask'
 import { fetchGmudConfigLists, type GmudConfigItem } from '@/features/gmud/api/gmudConfigLists'
+import { useGmudClientImpactEstimate } from '@/features/gmud/hooks/useGmudClients'
 import { GmudJanelaField } from '@/features/gmud/ui/GmudJanelaField'
 import { GmudConfirmarAbertura, GmudRevisao, GmudRevisaoBarra } from '@/features/gmud/ui/GmudRevisao'
 import { atencoesDoFormulario, numeroDeProtocolos, precisaConfirmarAbertura, textoDoBotaoAbrir } from '@/features/gmud/lib/gmudRevisao'
@@ -901,6 +903,7 @@ export function GmudNewScreen() {
               occForm,
               occForm.categoria === 'sistemas_internos' ? siData : null,
               occForm.categoria === 'sistemas_externos' ? seData : null,
+              impactoMascara,
             ),
             finalDateLocal: `${occ.dataFim}T${occForm.horaFim}:00`,
             idempotencyKey: idempotencyKey ?? undefined,
@@ -993,6 +996,16 @@ export function GmudNewScreen() {
   const ultimaEtapa = passos.length - 1
   const [etapa, setEtapa] = useState(rascunhoInicial?.etapa ?? 0)
   const [maxEtapa, setMaxEtapa] = useState(rascunhoInicial?.maxEtapa ?? 0)
+  // Total de clientes impactados que entra na máscara do protocolo. Só consulta na Revisão (reaproveita o cache
+  // da estimativa do formulário) e só em Rede Externa; sem estimativa pronta, a linha simplesmente não aparece.
+  const estimativaMascara = useGmudClientImpactEstimate(
+    { popSite: form.popSite, escopoRotas: form.escopoRotas, clientesSemSplitter: form.clientesSemSplitter },
+    form.categoria === 'rede_externa' && etapa === ultimaEtapa,
+  )
+  const impactoMascara: GmudImpactoClientes | null =
+    form.categoria === 'rede_externa' && estimativaMascara.data?.pronto
+      ? { total: estimativaMascara.data.total ?? 0, corporativos: estimativaMascara.data.corporativos ?? 0 }
+      : null
   const [aviso, setAviso] = useState<string[]>([])
   const trailRef = useRef<HTMLDivElement>(null)
   const irParaEtapa = (i: number) => {
@@ -1299,6 +1312,7 @@ export function GmudNewScreen() {
               form,
               form.categoria === 'sistemas_internos' ? siData : null,
               form.categoria === 'sistemas_externos' ? seData : null,
+              impactoMascara,
             )}
           </pre>
           <p className="mt-2 text-[11px] text-on-surface-variant/70">
