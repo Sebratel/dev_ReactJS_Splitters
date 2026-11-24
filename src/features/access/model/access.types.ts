@@ -11,6 +11,8 @@
   canApproveGmud: boolean
   /** Gerenciar listas configuráveis do módulo GMUD (setores, equipes, sistemas, etc.). */
   canConfigureGmud: boolean
+  /** Abrir GMUD do tipo Pré-aprovada (não passa por aprovação). Liberado individualmente pelo admin; depende de ver GMUD. */
+  canOpenGmudPreAprovada: boolean
   isAdmin: boolean
 }
 
@@ -38,6 +40,7 @@ export const defaultSplittersPermissions: SplittersPermissionSet = {
   canViewGmud: false,
   canApproveGmud: false,
   canConfigureGmud: false,
+  canOpenGmudPreAprovada: false,
   isAdmin: false,
 }
 

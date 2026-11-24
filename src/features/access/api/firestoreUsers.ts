@@ -40,6 +40,8 @@ export function parsePermissions(value: unknown): SplittersPermissionSet {
     canViewGmud: raw.canViewGmud ?? defaultSplittersPermissions.canViewGmud,
     canApproveGmud: raw.canApproveGmud ?? defaultSplittersPermissions.canApproveGmud,
     canConfigureGmud: raw.canConfigureGmud ?? defaultSplittersPermissions.canConfigureGmud,
+    canOpenGmudPreAprovada:
+      raw.canOpenGmudPreAprovada ?? defaultSplittersPermissions.canOpenGmudPreAprovada,
     isAdmin: raw.isAdmin ?? defaultSplittersPermissions.isAdmin,
   }
 }

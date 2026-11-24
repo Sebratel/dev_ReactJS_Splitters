@@ -2,11 +2,12 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { checkApprovalAreas } from '@/features/gmud/api/gmudAreaApprovals'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, CalendarClock, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarClock, ClipboardList, Loader2, Lock, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { GmudAvisoModal } from '@/features/gmud/ui/GmudAvisoModal'
 import { GmudClientesEstimativa } from '@/features/gmud/ui/GmudClientesEstimativa'
 import { maskValorInvestido } from '@/features/gmud/lib/gmudValor'
+import { MSG_SEM_PERMISSAO_PRE_APROVADA, podeAbrirGmudPreAprovada } from '@/features/gmud/lib/gmudPermissoes'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -188,11 +189,13 @@ const TIPO_DESCRICAO: Record<string, string> = {
 }
 
 function CamposComuns({
-  form, set, categoria,
+  form, set, categoria, podePreAprovada,
 }: {
   form: GmudFormState
   set: <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) => void
   categoria: GmudCategoria
+  /** Pré-aprovada não passa por aprovação: só quem tem a permissão (ou é admin) pode escolher. */
+  podePreAprovada: boolean
 }) {
   const naturezaOptions =
     categoria === 'rede_externa' ? GMUD_NATUREZA_RE_OPTIONS
@@ -206,15 +209,19 @@ function CamposComuns({
         <div role="radiogroup" aria-label="Tipo da GMUD" className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {GMUD_TIPO_OPTIONS.map((o) => {
             const ativo = form.tipo === o
+            const bloqueado = o === GMUD_TIPO_PRE_APROVADA && !podePreAprovada
             return (
               <button
                 key={o}
                 type="button"
                 role="radio"
                 aria-checked={ativo}
-                onClick={() => set('tipo', o)}
+                aria-disabled={bloqueado || undefined}
+                title={bloqueado ? MSG_SEM_PERMISSAO_PRE_APROVADA : undefined}
+                onClick={() => { if (!bloqueado) set('tipo', o) }}
                 className={cn(
                   'rounded-lg border px-3 py-2.5 text-left transition',
+                  bloqueado && 'cursor-not-allowed opacity-60 hover:bg-surface-container-lowest',
                   ativo
                     ? 'border-primary bg-primary shadow-sm ring-1 ring-primary'
                     : 'border-neutral-200/80 bg-surface-container-lowest hover:bg-surface-container-low dark:border-white/10',
@@ -236,9 +243,12 @@ function CamposComuns({
                     </span>
                   </span>
                 ) : null}
-                <span className={cn('block text-sm font-semibold', ativo ? 'text-neutral-900' : 'text-on-surface')}>{o}</span>
+                <span className={cn('flex items-center gap-1.5 text-sm font-semibold', ativo ? 'text-neutral-900' : 'text-on-surface')}>
+                  {o}
+                  {bloqueado ? <Lock size={12} aria-hidden /> : null}
+                </span>
                 <span className={cn('mt-0.5 block text-[11px]', ativo ? 'text-neutral-800' : 'text-on-surface-variant')}>
-                  {TIPO_DESCRICAO[o] ?? ''}
+                  {bloqueado ? 'Sem permissão · peça a um administrador' : (TIPO_DESCRICAO[o] ?? '')}
                 </span>
               </button>
             )
@@ -787,6 +797,7 @@ export function GmudNewScreen() {
   const navigate = useNavigate()
   const profile = useAccessAuthStore((s) => s.profile)
   const rascunhoKey = gmudDraftKey(profile?.email ?? '')
+  const podePreAprovada = podeAbrirGmudPreAprovada(profile?.permissions)
   // Rascunho guardado neste navegador: recupera na abertura (o aviso permite descartar).
   const [rascunhoInicial] = useState(() =>
     typeof window === 'undefined'
@@ -820,6 +831,11 @@ export function GmudNewScreen() {
 
   const set = <K extends keyof GmudFormState>(key: K, value: GmudFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
+
+  // Rascunho antigo (ou permissão retirada depois): quem não pode abrir pré-aprovada não a mantém selecionada.
+  useEffect(() => {
+    if (!podePreAprovada && form.tipo === GMUD_TIPO_PRE_APROVADA) setForm((prev) => ({ ...prev, tipo: '' }))
+  }, [podePreAprovada, form.tipo])
 
   const handleCategoriaChange = (cat: GmudCategoria) => {
     // Troca de categoria não descarta dados já preenchidos — apenas muda a visualização.
@@ -1136,7 +1152,7 @@ export function GmudNewScreen() {
         <FormStepContext.Provider value={{ visible: secoesVisiveis }}>
         <div className="min-w-0 space-y-4">
         {/* Campos comuns — Identificação + Solicitante */}
-        <CamposComuns form={form} set={set} categoria={form.categoria} />
+        <CamposComuns form={form} set={set} categoria={form.categoria} podePreAprovada={podePreAprovada} />
 
         {/* Campos dinâmicos por categoria */}
         {form.categoria === 'rede_externa' && (

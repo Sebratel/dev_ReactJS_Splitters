@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TIPO_PRE_APROVADA, isPreAprovada } from './gmudPreAprovada.js';
+import { TIPO_PRE_APROVADA, isPreAprovada, podeAbrirPreAprovada } from './gmudPreAprovada.js';
 import { deriveApprovalAreas } from './gmudAreaApproval.js';
 
 test('isPreAprovada reconhece o tipo (com espaços) e nada além dele', () => {
@@ -18,4 +18,20 @@ test('Pré-aprovada não tem áreas a aprovar, mesmo com áreas marcadas, em qua
   }
   // Programada continua exigindo aprovação das áreas marcadas
   assert.ok(deriveApprovalAreas({ tipo: 'Programada', categoria: 'rede_externa', recursosAdministrativos: recursos }).length > 0);
+});
+
+const ator = (permissions) => ({ profile: { permissions } });
+
+test('abrir pré-aprovada: admin pode; quem tem a permissão pode; os demais não', () => {
+  assert.equal(podeAbrirPreAprovada(ator({ isAdmin: true })), true);
+  assert.equal(podeAbrirPreAprovada(ator({ canOpenGmudPreAprovada: true })), true);
+  assert.equal(podeAbrirPreAprovada(ator({ canViewGmud: true, canApproveGmud: true, canConfigureGmud: true })), false);
+  assert.equal(podeAbrirPreAprovada(ator({ canOpenGmudPreAprovada: false })), false);
+});
+
+test('abrir pré-aprovada: sem ator, sem perfil ou valor não booleano, não pode (padrão fechado)', () => {
+  assert.equal(podeAbrirPreAprovada(null), false);
+  assert.equal(podeAbrirPreAprovada({}), false);
+  assert.equal(podeAbrirPreAprovada(ator({ canOpenGmudPreAprovada: 'true' })), false);
+  assert.equal(podeAbrirPreAprovada(ator({ isAdmin: 1 })), false);
 });
