@@ -169,6 +169,7 @@ function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
   }
 
   pushRecursosAdministrativos(out, form)
+  field(out, 'Valor investido', form.valorInvestido.trim() === '' ? '' : `R$ ${form.valorInvestido.trim()}`)
   section(out, '💬', 'Observações', form.observacoes)
   pushRodape(out, form)
 
@@ -199,6 +200,7 @@ function buildGmudDescriptionSistemasInternos(form: GmudFormState, si: GmudSiste
   section(out, '⚙️', 'Execução', form.planoExecucao)
   section(out, '↩️', 'Rollback', form.planoRollback)
   pushRecursosAdministrativos(out, form)
+  field(out, 'Valor investido', form.valorInvestido.trim() === '' ? '' : `R$ ${form.valorInvestido.trim()}`)
   section(out, '💬', 'Observações', form.observacoes)
   pushRodape(out, form)
 
@@ -230,6 +232,7 @@ function buildGmudDescriptionSistemasExternos(form: GmudFormState, se: GmudSiste
   section(out, '📝', 'Mudança prevista', form.descricao)
   section(out, '⚙️', 'Plano de contingência/execução', form.planoExecucao)
   pushRecursosAdministrativos(out, form)
+  field(out, 'Valor investido', form.valorInvestido.trim() === '' ? '' : `R$ ${form.valorInvestido.trim()}`)
   section(out, '💬', 'Observações', form.observacoes)
   pushRodape(out, form)
 

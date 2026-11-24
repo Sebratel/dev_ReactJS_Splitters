@@ -256,6 +256,8 @@ export type GmudFormState = {
   dataFim: string
   horaFim: string
   listaClientesCor: string
+  /** Valor investido na mudança (R$), opcional, já mascarado: "1.234,56". */
+  valorInvestido: string
   /** Texto livre do "Outro" em Ambiente afetado. */
   ambienteOutro: string
   /** Observações livres — entram na máscara do protocolo no Elleven. */
@@ -461,6 +463,7 @@ export function emptyGmudForm(prefillEmail = '', prefillName = ''): GmudFormStat
     dataFim: '',
     horaFim: '',
     listaClientesCor: '',
+    valorInvestido: '',
     ambienteOutro: '',
     observacoes: '',
   }

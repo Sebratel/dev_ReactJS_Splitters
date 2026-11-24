@@ -67,6 +67,7 @@ function toListItem(d: GmudDetail): GmudListItem {
           popSite: r.popSite,
           impactoParada: r.impactoParada,
           comunicaCliente: r.comunicaCliente,
+          valorInvestido: r.valorInvestido ?? null,
           statusComite: r.statusComite,
           statusExec: r.statusExec,
           rnc: r.rnc,

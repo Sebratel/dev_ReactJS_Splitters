@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, CalendarClock, ClipboardList, Loader2, Repeat, Zap } from 'lucide-react'
 import { GMUD_TIPO_CRITICIDADE } from '@/features/gmud/lib/gmudTipoCriticidade'
 import { GmudAvisoModal } from '@/features/gmud/ui/GmudAvisoModal'
+import { GmudClientesEstimativa } from '@/features/gmud/ui/GmudClientesEstimativa'
+import { maskValorInvestido } from '@/features/gmud/lib/gmudValor'
 import { AppPageHeader } from '@/shared/ui/AppPageHeader'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { createGmud } from '@/features/gmud/api/createGmud'
@@ -311,6 +313,26 @@ function JanelaDeMudanca({
 // ---------------------------------------------------------------------------
 // Seção: Observações (comum)
 // ---------------------------------------------------------------------------
+function Investimento({
+  value, onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  return (
+    <Section title="Investimento (opcional)">
+      <Field label="Valor investido na GMUD (R$)">
+        <input
+          className={cn(FIELD, 'tabular-nums')}
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => onChange(maskValorInvestido(e.target.value))}
+          placeholder="0,00"
+          aria-label="Valor investido na GMUD em reais"
+        />
+      </Field>
+    </Section>
+  )
+}
+
 function Observacoes({
   value, onChange,
 }: { value: string; onChange: (v: string) => void }) {
@@ -515,6 +537,13 @@ function RedeExternaFields({
             onChange={(v) => set('clientesSemSplitter', v)}
             observacao={form.clientesManuais}
             onObservacao={(v) => set('clientesManuais', v)}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <GmudClientesEstimativa
+            popSite={form.popSite}
+            escopoRotas={form.escopoRotas}
+            clientesSemSplitter={form.clientesSemSplitter}
           />
         </div>
         {form.impactoParada === 'Sim' ? (
@@ -1158,6 +1187,9 @@ export function GmudNewScreen() {
 
         {/* Janela de mudança — comum a todas */}
         <JanelaDeMudanca form={form} set={set} />
+
+        {/* Investimento — comum a todas as categorias */}
+        <Investimento value={form.valorInvestido} onChange={(v) => set('valorInvestido', v)} />
 
         {/* Observações — comum a todas as categorias */}
         <Observacoes value={form.observacoes} onChange={(v) => set('observacoes', v)} />

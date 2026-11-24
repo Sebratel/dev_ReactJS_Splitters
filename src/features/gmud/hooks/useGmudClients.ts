@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
+  estimateGmudClientImpact,
   fetchGmudActiveClients,
   fetchGmudClientImpact,
   type GmudActiveClient,
@@ -13,6 +14,25 @@ export function useGmudClientImpact(protocol: number, enabled = true) {
     enabled: enabled && Number.isFinite(protocol) && protocol > 0,
     staleTime: 60_000,
     retry: false,
+  })
+}
+
+/**
+ * Estimativa de clientes impactados enquanto o formulário é preenchido. O escopo vai na chave da consulta
+ * (já "assentado" por quem chama, com debounce), então cada mudança de escopo refaz a conta.
+ */
+export function useGmudClientImpactEstimate(
+  input: { popSite: string; escopoRotas: unknown[]; clientesSemSplitter: unknown[] },
+  enabled = true,
+) {
+  const popSite = input.popSite.trim()
+  return useQuery({
+    queryKey: ['gmud', 'client-impact-estimate', popSite, JSON.stringify(input.escopoRotas), JSON.stringify(input.clientesSemSplitter)],
+    queryFn: ({ signal }) => estimateGmudClientImpact({ ...input, popSite }, signal),
+    enabled: enabled && popSite !== '',
+    staleTime: 60_000,
+    retry: false,
+    placeholderData: (previous) => previous,
   })
 }
 
