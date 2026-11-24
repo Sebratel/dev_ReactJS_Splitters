@@ -113,6 +113,10 @@ export type ModernLoginScreenProps = {
   domainPill: string | null
   emailsWhitelistLabel: string | null
   authSuccess?: boolean
+  /** Endereço do Hub Apps: mostra "Entrar pelo Hub Apps" (HUB_ONLY ligado ou tela dentro do Hub). */
+  hubUrl?: string | null
+  /** Dentro do iframe do Hub o login do Google não funciona (popup/redirect): esconde o botão. */
+  hideGoogleSignIn?: boolean
 }
 
 export function ModernLoginScreen({
@@ -123,6 +127,8 @@ export function ModernLoginScreen({
   onGoogleSignIn,
   domainPill,
   emailsWhitelistLabel,
+  hubUrl = null,
+  hideGoogleSignIn = false,
 }: ModernLoginScreenProps) {
   const busy = submitting || authBusy
   const displayError = localError ?? storeError
@@ -273,21 +279,43 @@ export function ModernLoginScreen({
               </div>
             ) : null}
 
-            {/* CTA Google */}
-            <button
-              type="button"
-              onClick={() => void onGoogleSignIn()}
-              disabled={busy}
-              aria-busy={busy}
-              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl text-sm font-bold text-[#1a0f00] transition-all active:scale-[0.98] disabled:opacity-60"
-              style={{
-                background: AMBER,
-                boxShadow: '0 4px 18px rgba(255,176,0,0.45), 0 1px 4px rgba(0,0,0,0.12)',
-              }}
-            >
-              {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <GoogleMark />}
-              {busy ? 'Autenticando…' : 'Entrar com Google'}
-            </button>
+            {/* CTA Hub Apps — `_top` sai do iframe quando a tela está dentro do Hub */}
+            {hubUrl ? (
+              <a
+                href={hubUrl}
+                target="_top"
+                rel="noopener"
+                className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl text-sm font-bold text-[#1a0f00] transition-all active:scale-[0.98]"
+                style={{
+                  background: AMBER,
+                  boxShadow: '0 4px 18px rgba(255,176,0,0.45), 0 1px 4px rgba(0,0,0,0.12)',
+                }}
+              >
+                Entrar pelo Hub Apps
+              </a>
+            ) : null}
+
+            {/* CTA Google (com o Hub em destaque, vira a rota de emergência) */}
+            {hideGoogleSignIn ? null : (
+              <button
+                type="button"
+                onClick={() => void onGoogleSignIn()}
+                disabled={busy}
+                aria-busy={busy}
+                className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl text-sm font-bold text-[#1a0f00] transition-all active:scale-[0.98] disabled:opacity-60"
+                style={
+                  hubUrl
+                    ? { background: '#ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }
+                    : {
+                        background: AMBER,
+                        boxShadow: '0 4px 18px rgba(255,176,0,0.45), 0 1px 4px rgba(0,0,0,0.12)',
+                      }
+                }
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <GoogleMark />}
+                {busy ? 'Autenticando…' : 'Entrar com Google'}
+              </button>
+            )}
 
             {/* Divisor "ou" */}
             <div className="flex w-full items-center gap-3">

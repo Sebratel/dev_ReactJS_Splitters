@@ -17,10 +17,14 @@ export function GoogleSessionBridge() {
   const status = useSessionStore((s) => s.status)
   const sessionToken = useSessionStore((s) => s.sessionToken)
   const tokenExpiresAtMs = useSessionStore((s) => s.tokenExpiresAtMs)
+  // Sessão aberta pelo Hub: o token é do Firebase (renovado pelo próprio SDK) e um redirect
+  // ao Google dentro do iframe do Hub deixaria o quadro em branco.
+  const viaHub = useSessionStore((s) => s.viaHub)
   const attemptedRef = useRef(false)
   const refreshTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
+    if (viaHub) return
     if (!isGoogleIdentityConfigured()) return
     /**
      * Com Firebase Auth, o login interativo é só na `/login` — evita redirect OAuth extra ao
@@ -40,7 +44,7 @@ export function GoogleSessionBridge() {
     } catch {
       attemptedRef.current = false
     }
-  }, [sessionToken, status])
+  }, [sessionToken, status, viaHub])
 
   useEffect(() => {
     if (refreshTimerRef.current !== null) {
@@ -48,6 +52,7 @@ export function GoogleSessionBridge() {
       refreshTimerRef.current = null
     }
 
+    if (viaHub) return
     if (!isGoogleIdentityConfigured()) return
     if (typeof sessionToken !== 'string' || sessionToken.trim() === '') return
 
@@ -80,7 +85,7 @@ export function GoogleSessionBridge() {
         refreshTimerRef.current = null
       }
     }
-  }, [sessionToken, tokenExpiresAtMs])
+  }, [sessionToken, tokenExpiresAtMs, viaHub])
 
   return null
 }

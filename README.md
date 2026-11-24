@@ -12,6 +12,15 @@ Variáveis: um único [`.env.example`](.env.example) documenta tudo; em dev use 
 
 O BFF, o servidor do SPA e o browser estão instrumentados para o Elastic APM, **desligados por omissão** — cada agente só arranca com a respetiva variável de ambiente. Ver [`docs/observabilidade-apm.md`](docs/observabilidade-apm.md).
 
+## Entrada pelo Hub Apps (iframe)
+
+O Hub abre o Splitters dentro dele com `?sso_token=<JWT de 5 min>`. Antes do React montar, a tela troca o token no BFF (`POST /api/auth/hub`) por um **token personalizado do Firebase** e entra com `signInWithCustomToken` — sem popup e sem redirecionar ao Google, que não abre dentro de iframe. Perfil e permissões continuam vindo de `splitters_users`. Código: [`server/hubSso.js`](server/hubSso.js) e [`src/features/session/lib/hubSso.ts`](src/features/session/lib/hubSso.ts).
+
+- Stack: `HUB_SSO_SECRET` (= `SSO_JWT_SECRET` do Hub) e `HUB_APP_ID` (id do app no `DB_Hub_Apps`; padrão `app-splitters-sebratel`).
+- Hub (Administração › Apps): marcar **SSO — passar token** e **Abrir dentro do Hub**.
+- `HUB_ONLY=true` recusa o login direto (tela e rotas autenticadas do BFF), exceto os e-mails de `HUB_ONLY_BYPASS_EMAILS` — a rota de emergência se o Hub cair. Ligar só depois de testar a entrada pelo Hub.
+- O nginx do frontend libera o iframe só para o Hub (`frame-ancestors` em `nginx.conf.template`).
+
 ## Docker / Portainer
 
 O deploy é feito pelo **Portainer**, criando a stack a partir do Git e apontando o compose path para **`docker-compose.portainer.yml`** (ver [`README-DOCKER.md`](README-DOCKER.md)). As variáveis (`VITE_*`, `DB_*`, `MASSIVA_*`, `GEOGRID_*`, portas, etc.) são definidas no painel *Environment variables* da stack — a secção *Docker* de [`.env.example`](.env.example) documenta todas. O compose passa as `VITE_*` como *build args* do frontend; o Vite **não** lê ficheiro dentro da imagem.

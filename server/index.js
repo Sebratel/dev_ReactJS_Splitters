@@ -85,11 +85,14 @@ import {
   isPlanningAssistantConfigured,
 } from './planningAssistant.js';
 import {
+  isFirebaseAdminAccessConfigured,
+  mintHubFirebaseCustomToken,
   requireAuthenticatedSplittersUser,
   requireIsaAdminAccess,
   requireSplittersAdminAccess,
   requireSplittersPermission,
 } from './firebaseAdminAuth.js';
+import { hubOnlyActive, hubSsoConfigured, verifyHubLaunchToken } from './hubSso.js';
 import {
   readIsaPromptConfig,
   resetIsaPromptConfig,
@@ -1375,6 +1378,56 @@ app.get('/api/hub/session', async (req, res) => {
   } catch (error) {
     console.error('Erro ao consultar sessao no Hub:', error);
     res.status(502).json({ success: false, error: error.message });
+  }
+});
+
+// ── Entrada pelo Hub Apps (iframe) — ver hubSso.js ───────────────────────────
+// Público: a tela precisa saber, antes do login, se o "só pelo Hub" está valendo.
+app.get('/api/auth/config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ hubSso: hubSsoConfigured(), hubOnly: hubOnlyActive() });
+});
+
+// Troca o token de 5 min do Hub por um token personalizado do Firebase.
+app.post('/api/auth/hub', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const result = verifyHubLaunchToken(req.body?.token);
+  if (!result.ok) {
+    logger.warn('hub_sso_rejected', { status: result.status, reason: result.error });
+    return res.status(result.status).json({ success: false, message: result.error });
+  }
+  if (!isFirebaseAdminAccessConfigured()) {
+    return res.status(503).json({
+      success: false,
+      message: 'Autenticacao do backend indisponivel: credenciais Firebase Admin ausentes.',
+    });
+  }
+  try {
+    const customToken = await mintHubFirebaseCustomToken(result);
+    logger.info('hub_sso_accepted', { email: result.email });
+    return res.json({ success: true, customToken, email: result.email, name: result.name });
+  } catch (error) {
+    logger.error('hub_sso_mint_error', { error: { name: error?.name, message: error?.message } });
+    return res.status(500).json({
+      success: false,
+      message: 'Nao foi possivel abrir a sessao a partir do Hub. Tente de novo pelo Hub Apps.',
+    });
+  }
+});
+
+// A tela pergunta, depois do login, se esta sessão pode seguir (HUB_ONLY).
+app.get('/api/auth/access', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const actor = await requireAuthenticatedSplittersUser(req);
+    return res.json({ success: true, viaHub: actor.identity?.viaHub === true });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      code: error?.code,
+      message: error instanceof Error ? error.message : 'Falha ao conferir o acesso.',
+    });
   }
 });
 
