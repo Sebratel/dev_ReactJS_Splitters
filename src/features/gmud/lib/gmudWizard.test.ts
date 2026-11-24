@@ -76,3 +76,16 @@ describe('etapa ao escolher a categoria na tela inicial', () => {
     expect(etapaAoEscolherCategoria('sistemas_internos', 'rede_externa', 3)).toEqual({ trocou: true, etapa: 0 })
   })
 })
+
+describe('seções do formulário x etapas do passo a passo', () => {
+  it('toda seção da tela de criação pertence a alguma etapa (senão ela fica oculta para sempre)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const fonte = readFileSync('src/features/gmud/ui/GmudNewScreen.tsx', 'utf-8')
+    const titulos = [...fonte.matchAll(/<(?:Section|FormCard) title="([^"]+)"/g)].map((m) => m[1])
+    expect(titulos.length).toBeGreaterThan(8)
+    const naEtapa = new Set(
+      (['rede_externa', 'sistemas_internos', 'sistemas_externos'] as const).flatMap((c) => wizardSteps(c).flatMap((s) => s.sections)),
+    )
+    expect(titulos.filter((t) => !naEtapa.has(t))).toEqual([])
+  })
+})

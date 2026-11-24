@@ -13,7 +13,7 @@ const FINAL: WizardStep = { key: 'revisao', label: 'Revisão', sections: [] }
 const APROVADORES: WizardStep = {
   key: 'aprovadores',
   label: 'Aprovadores e janela',
-  sections: ['Recursos administrativos', 'Janela de mudança', 'Observações (opcional)'],
+  sections: ['Recursos administrativos', 'Janela de mudança', 'Investimento (opcional)', 'Observações (opcional)'],
 }
 
 /** As cinco etapas do formulário de GMUD; o miolo muda conforme a categoria. */
