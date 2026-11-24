@@ -11,17 +11,17 @@ const TAB_ITEMS: ReadonlyArray<{ to: string; label: string; end: boolean; icon: 
 ]
 
 /**
- * Layout raiz do modulo de massivas.
- * Cabecalho, navegacao por abas e `<Outlet />` para a rota ativa.
+ * Layout raiz do módulo de massivas.
+ * Cabeçalho, navegação por abas e `<Outlet />` para a rota ativa.
  */
 export function MassivaLayout() {
   return (
     <div className="mx-auto max-w-[1720px] animate-in fade-in pt-0 duration-500">
       <AppPageHeader
         icon={Sparkles}
-        badge="Centro de operacao"
-        title="Operacao de Massivas"
-        description="Fluxo guiado de abertura com preview de rota, formulario e apoio do AutoISP — tudo organizado em paineis claros."
+        badge="Centro de operação"
+        title="Operação de Massivas"
+        description="Fluxo guiado de abertura com preview de rota, formulário e apoio do AutoISP — tudo organizado em painéis claros."
         primaryAction={{ to: '/splitters', label: 'Voltar aos Splitters' }}
       />
 

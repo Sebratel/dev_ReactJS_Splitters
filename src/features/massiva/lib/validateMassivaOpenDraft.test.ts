@@ -15,7 +15,16 @@ describe('validateMassivaOpenDraft', () => {
     )
     // hora é obrigatória: data válida sem hora deve acusar erro
     expect(joined(getMassivaOpenDraftIssues('ok', '2026-06-20', ''))).toContain('hora')
-    expect(getMassivaOpenDraftIssues('ok', '2026-06-20', '10:00')).toEqual([])
+    // data/hora no passado deve ser rejeitada
+    expect(joined(getMassivaOpenDraftIssues('ok', '2026-06-20', '10:00'))).toContain('futura')
+    // data/hora futura válida — sem erros
+    const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000)
+    const yyyy = futureDate.getFullYear()
+    const mm = String(futureDate.getMonth() + 1).padStart(2, '0')
+    const dd = String(futureDate.getDate()).padStart(2, '0')
+    const hh = String(futureDate.getHours()).padStart(2, '0')
+    const min = String(futureDate.getMinutes()).padStart(2, '0')
+    expect(getMassivaOpenDraftIssues('ok', `${yyyy}-${mm}-${dd}`, `${hh}:${min}`)).toEqual([])
   })
 
   it('massivaOpenDraftFinalDateLocal mantém horário de parede para MySQL', () => {

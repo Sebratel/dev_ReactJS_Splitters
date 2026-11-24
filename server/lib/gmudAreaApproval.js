@@ -1,0 +1,127 @@
+import crypto from 'node:crypto';
+
+/**
+ * Regras puras da aprovação por área (sem banco, sem rede) — testáveis isoladamente.
+ *
+ * Fluxo: ao abrir a GMUD, cada área envolvida recebe um pedido de aprovação; basta UMA pessoa
+ * da área decidir. Todas as áreas aprovando, a GMUD segue para o Comitê; uma área negando,
+ * a GMUD fica negada.
+ */
+
+export const AREA_STATUS = Object.freeze({
+  PENDENTE: 'pendente',
+  APROVADA: 'aprovada',
+  NEGADA: 'negada',
+  NAO_APLICAVEL: 'nao_aplicavel',
+});
+
+const asList = (value) => (Array.isArray(value) ? value : []);
+const cleanLabels = (list) => [
+  ...new Set(list.map((a) => String(a ?? '').trim()).filter((a) => a !== '')),
+];
+
+/**
+ * Áreas que precisam aprovar a GMUD.
+ * - Emergencial: nenhuma (vai direto ao Comitê).
+ * - Sistemas internos: "Áreas impactadas". Sistemas externos: "Áreas afetadas".
+ * - Em TODAS as categorias: áreas da matriz "Recursos administrativos" com papel Executor,
+ *   Validador ou Observador (somam às impactadas/afetadas; N/A não aprova).
+ */
+const PAPEIS_QUE_APROVAM = new Set(['executor', 'validador', 'observador']);
+
+/**
+ * Áreas marcadas na GMUD (impactadas/afetadas + Executor/Validador/Observador da matriz), de qualquer
+ * tipo. Na Emergencial elas não aprovam, mas são AVISADAS por e-mail (sem link).
+ */
+export function deriveNotificationAreas({ categoria, categoriaData, recursosAdministrativos } = {}) {
+  const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
+  const base =
+    categoria === 'sistemas_internos'
+      ? asList(data.areasImpactadas)
+      : categoria === 'sistemas_externos'
+        ? asList(data.areasAfetadas)
+        : [];
+  const matriz =
+    recursosAdministrativos && typeof recursosAdministrativos === 'object'
+      ? Object.entries(recursosAdministrativos)
+          .filter(([, papel]) => PAPEIS_QUE_APROVAM.has(papel))
+          .map(([area]) => area)
+      : [];
+  return cleanLabels([...base, ...matriz]);
+}
+
+/**
+ * Papel de cada área na matriz "Recursos administrativos" (executor, validador ou observador).
+ * Área marcada só como impactada/afetada não tem papel (string vazia). Comparação sem caixa/espaços.
+ */
+export function papelDaArea(recursosAdministrativos, areaLabel) {
+  if (!recursosAdministrativos || typeof recursosAdministrativos !== 'object') return '';
+  const alvo = String(areaLabel ?? '').trim().toLowerCase();
+  if (alvo === '') return '';
+  for (const [area, papel] of Object.entries(recursosAdministrativos)) {
+    if (String(area).trim().toLowerCase() === alvo && PAPEIS_QUE_APROVAM.has(papel)) return papel;
+  }
+  return '';
+}
+
+export function deriveApprovalAreas(input = {}) {
+  // Emergencial vai direto ao Comitê; Pré-aprovada não passa por aprovação nenhuma.
+  const tipo = String(input?.tipo ?? '').trim();
+  if (tipo === 'Emergencial' || tipo === 'Pré-aprovada') return [];
+  return deriveNotificationAreas(input);
+}
+
+/** Situação geral das áreas de uma GMUD a partir do status de cada uma. */
+export function computeAreasStatus(statuses) {
+  const list = asList(statuses);
+  if (list.length === 0) return AREA_STATUS.NAO_APLICAVEL;
+  if (list.includes(AREA_STATUS.NEGADA)) return AREA_STATUS.NEGADA;
+  if (list.every((s) => s === AREA_STATUS.APROVADA)) return AREA_STATUS.APROVADA;
+  return AREA_STATUS.PENDENTE;
+}
+
+const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/** Código de uso no link: 256 bits aleatórios. Só o hash é guardado no banco. */
+export function generateApprovalToken() {
+  const token = crypto.randomBytes(32).toString('base64url');
+  return { token, hash: hashApprovalToken(token) };
+}
+
+export function isValidApprovalTokenShape(token) {
+  return typeof token === 'string' && TOKEN_RE.test(token);
+}
+
+export function hashApprovalToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+/**
+ * Link enviado por e-mail. O código vai no fragmento (#), que o navegador não envia ao servidor,
+ * então não aparece em logs de acesso do nginx nem do BFF.
+ */
+export function buildApprovalUrl(baseUrl, token) {
+  const base = String(baseUrl ?? '').trim().replace(/\/+$/, '') || 'http://localhost:5173';
+  return `${base}/gmud/aprovar-area#t=${token}`;
+}
+
+/** Limitador simples em memória (por chave, janela deslizante) para os endpoints públicos. */
+export function createRateLimiter({ windowMs, max, now = () => Date.now() }) {
+  const hits = new Map();
+  return function allow(key) {
+    const t = now();
+    const recent = (hits.get(key) ?? []).filter((ts) => t - ts < windowMs);
+    if (recent.length >= max) {
+      hits.set(key, recent);
+      return false;
+    }
+    recent.push(t);
+    hits.set(key, recent);
+    if (hits.size > 5000) {
+      for (const [k, v] of hits) {
+        if (v.every((ts) => t - ts >= windowMs)) hits.delete(k);
+      }
+    }
+    return true;
+  };
+}

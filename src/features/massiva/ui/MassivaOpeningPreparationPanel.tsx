@@ -37,7 +37,7 @@ export function MassivaOpeningPreparationPanel({
   if (preparation.status === 'invalid') {
     return (
       <div
-        className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/20 dark:to-amber-950/20 px-4 py-3.5 text-sm text-amber-950 dark:text-amber-100 shadow-sm ring-1 ring-amber-100/50"
+        className="rounded-xl border border-amber-200/80 dark:border-amber-800/50 bg-gradient-to-b from-amber-50 dark:from-amber-950/20 to-amber-50/20 dark:to-amber-950/20 px-4 py-3.5 text-sm text-amber-950 dark:text-amber-100 shadow-sm ring-1 ring-amber-100/50 dark:ring-amber-800/40"
         role="status"
       >
         <div className="flex items-start gap-3">

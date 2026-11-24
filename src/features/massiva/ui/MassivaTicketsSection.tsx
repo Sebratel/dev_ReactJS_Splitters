@@ -339,7 +339,9 @@ export function MassivaTicketsSection({
   const monthOptions = useMemo(() => listRecentMonths(new Date(), 12), [])
   const todayValue = useMemo(() => toDateValue(new Date()), [])
   const { view, refetch: refetchBffList, isRefreshing } = useMassivaTickets({
-    refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : undefined,
+    // Lista do Elleven ao vivo: 60s na visão normal (antes usava o padrão de 5min, então
+    // massivas abertas por outros atendentes demoravam a aparecer). 90s no fora-de-catálogo.
+    refetchIntervalMs: catalogFilter === 'fora_catalogo' ? 90_000 : 60_000,
   })
   const queryClient = useQueryClient()
   const didRestoreVisibleCountRef = useRef(false)
@@ -476,7 +478,10 @@ export function MassivaTicketsSection({
         startDate: historyListStart,
         limit: historyListLimit,
       }),
-    staleTime: 60_000,
+    // Base local é leve (MySQL próprio): pollamos a cada 10s para os cards se atualizarem
+    // sozinhos — massivas abertas (por você ou por outro atendente) aparecem sem refresh.
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnMount: 'always',
   })
 
@@ -1293,6 +1298,13 @@ const { data: recentOpenTickets = [] } = useQuery({
               O cancelamento marca o protocolo como <strong>Cancelado</strong> na Voalle (não é
               encerramento). Use para aberturas equivocadas ou duplicadas.
             </p>
+            {selectedCancellingTicket.infraProtocol != null ? (
+              <p className="mt-2 rounded-lg border border-amber-200/70 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 text-[11px] leading-snug text-amber-950 dark:text-amber-100">
+                O protocolo de infraestrutura{' '}
+                <span className="font-mono font-semibold">{selectedCancellingTicket.infraProtocol}</span>, aberto junto com
+                esta massiva, <strong>também será cancelado</strong>.
+              </p>
+            ) : null}
 
             {selectedCancellingTicket.assignmentId === null ? (
               <p className="mt-3 text-sm text-red-700 dark:text-red-200">
@@ -1354,6 +1366,8 @@ const { data: recentOpenTickets = [] } = useQuery({
                     protocol: selectedCancellingTicket.protocol,
                     cancelDescription: cancelDescription.trim(),
                     cancelledBy: closedByLabel,
+                    infraProtocol: selectedCancellingTicket.infraProtocol ?? null,
+                    infraAssignmentId: selectedCancellingTicket.infraAssignmentId ?? null,
                   })
                 }}
               >

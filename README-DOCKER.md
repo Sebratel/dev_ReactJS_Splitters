@@ -32,5 +32,5 @@ Opcional (não faz parte deste compose): pasta **`docker/nginx-edge/`** para que
 Se o container ficar unhealthy, verifique os logs:
 
 ```bash
-docker logs react-backend-portainer
+docker compose -p dev_reactjs_splitters logs backend
 ```

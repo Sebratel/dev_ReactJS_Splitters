@@ -24,6 +24,7 @@ const KNOWN_MODULES = new Set([
   'intelligence',
   'redistribuicao',
   'sugestoes',
+  'gmud',
   'usuarios',
   'isa-config',
   'radar-uso',

@@ -123,6 +123,66 @@ function replaceAffectedClientsCount(description: string, affectedCount: number)
   )
 }
 
+const SEP_SISTEMA = '----------------------------------------'
+
+/** Gera a máscara de protocolo para assuntos do tipo sistema (interno ou externo). */
+export function buildMassivaSistemaDescription(params: {
+  sistemaTipo: 'interno' | 'externo'
+  sistemaAfetado: string
+  sistemaDescricaoIncidente: string
+  eventStartDate: string
+  eventStartTime: string
+  eventIdentifiedDate: string
+  eventIdentifiedTime: string
+  assignmentForecastDate: string
+  assignmentForecastTime: string
+}): string {
+  const {
+    sistemaTipo,
+    sistemaAfetado,
+    sistemaDescricaoIncidente,
+    eventStartDate,
+    eventStartTime,
+    eventIdentifiedDate,
+    eventIdentifiedTime,
+    assignmentForecastDate,
+    assignmentForecastTime,
+  } = params
+
+  function fmtDateTime(date: string, time: string): string {
+    if (!date) return '-'
+    const [y, m, d] = date.split('-')
+    const dateFmt = d && m && y ? `${d}/${m}/${y}` : date
+    return time ? `${dateFmt} às ${time}` : dateFmt
+  }
+
+  const isInterno = sistemaTipo === 'interno'
+  const header = isInterno
+    ? '🖥️ MASSIVA — INCIDENTE EM SISTEMA INTERNO'
+    : '🌐 MASSIVA — INCIDENTE EM SISTEMA DE TERCEIROS'
+  const sistemaLabel = isInterno ? '💻 Sistema afetado' : '🔗 Sistema / Fornecedor'
+
+  const out: string[] = []
+
+  out.push(header)
+  out.push(SEP_SISTEMA)
+
+  if (sistemaAfetado.trim()) out.push(`${sistemaLabel}: ${sistemaAfetado.trim()}`)
+
+  out.push(`⏰ Início do evento:        ${fmtDateTime(eventStartDate, eventStartTime)}`)
+  out.push(`🔍 Identificado em:         ${fmtDateTime(eventIdentifiedDate, eventIdentifiedTime)}`)
+  out.push(`⏳ Previsão de normalização: ${fmtDateTime(assignmentForecastDate, assignmentForecastTime)}`)
+
+  out.push('')
+  out.push('>> 📋 DESCRIÇÃO DO INCIDENTE')
+  out.push(sistemaDescricaoIncidente.trim() || '(a preencher)')
+
+  out.push('')
+  out.push(SEP_SISTEMA)
+
+  return out.join('\n')
+}
+
 export function buildMassivaAssignmentDescriptionForRequest(
   context: MassivaOpenFinalContext,
   request: PlanRequest,

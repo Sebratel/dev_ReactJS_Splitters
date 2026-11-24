@@ -1,15 +1,15 @@
-name: nexaview
+name: dev_reactjs_splitters
 
-# Stack: backend + frontend sem Nginx de borda no compose.
+# Stack: backend + frontend (nginx:alpine) sem proxy de borda no compose.
 # O browser acede ao frontend em FRONTEND_PORT (predefinido 3177) e opcionalmente ao backend em BACKEND_PORT.
-# Dentro da imagem do frontend o Nginx serve o SPA na porta 3177. HTTPS na borda: Traefik, Cloudflare ou LB à parte.
+# O nginx serve o SPA em 3177, proxia /api/ → backend e /api/v1/ → GATEWAY_ORIGIN.
+# HTTPS na borda: Traefik, Cloudflare ou LB à parte.
 
 services:
   backend:
     build:
       context: ./server
       dockerfile: Dockerfile
-    container_name: react-backend-portainer
     mem_limit: 1.5g
     memswap_limit: 1.5g
     environment:
@@ -44,6 +44,9 @@ services:
       MASSIVA_MYSQL_DATABASE: ${MASSIVA_MYSQL_DATABASE}
       MASSIVA_MYSQL_USER: ${MASSIVA_MYSQL_USER}
       MASSIVA_MYSQL_PASSWORD: ${MASSIVA_MYSQL_PASSWORD}
+      # Gravação antecipada feita pelo gateway Java (server-to-server, sem navegador).
+      # MESMO valor configurado na stack do gateway (SPLITTERS_BFF_INTERNAL_SECRET lá).
+      MASSIVA_GATEWAY_INTERNAL_SECRET: ${MASSIVA_GATEWAY_INTERNAL_SECRET:-}
       ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE: ${ISA_PROMPT_MYSQL_AUTO_CREATE_TABLE:-false}
       PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE: ${PLATFORM_SUGGESTIONS_MYSQL_AUTO_CREATE_TABLE:-false}
       PLATFORM_SUGGESTIONS_READ_ONLY: ${PLATFORM_SUGGESTIONS_READ_ONLY:-true}
@@ -71,6 +74,40 @@ services:
       # responde 503 "Automação de HSM não configurada".
       # Ex.: https://n8n-prod.sebratel.net.br/webhook/massiva-hsm-cx
       N8N_MASSIVA_HSM_WEBHOOK_URL: ${N8N_MASSIVA_HSM_WEBHOOK_URL:-}
+      # Aprovação por área: ao abrir a GMUD, o N8N envia a cada pessoa das áreas marcadas um e-mail
+      # com o link de aprovação. Sem N8N_GMUD_APPROVAL_WEBHOOK_URL a GMUD é registrada, mas ninguém é avisado.
+      # Ex.: https://n8n-<ambiente>.sebratel.net.br/webhook/gmud-aprovacao
+      N8N_GMUD_APPROVAL_WEBHOOK_URL: ${N8N_GMUD_APPROVAL_WEBHOOK_URL:-}
+      # Segredo do N8N para chamar o backend (GET /api/gmud/corporate-hsm-preview, cabeçalho x-internal-secret).
+      # Sem ele o endpoint responde sempre 401. Defina um valor próprio por ambiente na stack.
+      N8N_INTERNAL_SECRET: ${N8N_INTERNAL_SECRET:-}
+      # URL pública da plataforma (monta o link de aprovação). Ex.: https://<dominio-do-ambiente>.sebratel.net.br
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      # Validade do link de aprovação, em dias (padrão 30).
+      GMUD_APPROVAL_TOKEN_TTL_DAYS: ${GMUD_APPROVAL_TOKEN_TTL_DAYS:-30}
+      # Cancelamento automático no Elleven quando uma área nega a GMUD (sem usuário logado, via Basic Auth
+      # do gateway). São as MESMAS variáveis do frontend; sem elas a GMUD fica negada e o Comitê cancela.
+      GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
+      GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
+      GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
+      # Envio dos clientes da GMUD ao banco de usuários afetados (gateway /api/v1/afetados), no início da janela.
+      # O servidor só enxerga o que está listado aqui: sem estas linhas, ligar a variável no Portainer não
+      # tinha efeito e o agendador ficava "desativado". Padrão seguro: desligado e, se ligado, em simulação.
+      # Para enviar de verdade: GMUD_CLIENTES_SYNC_ENABLED=true e GMUD_CLIENTES_SYNC_DRY_RUN=false.
+      GMUD_CLIENTES_SYNC_ENABLED: ${GMUD_CLIENTES_SYNC_ENABLED:-false}
+      GMUD_CLIENTES_SYNC_DRY_RUN: ${GMUD_CLIENTES_SYNC_DRY_RUN:-true}
+      GMUD_CLIENTES_SYNC_INTERVAL_MINUTES: ${GMUD_CLIENTES_SYNC_INTERVAL_MINUTES:-5}
+      GMUD_CLIENTES_SYNC_MAX_CLIENTES: ${GMUD_CLIENTES_SYNC_MAX_CLIENTES:-5000}
+      # Reinclusão de quem ficou de fora de um evento por já estar em outro (mesmo padrão: desligada/simulação).
+      EVENT_REINCLUSION_ENABLED: ${EVENT_REINCLUSION_ENABLED:-false}
+      EVENT_REINCLUSION_DRY_RUN: ${EVENT_REINCLUSION_DRY_RUN:-true}
+      EVENT_REINCLUSION_INTERVAL_MINUTES: ${EVENT_REINCLUSION_INTERVAL_MINUTES:-5}
+      # Lista de clientes ao COR antes da janela (e-mail via N8N). Mesmo padrão: desligada/simulação.
+      GMUD_COR_LISTA_ENABLED: ${GMUD_COR_LISTA_ENABLED:-false}
+      GMUD_COR_LISTA_DRY_RUN: ${GMUD_COR_LISTA_DRY_RUN:-true}
+      GMUD_COR_LISTA_INTERVAL_MINUTES: ${GMUD_COR_LISTA_INTERVAL_MINUTES:-10}
+      GMUD_COR_LISTA_LEMBRETE_HORAS: ${GMUD_COR_LISTA_LEMBRETE_HORAS:-24}
+      N8N_GMUD_COR_LISTA_WEBHOOK_URL: ${N8N_GMUD_COR_LISTA_WEBHOOK_URL:-}
       # Assistente ISA (Google Gemini). Sem GEMINI_API_KEY ou GOOGLE_API_KEY o POST /api/isa/planning-assistant/chat responde 503.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -99,6 +136,12 @@ services:
       # ambiente, senão perde a comparação entre eles). Em testes: ELASTIC_APM_ENVIRONMENT=staging.
       ELASTIC_APM_SERVICE_NAME: ${ELASTIC_APM_SERVICE_NAME:-splitters-bff}
       ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
+      # Anexos de GMUD (PDF e imagens). O banco guarda só o registro; o arquivo vive nesta pasta,
+      # que precisa estar num volume. Sem ele, cada redeploy recria o container e os anexos somem
+      # (a tela mostra "Não foi possível abrir este anexo" e a rota devolve 404).
+      GMUD_UPLOADS_DIR: /data/gmud-uploads
+    volumes:
+      - gmud-uploads:/data/gmud-uploads
     ports:
       - "${BACKEND_PORT:-3004}:3001"
     expose:
@@ -133,6 +176,13 @@ services:
         - VITE_MASSIVA_CLOSE_PATH=${VITE_MASSIVA_CLOSE_PATH:-/api/v1/massivas/finalizar-chamado-via-api}
         - VITE_MASSIVA_INFRA_OPEN_PATH=${VITE_MASSIVA_INFRA_OPEN_PATH:-/api/v1/massivas/abrir-protocolo-infra-via-api}
         - VITE_MASSIVA_AFETADOS_PATH=${VITE_MASSIVA_AFETADOS_PATH:-/api/v1/afetados}
+        # Ponto de acesso (código) sob o qual as massivas de sistema interno/externo são abertas.
+        # Lido em BUILD. Vazio = o formulário de massiva de sistema fica todo desabilitado.
+        # Defina na stack (o .env.example documenta o valor provisório).
+        - VITE_MASSIVA_SISTEMA_AP_CODE=${VITE_MASSIVA_SISTEMA_AP_CODE:-}
+        # Link "Abrir no Elleven" do detalhe da GMUD ({protocol} = número). Vazio = ERP de produção.
+        # Em staging, defina na stack (exemplo de formato no .env.example).
+        - VITE_ELLEVEN_PROTOCOL_URL=${VITE_ELLEVEN_PROTOCOL_URL:-}
         # Só o endpoint de eventos (URL, não é segredo) vai para o frontend.
         # Auth AutoISP é feita no backend via AUTOISP_* (usuário/senha nunca no bundle).
         - VITE_AUTOISP_EVENTS_ENDPOINT=${VITE_AUTOISP_EVENTS_ENDPOINT}
@@ -159,30 +209,21 @@ services:
         - VITE_APM_SERVICE_NAME=${VITE_APM_SERVICE_NAME:-splitters-web}
         - VITE_APM_SERVICE_VERSION=${VITE_APM_SERVICE_VERSION:-}
         - VITE_APM_ENVIRONMENT=${VITE_APM_ENVIRONMENT:-production}
-    container_name: react-frontend-portainer
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: 256m
+    memswap_limit: 256m
     environment:
-      # Proxy do BFF: o SPA chama `/api/...` e este servidor encaminha ao backend
+      # Proxy do BFF: o SPA chama `/api/...` e o nginx encaminha ao backend
       # pela rede interna do compose (sem expor o backend ao browser, sem CORS).
       BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
-      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados) — mesmo host usado
-      # em dev no VITE_BFF_PROXY_TARGET (ex.: https://api-gateway-bff.sebratel.net.br).
+      # Gateway ERP/Elleven que atende `/api/v1/...` (massivas/afetados). Cada ambiente chama o gateway do PROPRIO
+      # ambiente (enderecos em .env.example).
       GATEWAY_ORIGIN: ${GATEWAY_ORIGIN:-}
-      # Basic Auth do api-gateway-bff (ex.: admin/admin) — só no proxy server-side; evita popup no browser.
+      # Basic Auth do api-gateway-bff — computado em base64 pelo docker-entrypoint.sh. Use o consumidor proprio deste sistema
+      # NO MESMO AMBIENTE do GATEWAY_ORIGIN (senha no Passbolt, so no Environment da stack); nunca admin/admin.
       GATEWAY_BASIC_AUTH_USER: ${GATEWAY_BASIC_AUTH_USER:-}
       GATEWAY_BASIC_AUTH_PASSWORD: ${GATEWAY_BASIC_AUTH_PASSWORD:-}
-      # Opcional: proxy `/__autoisp/...` (deixe vazio se o app usa URLs absolutas do AutoISP).
+      # Opcional: proxy `/__autoisp/...` (deixe vazio se não usado).
       AUTOISP_ORIGIN: ${AUTOISP_ORIGIN:-}
-      # Desenvolvimento local
-      LOCAL_USER_EMAIL: dev@local
-      LOCAL_USER_PERSON_ID: 629
-      LOCAL_MASSIVA_ENABLED: "true"
-      # Elastic APM do servidor Node que serve o SPA e faz proxy (serviço separado do BFF).
-      # `-` e não `:-`: ver a nota no serviço backend — vazio tem de significar desligado.
-      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL-https://apm.sebratel.net.br}
-      ELASTIC_APM_SERVICE_NAME: ${FRONTEND_APM_SERVICE_NAME:-splitters-frontend-server}
-      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-production}
     expose:
       - "3177"
     ports:
@@ -201,3 +242,8 @@ services:
 networks:
   nexaview-network:
     driver: bridge
+
+# Volume nomeado: sobrevive à recriação do container (redeploy pelo Portainer). Faça backup dele
+# junto com o banco: os anexos de GMUD só existem aqui.
+volumes:
+  gmud-uploads:

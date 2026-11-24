@@ -191,6 +191,17 @@ export function MassivaOpenMutationBar({
               Afetados registrados: {successPayload.afetadosPostedCount}
             </p>
           ) : null}
+          {(successPayload.excludedClientsCount ?? 0) > 0 ? (
+            <p className="mt-2 text-xs opacity-95">
+              {successPayload.excludedClientsCount}{' '}
+              {successPayload.excludedClientsCount === 1 ? 'cliente ficou' : 'clientes ficaram'} de fora por já
+              {successPayload.excludedClientsCount === 1 ? ' estar' : ' estarem'} em outro evento aberto
+              {successPayload.excludedClientsEventProtocols?.length
+                ? ` (protocolo ${successPayload.excludedClientsEventProtocols.join(', ')})`
+                : ''}
+              .
+            </p>
+          ) : null}
           {successPayload.infraProtocol != null ? (
             <div className="mt-2 rounded-md border border-sky-300/80 bg-sky-50/90 dark:bg-sky-950/40 px-3 py-2 text-xs text-sky-950 dark:text-sky-100 dark:border-sky-800/60 dark:bg-sky-950/30 dark:text-sky-100">
               <p className="font-semibold">Protocolo de infraestrutura aberto junto</p>

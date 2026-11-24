@@ -1,0 +1,104 @@
+import { describe, expect, it } from 'vitest'
+import { buildGmudTimeline } from '@/features/gmud/lib/gmudTimeline'
+
+describe('buildGmudTimeline', () => {
+  it('junta abertura do Voalle e trilha da plataforma em ordem cronológica', () => {
+    const items = buildGmudTimeline({
+      openedAt: '2026-10-01T10:00:00Z',
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'comite_aprovada', actor: 'Comitê', payload: { dataCab: '2026-10-02', rnc: null }, at: '2026-10-02T15:00:00Z' },
+        { type: 'criada', actor: 'Bruno', payload: { tipo: 'Programada' }, at: '2026-10-01T10:01:00Z' },
+        {
+          type: 'reagendada',
+          actor: 'Bruno',
+          payload: {
+            previous: { dataInicio: '2026-10-05', horaInicio: '22:00', dataFim: '2026-10-06', horaFim: '02:00' },
+            next: { dataInicio: '2026-10-07', horaInicio: '22:00', dataFim: '2026-10-08', horaFim: '02:00' },
+          },
+          at: '2026-10-03T09:00:00Z',
+        },
+      ],
+    })
+    expect(items.map((i) => i.title)).toEqual([
+      'Protocolo aberto no Elleven',
+      'Registrada na plataforma',
+      'Aprovada pelo Comitê',
+      'Janela reagendada',
+    ])
+    expect(items[1].detail).toBe('Programada')
+    expect(items[2].detail).toBe('CAB 02/10/2026')
+    expect(items[3].detail).toBe('05/10/2026 22:00 às 06/10/2026 02:00 → 07/10/2026 22:00 às 08/10/2026 02:00')
+  })
+
+  it('exibe eventos de fluxograma com títulos e tons corretos', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'fluxograma_criado', actor: 'Bruno', payload: {}, at: '2026-10-10T09:00:00Z' },
+        { type: 'fluxograma_atualizado', actor: 'Ana', payload: {}, at: '2026-10-11T10:00:00Z' },
+        { type: 'fluxograma_removido', actor: 'Bruno', payload: {}, at: '2026-10-12T11:00:00Z' },
+      ],
+    })
+    expect(items).toHaveLength(3)
+    expect(items[0]).toMatchObject({ title: 'Fluxograma gerado', tone: 'primary', actor: 'Bruno' })
+    expect(items[1]).toMatchObject({ title: 'Fluxograma atualizado', tone: 'neutral', actor: 'Ana' })
+    expect(items[2]).toMatchObject({ title: 'Fluxograma removido', tone: 'warning', actor: 'Bruno' })
+  })
+
+  it('exibe eventos de anexo com nome do arquivo no detail', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'anexo_adicionado', actor: 'Bruno', payload: { filename: 'plano.pdf' }, at: '2026-10-10T08:00:00Z' },
+        { type: 'anexo_removido', actor: 'Ana', payload: { filename: 'rascunho.docx' }, at: '2026-10-10T09:00:00Z' },
+      ],
+    })
+    expect(items[0]).toMatchObject({ title: 'Anexo incluído', detail: 'plano.pdf', tone: 'neutral' })
+    expect(items[1]).toMatchObject({ title: 'Anexo removido', detail: 'rascunho.docx', tone: 'warning' })
+  })
+
+  it('usa o encerramento do Voalle só quando a plataforma não encerrou', () => {
+    const legado = buildGmudTimeline({ openedAt: '2026-01-01T10:00:00Z', conclusionDate: '2026-02-01T10:00:00Z', voalleStatus: 'Cancelado', events: [] })
+    expect(legado.at(-1)).toMatchObject({ title: 'Protocolo cancelado no Elleven', tone: 'danger' })
+
+    const plataforma = buildGmudTimeline({
+      openedAt: '2026-01-01T10:00:00Z',
+      conclusionDate: '2026-02-01T10:00:00Z',
+      voalleStatus: 'Encerrado',
+      events: [{ type: 'encerrada_elleven', actor: 'Bruno', payload: { motivo: 'concluida' }, at: '2026-02-01T09:59:00Z' }],
+    })
+    expect(plataforma.filter((i) => i.title.includes('encerrado'))).toHaveLength(1)
+    expect(plataforma.at(-1)?.detail).toBe('Encerramento (GMUD concluída)')
+  })
+})
+
+describe('buildGmudTimeline — aprovação por área', () => {
+  it('mostra decisão das áreas, aprovação do Comitê em nome da área e falha de cancelamento', () => {
+    const items = buildGmudTimeline({
+      openedAt: null,
+      conclusionDate: null,
+      voalleStatus: 'Abertura',
+      events: [
+        { type: 'area_aprovada', actor: 'Ana', payload: { area: 'Comercial' }, at: '2026-10-01T10:00:00Z' },
+        { type: 'area_aprovada_comite', actor: 'Comitê', payload: { area: 'RH' }, at: '2026-10-01T11:00:00Z' },
+        { type: 'area_negada', actor: 'Beto', payload: { area: 'Atendimento', motivo: 'Fora da janela' }, at: '2026-10-01T12:00:00Z' },
+        { type: 'cancelamento_elleven_falhou', actor: 'Beto', payload: { motivo: 'Gateway recusou (HTTP 502).' }, at: '2026-10-01T12:01:00Z' },
+      ],
+    })
+    expect(items.map((i) => [i.title, i.tone])).toEqual([
+      ['Área aprovou', 'success'],
+      ['Comitê aprovou em nome da área', 'warning'],
+      ['Área negou — GMUD negada', 'danger'],
+      ['Cancelamento no Elleven não concluído', 'danger'],
+    ])
+    expect(items[0].detail).toBe('Comercial')
+    expect(items[2].detail).toBe('Atendimento — Fora da janela')
+    expect(items[3].detail).toBe('Gateway recusou (HTTP 502).')
+  })
+})

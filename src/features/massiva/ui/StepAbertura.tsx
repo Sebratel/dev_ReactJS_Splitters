@@ -14,6 +14,8 @@ import type {
 } from '@/features/massiva/model/massivaOpenReadiness'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import { MassivaOpenDraftFields } from '@/features/massiva/ui/MassivaOpenDraftFields'
+import { MassivaClientConflictsAlert } from '@/features/massiva/ui/MassivaClientConflictsAlert'
+import { useMassivaClientConflicts } from '@/features/massiva/hooks/useMassivaClientConflicts'
 import { isGoogleIdentityConfigured } from '@/shared/config/env'
 import { formatQueryError } from '@/shared/lib/formatQueryError'
 import { ErrorState } from '@/shared/ui/states/ErrorState'
@@ -24,6 +26,10 @@ type StepAberturaProps = {
   openingPreparation: MassivaOpeningPreparationView
   draftFormEnabled: boolean
   onRetryPersonId: () => void
+  solicitationTypeLabel?: string
+  hideNetworkFields?: boolean
+  sistemaOptions?: readonly string[]
+  sistemaTipo?: 'interno' | 'externo'
 }
 
 function Notice({
@@ -55,6 +61,10 @@ export function StepAbertura({
   openingPreparation,
   draftFormEnabled,
   onRetryPersonId,
+  solicitationTypeLabel,
+  hideNetworkFields,
+  sistemaOptions,
+  sistemaTipo,
 }: StepAberturaProps) {
   const assignmentDescription = useMassivaOpenDraftStore((s) => s.assignmentDescription)
   const descriptionAutoSync = useMassivaOpenDraftStore((s) => s.descriptionAutoSync)
@@ -85,6 +95,12 @@ export function StepAbertura({
     staleTime: 60_000,
   })
   const fullConnections = fullConnectionsQuery.data ?? []
+
+  // Clientes da seleção que já estão em OUTRO evento aberto: avisa (não bloqueia) e, por padrão,
+  // eles ficam de fora desta massiva.
+  const includeConflictingClients = useMassivaOpenDraftStore((s) => s.includeConflictingClients)
+  const setIncludeConflictingClients = useMassivaOpenDraftStore((s) => s.setIncludeConflictingClients)
+  const { conflicts: clientConflicts } = useMassivaClientConflicts(fullConnections, hideNetworkFields !== true)
 
   // Assinatura da seleção (AP/slot/porta/splitters). Quando muda de fato, reseta os
   // campos da abertura (relato, quem identificou, protocolo de infra) para o padrão —
@@ -266,6 +282,15 @@ export function StepAbertura({
         />
       ) : null}
 
+      {hideNetworkFields !== true ? (
+        <MassivaClientConflictsAlert
+          conflicts={clientConflicts}
+          includeAnyway={includeConflictingClients}
+          onIncludeAnywayChange={setIncludeConflictingClients}
+          disabled={!draftFormEnabled}
+        />
+      ) : null}
+
       {readiness.status === 'missing-session' ? (
         <div className="space-y-3">
           <Notice
@@ -358,6 +383,10 @@ export function StepAbertura({
         disabled={!draftFormEnabled}
         descriptionByAp={descriptionByAp}
         siteCandidates={siteCandidates}
+        solicitationTypeLabel={solicitationTypeLabel}
+        hideNetworkFields={hideNetworkFields}
+        sistemaOptions={sistemaOptions}
+        sistemaTipo={sistemaTipo}
       />
     </div>
   )

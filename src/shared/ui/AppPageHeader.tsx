@@ -38,7 +38,7 @@ export function AppPageHeader({
   return (
     <header
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-amber-50/30 dark:to-amber-950/20 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80',
+        'relative overflow-hidden rounded-2xl border border-amber-200/70 dark:border-white/10 bg-gradient-to-br from-amber-50 dark:from-amber-950/20 via-white dark:via-surface-container-lowest to-amber-50/30 dark:to-amber-950/20 shadow-[0_4px_24px_-8px_rgba(180,83,9,0.18)] ring-1 ring-amber-100/80 dark:ring-white/10',
         'animate-in fade-in slide-in-from-top-2 zoom-in-[0.99] duration-300 ease-out',
         'motion-reduce:animate-none motion-reduce:opacity-100',
         className,
@@ -81,7 +81,7 @@ export function AppPageHeader({
                 replace={primaryAction.replace}
                 state={primaryAction.state}
                 aria-label={primaryAction.label}
-                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-amber-800/15 bg-amber-400 px-3 py-2.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-amber-500 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 sm:px-4 sm:text-sm"
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-neutral-900/10 bg-primary px-3 py-2.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 sm:px-4 sm:text-sm"
                 title={primaryAction.label}
               >
                 <ArrowLeft size={16} aria-hidden className="shrink-0 opacity-80" />

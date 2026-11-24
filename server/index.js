@@ -1,12 +1,52 @@
 import express from 'express';
 import pkg from 'pg';
 import cors from 'cors';
+import helmet from 'helmet';
 import cron from 'node-cron';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { fileURLToPath } from 'url';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
 import { createMassivaHistoryStore } from './massivaHistoryStore.js';
+import { createMassivaConferenciaStore } from './massivaConferenciaStore.js';
+import {
+  buildConferenciaStatus,
+  createConferenciaService,
+  startConferenciaScheduler,
+} from './lib/massivaConferenciaElleven.js';
+import { createMassivaClientConflictsStore } from './massivaClientConflictsStore.js';
+import { MAX_CONTRACT_IDS, normalizeContractIds } from './lib/massivaClientConflicts.js';
+import { createGmudClientSyncStore } from './gmudClientSyncStore.js';
+import { createGmudClientSyncService, startGmudClientSyncScheduler } from './lib/gmudClientSyncService.js';
+import { createGmudGatewayClient } from './lib/gmudGatewayClient.js';
+import { createGmudClientsSource } from './lib/gmudClientsSource.js';
+import { composeClientesTexto, normalizeClientesSemSplitter } from './lib/gmudClientesSemSplitter.js';
+import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
+import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
+import { isNetworkGmud as isGmudNetwork, readClientSyncConfig as readGmudClientSyncConfig } from './lib/gmudClientSync.js';
+import { createEventSuppressedStore } from './eventSuppressedStore.js';
+import { isPreAprovada, podeAbrirPreAprovada, MSG_SEM_PERMISSAO_PRE_APROVADA } from './lib/gmudPreAprovada.js';
+import {
+  GMUD_OPEN_SQL,
+  buildGmudSummarySql,
+  gmudSummaryFromRow,
+} from './lib/gmudListFilters.js';
+import {
+  agruparSituacoes,
+  buildGmudPainelCountsSql,
+  buildGmudPainelWhere,
+  buildGmudSolicitantesSql,
+  gmudPainelCountsFromRow,
+  gmudPainelNeeds,
+  parseGmudPainelFilters,
+  semanaAtual,
+} from './lib/gmudPainelFiltros.js';
+import { buildReuniaoSemanal, parseReuniaoSemanalQuery, reagendadasParaFora } from './lib/gmudReuniaoSemanal.js';
+import { createEventReinclusionService, startEventReinclusionScheduler } from './lib/eventReinclusionService.js';
+import { SYNC_STATUS as GMUD_SYNC_STATUS, brazilNowNaive } from './lib/gmudClientSync.js';
 import {
   analyzeStreetReliefContext,
   evaluateReliefForSplitter,
@@ -69,10 +109,89 @@ import {
   normalizeMassivaRouteRowTituloPreferido,
   rowMatchesMassivaOltRoute,
 } from './splitterTitleOltDerivation.js';
+import { formatEscopoRotas, normalizeEscopoRotas, rowMatchesEscopoRotas } from './lib/gmudEscopoRede.js';
 import {
   recordUsageEvents,
   summarizeUsage,
 } from './usageAnalyticsStore.js';
+import {
+  createGmudRequest,
+  minDataProgramada,
+  getGmudExtrasByProtocols,
+  setGmudApproval,
+  addMassivaLink,
+  removeMassivaLink,
+  getMassivaLinks,
+  getMassivaLinkCounts,
+  listPendingGmuds,
+  getPendingGmudCount,
+  getGmudApprovalState,
+  listScheduledGmuds,
+  rescheduleGmud,
+  logGmudEvent,
+  getGmudEvents,
+  getGmudRequest,
+  listGmudRequestsCreatedBetween,
+  listGmudEventsBetween,
+  getLinksWithAffected,
+  listRegisteredGmudProtocols,
+  listRegisteredGmudProtocolsByTipos,
+  listGmudSituacaoRows,
+  listGmudsWithWindowBetween,
+  listGmudRequestsByProtocols,
+  listGmudReagendadaEvents,
+  getGmudConfigLists,
+  addGmudConfigItem,
+  deactivateGmudConfigItem,
+  addGmudAttachment,
+  listGmudAttachments,
+  getGmudAttachment,
+  softDeleteGmudAttachment,
+  getGmudFlowchart,
+  saveGmudFlowchart,
+  deleteGmudFlowchart,
+  getAllTeamApprovers,
+  addTeamApprover,
+  removeTeamApprover,
+  resolveAreasWithApprovers,
+  ensureGmudCorItem,
+  listGmudCorRecipients,
+  listGmudsForCorLista,
+  getLatestGmudEventsByTypes,
+  createAreaApprovals,
+  getAreaApprovals,
+  lookupApprovalToken,
+  decideAreaApproval,
+  overrideAreaApproval,
+  listGmudUpcomingForHsm,
+  getGmudCommittee,
+  isGmudCommitteeMember,
+  assertGmudCommitteeMember,
+  listGmudsForClientSync,
+} from './gmudStore.js';
+import { changesCommitteeDecision, isCommitteeMember, isGmudAprovadaFinal } from './lib/gmudCommittee.js';
+import { aggregatePlatform, aggregateVoalle } from './gmudIndicators.js';
+import { validateGmudDateWindow, canEditGmudRequest, safeErrorMessage as _safeErrorMessage } from './gmudValidation.js';
+import {
+  generateGmudFlowchart,
+  assistGmudFlowchart,
+  isPlanningAssistantConfigured as isGeminiConfigured,
+} from './gmudFlowchartAI.js';
+import {
+  buildApprovalUrl,
+  createRateLimiter,
+  deriveApprovalAreas,
+  papelDaArea,
+  deriveNotificationAreas,
+} from './lib/gmudAreaApproval.js';
+import { buildAreaDenialDescription, cancelGmudInElleven } from './lib/gmudEllevenCancel.js';
+import {
+  MASSIVA_FINALIZE_MODES,
+  cleanupMassivaAffected,
+  finalizeMassivaInElleven,
+  nowBrazilIsoLike,
+  cancelLinkedInfraProtocol,
+} from './lib/massivaEllevenClose.js';
 import logger, { captureConsole } from './logger.js';
 import { ROTA_POR_PPPOE_SQL, parseRotaPorPppoeBody } from './lib/rotaPorPppoe.js';
 
@@ -81,6 +200,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '..', '.env.local'), override: true });
+
+// ─── Upload de anexos GMUD ────────────────────────────────────────────────────
+// Arquivos ficam em /uploads/gmud/{protocol}/ com nome UUID+extensão.
+// O diretório é criado on-demand no handler (não no startup).
+const GMUD_UPLOADS_ROOT = path.resolve(
+  process.env.GMUD_UPLOADS_DIR || path.join(__dirname, '..', 'uploads', 'gmud'),
+);
+const GMUD_ALLOWED_MIMETYPES = new Set([
+  'application/pdf', 'image/png', 'image/jpeg', 'image/webp',
+]);
+const GMUD_MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const gmudUpload = multer({
+  storage: multer.diskStorage({
+    destination(req, _file, cb) {
+      const protocol = String(req.params.protocol ?? '').trim();
+      if (!/^\d+$/.test(protocol)) return cb(new Error('Protocolo inválido.'));
+      const dir = path.join(GMUD_UPLOADS_ROOT, protocol);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename(_req, file, cb) {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${uuidv4()}${ext}`);
+    },
+  }),
+  limits: { fileSize: GMUD_MAX_FILE_BYTES },
+  fileFilter(_req, file, cb) {
+    cb(null, GMUD_ALLOWED_MIMETYPES.has(file.mimetype));
+  },
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 if (!String(process.env.REVERSE_GEOCODE_ENDPOINT ?? '').trim()) {
   const viteReverse = String(process.env.VITE_REVERSE_GEOCODE_ENDPOINT ?? '').trim();
@@ -107,8 +258,33 @@ const hubBaseUrl = (
   process.env.VITE_HUB_ORIGIN ||
   'https://sebratel-hub.web.app'
 ).replace(/\/+$/, '');
-app.use(cors()); // Permite qualquer origem em desenvolvimento local
+// Helmet: headers de segurança (X-Frame-Options, HSTS, X-Content-Type-Options, etc.)
+// CSP desabilitado: o BFF serve apenas JSON/proxy — quem serve o SPA é o nginx.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS: em produção restringe às origens configuradas; em dev permite qualquer origem.
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+app.use(
+  cors(
+    allowedOrigins.length > 0
+      ? {
+          origin: (origin, callback) => {
+            // Requisições sem origin (server-to-server, nginx proxy) são sempre permitidas.
+            if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+            callback(Object.assign(new Error('CORS: origin não permitida'), { statusCode: 403 }));
+          },
+          credentials: true,
+        }
+      : undefined, // undefined = cors() sem restrição (dev local)
+  ),
+);
+
 app.use(express.json({ limit: '512kb' }));
+
+// safeErrorMessage, validateGmudDateWindow e canEditGmudRequest importados de gmudValidation.js
+const safeErrorMessage = (error, fallback) => _safeErrorMessage(error, fallback);
 
 // Observabilidade aditiva: um id de correlação por requisição, gerado
 // sincronamente (antes de qualquer trabalho assíncrono) e logado como
@@ -626,6 +802,30 @@ async function buildPlanningAssistantContext({ splitterCode, straightRadiusMeter
 }
 
 const massivaHistoryStore = createMassivaHistoryStore({
+  host: process.env.MASSIVA_MYSQL_HOST,
+  port: process.env.MASSIVA_MYSQL_PORT,
+  user: process.env.MASSIVA_MYSQL_USER,
+  password: process.env.MASSIVA_MYSQL_PASSWORD,
+  database: process.env.MASSIVA_MYSQL_DATABASE,
+});
+
+// Conferência com o Elleven: cria no histórico local as massivas que existem no Elleven e faltam aqui.
+// Desligada por padrão (MASSIVA_CONFERENCIA_ENABLED=true liga). Ver lib/massivaConferenciaElleven.js.
+const massivaConferenciaStore = createMassivaConferenciaStore({
+  host: process.env.MASSIVA_MYSQL_HOST,
+  port: process.env.MASSIVA_MYSQL_PORT,
+  user: process.env.MASSIVA_MYSQL_USER,
+  password: process.env.MASSIVA_MYSQL_PASSWORD,
+  database: process.env.MASSIVA_MYSQL_DATABASE,
+});
+const massivaConferenciaService = createConferenciaService({
+  store: massivaConferenciaStore,
+  env: process.env,
+  logger,
+});
+
+// Só leitura: quais clientes já estão em outro evento aberto (aviso ao abrir nova massiva).
+const massivaClientConflictsStore = createMassivaClientConflictsStore({
   host: process.env.MASSIVA_MYSQL_HOST,
   port: process.env.MASSIVA_MYSQL_PORT,
   user: process.env.MASSIVA_MYSQL_USER,
@@ -1468,6 +1668,7 @@ app.get('/api/massiva/routes', async (req, res) => {
       SELECT DISTINCT
         COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") AS "apCode",
         base."PONTO DE ACESSO" AS "apTitle",
+        base."SITE" AS "siteTitle",
         base."CONCENTRADOR" AS "oltTitle",
         base."CONCENTRADOR_CODE" AS "oltCode",
         COALESCE(base."SLOT[SPLT.SECUNDARIO]", 0) AS "slot",
@@ -1911,6 +2112,30 @@ app.post('/api/massiva/connections/batch-summary', async (req, res) => {
   }
 });
 
+// Quais destes contratos já fazem parte de OUTRO evento aberto? Não bloqueia nada: o front avisa o
+// operador e deixa esses clientes de fora do novo evento (um cliente não entra em dois eventos).
+app.post('/api/massiva/clientes-em-evento', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const requested = req.body?.contractIds;
+    if (Array.isArray(requested) && requested.length > MAX_CONTRACT_IDS) {
+      return res.status(400).json({ success: false, message: `Máximo de ${MAX_CONTRACT_IDS} contratos por consulta.` });
+    }
+    const contractIds = normalizeContractIds(requested);
+    if (contractIds.length === 0) {
+      return res.json({ success: true, data: { events: [], contractIds: [] } });
+    }
+    const data = await massivaClientConflictsStore.findOpenEventConflicts(contractIds);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao consultar clientes em outro evento.',
+    });
+  }
+});
+
 app.post('/api/massiva/history/open', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
@@ -1944,6 +2169,8 @@ app.post('/api/massiva/history/open', async (req, res) => {
       infraProtocol: req.body?.infraProtocol ?? null,
       infraAssignmentId: req.body?.infraAssignmentId ?? null,
       identifiedBy: req.body?.identifiedBy ?? null,
+      // Linha completa (gravação final) por padrão; `false` só na gravação antecipada de 1 AP.
+      complete: req.body?.complete !== false,
     };
 
     const result = await massivaHistoryStore.registerOpenBatch(payload);
@@ -1956,6 +2183,54 @@ app.post('/api/massiva/history/open', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao registrar histórico local de abertura de massiva.',
+      error: error.message,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Massiva — gravação antecipada chamada pelo GATEWAY (server-to-server), logo após o
+// Elleven confirmar a abertura do protocolo — independente do navegador do operador.
+// Fecha a janela que a gravação antecipada do front (openMassivaFromContext.ts) não cobre:
+// queda/timeout durante o próprio POST de abertura, antes de o navegador processar a
+// resposta. Protegido por segredo compartilhado (não é sessão de usuário — quem chama é o
+// gateway Java, não um browser logado). Resposta ao item 2 da revisão da PR #45.
+// Sempre complete:false e best-effort nos campos: a gravação do front (early + final)
+// continua rodando normalmente depois e enriquece/fecha a mesma linha via upsert.
+// ---------------------------------------------------------------------------
+app.post('/api/internal/massiva/history/open', async (req, res) => {
+  try {
+    const secret = (process.env.MASSIVA_GATEWAY_INTERNAL_SECRET ?? '').trim();
+    const provided = (req.headers['x-internal-secret'] ?? '').trim();
+    if (!secret || !provided || provided !== secret) {
+      return res.status(401).json({ success: false, message: 'Não autorizado.' });
+    }
+
+    if (!massivaHistoryStore.configured) {
+      return res.status(503).json({
+        success: false,
+        message: 'Histórico local de massivas não configurado no MySQL.',
+      });
+    }
+
+    const payload = {
+      operatorEmail: String(req.body?.operatorEmail ?? '').trim(),
+      title: String(req.body?.title ?? '').trim(),
+      splitterEntries: [],
+      results: normalizeMassivaHistoryResults(req.body?.results),
+      affectedClients: req.body?.affectedClients ?? 0,
+      openedAt: req.body?.openedAt ?? null,
+      identifiedBy: req.body?.identifiedBy ?? null,
+      complete: false,
+    };
+
+    const result = await massivaHistoryStore.registerOpenBatch(payload);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erro ao registrar histórico local (gravação do gateway):', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao registrar histórico local da abertura (gateway).',
       error: error.message,
     });
   }
@@ -2488,6 +2763,95 @@ app.post('/api/massiva/history/update-expected-close', async (req, res) => {
   }
 });
 
+/**
+ * Encerra ou cancela uma massiva de ponta a ponta no backend: Elleven (via gateway) -> limpeza dos afetados ->
+ * histórico local. Tudo numa só requisição que segue rodando mesmo se o navegador desconectar, então a aba
+ * fechar no meio não deixa mais o Elleven encerrado e o histórico local "aberta".
+ * Sem GATEWAY_* no backend responde 503 { code: 'gateway_not_configured' } e o frontend cai no fluxo antigo.
+ */
+app.post('/api/massiva/finalize', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+
+    const mode = String(req.body?.mode ?? '').trim();
+    if (mode !== MASSIVA_FINALIZE_MODES.ENCERRAR && mode !== MASSIVA_FINALIZE_MODES.CANCELAR) {
+      return res.status(400).json({ success: false, message: 'Modo inválido (use encerrar ou cancelar).' });
+    }
+    const protocol = Number(req.body?.protocol);
+    const assignmentId = Number(req.body?.assignmentId);
+    const description = String(req.body?.description ?? '').trim();
+    if (!Number.isInteger(protocol) || protocol <= 0 || !Number.isInteger(assignmentId) || assignmentId <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo ou assignmentId inválidos.' });
+    }
+    if (description.length < 3 || description.length > 4000) {
+      return res.status(400).json({ success: false, message: 'Informe a descrição (3 a 4000 caracteres).' });
+    }
+
+    // 1) Elleven. Se falhar, nada local é alterado.
+    const elleven = await finalizeMassivaInElleven({ assignmentId, description, mode });
+    if (!elleven.ok) {
+      if (elleven.notConfigured) {
+        return res.status(503).json({ success: false, code: 'gateway_not_configured', message: elleven.reason });
+      }
+      logger.error('[massiva-finalize] Elleven não finalizou o protocolo.', { protocol, mode, reason: elleven.reason });
+      return res.status(502).json({ success: false, message: elleven.reason });
+    }
+
+    // 2) Limpeza dos afetados no gateway (auxiliar; falha não desfaz o encerramento).
+    await cleanupMassivaAffected({ protocol });
+
+    // 2b) Cancelar a massiva cancela também o protocolo de infra aberto junto com ela (se houver). A massiva já foi
+    // cancelada: falha aqui vira aviso, não erro.
+    const infraCancel =
+      mode === MASSIVA_FINALIZE_MODES.CANCELAR && massivaHistoryStore.configured
+        ? await cancelLinkedInfraProtocol(
+            { protocol, description },
+            { getLink: (p) => massivaHistoryStore.getInfraLinkByProtocol(p), finalize: finalizeMassivaInElleven, logger },
+          )
+        : null;
+
+    // 3) Histórico local. Elleven já finalizou: falha aqui vira aviso, não erro.
+    const closedBy = gmudActorName(actor);
+    let localHistoryWarning;
+    try {
+      if (!massivaHistoryStore.configured) {
+        localHistoryWarning = 'Histórico local de massivas não configurado no MySQL.';
+      } else {
+        const base = { protocol, assignmentId, closeDescription: description, closedAt: nowBrazilIsoLike(), closedBy };
+        const saved =
+          mode === MASSIVA_FINALIZE_MODES.CANCELAR
+            ? await massivaHistoryStore.registerCancel(base)
+            : await massivaHistoryStore.registerClose({
+                ...base,
+                tipoIncidente: req.body?.tipoIncidente ?? null,
+                impacto: req.body?.impacto ?? null,
+                area: req.body?.area ?? null,
+                tecnologia: req.body?.tecnologia ?? null,
+                classificacao: req.body?.classificacao ?? null,
+                cnl: req.body?.cnl ?? null,
+              });
+        if (!saved || Number(saved.updated ?? 0) === 0) {
+          localHistoryWarning = 'Finalizada no Elleven, mas não há registro local desse protocolo para atualizar.';
+        }
+      }
+    } catch (localError) {
+      logger.error('[massiva-finalize] Falha ao gravar o histórico local.', { protocol, mode, error: localError?.message });
+      localHistoryWarning = `Finalizada no Elleven, mas o registro local falhou: ${localError?.message ?? 'erro desconhecido'}.`;
+    }
+
+    return res.json({
+      success: true,
+      data: { ok: true, ...(localHistoryWarning ? { localHistoryWarning } : {}), ...(infraCancel ? { infraCancel } : {}) },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao finalizar a massiva.'),
+    });
+  }
+});
+
 app.post('/api/massiva/history/mark-closed-by-protocols', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
@@ -2784,6 +3148,26 @@ app.get('/api/massiva/history/open-filter-splitter-codes', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno ao resolver splitters para filtro de massiva aberta.',
+      error: error.message,
+    });
+  }
+});
+
+// Estado da Conferência com o Elleven (leitura, para a tela de qualidade das massivas).
+app.get('/api/massiva/conferencia/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const data = await buildConferenciaStatus({
+      service: massivaConferenciaService,
+      store: massivaConferenciaStore,
+      env: process.env,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: 'Erro ao consultar a conferência com o Elleven.',
       error: error.message,
     });
   }
@@ -4129,7 +4513,7 @@ app.post('/api/usage-events', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar evento de uso.',
+      message: safeErrorMessage(error, 'Falha ao registrar evento de uso.'),
     });
   }
 });
@@ -4178,7 +4562,7 @@ app.post('/api/client-logs', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao registrar evento do cliente.',
+      message: safeErrorMessage(error, 'Falha ao registrar evento do cliente.'),
     });
   }
 });
@@ -4207,8 +4591,1987 @@ app.get('/api/usage-events/summary', async (req, res) => {
     const statusCode = Number(error?.statusCode ?? 500);
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Falha ao carregar o radar de uso.',
+      message: safeErrorMessage(error, 'Falha ao carregar o radar de uso.'),
     });
+  }
+});
+
+// GMUD (Gestão de Mudança de Rede): lista as GMUDs direto do Voalle/ERP (Postgres).
+// A GMUD vive nas mesmas tabelas da massiva (assignment_incidents/assignments), com
+// incident_type_id = 1084 (catálogo "GMUD"). Somente leitura — enriquecimento com os
+// campos do formulário (nosso MySQL) vem em etapa posterior.
+const GMUD_INCIDENT_TYPE_ID = 1084;
+
+/** Listas de protocolos (do nosso MySQL, só leitura) que os filtros do painel de GMUDs precisam. */
+async function loadGmudPainelLists(filters, todasAsAbas) {
+  const need = gmudPainelNeeds(filters, { todasAsAbas });
+  const lists = {};
+  if (need.filter !== undefined) lists.filter = await listRegisteredGmudProtocols(need.filter);
+  if (need.registered) lists.registered = await listRegisteredGmudProtocols(null);
+  if (need.tipos) lists.tipos = await listRegisteredGmudProtocolsByTipos(filters.tipos);
+  if (need.situacao) lists.situacao = agruparSituacoes(await listGmudSituacaoRows());
+  if (need.comitePendente) lists.comitePendente = await listRegisteredGmudProtocols(['pendente']);
+  if (need.semana) {
+    // Aba "Esta semana": janela de execução cruzando a semana atual (segunda a domingo, hora de Brasília).
+    const semana = semanaAtual(brazilNowNaive());
+    lists.semana = semana ? (await listGmudsWithWindowBetween(semana.de, semana.ate)).map((r) => r.voalleProtocol) : [];
+  }
+  return lists;
+}
+
+/**
+ * Contagem de cada aba rápida do painel de GMUDs com os mesmos filtros da lista (menos a própria aba) e o
+ * número de canceladas na aba atual. Só leitura; aceita os mesmos parâmetros de filtro de /api/gmud/list.
+ */
+app.get('/api/gmud/list-counts', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    const filters = parseGmudPainelFilters(req.query);
+    const email = String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase();
+    const lists = await loadGmudPainelLists(filters, true);
+    const { sql, params } = buildGmudPainelCountsSql({ typeId: GMUD_INCIDENT_TYPE_ID, search, filters, email, lists });
+    const result = await pool.query(sql, params);
+    return res.json({ success: true, data: gmudPainelCountsFromRow(result.rows?.[0]) });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar as contagens das GMUDs.'),
+    });
+  }
+});
+
+/** Nomes dos solicitantes das GMUDs, para as opções do filtro "Solicitante" do painel. Só leitura. */
+app.get('/api/gmud/list-solicitantes', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const result = await pool.query(buildGmudSolicitantesSql(), [GMUD_INCIDENT_TYPE_ID]);
+    const items = (result.rows ?? []).map((r) => String(r.name ?? '').trim()).filter((n) => n !== '');
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar os solicitantes das GMUDs.'),
+    });
+  }
+});
+
+app.get('/api/gmud/list', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+
+    const rawLimit = Number.parseInt(String(req.query?.limit ?? ''), 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit <= 500 ? rawLimit : 100;
+    const rawOffset = Number.parseInt(String(req.query?.offset ?? ''), 10);
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
+    const search = typeof req.query?.q === 'string' ? req.query.q.trim() : '';
+    // Ordenação por coluna (whitelist — o valor nunca entra cru no SQL).
+    const SORT_COLUMNS = {
+      protocolo: 'ai.protocol',
+      solicitante: 'pe.name',
+      abertura: 'ai.date_to_start',
+      prazo: 'ai.responsible_final_date',
+      status: 'ist.title',
+    };
+    const sortColumn = SORT_COLUMNS[String(req.query?.sort ?? '')] ?? 'ai.protocol';
+    const sortDir = String(req.query?.dir ?? '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const orderBy = `${sortColumn} ${sortDir} NULLS LAST${sortColumn === 'ai.protocol' ? '' : ', ai.protocol DESC'}`;
+
+    // Filtros do painel: o `filter` dos cartões do topo, as abas rápidas e os filtros do construtor
+    // (situação, abertura, tipo, origem, solicitante, canceladas ocultas) se combinam. Os do Voalle são SQL;
+    // os da plataforma usam listas de protocolos do nosso MySQL, aplicadas como `ai.protocol = ANY(...)`.
+    const filters = parseGmudPainelFilters(req.query);
+    const email = String(actor?.profile?.email || actor?.identity?.email || '').trim().toLowerCase();
+    const lists = await loadGmudPainelLists(filters, false);
+    const { clause: searchClause, params } = buildGmudPainelWhere({ typeId: GMUD_INCIDENT_TYPE_ID, search, filters, email, lists });
+
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+        FROM erp.assignment_incidents ai
+        JOIN erp.assignments a ON a.id = ai.assignment_id
+        LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+        LEFT JOIN erp.people pe ON pe.id = ai.person_id
+       WHERE ai.incident_type_id = $1${searchClause}`;
+    const countResult = await pool.query(countSql, params);
+    const total = countResult.rows?.[0]?.total ?? 0;
+
+    const listParams = [...params, limit, offset];
+    const listSql = `
+      SELECT ai.protocol::bigint AS protocol,
+             ai.assignment_id::bigint AS assignment_id,
+             a.title,
+             a.description,
+             ai.date_to_start AS opened_at,
+             ai.responsible_final_date AS sla_date,
+             a.conclusion_date,
+             ai.incident_status_id::int AS status_id,
+             ist.title AS status,
+             pe.name AS requester,
+             pe.email AS requester_email
+        FROM erp.assignment_incidents ai
+        JOIN erp.assignments a ON a.id = ai.assignment_id
+        LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+        LEFT JOIN erp.people pe ON pe.id = ai.person_id
+       WHERE ai.incident_type_id = $1${searchClause}
+       ORDER BY ${orderBy}
+       LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`;
+    const listResult = await pool.query(listSql, listParams);
+
+    const baseItems = (listResult.rows ?? []).map((r) => ({
+      protocol: Number(r.protocol),
+      assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+      title: r.title ?? '',
+      description: r.description ?? '',
+      openedAt: r.opened_at ? new Date(r.opened_at).toISOString() : null,
+      slaDate: r.sla_date ? new Date(r.sla_date).toISOString() : null,
+      conclusionDate: r.conclusion_date ? new Date(r.conclusion_date).toISOString() : null,
+      status: r.status ?? '',
+      statusId: r.status_id != null ? Number(r.status_id) : null,
+      requester: r.requester ?? '',
+      requesterEmail: r.requester_email ?? '',
+    }));
+
+    // Enriquece com os campos do formulário/aprovação (nosso MySQL). Best-effort:
+    // se o MySQL falhar/estiver indisponível, devolve só os dados do Voalle.
+    let extras = new Map();
+    let linkCounts = new Map();
+    try {
+      const protocols = baseItems.map((i) => i.protocol);
+      [extras, linkCounts] = await Promise.all([
+        getGmudExtrasByProtocols(protocols),
+        getMassivaLinkCounts(protocols),
+      ]);
+    } catch (extraError) {
+      logger.warn('[gmud] Falha ao enriquecer lista com campos locais (segue só Voalle): %s', extraError?.message);
+    }
+    const items = baseItems.map((i) => {
+      const extra = extras.get(i.protocol) ?? null;
+      // assignmentId para o encerramento no Elleven: prioriza o do nosso banco (gravado na abertura);
+      // se faltar (GMUD antiga/só no Voalle), usa o do Voalle (assignment_incidents.assignment_id).
+      const assignmentId = extra?.assignmentId ?? i.assignmentId ?? null;
+      return {
+        ...i,
+        assignmentId,
+        extra: extra ? { ...extra, assignmentId } : null,
+        massivaLinksCount: linkCounts.get(i.protocol) ?? 0,
+      };
+    });
+
+    return res.json({ success: true, data: { items, total, limit, offset } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar as GMUDs.'),
+    });
+  }
+});
+
+/**
+ * Busca de clientes corporativos no Elleven para a GMUD (ponto a ponto, fibra apagada): por nome, contrato ou
+ * usuário. Somente leitura; devolve só o necessário para escolher (sem telefone nem endereço).
+ */
+const gmudClientesEllevenSearch = createClientesEllevenSearch({ pool });
+// Lista dos POPs/Sites ativos, para o campo de POP/Site abrir já com as opções (sem precisar digitar).
+// São poucas dezenas de linhas; cache de 5 min porque quase não mudam.
+let gmudPopSitesCache = { at: 0, data: [] };
+app.get('/api/gmud/pop-sites', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    if (Date.now() - gmudPopSitesCache.at > 5 * 60_000) {
+      const result = await pool.query(
+        `SELECT id, TRIM(title) AS title, NULLIF(TRIM(city), '') AS city, NULLIF(TRIM(neighborhood), '') AS neighborhood
+           FROM authentication_sites
+          WHERE active IS TRUE AND deleted IS FALSE AND title IS NOT NULL AND TRIM(title) <> ''
+          ORDER BY TRIM(title) ASC
+          LIMIT 500`,
+      );
+      gmudPopSitesCache = { at: Date.now(), data: result.rows ?? [] };
+    }
+    return res.json({ success: true, data: gmudPopSitesCache.data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao listar os POPs/Sites.'),
+    });
+  }
+});
+
+app.get('/api/gmud/clientes-elleven', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const q = typeof req.query?.q === 'string' ? req.query.q : '';
+    const data = await gmudClientesEllevenSearch.search(q);
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao buscar clientes no Elleven.'),
+    });
+  }
+});
+
+/**
+ * Números dos indicadores do topo do painel de GMUDs. Cada um usa a MESMA regra do filtro de mesmo nome
+ * da lista, para o número do cartão ser igual ao total que aparece ao clicar nele.
+ */
+app.get('/api/gmud/list-summary', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const OPEN_SQL = GMUD_OPEN_SQL;
+    // Divisão Plataforma/Legado das abertas e vencidas: precisa dos protocolos registrados (MySQL).
+    // Best-effort: se a plataforma não responder, seguem só os totais (a divisão vai nula).
+    let registered = null;
+    try {
+      registered = await listRegisteredGmudProtocols(null);
+    } catch (e) {
+      logger.warn('[gmud] Falha ao listar GMUDs registradas para o resumo (segue sem a divisão por origem): %s', e?.message);
+    }
+    const withOrigem = registered !== null;
+    const result = await pool.query(
+      buildGmudSummarySql({ withOrigem }),
+      withOrigem ? [GMUD_INCIDENT_TYPE_ID, registered.length > 0 ? registered : [0]] : [GMUD_INCIDENT_TYPE_ID],
+    );
+    const row = result.rows?.[0] ?? {};
+    let comitePendente = 0;
+    try {
+      const protocols = await listRegisteredGmudProtocols(['pendente']);
+      if (protocols.length > 0) {
+        const c = await pool.query(
+          `SELECT COUNT(*)::int AS total
+             FROM erp.assignment_incidents ai
+             JOIN erp.assignments a ON a.id = ai.assignment_id
+             LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+            WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[]) AND ${OPEN_SQL}`,
+          [GMUD_INCIDENT_TYPE_ID, protocols],
+        );
+        comitePendente = c.rows?.[0]?.total ?? 0;
+      }
+    } catch (e) {
+      logger.warn('[gmud] Falha ao contar GMUDs aguardando o Comitê (segue com 0): %s', e?.message);
+    }
+    return res.json({
+      success: true,
+      data: gmudSummaryFromRow(row, { comitePendente, withOrigem }),
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar o resumo das GMUDs.'),
+    });
+  }
+});
+
+/**
+ * Áreas marcadas na GMUD (sistemas internos: areasImpactadas; externos: areasAfetadas).
+ * São as áreas cujas pessoas cadastradas recebem o aviso de aprovação.
+ */
+function gmudAreasFromCategoriaData(categoriaData) {
+  const data = categoriaData && typeof categoriaData === 'object' ? categoriaData : {};
+  const lists = [data.areasImpactadas, data.areasAfetadas].filter(Array.isArray);
+  return [...new Set(lists.flat().map((a) => String(a ?? '').trim()).filter((a) => a !== ''))];
+}
+
+/**
+ * Pede a aprovação das áreas: o N8N envia um e-mail a cada pessoa cadastrada nas áreas da GMUD,
+ * com o link individual para aprovar ou negar. Fire-and-forget — falha não impede o registro.
+ * Configurar via env N8N_GMUD_APPROVAL_WEBHOOK_URL (e APP_BASE_URL para montar os links).
+ * O payload carrega links com código de uso único: nunca logar o corpo enviado.
+ */
+async function notifyGmudAreaApprovalWebhook({ gmud, approvals = [], avisos = [], recursosAdministrativos = null }) {
+  const webhookUrl = (process.env.N8N_GMUD_APPROVAL_WEBHOOK_URL ?? '').trim();
+  if (webhookUrl === '') return;
+  const baseUrl = (process.env.APP_BASE_URL ?? '').trim();
+  const approvers = approvals.flatMap((a) =>
+    a.pessoas.map((p) => ({
+      email: p.email,
+      nome: p.nome,
+      area: a.areaLabel,
+      // Papel da área na matriz (executor/validador/observador); vazio = só marcada como impactada/afetada.
+      papel: papelDaArea(recursosAdministrativos, a.areaLabel),
+      link: buildApprovalUrl(baseUrl, p.token),
+    })),
+  );
+  // Toda GMUD NOVA chama o webhook: o Chat avisa sempre; o e-mail com link de aprovação só sai para quem
+  // foi marcado (áreas impactadas/afetadas, ou Executor/Validador/Observador na matriz). Sem aprovação
+  // por área (Emergencial), approvers vai vazio e as áreas marcadas vão em `avisos` (e-mail sem link).
+  const payload = {
+    evento: 'gmud_aprovacao_areas',
+    protocol: gmud.voalleProtocol,
+    titulo: gmud.titulo,
+    categoria: gmud.categoria,
+    tipo: gmud.tipo,
+    popSite: gmud.popSite ?? '',
+    abrangenciaRede: formatEscopoRotas(normalizeEscopoRotas(gmud.categoriaData)),
+    clientesManuais: composeClientesTexto(gmud.categoriaData),
+    solicitanteNome: gmud.solicitanteNome,
+    solicitanteEmail: gmud.solicitanteEmail,
+    dataInicio: gmud.dataInicio,
+    horaInicio: gmud.horaInicio,
+    dataFim: gmud.dataFim,
+    horaFim: gmud.horaFim,
+    areas: approvals.map((a) => a.areaLabel),
+    approvers,
+    // Só na Emergencial: pessoas das áreas marcadas, avisadas por e-mail SEM link de aprovação.
+    avisos,
+    criadaEm: new Date().toISOString(),
+    platformUrl: `${baseUrl.replace(/\/+$/, '') || 'http://localhost:5173'}/gmud/${gmud.voalleProtocol}`,
+  };
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      logger.error('[gmud-approval-webhook] Webhook respondeu com erro:', { status: response.status });
+    } else {
+      logger.info(`[gmud-approval-webhook] Pedido de aprovação enviado (protocolo ${gmud.voalleProtocol}, ${approvers.length} pessoa(s)).`);
+    }
+  } catch (err) {
+    logger.warn('[gmud-approval-webhook] Falha ao notificar webhook:', { error: err?.message ?? err });
+  }
+}
+
+// Cria/atualiza uma requisição de GMUD no nosso MySQL (campos do formulário que não
+// existem no Voalle). Nesta etapa NÃO abre protocolo no Elleven — o "Protocolo Voalle"
+// é informado manualmente (como no Google Form de hoje). A abertura automática entra
+// numa etapa posterior, com endpoint dedicado no gateway.
+app.post('/api/gmud/create', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para registrar GMUDs.');
+    const body = req.body ?? {};
+
+    const voalleProtocol = Number.parseInt(String(body.voalleProtocol ?? ''), 10);
+    if (!Number.isFinite(voalleProtocol) || voalleProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Informe o Protocolo Voalle da GMUD.' });
+    }
+    if (String(body.titulo ?? '').trim() === '') {
+      return res.status(400).json({ success: false, message: 'Informe o título da GMUD.' });
+    }
+
+    // Pré-aprovada não passa por aprovação nenhuma: só abre quem tem a permissão própria (ou é admin).
+    if (isPreAprovada(body.tipo) && !podeAbrirPreAprovada(actor)) {
+      return res.status(403).json({ success: false, message: MSG_SEM_PERMISSAO_PRE_APROVADA });
+    }
+
+    // F-02: verifica que o protocolo existe no Voalle antes de criar o registro local.
+    const [voalleCheck] = await fetchVoalleGmudRows(voalleProtocol);
+    if (!voalleCheck) {
+      return res.status(404).json({ success: false, message: 'Protocolo não encontrado no Voalle. Verifique o número e tente novamente.' });
+    }
+
+    const actorEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const canApprove = actor?.permissions?.canApproveGmud === true;
+
+    // F-01: em caso de UPSERT, apenas o criador ou um aprovador pode atualizar (canEditGmudRequest).
+    const existing = await getGmudRequest(voalleProtocol);
+    if (!canEditGmudRequest(existing, actorEmail, canApprove)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Você não tem permissão para editar a GMUD de outro usuário.',
+      });
+    }
+
+    const createdByEmail = actorEmail || String(body.solicitanteEmail ?? '');
+
+    const exigeArea = body.categoria === 'sistemas_internos' || body.categoria === 'sistemas_externos';
+    if (!existing && exigeArea && gmudAreasFromCategoriaData(body.categoriaData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Selecione ao menos uma área impactada: são as áreas que serão avisadas quando a GMUD for aprovada.',
+      });
+    }
+
+    const inicioJanela = `${String(body.dataInicio ?? '').slice(0, 10)} ${String(body.horaInicio ?? '00:00').slice(0, 5)}`;
+    const fimJanela = `${String(body.dataFim ?? '').slice(0, 10)} ${String(body.horaFim ?? '00:00').slice(0, 5)}`;
+    if (!existing && body.dataInicio && body.dataFim && fimJanela <= inicioJanela) {
+      return res.status(400).json({ success: false, message: 'O fim da janela deve ser depois do início.' });
+    }
+
+    if (!existing && (String(body.tipo ?? '').trim() === 'Programada' || isPreAprovada(body.tipo))) {
+      const dataInicio = String(body.dataInicio ?? '').slice(0, 10);
+      const minimo = minDataProgramada();
+      if (dataInicio !== '' && dataInicio < minimo) {
+        return res.status(400).json({
+          success: false,
+          message: `GMUD ${isPreAprovada(body.tipo) ? 'Pré-aprovada' : 'Programada'} só pode iniciar a partir de ${minimo.split('-').reverse().join('/')} (apresentação na terça + 7 dias).`,
+        });
+      }
+    }
+
+    // Aprovação por área: toda área envolvida precisa ter quem aprove ANTES de registrar.
+    let areasToApprove = [];
+    if (!existing) {
+      const labels = deriveApprovalAreas({
+        tipo: body.tipo,
+        categoria: body.categoria,
+        categoriaData: body.categoriaData,
+        recursosAdministrativos: body.recursosAdministrativos,
+      });
+      if (labels.length > 0) {
+        areasToApprove = await resolveAreasWithApprovers(labels);
+        const semResponsavel = areasToApprove
+          .filter((a) => a.areaId === null || a.people.length === 0)
+          .map((a) => a.label);
+        if (semResponsavel.length > 0) {
+          return res.status(422).json({
+            success: false,
+            message: `Sem responsável cadastrado para aprovar: ${semResponsavel.join(', ')}. Peça ao administrador para cadastrar em GMUD > Configurações.`,
+          });
+        }
+      }
+    }
+
+    const result = await createGmudRequest({ ...body, voalleProtocol, createdByEmail });
+    await logGmudEvent({
+      voalleProtocol,
+      type: 'criada',
+      actor: gmudActorName(actor) || createdByEmail,
+      payload: { tipo: body.tipo ?? null, titulo: body.titulo ?? null },
+    });
+
+    // Pré-aprovada: não passa por aprovação. Já nasce liberada (agenda, vínculo de massivas, clientes em alerta).
+    // Só na criação: reenviar ou editar uma GMUD existente nunca a aprova por esse caminho.
+    if (!existing && isPreAprovada(body.tipo)) {
+      await setGmudApproval({ voalleProtocol, statusComite: 'aprovada', aprovadoPor: 'Pré-aprovada' });
+      await logGmudEvent({
+        voalleProtocol,
+        type: 'pre_aprovada',
+        actor: gmudActorName(actor) || createdByEmail,
+        payload: { serie: body.categoriaData?.serie ?? null },
+      });
+    }
+
+    // Toda GMUD NOVA avisa (Chat + e-mail), com ou sem aprovação de área.
+    let approvals = [];
+    if (areasToApprove.length > 0) {
+      try {
+        approvals = await createAreaApprovals({
+          protocol: voalleProtocol,
+          areas: areasToApprove,
+          ttlDays: Number(process.env.GMUD_APPROVAL_TOKEN_TTL_DAYS) || 30,
+        });
+      } catch (approvalError) {
+        logger.error('[gmud-area-approval] Falha ao criar as aprovações das áreas:', { error: approvalError?.message });
+        return res.status(500).json({
+          success: false,
+          message: 'A GMUD foi registrada, mas não foi possível criar as aprovações das áreas. Ela ficou bloqueada; avise o suporte.',
+        });
+      }
+    }
+    if (!existing) {
+      // Emergencial não passa por aprovação de área, mas as áreas marcadas (impactadas/afetadas e
+      // Executor/Validador/Observador) são avisadas por e-mail. Best-effort: área sem ninguém
+      // cadastrado só deixa de receber — nunca bloqueia a Emergencial.
+      let avisos = [];
+      if (String(body.tipo ?? '').trim() === 'Emergencial' || isPreAprovada(body.tipo)) {
+        try {
+          const labels = deriveNotificationAreas({
+            categoria: body.categoria,
+            categoriaData: body.categoriaData,
+            recursosAdministrativos: body.recursosAdministrativos,
+          });
+          const resolved = await resolveAreasWithApprovers(labels);
+          avisos = resolved.flatMap((a) =>
+            a.people.map((p) => ({ email: p.email, nome: p.name, area: a.label, papel: papelDaArea(body.recursosAdministrativos, a.label) })),
+          );
+        } catch (avisoError) {
+          logger.warn('[gmud-approval-webhook] Falha ao resolver quem avisar na Emergencial:', { error: avisoError?.message });
+        }
+      }
+      const gmudRow = await getGmudRequest(voalleProtocol);
+      void notifyGmudAreaApprovalWebhook({ gmud: gmudRow, approvals, avisos, recursosAdministrativos: body.recursosAdministrativos });
+    }
+
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao registrar a GMUD.'),
+    });
+  }
+});
+
+/** E-mail de quem está agindo (perfil ou identidade da sessão). */
+function gmudActorEmail(actor) {
+  return actor?.profile?.email || actor?.identity?.email || '';
+}
+
+// Fila de aprovação: GMUDs pendentes de decisão do Comitê (escopo completo). Só p/ membros do Comitê.
+app.get('/api/gmud/pending', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    await assertGmudCommitteeMember(gmudActorEmail(actor));
+    const items = await listPendingGmuds();
+    return res.json({ success: true, data: { items, total: items.length } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar as GMUDs pendentes.'),
+    });
+  }
+});
+
+// Contador de GMUDs pendentes (badge do menu). Só conta para membros do Comitê (demais recebem 0).
+app.get('/api/gmud/pending-count', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const isMember = await isGmudCommitteeMember(gmudActorEmail(actor));
+    const count = isMember ? await getPendingGmudCount() : 0;
+    return res.json({ success: true, data: { count } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao contar GMUDs pendentes.'),
+    });
+  }
+});
+
+// Comitê da GMUD: id do item fixo (para gerir membros em Configurações), se quem pergunta é
+// membro e quantos membros existem. Os e-mails dos membros só saem em /api/gmud/team-approvers (canConfigureGmud).
+app.get('/api/gmud/committee', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const { itemId, members } = await getGmudCommittee();
+    return res.json({
+      success: true,
+      data: {
+        itemId,
+        membersCount: members.length,
+        isMember: isCommitteeMember(members, gmudActorEmail(actor)),
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar o Comitê.'),
+    });
+  }
+});
+
+// Listas configuráveis do módulo GMUD (setores, equipes, sistemas…). Aberto a todos com canViewGmud.
+app.get('/api/gmud/config-lists', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const lists = await getGmudConfigLists();
+    return res.json({ success: true, data: lists });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar listas de configuração.',
+    });
+  }
+});
+
+// Adiciona item a uma lista configurável (requer canConfigureGmud ou isAdmin).
+app.post('/api/gmud/config-lists', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const body = req.body ?? {};
+    const { listKey, label } = body;
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const item = await addGmudConfigItem(listKey, label, createdBy);
+    return res.json({ success: true, data: item });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao adicionar item.',
+    });
+  }
+});
+
+// Remove (soft-delete) um item de uma lista configurável (requer canConfigureGmud ou isAdmin).
+app.delete('/api/gmud/config-lists/:id', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID inválido.' });
+    }
+    const result = await deactivateGmudConfigItem(id);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover item.',
+    });
+  }
+});
+
+// ─── Aprovadores de equipe (matriz de e-mails) ───────────────────────────────
+
+// GET /api/gmud/team-approvers — retorna todos os aprovadores agrupados por equipeId.
+app.get('/api/gmud/team-approvers', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const data = await getAllTeamApprovers();
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar aprovadores.',
+    });
+  }
+});
+
+// POST /api/gmud/team-approvers — adiciona uma pessoa a ser avisada numa área.
+app.post('/api/gmud/team-approvers', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const { areaId, userEmail, userDisplayName } = req.body ?? {};
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await addTeamApprover({ areaId, userEmail, userDisplayName, createdBy });
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao adicionar aprovador.',
+    });
+  }
+});
+
+// DELETE /api/gmud/team-approvers/:id — remove um aprovador.
+app.delete('/api/gmud/team-approvers/:id', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID inválido.' });
+    }
+    const result = await removeTeamApprover(id);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover aprovador.',
+    });
+  }
+});
+
+// ─── Fluxogramas GMUD ────────────────────────────────────────────────────────
+
+app.get('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const flowchart = await getGmudFlowchart(protocol);
+    return res.json({ success: true, data: flowchart });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao carregar o fluxograma.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/flowchart/generate', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({ success: false, message: 'Assistente IA não configurado no servidor (GEMINI_API_KEY ausente).' });
+    }
+    const description = String(req.body?.description ?? '').trim();
+    const gmudContext = String(req.body?.gmudContext ?? '').trim() || null;
+    if (!description || description.length < 20) {
+      return res.status(400).json({ success: false, message: 'Descrição deve ter pelo menos 20 caracteres.' });
+    }
+
+    const actor = gmudActorName(req.user);
+    const { mermaidSource, model, warnings } = await generateGmudFlowchart(description, gmudContext);
+
+    // Salva automaticamente como rascunho de IA
+    const flowchart = await saveGmudFlowchart({
+      voalleProtocol: protocol,
+      mermaidSource,
+      origin: 'ai',
+      reviewStatus: 'draft',
+      aiModel: model,
+      aiWarnings: warnings,
+      createdBy: actor,
+    });
+
+    // Registra na trilha (best-effort)
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_criado', actor, payload: { origin: 'ai', model } }).catch(() => {});
+
+    return res.json({ success: true, data: { flowchart, warnings } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao gerar o fluxograma.',
+    });
+  }
+});
+
+app.put('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const mermaidSource = String(req.body?.mermaidSource ?? '').trim();
+    if (!mermaidSource) {
+      return res.status(400).json({ success: false, message: 'Fonte Mermaid é obrigatória.' });
+    }
+    const VALID_ORIGINS = new Set(['ai', 'manual', 'imported']);
+    const origin = VALID_ORIGINS.has(req.body?.origin) ? req.body.origin : 'manual';
+    const actor = gmudActorName(req.user);
+
+    const flowchart = await saveGmudFlowchart({
+      voalleProtocol: protocol,
+      mermaidSource,
+      origin,
+      reviewStatus: req.body?.reviewStatus === 'reviewed' ? 'reviewed' : 'draft',
+      createdBy: actor,
+    });
+
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_atualizado', actor, payload: { origin, version: flowchart.version } }).catch(() => {});
+
+    return res.json({ success: true, data: flowchart });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao salvar o fluxograma.',
+    });
+  }
+});
+
+app.delete('/api/gmud/:protocol/flowchart', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canApproveGmud', 'Somente membros do Comitê podem remover fluxogramas.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const result = await deleteGmudFlowchart(protocol);
+    const actor = gmudActorName(req.user);
+    logGmudEvent({ voalleProtocol: protocol, type: 'fluxograma_removido', actor, payload: {} }).catch(() => {});
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover o fluxograma.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/flowchart/assist', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!isGeminiConfigured()) {
+      return res.status(503).json({ success: false, message: 'Assistente IA não configurado no servidor (GEMINI_API_KEY ausente).' });
+    }
+    const VALID_TYPES = new Set(['checklist', 'risks', 'summary']);
+    const type = String(req.body?.type ?? '');
+    if (!VALID_TYPES.has(type)) {
+      return res.status(400).json({ success: false, message: 'Tipo de assistência inválido. Use: checklist, risks ou summary.' });
+    }
+    const description = String(req.body?.description ?? '').trim();
+    const gmudContext = String(req.body?.gmudContext ?? '').trim() || null;
+    if (!description || description.length < 10) {
+      return res.status(400).json({ success: false, message: 'Descrição insuficiente.' });
+    }
+
+    const { result, model } = await assistGmudFlowchart(type, description, gmudContext);
+    return res.json({ success: true, data: { result, model, type, generatedByAI: true } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha na assistência de IA.',
+    });
+  }
+});
+
+// ─── Anexos GMUD ─────────────────────────────────────────────────────────────
+
+app.get('/api/gmud/:protocol/attachments', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const protocol = Number.parseInt(req.params.protocol, 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const attachments = await listGmudAttachments(protocol);
+    return res.json({ success: true, data: attachments });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao listar anexos.',
+    });
+  }
+});
+
+app.post('/api/gmud/:protocol/attachments', gmudUpload.single('file'), async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const protocol = Number.parseInt(req.params.protocol, 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      if (req.file) fs.rmSync(req.file.path, { force: true });
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Nenhum arquivo enviado ou tipo não permitido (PDF, PNG, JPG, WEBP).' });
+    }
+    if (!GMUD_ALLOWED_MIMETYPES.has(req.file.mimetype)) {
+      fs.rmSync(req.file.path, { force: true });
+      return res.status(400).json({ success: false, message: 'Tipo de arquivo não permitido.' });
+    }
+    const uploadedBy = actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || null;
+    const description = String(req.body?.description ?? '').trim() || null;
+    const attachment = await addGmudAttachment({
+      voalleProtocol: protocol,
+      filenameOriginal: req.file.originalname,
+      filenameStored: req.file.filename,
+      mimetype: req.file.mimetype,
+      sizeBytes: req.file.size,
+      description,
+      uploadedBy,
+    });
+    // best-effort: falha no evento não desfaz o upload
+    logGmudEvent({ voalleProtocol: protocol, eventType: 'anexo_adicionado', actor: uploadedBy, payload: { attachmentId: attachment.id, filename: req.file.originalname } })
+      .catch((e) => console.warn('[gmud] evento anexo_adicionado falhou:', e?.message));
+    return res.status(201).json({ success: true, data: attachment });
+  } catch (error) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao salvar anexo.',
+    });
+  }
+});
+
+app.get('/api/gmud/attachments/:id/file', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID de anexo inválido.' });
+    }
+    const attachment = await getGmudAttachment(id);
+    const filePath = path.join(GMUD_UPLOADS_ROOT, String(attachment.voalleProtocol), attachment.filenameStored);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Arquivo não encontrado no servidor.' });
+    }
+    res.setHeader('Content-Type', attachment.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.filenameOriginal)}"`);
+    res.setHeader('Content-Length', attachment.sizeBytes);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao servir arquivo.',
+    });
+  }
+});
+
+app.delete('/api/gmud/attachments/:id', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Sem permissão para visualizar GMUDs.');
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: 'ID de anexo inválido.' });
+    }
+    const deleted = await softDeleteGmudAttachment(id);
+    // Remove o arquivo do filesystem após confirmar o soft-delete
+    const filePath = path.join(GMUD_UPLOADS_ROOT, String(deleted.voalleProtocol), deleted.filenameStored);
+    fs.rmSync(filePath, { force: true });
+    const actorName = actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || null;
+    logGmudEvent({ voalleProtocol: deleted.voalleProtocol, eventType: 'anexo_removido', actor: actorName, payload: { attachmentId: deleted.id } })
+      .catch((e) => console.warn('[gmud] evento anexo_removido falhou:', e?.message));
+    return res.json({ success: true, data: { id: deleted.id } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao remover anexo.',
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Decisão do Comitê + status de execução de uma GMUD (só no nosso banco; não reflete no Elleven).
+app.post('/api/gmud/approval', async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    // Decidir (aprovar/negar/reabrir) é do Comitê: basta estar na lista de membros (Configurações
+    // da GMUD) e ver o módulo. Lista vazia = ninguém decide. Status de execução, CAB, RNC e
+    // encerramento no Elleven seguem com canApproveGmud.
+    let actor;
+    if (changesCommitteeDecision(body.statusComite)) {
+      actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+      await assertGmudCommitteeMember(gmudActorEmail(actor));
+    } else {
+      actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para aprovar GMUDs.');
+    }
+    const voalleProtocol = Number.parseInt(String(body.voalleProtocol ?? ''), 10);
+    if (!Number.isFinite(voalleProtocol) || voalleProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const aprovadoPor =
+      actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || '';
+    const result = await setGmudApproval({
+      voalleProtocol,
+      statusComite: body.statusComite,
+      statusExec: body.statusExec,
+      dataCab: body.dataCab,
+      rnc: body.rnc,
+      aprovadoPor,
+      ellevenEncerrado:
+        body.ellevenEncerrado && typeof body.ellevenEncerrado === 'object'
+          ? { status: String(body.ellevenEncerrado.status ?? '') }
+          : null,
+    });
+    for (const type of result.changes ?? []) {
+      await logGmudEvent({
+        voalleProtocol,
+        type,
+        actor: aprovadoPor,
+        payload: type === 'encerrada_elleven'
+          ? { motivo: String(body.ellevenEncerrado?.status ?? '') }
+          : { dataCab: body.dataCab ?? null, rnc: body.rnc ?? null },
+      });
+    }
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao registrar a aprovação.'),
+    });
+  }
+});
+
+// ─── Aprovação por área ──────────────────────────────────────────────────────
+// Cada área marcada na GMUD aprova antes do Comitê; basta uma pessoa da área. Se uma área nega,
+// a GMUD fica negada e o protocolo é cancelado no Elleven.
+
+/** Antes de abrir o protocolo no Elleven: confere se toda área da GMUD tem quem aprove. */
+app.post('/api/gmud/approval-areas/check', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para registrar GMUDs.');
+    const body = req.body ?? {};
+    const labels = deriveApprovalAreas({
+      tipo: body.tipo,
+      categoria: body.categoria,
+      categoriaData: body.categoriaData,
+      recursosAdministrativos: body.recursosAdministrativos,
+    });
+    const areas = await resolveAreasWithApprovers(labels);
+    const semResponsavel = areas.filter((a) => a.areaId === null || a.people.length === 0).map((a) => a.label);
+    return res.json({
+      success: true,
+      data: { areas: areas.map((a) => ({ label: a.label, pessoas: a.people.length })), semResponsavel },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao conferir as áreas da GMUD.'),
+    });
+  }
+});
+
+// Endpoints PÚBLICOS (sem login): quem tem o link individual decide. A segurança vem do código
+// aleatório de 256 bits (só o hash fica no banco), da confirmação por POST e do limite de tentativas.
+const areaApprovalLimiter = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 40 });
+function clientIpForLimit(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+  return forwarded[forwarded.length - 1] || req.socket?.remoteAddress || 'unknown';
+}
+function publicApprovalError(res, error, fallback) {
+  const statusCode = Number(error?.statusCode ?? 500);
+  const status = Number.isFinite(statusCode) ? statusCode : 500;
+  return res.status(status).json({ success: false, message: status < 500 ? error.message : fallback });
+}
+
+app.post('/api/gmud/area-approval/info', async (req, res) => {
+  try {
+    if (!areaApprovalLimiter(clientIpForLimit(req))) {
+      return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+    const info = await lookupApprovalToken(String(req.body?.token ?? ''));
+    if (info.state === 'invalid') {
+      return res.status(404).json({ success: false, message: 'Link inválido ou expirado.' });
+    }
+    return res.json({
+      success: true,
+      data: {
+        state: info.state,
+        area: info.areaLabel,
+        approver: info.approverName,
+        gmud: info.gmud,
+        decision: info.decision ?? null,
+        decidedByName: info.decidedByName ?? null,
+        decidedAt: info.decidedAt ?? null,
+      },
+    });
+  } catch (error) {
+    return publicApprovalError(res, error, 'Falha ao consultar o pedido de aprovação.');
+  }
+});
+
+/** Negou: a GMUD fica negada e o protocolo é cancelado no Elleven (sem sessão, via gateway). */
+async function denyGmudAfterAreaDenial(result) {
+  const quem = `Área ${result.areaLabel} — ${result.decidedByName}`;
+  await setGmudApproval({ voalleProtocol: result.protocol, statusComite: 'negada', aprovadoPor: quem });
+  const cancel = await cancelGmudInElleven({
+    assignmentId: result.assignmentId,
+    description: buildAreaDenialDescription({ areaLabel: result.areaLabel, byName: result.decidedByName }),
+  });
+  if (cancel.ok) {
+    const closed = await setGmudApproval({ voalleProtocol: result.protocol, ellevenEncerrado: { status: 'negada' } });
+    for (const type of closed.changes ?? []) {
+      await logGmudEvent({ voalleProtocol: result.protocol, type, actor: quem, payload: { motivo: 'negada' } });
+    }
+    return true;
+  }
+  await logGmudEvent({
+    voalleProtocol: result.protocol,
+    type: 'cancelamento_elleven_falhou',
+    actor: quem,
+    payload: { motivo: cancel.reason ?? null },
+  });
+  logger.warn('[gmud-area-approval] GMUD negada, mas o cancelamento no Elleven não foi concluído.', {
+    protocol: result.protocol,
+    reason: cancel.reason,
+  });
+  return false;
+}
+
+// A aprovação das áreas NÃO aprova a GMUD: com todas as áreas aprovadas ela segue pendente da
+// aprovação final do Comitê (fila do Comitê). Só a negativa de uma área age sozinha (nega e cancela).
+
+app.post('/api/gmud/area-approval/decide', async (req, res) => {
+  try {
+    if (!areaApprovalLimiter(clientIpForLimit(req))) {
+      return res.status(429).json({ success: false, message: 'Muitas tentativas. Aguarde alguns minutos.' });
+    }
+    const { token, decision, motivo } = req.body ?? {};
+    const result = await decideAreaApproval({ token: String(token ?? ''), decision, motivo });
+    await logGmudEvent({
+      voalleProtocol: result.protocol,
+      type: result.decision === 'aprovada' ? 'area_aprovada' : 'area_negada',
+      actor: result.decidedByName,
+      payload: { area: result.areaLabel, motivo: result.motivo, email: result.decidedByEmail },
+    });
+    let canceladoNoElleven = null;
+    if (result.decision === 'negada') {
+      canceladoNoElleven = await denyGmudAfterAreaDenial(result);
+    }
+    return res.json({
+      success: true,
+      data: { decision: result.decision, area: result.areaLabel, areasStatus: result.areasStatus, canceladoNoElleven },
+    });
+  } catch (error) {
+    return publicApprovalError(res, error, 'Falha ao registrar a decisão.');
+  }
+});
+
+// O Comitê aprova em nome de uma área que não respondeu, para a GMUD não ficar parada.
+app.post('/api/gmud/:protocol/area-approvals/:areaId/override', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    await assertGmudCommitteeMember(gmudActorEmail(actor));
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    const areaId = Number.parseInt(String(req.params.areaId ?? ''), 10);
+    const byName = gmudActorName(actor);
+    const byEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await overrideAreaApproval({ protocol, areaId, byName, byEmail });
+    await logGmudEvent({
+      voalleProtocol: protocol,
+      type: 'area_aprovada_comite',
+      actor: byName || byEmail,
+      payload: { area: result.areaLabel },
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao aprovar em nome da área.'),
+    });
+  }
+});
+
+/** Nome legível de quem executou a ação (trilha da GMUD). */
+function gmudActorName(actor) {
+  return actor?.profile?.displayName || actor?.profile?.email || actor?.identity?.email || '';
+}
+
+// Timeout para queries no Voalle (ERP Postgres) — evita que o endpoint /indicators
+// fique pendurado indefinidamente quando o banco está travado ou sobrecarregado.
+const VOALLE_QUERY_TIMEOUT_MS = Number(process.env.VOALLE_QUERY_TIMEOUT_MS || 8000);
+
+/** Todas as GMUDs do Voalle (histórico completo) — base dos indicadores. */
+async function fetchVoalleGmudRows(protocol = null) {
+  const params = [GMUD_INCIDENT_TYPE_ID];
+  let extra = '';
+  if (protocol) {
+    params.push(protocol);
+    extra = ' AND ai.protocol = $2';
+  }
+  const result = await pool.query(
+    { text:
+      `SELECT ai.protocol::bigint AS protocol,
+              ai.assignment_id::bigint AS assignment_id,
+              a.title,
+              a.description,
+              ai.date_to_start AS opened_at,
+              ai.responsible_final_date AS sla_date,
+              a.conclusion_date,
+              ai.incident_status_id AS status_id,
+              ist.title AS status,
+              pe.name AS requester,
+              pe.email AS requester_email
+         FROM erp.assignment_incidents ai
+         JOIN erp.assignments a ON a.id = ai.assignment_id
+         LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+         LEFT JOIN erp.people pe ON pe.id = ai.person_id
+        WHERE ai.incident_type_id = $1${extra}`,
+      values: params,
+      query_timeout: VOALLE_QUERY_TIMEOUT_MS,
+    },
+  );
+  return (result.rows ?? []).map((r) => ({
+    protocol: Number(r.protocol),
+    assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+    title: r.title ?? '',
+    description: r.description ?? '',
+    openedAt: r.opened_at ? new Date(r.opened_at).toISOString() : null,
+    slaDate: r.sla_date ? new Date(r.sla_date).toISOString() : null,
+    conclusionDate: r.conclusion_date ? new Date(r.conclusion_date).toISOString() : null,
+    statusId: r.status_id != null ? Number(r.status_id) : null,
+    status: r.status ?? '',
+    requester: r.requester ?? '',
+    requesterEmail: r.requester_email ?? '',
+  }));
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// Indicadores de GMUD: histórico do Voalle (foto de agora + fluxo do período) e dados da plataforma.
+app.get('/api/gmud/indicators', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const today = new Date();
+    const defaultFrom = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = ISO_DAY.test(String(req.query?.from ?? '')) ? String(req.query.from) : fmt(defaultFrom);
+    const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
+    if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
+
+    const VALID_CATEGORIAS = new Set(['rede_externa', 'sistemas_internos', 'sistemas_externos']);
+    const categoriaFilter = VALID_CATEGORIAS.has(String(req.query?.categoria ?? '')) ? String(req.query.categoria) : null;
+
+    // F-03: busca Voalle e dados da plataforma em paralelo; cada lado tolera falha do outro.
+    let voalle = null;
+    let voalleError = null;
+    let platform = null;
+    let platformError = null;
+
+    await Promise.allSettled([
+      fetchVoalleGmudRows().then((rows) => { voalle = aggregateVoalle(rows, { from, to }); })
+        .catch((err) => { voalleError = err instanceof Error ? err.message : 'Dados do Voalle indisponíveis.'; }),
+      Promise.all([
+        listGmudRequestsCreatedBetween(from, to),
+        listGmudEventsBetween(from, to),
+      ]).then(async ([requestsAll, events]) => {
+        const requests = categoriaFilter
+          ? requestsAll.filter((r) => (r.categoria ?? 'rede_externa') === categoriaFilter)
+          : requestsAll;
+        const protocols = requests.map((r) => r.voalleProtocol);
+        const protocolSet = new Set(protocols);
+        const filteredEvents = categoriaFilter ? events.filter((e) => protocolSet.has(e.voalleProtocol)) : events;
+        const links = await getLinksWithAffected(protocols);
+        platform = aggregatePlatform(requests, filteredEvents, links);
+      }).catch((err) => { platformError = err instanceof Error ? err.message : 'Dados da plataforma indisponíveis.'; }),
+    ]);
+
+    return res.json({ success: true, data: { from, to, categoria: categoriaFilter, generatedAt: today.toISOString(), voalle, voalleError, platform, platformError } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao calcular os indicadores de GMUD.'),
+    });
+  }
+});
+
+// Exportação CSV dos dados de plataforma no período (com filtro opcional de categoria).
+app.get('/api/gmud/indicators/export.csv', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const today = new Date();
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const defaultFrom = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const from = ISO_DAY.test(String(req.query?.from ?? '')) ? String(req.query.from) : fmt(defaultFrom);
+    const to = ISO_DAY.test(String(req.query?.to ?? '')) ? String(req.query.to) : fmt(today);
+    if (from > to) return res.status(400).json({ success: false, message: 'Período inválido.' });
+
+    const VALID_CATEGORIAS = new Set(['rede_externa', 'sistemas_internos', 'sistemas_externos']);
+    const categoriaFilter = VALID_CATEGORIAS.has(String(req.query?.categoria ?? '')) ? String(req.query.categoria) : null;
+
+    let requests = await listGmudRequestsCreatedBetween(from, to);
+    if (categoriaFilter) {
+      requests = requests.filter((r) => (r.categoria ?? 'rede_externa') === categoriaFilter);
+    }
+
+    const COLS = [
+      'Protocolo', 'Tipo', 'Assunto', 'Categoria', 'Título', 'POP/Site',
+      'Ambiente afetado', 'Comunica cliente', 'Impacto parada',
+      'Status comitê', 'Status execução', 'Data início', 'Hora início', 'Data fim', 'Hora fim',
+      'Data CAB', 'RNC', 'Encerrado status', 'Encerrado em', 'Criado em',
+    ];
+
+    const csvEsc = (v) => {
+      const s = v == null ? '' : String(v).replace(/"/g, '""');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+    };
+
+    const rows = [COLS.join(',')];
+    for (const r of requests) {
+      rows.push([
+        r.voalleProtocol, r.tipo, r.assunto, r.categoria ?? 'rede_externa',
+        r.titulo, r.popSite,
+        Array.isArray(r.ambienteAfetado) ? r.ambienteAfetado.join(';') : '',
+        r.comunicaCliente, r.impactoParada,
+        r.statusComite, r.statusExec,
+        r.dataInicio, r.horaInicio, r.dataFim, r.horaFim,
+        r.dataCab, r.rnc, r.ellevenEncerradoStatus, r.ellevenEncerradoEm, r.createdAt,
+      ].map(csvEsc).join(','));
+    }
+
+    const filename = `gmud_indicadores_${from}_${to}${categoriaFilter ? `_${categoriaFilter}` : ''}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send('﻿' + rows.join('\r\n'));
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Falha ao exportar indicadores de GMUD.',
+    });
+  }
+});
+
+// Detalhe de uma GMUD: dados do Voalle + escopo da plataforma + trilha + massivas vinculadas.
+app.get('/api/gmud/:protocol/detail', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const [voalle] = await fetchVoalleGmudRows(protocol);
+    if (!voalle) return res.status(404).json({ success: false, message: 'GMUD não encontrada no Voalle.' });
+    const [request, events, links, areaApprovals] = await Promise.all([
+      getGmudRequest(protocol),
+      getGmudEvents(protocol),
+      getLinksWithAffected([protocol]),
+      getAreaApprovals(protocol),
+    ]);
+    return res.json({ success: true, data: { voalle, request, events, links, areaApprovals } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar a GMUD.'),
+    });
+  }
+});
+
+/** Status atual do protocolo no Elleven (id + título), por protocolo — para o relato não mudar o status. */
+async function fetchGmudEllevenStatus(protocols) {
+  const ids = protocols.filter((p) => Number.isFinite(p) && p > 0);
+  const map = new Map();
+  if (ids.length === 0) return map;
+  const result = await pool.query(
+    `SELECT ai.protocol::bigint AS protocol,
+            ai.assignment_id::bigint AS assignment_id,
+            ai.incident_status_id AS status_id,
+            ist.title AS status
+       FROM erp.assignment_incidents ai
+       LEFT JOIN erp.incident_status ist ON ist.id = ai.incident_status_id
+      WHERE ai.incident_type_id = $1 AND ai.protocol = ANY($2::bigint[])`,
+    [GMUD_INCIDENT_TYPE_ID, ids],
+  );
+  for (const r of result.rows ?? []) {
+    map.set(Number(r.protocol), {
+      assignmentId: r.assignment_id != null ? Number(r.assignment_id) : null,
+      statusId: r.status_id != null ? Number(r.status_id) : null,
+      status: r.status ?? '',
+    });
+  }
+  return map;
+}
+
+// Agenda de GMUDs: aprovadas com janela no intervalo [from, to] (YYYY-MM-DD).
+app.get('/api/gmud/agenda', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const items = await listScheduledGmuds({ from: req.query?.from, to: req.query?.to });
+    const statusByProtocol = await fetchGmudEllevenStatus(items.map((i) => i.voalleProtocol));
+    const enriched = items.map((i) => {
+      const elleven = statusByProtocol.get(i.voalleProtocol) ?? null;
+      return {
+        ...i,
+        assignmentId: i.assignmentId ?? elleven?.assignmentId ?? null,
+        ellevenStatusId: elleven?.statusId ?? null,
+        ellevenStatus: elleven?.status ?? '',
+      };
+    });
+    return res.json({ success: true, data: { items: enriched } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar a agenda de GMUDs.'),
+    });
+  }
+});
+
+/**
+ * Reunião semanal de GMUDs (só leitura): o que foi feito numa semana (`feitoDe`..`feitoAte`) e o que vem na
+ * outra (`vemDe`..`vemAte`), datas AAAA-MM-DD. Só GMUDs registradas na plataforma — a janela fica no nosso
+ * banco; as legadas (só no Voalle) não têm janela. Regras em lib/gmudReuniaoSemanal.js.
+ */
+app.get('/api/gmud/reuniao-semanal', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const range = parseReuniaoSemanalQuery(req.query);
+    const [feitoRows, vemRows, events] = await Promise.all([
+      listGmudsWithWindowBetween(range.feitoDe, range.feitoAte),
+      listGmudsWithWindowBetween(range.vemDe, range.vemAte),
+      listGmudReagendadaEvents(),
+    ]);
+    // Reagendadas para fora da semana do "feito": estavam marcadas para ela e a janela atual não cruza mais.
+    const moved = reagendadasParaFora(events, new Set(feitoRows.map((r) => r.voalleProtocol)), range.feitoDe, range.feitoAte);
+    const movedRows = moved.size > 0 ? await listGmudRequestsByProtocols([...moved.keys()]) : [];
+    const protocols = [...new Set([...feitoRows, ...vemRows, ...movedRows].map((r) => r.voalleProtocol))];
+    const [ellevenByProtocol, extrasByProtocol] = await Promise.all([
+      fetchGmudEllevenStatus(protocols),
+      getGmudExtrasByProtocols(protocols),
+    ]);
+    const data = buildReuniaoSemanal({
+      feitoRows,
+      vemRows,
+      moved,
+      movedRows,
+      ellevenByProtocol,
+      extrasByProtocol,
+      reagendadas: new Set(events.map((e) => e.voalleProtocol)),
+      agoraNaive: brazilNowNaive(),
+    });
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar a reunião semanal de GMUDs.'),
+    });
+  }
+});
+
+// Reagendamento da janela (só no nosso banco). O relato no protocolo do Elleven é enviado pelo
+// frontend em seguida, com o status atual do protocolo (devolvido aqui) para não alterá-lo.
+app.post('/api/gmud/reschedule', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canApproveGmud', 'Voce nao tem permissao para reagendar GMUDs.');
+    const body = req.body ?? {};
+
+    // F-02: valida janela de datas via validateGmudDateWindow (testável em gmudValidation.test.js).
+    const dateWindowError = validateGmudDateWindow(body.dataInicio, body.dataFim, body.horaInicio, body.horaFim);
+    if (dateWindowError) {
+      return res.status(400).json({ success: false, message: dateWindowError });
+    }
+
+    const result = await rescheduleGmud({
+      voalleProtocol: body.voalleProtocol,
+      dataInicio: body.dataInicio,
+      horaInicio: body.horaInicio,
+      dataFim: body.dataFim,
+      horaFim: body.horaFim,
+    });
+    const elleven = (await fetchGmudEllevenStatus([result.voalleProtocol])).get(result.voalleProtocol) ?? null;
+    const reagendadoPor = gmudActorName(actor);
+    await logGmudEvent({
+      voalleProtocol: result.voalleProtocol,
+      type: 'reagendada',
+      actor: reagendadoPor,
+      payload: { previous: result.previous, next: result.next },
+    });
+    return res.json({
+      success: true,
+      data: {
+        ...result,
+        assignmentId: result.assignmentId ?? elleven?.assignmentId ?? null,
+        ellevenStatusId: elleven?.statusId ?? null,
+        reagendadoPor,
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao reagendar a GMUD.'),
+    });
+  }
+});
+
+// Vínculo GMUD ↔ massiva (lista / criar / remover). Só no nosso banco.
+app.get('/api/gmud/:protocol/links', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const links = await getMassivaLinks(protocol);
+    return res.json({ success: true, data: { links } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao carregar os vínculos.'),
+    });
+  }
+});
+
+app.post('/api/gmud/link', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para vincular massivas.');
+    const body = req.body ?? {};
+    const gmudProtocol = Number.parseInt(String(body.gmudProtocol ?? ''), 10);
+    const massivaProtocol = Number.parseInt(String(body.massivaProtocol ?? ''), 10);
+    if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Informe o protocolo da GMUD e da massiva.' });
+    }
+    // Guard de "disponibilização": só vincula massiva a GMUD aprovada pelo Comitê E pelas áreas.
+    // Pendente/negada (ou sem registro local) é bloqueada — backstop do bloqueio do front.
+    const approvalState = await getGmudApprovalState(gmudProtocol);
+    if (!isGmudAprovadaFinal(approvalState?.statusComite, approvalState?.statusAreas)) {
+      const motivo =
+        approvalState?.statusComite === 'negada' || approvalState?.statusAreas === 'negada'
+          ? 'A GMUD foi negada.'
+          : approvalState?.statusComite === 'aprovada'
+            ? 'A GMUD ainda aguarda a aprovação das áreas.'
+            : 'A GMUD ainda não foi aprovada pelo Comitê.';
+      return res.status(409).json({
+        success: false,
+        message: `${motivo} O vínculo de massivas libera somente após a aprovação.`,
+      });
+    }
+    const createdByEmail = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await addMassivaLink({ gmudProtocol, massivaProtocol, createdByEmail });
+    await logGmudEvent({ voalleProtocol: gmudProtocol, type: 'massiva_vinculada', actor: gmudActorName(actor), payload: { massivaProtocol } });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao vincular a massiva.'),
+    });
+  }
+});
+
+app.delete('/api/gmud/link', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para desvincular massivas.');
+    const body = req.body ?? {};
+    const gmudProtocol = Number.parseInt(String(body.gmudProtocol ?? ''), 10);
+    const massivaProtocol = Number.parseInt(String(body.massivaProtocol ?? ''), 10);
+    if (!Number.isFinite(gmudProtocol) || gmudProtocol <= 0 || !Number.isFinite(massivaProtocol) || massivaProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolos inválidos.' });
+    }
+    const result = await removeMassivaLink({ gmudProtocol, massivaProtocol });
+    await logGmudEvent({ voalleProtocol: gmudProtocol, type: 'massiva_desvinculada', actor: gmudActorName(actor), payload: { massivaProtocol } });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao desvincular a massiva.'),
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GMUD — Clientes corporativos para HSM D-7
+// Uso exclusivo do N8N (cron diário). Protegido por N8N_INTERNAL_SECRET.
+// Retorna GMUDs aprovadas cuja data_inicio = hoje + daysAhead (padrão 7) com
+// seus clientes corporativos no site (pop_site) para disparo de HSM.
+// ---------------------------------------------------------------------------
+// ─── Clientes da GMUD em assignment_clients (gatilho do aviso ao cliente) ───────────────────────────
+// Desligado por padrão (GMUD_CLIENTES_SYNC_ENABLED=true liga; começa em simulação, GMUD_CLIENTES_SYNC_DRY_RUN=false grava).
+let eventSuppressedStore = null;
+function getEventSuppressedStore() {
+  if (!eventSuppressedStore) {
+    eventSuppressedStore = createEventSuppressedStore({
+      host: process.env.MASSIVA_MYSQL_HOST,
+      port: process.env.MASSIVA_MYSQL_PORT,
+      user: process.env.MASSIVA_MYSQL_USER,
+      password: process.env.MASSIVA_MYSQL_PASSWORD,
+      database: process.env.MASSIVA_MYSQL_DATABASE,
+    });
+  }
+  return eventSuppressedStore;
+}
+
+// ─── Lista de clientes ao COR (corporativos + ponto a ponto/fibra apagada), por e-mail via N8N ─────────────────
+// Desligada por padrão (GMUD_COR_LISTA_ENABLED=true liga; começa em simulação, GMUD_COR_LISTA_DRY_RUN=false envia).
+let gmudCorListaService = null;
+function getGmudCorLista() {
+  if (gmudCorListaService) return gmudCorListaService;
+  const { clientsSource } = getGmudClientSync();
+  gmudCorListaService = createGmudCorListaService({
+    gmudSource: { listCandidates: (nowNaive) => listGmudsForCorLista(nowNaive) },
+    eventsSource: { latestByTypes: (protocols, types) => getLatestGmudEventsByTypes(protocols, types), log: (event) => logGmudEvent(event) },
+    clientsSource,
+    recipientsSource: { list: () => listGmudCorRecipients() },
+    sender: createCorListaSender(),
+    env: process.env,
+    logger,
+  });
+  return gmudCorListaService;
+}
+
+let gmudClientSyncParts = null;
+function getGmudClientSync() {
+  if (gmudClientSyncParts) return gmudClientSyncParts;
+  const store = createGmudClientSyncStore({
+    host: process.env.MASSIVA_MYSQL_HOST,
+    port: process.env.MASSIVA_MYSQL_PORT,
+    user: process.env.MASSIVA_MYSQL_USER,
+    password: process.env.MASSIVA_MYSQL_PASSWORD,
+    database: process.env.MASSIVA_MYSQL_DATABASE,
+  });
+  const gateway = createGmudGatewayClient({ env: process.env });
+  const clientsSource = createGmudClientsSource({
+    pool,
+    baseQuery: SPLITTERS_BASE_QUERY,
+    normalizeEscopoRotas,
+    rowMatchesEscopoRotas,
+    normalizeClientesSemSplitter,
+  });
+  const service = createGmudClientSyncService({
+    store,
+    gateway,
+    suppressed: getEventSuppressedStore(),
+    env: process.env,
+    logger,
+    gmudSource: {
+      listCandidates: (nowNaive) => listGmudsForClientSync(nowNaive),
+      getByProtocol: (protocol) => getGmudRequest(protocol),
+    },
+    clientsSource,
+  });
+  gmudClientSyncParts = { store, gateway, service, clientsSource };
+  return gmudClientSyncParts;
+}
+
+// ─── Reinclusão: cliente que ficou de fora de um evento volta quando o outro evento fecha ────────────────
+// Desligada por padrão (EVENT_REINCLUSION_ENABLED=true liga; começa em simulação, EVENT_REINCLUSION_DRY_RUN=false grava).
+let eventReinclusionParts = null;
+function getEventReinclusion() {
+  if (eventReinclusionParts) return eventReinclusionParts;
+  const suppressed = getEventSuppressedStore();
+  const { store: gmudSyncStore, gateway } = getGmudClientSync();
+  const service = createEventReinclusionService({
+    store: suppressed,
+    conflictsStore: massivaClientConflictsStore,
+    gateway,
+    env: process.env,
+    logger,
+    eventInfo: {
+      async get(group) {
+        if (group.eventType === 'gmud') {
+          const states = await gmudSyncStore.listStates();
+          const st = states.get(group.eventProtocol);
+          const gmud = await getGmudRequest(group.eventProtocol);
+          return {
+            open: st?.status === GMUD_SYNC_STATUS.INCLUIDA,
+            assignmentId: gmud?.assignmentId ?? null,
+            finishDateNaive: st?.windowEnd ?? null,
+          };
+        }
+        const [info, finish] = await Promise.all([
+          suppressed.getMassivaEventInfo([group.eventProtocol]),
+          suppressed.getAssignmentFinishDates([group.eventProtocol]),
+        ]);
+        const i = info.get(group.eventProtocol);
+        return {
+          open: i?.open === true,
+          assignmentId: i?.assignmentId ?? group.rows.find((r) => r.assignmentId)?.assignmentId ?? null,
+          finishDateNaive: finish.get(group.eventProtocol) ?? null,
+        };
+      },
+    },
+    followUp: {
+      // Massiva: o cliente reincluído também entra na cópia local da lista de afetados (verificação de sinal).
+      massiva: (x) => massivaHistoryStore.registerAffectedClients(x),
+      gmud: (x) => gmudSyncStore.markReincluded(x),
+    },
+  });
+  eventReinclusionParts = { suppressed, gateway, service };
+  return eventReinclusionParts;
+}
+
+// Registra os clientes que ficaram de fora de uma MASSIVA por já estarem em outro evento (histórico + fila de reinclusão).
+app.post('/api/massiva/clientes-excluidos', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewMassiva', 'Voce nao tem permissao para operar massivas.');
+    const body = req.body ?? {};
+    const eventProtocol = Number.parseInt(String(body.protocol ?? ''), 10);
+    if (!Number.isFinite(eventProtocol) || eventProtocol <= 0) {
+      return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    }
+    const clients = (Array.isArray(body.clients) ? body.clients : []).slice(0, 20000);
+    const suppressed = getEventSuppressedStore();
+    if (!(await suppressed.isReady())) return res.json({ success: true, data: { inserted: 0, skipped: 'tabela_ausente' } });
+    const result = await suppressed.add({
+      eventType: 'massiva',
+      eventProtocol,
+      assignmentId: Number.parseInt(String(body.assignmentId ?? ''), 10) || null,
+      reason: String(body.reason ?? '').slice(0, 2000) || null,
+      finishDateNaive: /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(String(body.finishDate ?? '')) ? String(body.finishDate).replace('T', ' ').slice(0, 19) : null,
+      nowNaive: brazilNowNaive(),
+      clients: clients.map((c) => ({
+        contractId: Number(c?.contractId),
+        pppoe: c?.pppoe,
+        corporate: c?.corporate === true,
+        blockedByProtocol: Number(c?.blockedByProtocol) > 0 ? Number(c.blockedByProtocol) : null,
+        blockedByType: c?.blockedByType === 'gmud' || c?.blockedByType === 'massiva' ? c.blockedByType : null,
+      })),
+    });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao registrar os clientes excluídos.'),
+    });
+  }
+});
+
+// Quem ficou de fora deste evento ("já estava em outro evento") e se já foi reincluído.
+app.get('/api/eventos/:tipo/:protocolo/clientes-excluidos', async (req, res) => {
+  try {
+    const tipo = String(req.params.tipo ?? '');
+    if (tipo !== 'massiva' && tipo !== 'gmud') return res.status(400).json({ success: false, message: 'Tipo de evento inválido.' });
+    await requireSplittersPermission(req, tipo === 'gmud' ? 'canViewGmud' : 'canViewMassiva', 'Voce nao tem permissao para ver estes clientes.');
+    const protocolo = Number.parseInt(String(req.params.protocolo ?? ''), 10);
+    if (!Number.isFinite(protocolo) || protocolo <= 0) return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    const suppressed = getEventSuppressedStore();
+    const items = (await suppressed.isReady()) ? await suppressed.listForEvent(tipo, protocolo) : [];
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar os clientes excluídos do evento.'),
+    });
+  }
+});
+
+app.get('/api/eventos/reinclusao/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    return res.json({ success: true, data: await getEventReinclusion().service.getStatus() });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o estado da reinclusão.'),
+    });
+  }
+});
+
+// Clientes hoje sinalizados por alguma GMUD (para as telas mostrarem "GMUD" em vez de massiva).
+app.get('/api/gmud-clientes/ativos', async (_req, res) => {
+  try {
+    const { store } = getGmudClientSync();
+    const items = (await store.isReady()) ? await store.listActiveClients() : [];
+    return res.json({ success: true, data: { items } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: safeErrorMessage(error, 'Falha ao consultar os clientes de GMUD.') });
+  }
+});
+
+// Estimativa de clientes impactados ENQUANTO o formulário é preenchido (a GMUD ainda não existe): recebe o
+// escopo (POP/Site, afunilamento e clientes escolhidos à mão) e conta quem seria afetado. Só leitura.
+app.post('/api/gmud/clientes-impactados/estimativa', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const body = req.body ?? {};
+    const popSite = typeof body.popSite === 'string' ? body.popSite.trim() : '';
+    if (popSite === '') return res.json({ success: true, data: { applicable: true, pronto: false } });
+    const { clientsSource } = getGmudClientSync();
+    const found = await clientsSource.listClients({
+      popSite,
+      categoriaData: {
+        escopoRotas: Array.isArray(body.escopoRotas) ? body.escopoRotas : [],
+        clientesSemSplitter: Array.isArray(body.clientesSemSplitter) ? body.clientesSemSplitter : [],
+      },
+    });
+    if (!found.ok) return res.json({ success: true, data: { applicable: true, pronto: false, erro: found.reason } });
+    return res.json({
+      success: true,
+      data: {
+        applicable: true,
+        pronto: true,
+        total: found.clients.length,
+        corporativos: found.clients.filter((c) => c.corporate).length,
+        // Acima disto o envio ao usuários-afetados não inclui a GMUD (GMUD_CLIENTES_SYNC_MAX_CLIENTES).
+        limite: readGmudClientSyncConfig(process.env).maxClientsPerGmud,
+      },
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao estimar os clientes impactados.'),
+    });
+  }
+});
+
+// Impacto de uma GMUD em clientes: do histórico (se já foi incluída) ou estimado pelo escopo (cache de 5 min).
+const gmudImpactEstimateCache = new Map();
+app.get('/api/gmud/:protocol/clientes-impactados', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const protocol = Number.parseInt(String(req.params.protocol ?? ''), 10);
+    if (!Number.isFinite(protocol) || protocol <= 0) return res.status(400).json({ success: false, message: 'Protocolo inválido.' });
+    const { store, clientsSource } = getGmudClientSync();
+    const gmud = await getGmudRequest(protocol);
+    if (!gmud) return res.status(404).json({ success: false, message: 'GMUD não registrada na plataforma.' });
+    if (!isGmudNetwork(gmud)) return res.json({ success: true, data: { applicable: false } });
+
+    const summary = (await store.isReady()) ? await store.getClientSummary(protocol) : null;
+    if (summary) return res.json({ success: true, data: { applicable: true, source: 'historico', ...summary } });
+
+    const cached = gmudImpactEstimateCache.get(protocol);
+    if (cached && Date.now() - cached.at < 5 * 60_000) return res.json({ success: true, data: cached.data });
+    const found = await clientsSource.listClients(gmud);
+    if (!found.ok) return res.json({ success: true, data: { applicable: true, source: 'estimativa', erro: found.reason } });
+    const data = {
+      applicable: true,
+      source: 'estimativa',
+      status: 'nao_incluida',
+      total: found.clients.length,
+      corporativos: found.clients.filter((c) => c.corporate).length,
+      deForaPorOutroEvento: 0,
+      windowEnd: null,
+    };
+    gmudImpactEstimateCache.set(protocol, { at: Date.now(), data });
+    return res.json({ success: true, data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao calcular os clientes impactados da GMUD.'),
+    });
+  }
+});
+
+// Estado do job: configuração, última execução, erros e quantos clientes de GMUD estão ativos.
+app.get('/api/gmud/cor-lista/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    return res.json({ success: true, data: await getGmudCorLista().getStatus() });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o envio da lista ao COR.'),
+    });
+  }
+});
+
+// Cria (sob demanda) o item fixo "COR" da lista de destinatários; as pessoas entram por /api/gmud/team-approvers.
+app.post('/api/gmud/cor/item', async (req, res) => {
+  try {
+    const actor = await requireSplittersPermission(req, 'canConfigureGmud', 'Voce nao tem permissao para configurar o modulo GMUD.');
+    const createdBy = actor?.profile?.email || actor?.identity?.email || '';
+    const result = await ensureGmudCorItem(createdBy);
+    return res.status(result.created ? 201 : 200).json({ success: true, data: result });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao criar a lista do COR.'),
+    });
+  }
+});
+
+app.get('/api/gmud/clientes-sync/status', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para acessar o modulo GMUD.');
+    const status = await getGmudClientSync().service.getStatus();
+    return res.json({ success: true, data: status });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao consultar o estado dos clientes da GMUD.'),
+    });
+  }
+});
+
+app.get('/api/gmud/corporate-hsm-preview', async (req, res) => {
+  try {
+    const secret = (process.env.N8N_INTERNAL_SECRET ?? '').trim();
+    const provided = (req.headers['x-internal-secret'] ?? '').trim();
+    if (!secret || !provided || provided !== secret) {
+      return res.status(401).json({ success: false, message: 'Não autorizado.' });
+    }
+
+    const daysAhead = Math.max(1, Math.min(30, Number.parseInt(String(req.query.daysAhead ?? '7'), 10) || 7));
+
+    const gmudRows = await listGmudUpcomingForHsm(daysAhead);
+
+    if (!gmudRows.length) {
+      return res.json({ success: true, gmudCount: 0, data: [] });
+    }
+
+    const CORPORATE_INSIGNIAS = ['contrato corporativo', 'contrato corporativo pme'];
+    const placeholders = CORPORATE_INSIGNIAS.map(() => '$1').join(', ');
+
+    const corporateQuery = `
+      SELECT DISTINCT
+        client.name          AS nome,
+        client.cell_phone_1  AS telefone,
+        contract.id::text    AS contrato,
+        auth_contract.user   AS pppoe
+      FROM authentication_sites site
+      INNER JOIN authentication_access_points ap
+          ON ap.authentication_site_id = site.id
+      INNER JOIN authentication_splitters ps
+          ON ps.authentication_access_point_id = ap.id
+      INNER JOIN authentication_splitter_ports psp
+          ON psp.authentication_splitter_id = ps.id
+         AND psp.deleted = FALSE
+      INNER JOIN authentication_splitters ss
+          ON ss.id = psp.children_authentication_splitter_id
+      INNER JOIN authentication_splitter_ports ssp
+          ON ssp.authentication_splitter_id = ss.id
+         AND ssp.deleted = FALSE
+         AND ssp.busy = TRUE
+      INNER JOIN authentication_contracts auth_contract
+          ON auth_contract.id = ssp.authentication_contract_id
+      INNER JOIN contracts contract
+          ON contract.id = auth_contract.contract_id
+      INNER JOIN people client
+          ON client.id = contract.client_id
+      INNER JOIN insignias insig
+          ON insig.id = client.insignia_id
+      WHERE UPPER(TRIM(site.title)) = UPPER(TRIM($1))
+        AND LOWER(TRIM(COALESCE(insig.title, ''))) = ANY($2::text[])
+        AND client.cell_phone_1 IS NOT NULL
+        AND TRIM(client.cell_phone_1) != ''
+    `;
+
+    // GMUD afunilada (ponto de acesso/slot/PON/splitter): mesma base de conexões da massiva, filtrada
+    // em memória com a regra de slot/PON dela. O AP vai no SQL; o restante, nas linhas do AP.
+    const scopedQuery = `
+      SELECT
+        base."NOME CLIENTE"                  AS nome,
+        base."CELULAR"                       AS telefone,
+        base."CONTRATO ID[CLIENTE]"::text    AS contrato,
+        base."USUÁRIO[CLIENTE]"              AS pppoe,
+        base."PONTO DE ACESSO CODE",
+        base."PONTO DE ACESSO",
+        base."CÓDIGO[SPLT.SECUNDARIO]",
+        base."SPLT.SECUNDARIO",
+        base."SLOT[SPLT.SECUNDARIO]",
+        base."PORTA EXTRAÍDA[SPLT.SECUNDARIO]",
+        base."PORTA[SPLT.PRIMARIO]"
+      FROM (${SPLITTERS_BASE_QUERY}) base
+      WHERE UPPER(TRIM(base."SITE")) = UPPER(TRIM($1))
+        AND COALESCE(NULLIF(base."PONTO DE ACESSO CODE", ''), base."PONTO DE ACESSO") = ANY($2::text[])
+        AND base."ID CONEXAO[CLIENTE]" IS NOT NULL
+        AND base."CORPORATIVO" IS TRUE
+        AND base."OCUPADO:[SPLT.SECUNDARIO]" IS TRUE
+        AND base."CELULAR" IS NOT NULL
+        AND TRIM(base."CELULAR") <> ''
+    `;
+
+    const results = await Promise.all(
+      gmudRows.map(async (gmud) => {
+        let clientes = [];
+        try {
+          const rotas = gmud.escopoRotas ?? [];
+          const { rows } = rotas.length > 0
+            ? await pool.query(scopedQuery, [gmud.popSite, [...new Set(rotas.map((r) => r.apCode))]])
+            : await pool.query(corporateQuery, [gmud.popSite, CORPORATE_INSIGNIAS]);
+          const seen = new Set();
+          for (const r of rotas.length > 0 ? rows.filter((row) => rowMatchesEscopoRotas(row, rotas)) : rows) {
+            const cliente = {
+              nome: (r.nome ?? '').trim(),
+              telefone: (r.telefone ?? '').trim(),
+              contrato: (r.contrato ?? '').trim(),
+              pppoe: (r.pppoe ?? '').trim(),
+            };
+            const key = `${cliente.nome}|${cliente.telefone}|${cliente.contrato}|${cliente.pppoe}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            clientes.push(cliente);
+          }
+        } catch (err) {
+          logger.error('[gmud-corporate-hsm] Falha ao buscar clientes do site:', { site: gmud.popSite, error: err.message });
+        }
+        return {
+          gmud: { ...gmud, escopoTexto: formatEscopoRotas(gmud.escopoRotas) },
+          clienteCount: clientes.length,
+          clientes,
+        };
+      }),
+    );
+
+    const withClients = results.filter((r) => r.clientes.length > 0);
+    return res.json({ success: true, gmudCount: withClients.length, data: withClients });
+  } catch (error) {
+    logger.error('[gmud-corporate-hsm] Erro no endpoint:', { error: error?.message });
+    return res.status(500).json({ success: false, message: safeErrorMessage(error, 'Erro ao buscar GMUDs para HSM.') });
   }
 });
 
@@ -6238,6 +8601,25 @@ async function startServer() {
     logger.warn('Histórico local de massivas (MySQL) desativado: configure MASSIVA_MYSQL_* no .env.local.');
   }
 
+  startConferenciaScheduler({
+    service: massivaConferenciaService,
+    store: massivaConferenciaStore,
+    env: process.env,
+    logger,
+  });
+
+  {
+    const { service, store, gateway } = getGmudClientSync();
+    startGmudClientSyncScheduler({ service, store, gateway, env: process.env, logger });
+  }
+
+  startGmudCorListaScheduler({ service: getGmudCorLista(), env: process.env, logger });
+
+  {
+    const { suppressed, gateway, service } = getEventReinclusion();
+    startEventReinclusionScheduler({ service, store: suppressed, gateway, env: process.env, logger });
+  }
+
   const kpiCronDisabled = String(process.env.DASHBOARD_KPI_CRON_DISABLED ?? '').toLowerCase() === 'true';
   const kpiCronExpr = (process.env.DASHBOARD_KPI_CRON ?? '0 6 * * *').trim();
   if (!dashboardKpiSnapshotWritesEnabled) {
@@ -6317,6 +8699,66 @@ async function startServer() {
     );
   } else {
     logger.info('[network-relief-snapshot] Cron desativado (NETWORK_RELIEF_SNAPSHOT_CRON_DISABLED=true).');
+  }
+
+  // Reconciliação: acha linhas de massiva_history que só foram gravadas pela antecipação
+  // (ver registerOpenedHistoryEarly no front) e cuja gravação final nunca completou —
+  // "history_complete = 0" por tempo demais. Sinaliza nos logs e, se configurado, num
+  // webhook (reaproveita o padrão de webhook já usado em outras integrações do projeto).
+  // Resposta ao item 3 da revisão da PR #45 (gravação antecipada do histórico de massiva).
+  const reconciliationCronDisabled =
+    String(process.env.MASSIVA_RECONCILIATION_CRON_DISABLED ?? '').toLowerCase() === 'true';
+  const reconciliationCronExpr = (process.env.MASSIVA_RECONCILIATION_CRON ?? '*/15 * * * *').trim();
+  const reconciliationThresholdHours = (() => {
+    const n = Number.parseInt(process.env.MASSIVA_RECONCILIATION_THRESHOLD_HOURS ?? '1', 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  })();
+  const reconciliationWebhookUrl = String(process.env.MASSIVA_RECONCILIATION_WEBHOOK_URL ?? '').trim();
+
+  if (!massivaHistoryStore.configured) {
+    logger.info('[massiva-reconciliation] Cron não registrado (MySQL de massivas não configurado).');
+  } else if (!reconciliationCronDisabled) {
+    cron.schedule(
+      reconciliationCronExpr,
+      async () => {
+        try {
+          const stale = await massivaHistoryStore.getStaleIncompleteHistory(reconciliationThresholdHours);
+          if (stale.length === 0) return;
+
+          logger.warn(
+            `[massiva-reconciliation] ${stale.length} linha(s) de histórico incompletas há mais de ${reconciliationThresholdHours}h.`,
+            { items: stale },
+          );
+
+          if (reconciliationWebhookUrl !== '') {
+            const linhas = stale
+              .map((item) => `• ${item.protocol ?? item.assignmentId ?? item.id} — ${item.title || '(sem título)'} (aberta ${item.openedAt}, status ${item.status})`)
+              .join('\n');
+            try {
+              await fetch(reconciliationWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: `⚠️ ${stale.length} massiva(s) com histórico incompleto há mais de ${reconciliationThresholdHours}h — confira manualmente no Elleven:\n${linhas}`,
+                }),
+              });
+            } catch (webhookError) {
+              logger.error('[massiva-reconciliation] Falha ao postar alerta no webhook.', { error: webhookError });
+            }
+          }
+        } catch (error) {
+          logger.error('[massiva-reconciliation] Falha ao consultar histórico incompleto.', { error });
+        }
+      },
+      { timezone: 'America/Sao_Paulo' },
+    );
+    logger.info(
+      `[massiva-reconciliation] Cron ativo: "${reconciliationCronExpr}" America/Sao_Paulo (padrão a cada 15 min, limiar ${reconciliationThresholdHours}h)` +
+        (reconciliationWebhookUrl !== '' ? ', com webhook configurado' : ', sem webhook — só log') +
+        '. Desative com MASSIVA_RECONCILIATION_CRON_DISABLED=true.',
+    );
+  } else {
+    logger.info('[massiva-reconciliation] Cron desativado (MASSIVA_RECONCILIATION_CRON_DISABLED=true).');
   }
 }
 

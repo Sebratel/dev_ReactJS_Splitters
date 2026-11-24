@@ -10,6 +10,7 @@ import {
   bffSaysMassivaOpen,
 } from '@/features/massiva/lib/syncOutOfCatalogMassivaFromBff'
 import { restorationHoursBetweenDates } from '@/features/massiva/lib/formatMassivaListDate'
+import { MASSIVA_SOURCE_CONFERENCIA_ELLEVEN } from '@/features/massiva/model/massivaConferenciaStatus'
 import type { MassivaStatus, MassivaTicket } from '@/features/massiva/model/massivaTicket'
 
 /** Sabor de "fechado" preservando cancelamento distinto do encerramento. */
@@ -76,6 +77,8 @@ function massivaTicketFromLocalHistoryRow(row: MassivaHistoryListRow): MassivaTi
     infraProtocol: row.infraProtocol,
     infraAssignmentId: row.infraAssignmentId,
     identifiedBy: row.identifiedBy,
+    // Só marca quando verdadeiro: não altera o formato dos tickets das demais origens.
+    ...(row.source === MASSIVA_SOURCE_CONFERENCIA_ELLEVEN ? { recoveredFromElleven: true } : {}),
   })
 }
 

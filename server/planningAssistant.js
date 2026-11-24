@@ -1924,3 +1924,59 @@ export async function askPlanningAssistant({
 
   return { structured: queryResult.structured, model: activeModel };
 }
+
+/**
+ * Wrapper genérico para chamadas Gemini fora do domínio ISA.
+ * Reutiliza a chave, o modelo configurado, a cadeia de fallback e o logger.
+ *
+ * @param {string} prompt - Prompt completo a enviar ao Gemini.
+ * @param {{ responseMode?: 'text'|'json', tag?: string }} options
+ * @returns {Promise<{ text: string; model: string }>}
+ */
+export async function callGeminiRaw(prompt, { responseMode = 'text', tag = 'gemini_raw' } = {}) {
+  const { apiKey, model } = getGeminiConfig();
+  if (!apiKey) {
+    const error = new Error('Gemini nao configurado no servidor (GEMINI_API_KEY ausente).');
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  const modelsToTry = [model, ...GEMINI_FALLBACK_CHAIN.filter((m) => m !== model)];
+  let activeModel = model;
+
+  for (const candidate of modelsToTry) {
+    try {
+      const { rawText } = await requestGeminiAnswer({
+        apiKey,
+        model: candidate,
+        question: prompt,
+        context: '',
+        responseMode,
+        promptSections: null,
+        conversationHistory: [],
+      });
+      activeModel = candidate;
+      logger.info(`${tag}_ok`, { model: activeModel, durationMs: Date.now() - startedAt });
+      return { text: rawText, model: activeModel };
+    } catch (err) {
+      const status = Number(err?.statusCode);
+      const msg = err instanceof Error ? err.message.trim() : '';
+      const retryable =
+        (status === 503 && /high demand|unavailable/i.test(msg)) ||
+        (status === 429 && /quota exceeded|rate.?limit/i.test(msg)) ||
+        (status === 404 && /not found|not supported/i.test(msg));
+      if (!retryable) {
+        logger.error(`${tag}_error`, { model: candidate, status, msg });
+        formatAndThrowGeminiError(err);
+      }
+      const nextCandidate = modelsToTry[modelsToTry.indexOf(candidate) + 1];
+      if (nextCandidate) {
+        logger.warn(`${tag}_fallback`, { from: candidate, to: nextCandidate });
+      } else {
+        logger.error(`${tag}_chain_exhausted`, { tried: modelsToTry });
+        formatAndThrowGeminiError(err, { exhaustedChain: true });
+      }
+    }
+  }
+}

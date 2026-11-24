@@ -1,0 +1,626 @@
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Settings2, Plus, Trash2, Loader2, UserPlus, Mail, X, Users } from 'lucide-react'
+import { AppPageHeader } from '@/shared/ui/AppPageHeader'
+import {
+  fetchGmudConfigLists,
+  addGmudConfigItem,
+  ensureGmudCorItem,
+  removeGmudConfigItem,
+  type GmudConfigItem,
+} from '@/features/gmud/api/gmudConfigLists'
+import {
+  fetchTeamApprovers,
+  addTeamApprover,
+  removeTeamApprover,
+  type TeamApprover,
+} from '@/features/gmud/api/gmudTeamApprovers'
+import { listSplittersUsers } from '@/features/access/api/firestoreUsers'
+import type { SplittersUserProfile } from '@/features/access/model/access.types'
+import { showGmudError } from '@/features/gmud/lib/gmudFeedback'
+import { GMUD_COMMITTEE_QUERY_KEY } from '@/features/gmud/hooks/useGmudCommittee'
+import { requesterInitials } from '@/features/gmud/lib/gmudRequester'
+import { gmudConfirm } from '@/features/gmud/lib/gmudConfirm'
+import { cn } from '@/shared/lib/utils'
+
+const LIST_META: Record<string, { label: string; hint: string }> = {
+  areas: {
+    label: 'Setores / Áreas',
+    hint: 'Setores que aparecem nos campos "Áreas impactadas" e "Áreas afetadas". Clique em uma área para definir quem aprova por ela: toda GMUD que marcar a área envia um e-mail com o link de aprovação (basta uma pessoa decidir).',
+  },
+  comite: {
+    label: 'Comitê',
+    hint: 'Quem toma a decisão final (aprovar ou negar) das GMUDs. Use "Gerenciar membros" para escolher quem decide; basta um deles. A aprovação das áreas não substitui a do Comitê. Sem membros, nenhuma GMUD pode ser aprovada.',
+  },
+  cor: {
+    label: 'COR — lista de clientes',
+    hint: 'Quem recebe por e-mail a lista de clientes corporativos e ponto a ponto/fibra apagada de cada GMUD liberada (e de novo se a abrangência ou a janela mudar, mais um lembrete antes da janela). Sem destinatários, nada é enviado.',
+  },
+  processos: {
+    label: 'Processos de negócio',
+    hint: 'Processos que aparecem nos campos "Processos de negócio" e "Processos dependentes".',
+  },
+  sistemas_internos: {
+    label: 'Sistemas internos',
+    hint: 'Catálogo de sistemas internos disponíveis no formulário de Sistemas Internos.',
+  },
+  sistemas_externos: {
+    label: 'Sistemas externos',
+    hint: 'Catálogo de sistemas externos (fornecedores) disponíveis no formulário de Sistemas Externos.',
+  },
+}
+
+const CARD = 'rounded-2xl border border-neutral-200/90 dark:border-white/10 bg-surface-container-lowest'
+const FIELD =
+  'flex-1 rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30'
+
+// ---------------------------------------------------------------------------
+// Modal de quem é avisado por uma área
+// ---------------------------------------------------------------------------
+function TeamApproversModal({
+  areaItem,
+  approvers,
+  allUsers,
+  usersLoading,
+  isCommittee = false,
+  isCor = false,
+  refetch,
+  onClose,
+}: {
+  areaItem: GmudConfigItem
+  approvers: TeamApprover[]
+  allUsers: SplittersUserProfile[]
+  usersLoading: boolean
+  /** Modal dos membros do Comitê (textos próprios), em vez de aprovadores de uma área. */
+  isCommittee?: boolean
+  isCor?: boolean
+  refetch: () => void
+  onClose: () => void
+}) {
+  const [selectedEmail, setSelectedEmail] = useState('')
+  const [search, setSearch] = useState('')
+  const qc = useQueryClient()
+
+  const availableUsers = allUsers.filter(
+    (u) => u.isActive && !approvers.some((a) => a.userEmail === u.email),
+  )
+
+  const filteredUsers = search.trim() === ''
+    ? availableUsers
+    : availableUsers.filter((u) => {
+        const q = search.toLowerCase()
+        return u.email.toLowerCase().includes(q) || (u.displayName ?? '').toLowerCase().includes(q)
+      })
+
+  const addMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível adicionar o aprovador'),
+    mutationFn: () => {
+      const user = allUsers.find((u) => u.email === selectedEmail)
+      return addTeamApprover(areaItem.id, selectedEmail, user?.displayName ?? null)
+    },
+    onSuccess: () => {
+      setSelectedEmail('')
+      qc.invalidateQueries({ queryKey: ['gmud-team-approvers'] })
+      refetch()
+    },
+  })
+
+  const removeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o aprovador'),
+    mutationFn: (id: number) => removeTeamApprover(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmud-team-approvers'] })
+      refetch()
+    },
+  })
+
+  return (
+    /* Backdrop */
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="flex w-full max-w-xl flex-col rounded-2xl border border-neutral-200/80 dark:border-white/10 bg-surface-container-lowest shadow-2xl" style={{width: 'min(560px, calc(100vw - 32px))' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-neutral-200/70 dark:border-white/8 px-5 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Mail size={15} className="text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-on-surface">
+                {isCor ? 'Destinatários da lista ao COR' : isCommittee ? 'Membros do Comitê' : `Quem aprova — ${areaItem.label}`}
+              </p>
+              <p className="text-xs text-on-surface-variant">
+                {isCor
+                  ? 'Recebem por e-mail a lista de clientes corporativos e ponto a ponto/fibra apagada de cada GMUD liberada.'
+                  : isCommittee
+                  ? 'Tomam a decisão final das GMUDs (aprovar ou negar) na plataforma. Basta um membro decidir. Sem membros, ninguém consegue aprovar.'
+                  : 'Recebem por e-mail o link para aprovar ou negar as GMUDs que marcarem esta área. Basta uma pessoa decidir.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-on-surface-variant transition hover:bg-neutral-100 dark:hover:bg-white/8"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Lista de aprovadores */}
+        <div className="overflow-y-auto px-5 py-4 space-y-3">
+          {approvers.length === 0 ? (
+            <p className="py-3 text-center text-sm text-on-surface-variant/60 italic">
+              {isCor
+                ? 'Ninguém cadastrado: o COR não receberá a lista de clientes.'
+                : isCommittee
+                ? 'Ninguém cadastrado: nenhuma GMUD pode ser aprovada ou negada até haver membros.'
+                : 'Ninguém cadastrado: GMUDs com esta área não podem ser abertas.'}
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {approvers.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200/70 dark:border-white/8 bg-surface-container px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    {a.userDisplayName ? (
+                      <p className="text-sm font-medium text-on-surface truncate">{a.userDisplayName}</p>
+                    ) : null}
+                    <p className="text-xs text-on-surface-variant truncate">{a.userEmail}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void gmudConfirm({
+                        titulo: 'Remover aprovador?',
+                        mensagem: `Remover "${a.userEmail}" como aprovador?`,
+                        confirmar: 'Remover',
+                        cancelar: 'Manter',
+                        tom: 'destrutivo',
+                      }).then(({ confirmado }) => {
+                        if (confirmado) removeMutation.mutate(a.id)
+                      })
+                    }}
+                    disabled={removeMutation.isPending}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-on-surface-variant ring-1 ring-neutral-200/70 dark:ring-white/10 transition hover:text-error hover:ring-error/40 disabled:opacity-40"
+                    title="Remover aprovador"
+                  >
+                    {removeMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Remover
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Adicionar aprovador */}
+          <div className="border-t border-neutral-200/60 dark:border-white/6 pt-3 space-y-2">
+            <p className="text-xs font-semibold text-on-surface-variant">
+              {isCor ? 'Adicionar destinatário' : isCommittee ? 'Adicionar membro' : 'Adicionar aprovador'}
+            </p>
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (selectedEmail) addMutation.mutate()
+              }}
+            >
+              <div className="relative">
+                <input
+                  className={FIELD + ' w-full'}
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setSelectedEmail('') }}
+                  placeholder="Buscar por nome ou e-mail…"
+                  disabled={usersLoading || availableUsers.length === 0}
+                  autoComplete="off"
+                />
+                {search.trim() !== '' && !selectedEmail && filteredUsers.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest shadow-lg max-h-48 overflow-y-auto">
+                    {filteredUsers.map((u) => (
+                      <li
+                        key={u.uid}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setSelectedEmail(u.email)
+                          setSearch(u.displayName ? `${u.displayName} (${u.email})` : u.email)
+                        }}
+                        className={`cursor-pointer px-3 py-2 text-sm transition hover:bg-primary/8 dark:hover:bg-primary/15 ${selectedEmail === u.email ? 'bg-primary/10 font-medium' : ''}`}
+                      >
+                        {u.displayName
+                          ? <><span className="text-on-surface">{u.displayName}</span><span className="ml-1.5 text-xs text-on-surface-variant">{u.email}</span></>
+                          : <span className="text-on-surface">{u.email}</span>
+                        }
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {search.trim() !== '' && !selectedEmail && filteredUsers.length === 0 && (
+                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 py-2 text-sm text-on-surface-variant/60 shadow-lg italic">
+                    Nenhum resultado encontrado.
+                  </div>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={addMutation.isPending || selectedEmail === ''}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {addMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                Adicionar aprovador
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Painel de uma lista configurável
+// ---------------------------------------------------------------------------
+function ListPanel({
+  listKey,
+  items,
+  refetch,
+  approversMap,
+  allUsers,
+  usersLoading,
+  refetchApprovers,
+}: {
+  listKey: string
+  items: GmudConfigItem[]
+  refetch: () => void
+  approversMap?: Record<number, TeamApprover[]>
+  allUsers?: SplittersUserProfile[]
+  usersLoading?: boolean
+  refetchApprovers?: () => void
+}) {
+  const [newLabel, setNewLabel] = useState('')
+  const [filtro, setFiltro] = useState('')
+  const [openApproversForId, setOpenApproversForId] = useState<number | null>(null)
+  const qc = useQueryClient()
+  const meta = LIST_META[listKey] ?? { label: listKey, hint: '' }
+  const isCommittee = listKey === 'comite'
+  const isCor = listKey === 'cor'
+  const isFixed = isCommittee || isCor
+  const hasApprovers = listKey === 'areas' || isFixed
+  const createCorMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível criar a lista do COR'),
+    mutationFn: () => ensureGmudCorItem(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmud-config-lists'] })
+      refetch()
+    },
+  })
+
+  const addMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível adicionar o item'),
+    mutationFn: () => addGmudConfigItem(listKey, newLabel.trim()),
+    onSuccess: () => {
+      setNewLabel('')
+      qc.invalidateQueries({ queryKey: ['gmud-config-lists'] })
+      refetch()
+    },
+  })
+
+  const removeMutation = useMutation({
+    onError: (error) => showGmudError(error, 'Não foi possível remover o item'),
+    mutationFn: (id: number) => removeGmudConfigItem(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmud-config-lists'] })
+      refetch()
+    },
+  })
+
+  const openAreaItem = openApproversForId != null
+    ? items.find((i) => i.id === openApproversForId) ?? null
+    : null
+
+  return (
+    <>
+      <div className={CARD}>
+        <div className="border-b border-neutral-200/70 dark:border-white/8 px-4 py-3">
+          <p className="font-semibold text-sm text-on-surface">{meta.label}</p>
+          {meta.hint ? <p className="mt-0.5 text-xs text-on-surface-variant">{meta.hint}</p> : null}
+        </div>
+
+        {items.length === 0 && isCor ? (
+          <div className="flex flex-wrap items-center gap-3 px-4 py-4">
+            <p className="min-w-0 flex-1 text-sm text-on-surface-variant">A lista do COR ainda não foi criada.</p>
+            <button
+              type="button"
+              onClick={() => createCorMutation.mutate()}
+              disabled={createCorMutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
+            >
+              {createCorMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Criar lista do COR
+            </button>
+          </div>
+        ) : items.length === 0 ? (
+          <p className="px-4 py-4 text-sm italic text-on-surface-variant/60">Nenhum item cadastrado.</p>
+        ) : isFixed ? (
+          <div className="space-y-2 px-4 py-3">
+            {items.map((item) => {
+              const members = approversMap?.[item.id] ?? []
+              return (
+                <div key={item.id} className="flex flex-wrap items-center gap-3">
+                  <div className="flex -space-x-2" aria-hidden>
+                    {members.slice(0, 5).map((m) => (
+                      <span
+                        key={m.id}
+                        title={m.userDisplayName ?? m.userEmail}
+                        className="inline-flex size-8 items-center justify-center rounded-full bg-surface-container-low text-[11px] font-bold text-on-surface ring-2 ring-surface-container-lowest"
+                      >
+                        {requesterInitials(m.userDisplayName ?? m.userEmail.split('@')[0])}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="min-w-0 flex-1 text-sm">
+                    {members.length > 0 ? (
+                      <>
+                        <p className="font-semibold text-on-surface">
+                          {members.length} {isCor ? `destinatário${members.length === 1 ? '' : 's'}` : `membro${members.length === 1 ? '' : 's'}`}
+                        </p>
+                        <p className="truncate text-xs text-on-surface-variant">
+                          {members.map((m) => m.userDisplayName ?? m.userEmail).join(', ')}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
+                        {isCor ? 'Sem destinatários: o COR não receberá a lista de clientes' : 'Sem membros: ninguém pode aprovar ou negar GMUDs'}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpenApproversForId(item.id)}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-on-surface ring-1 ring-neutral-200/70 transition hover:bg-surface-container-low dark:ring-white/10"
+                  >
+                    <Users size={13} /> {isCor ? 'Gerenciar destinatários' : 'Gerenciar membros'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3 p-4">
+            {items.length > 8 ? (
+              <input
+                className={FIELD}
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                placeholder="Filtrar…"
+                aria-label={`Filtrar ${meta.label}`}
+              />
+            ) : null}
+            <ul className={hasApprovers ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-wrap gap-2'}>
+              {items
+                .filter((i) => filtro.trim() === '' || i.label.toLocaleLowerCase('pt-BR').includes(filtro.trim().toLocaleLowerCase('pt-BR')))
+                .map((item) => {
+                  const count = approversMap?.[item.id]?.length ?? 0
+                  const semAprovador = hasApprovers && count === 0
+                  const remover = (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void gmudConfirm({
+                          titulo: 'Remover item da lista?',
+                          mensagem: `Remover "${item.label}" da lista "${meta.label}"?`,
+                          confirmar: 'Remover',
+                          cancelar: 'Manter',
+                          tom: 'destrutivo',
+                        }).then(({ confirmado }) => {
+                          if (confirmado) removeMutation.mutate(item.id)
+                        })
+                      }}
+                      disabled={removeMutation.isPending}
+                      className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition hover:bg-surface-container-low hover:text-error disabled:opacity-40"
+                      title={`Remover ${item.label}`}
+                      aria-label={`Remover ${item.label}`}
+                    >
+                      {removeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  )
+                  return hasApprovers ? (
+                    <li
+                      key={item.id}
+                      className={cn(
+                        'flex items-center gap-1 rounded-xl border px-3 py-2',
+                        semAprovador
+                          ? 'border-amber-300/70 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/20'
+                          : 'border-neutral-200/80 dark:border-white/10',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setOpenApproversForId(item.id)}
+                        className="min-w-0 flex-1 text-left"
+                        title="Gerenciar quem aprova"
+                      >
+                        <span className="block truncate text-sm font-medium text-on-surface">{item.label}</span>
+                        {semAprovador ? (
+                          <span
+                            className="block text-[11px] font-semibold text-amber-700 dark:text-amber-300"
+                            title="GMUDs que marcarem esta área não poderão ser registradas até cadastrar um aprovador"
+                          >
+                            Sem aprovador: bloqueia GMUDs que marcarem a área
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant">
+                            <Users size={10} /> {count} aprovador{count === 1 ? '' : 'es'}
+                          </span>
+                        )}
+                      </button>
+                      {remover}
+                    </li>
+                  ) : (
+                    <li
+                      key={item.id}
+                      className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 py-0.5 pl-3 pr-1 text-sm text-on-surface dark:border-white/10"
+                    >
+                      {item.label}
+                      {remover}
+                    </li>
+                  )
+                })}
+            </ul>
+          </div>
+        )}
+
+        {!isFixed ? (
+        <div className="border-t border-neutral-200/70 dark:border-white/8 px-4 py-3">
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (newLabel.trim()) addMutation.mutate()
+            }}
+          >
+            <input
+              className={FIELD}
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Nome do novo item…"
+              maxLength={191}
+            />
+            <button
+              type="submit"
+              disabled={addMutation.isPending || newLabel.trim() === ''}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-neutral-900 transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {addMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar
+            </button>
+          </form>
+        </div>
+        ) : null}
+      </div>
+
+      {hasApprovers && openAreaItem && approversMap && allUsers ? (
+        <TeamApproversModal
+          areaItem={openAreaItem}
+          approvers={approversMap[openAreaItem.id] ?? []}
+          allUsers={allUsers}
+          usersLoading={usersLoading ?? false}
+          isCommittee={isCommittee}
+          isCor={isCor}
+          refetch={() => {
+            refetch()
+            refetchApprovers?.()
+            void qc.invalidateQueries({ queryKey: GMUD_COMMITTEE_QUERY_KEY })
+          }}
+          onClose={() => setOpenApproversForId(null)}
+        />
+      ) : null}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tela principal
+// ---------------------------------------------------------------------------
+export function GmudConfigScreen() {
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['gmud-config-lists'],
+    queryFn: fetchGmudConfigLists,
+    staleTime: 0,
+  })
+
+  const { data: approversMap = {}, refetch: refetchApprovers } = useQuery({
+    queryKey: ['gmud-team-approvers'],
+    queryFn: fetchTeamApprovers,
+    staleTime: 0,
+  })
+
+  const { data: allUsers = [], isLoading: usersLoading } = useQuery({
+    queryKey: ['splitters-users'],
+    queryFn: listSplittersUsers,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const handleRefetch = () => { void refetch(); void refetchApprovers() }
+
+  return (
+    <div className="mx-auto min-w-0 max-w-[1480px] space-y-4">
+      <AppPageHeader
+        badge="Módulo GMUD"
+        title="Configurações"
+        description="Gerencie as listas de opções do formulário de GMUD: áreas, sistemas e processos."
+        icon={Settings2}
+        primaryAction={{ to: '/gmud', label: 'Voltar às GMUDs' }}
+      />
+
+      <div className="rounded-xl border border-amber-300/60 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-900 dark:text-amber-100">
+        <span className="font-semibold">Atenção:</span> Remover um item não afeta registros históricos — apenas oculta a opção em novos formulários.
+        Itens removidos que já existem em GMUDs registradas continuam visíveis nos detalhes.
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-on-surface-variant py-8">
+          <Loader2 size={16} className="animate-spin" />
+          Carregando listas…
+        </div>
+      ) : isError ? (
+        <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+          {error instanceof Error ? error.message : 'Falha ao carregar as listas de configuração.'}
+        </div>
+      ) : (
+        <div className="pb-8 space-y-4">
+          <ListPanel
+            listKey="comite"
+            items={data?.comite ?? []}
+            refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
+          />
+
+          <ListPanel
+            listKey="cor"
+            items={data?.cor ?? []}
+            refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
+          />
+
+          <ListPanel
+            listKey="areas"
+            items={data?.areas ?? []}
+            refetch={handleRefetch}
+            approversMap={approversMap}
+            allUsers={allUsers}
+            usersLoading={usersLoading}
+            refetchApprovers={refetchApprovers}
+          />
+
+          <ListPanel
+            listKey="processos"
+            items={data?.processos ?? []}
+            refetch={handleRefetch}
+          />
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ListPanel
+              listKey="sistemas_internos"
+              items={data?.sistemas_internos ?? []}
+              refetch={handleRefetch}
+            />
+            <ListPanel
+              listKey="sistemas_externos"
+              items={data?.sistemas_externos ?? []}
+              refetch={handleRefetch}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

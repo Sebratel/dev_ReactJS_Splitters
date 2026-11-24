@@ -2,10 +2,24 @@ import { env } from '@/shared/config/env'
 import { fetchWithSessionAuth } from '@/shared/api/fetchWithSessionAuth'
 import type { UsageSummary } from '@/features/analytics/model/usageSummary'
 
-/** Busca o sumário agregado do radar de uso (somente admin) para os últimos `days`. */
-export async function fetchUsageSummary(days: number, userEmail?: string | null): Promise<UsageSummary> {
-  const params = new URLSearchParams({ days: String(days) })
-  if (userEmail && userEmail.trim() !== '') params.set('user', userEmail.trim())
+/** Filtro do radar: um preset (`days`) OU um intervalo explícito (`start`/`end`, ISO), + colaborador. */
+export type UsageSummaryQuery = {
+  days?: number
+  start?: string
+  end?: string
+  userEmail?: string | null
+}
+
+/** Busca o sumário agregado do radar de uso (somente admin) — por preset de dias ou intervalo. */
+export async function fetchUsageSummary(query: UsageSummaryQuery): Promise<UsageSummary> {
+  const params = new URLSearchParams()
+  if (query.start && query.end) {
+    params.set('start', query.start)
+    params.set('end', query.end)
+  } else {
+    params.set('days', String(query.days ?? 7))
+  }
+  if (query.userEmail && query.userEmail.trim() !== '') params.set('user', query.userEmail.trim())
   const response = await fetchWithSessionAuth(
     `${env.localBffUrl}/api/usage-events/summary?${params.toString()}`,
   )

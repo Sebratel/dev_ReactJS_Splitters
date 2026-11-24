@@ -249,6 +249,7 @@ const MASSIVA_IDENTIFIED_BY_LABEL: Record<string, string> = {
   tecnico: 'Técnico',
   zabbix: 'Zabbix',
   int6: 'INT6',
+  gmud: 'GMUD',
 }
 
 type KpiTrend = { deltaLabel: string; better: boolean }

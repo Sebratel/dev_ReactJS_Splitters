@@ -36,15 +36,19 @@ export function buildUsageCsv(summary: UsageSummary): string {
 }
 
 /** Dispara o download do CSV no navegador (app real — Blob + âncora). */
-export function downloadUsageCsv(summary: UsageSummary, options: { days: number; userEmail?: string | null }): void {
+export function downloadUsageCsv(
+  summary: UsageSummary,
+  options: { period: string; userEmail?: string | null },
+): void {
   const csv = buildUsageCsv(summary)
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const who = options.userEmail && options.userEmail.trim() !== '' ? options.userEmail.split('@')[0] : 'todos'
   const date = new Date().toISOString().slice(0, 10)
+  const safePeriod = options.period.replace(/[^\w-]+/g, '-')
   const a = document.createElement('a')
   a.href = url
-  a.download = `radar-uso_${who}_${options.days}d_${date}.csv`
+  a.download = `radar-uso_${who}_${safePeriod}_${date}.csv`
   document.body.appendChild(a)
   a.click()
   a.remove()

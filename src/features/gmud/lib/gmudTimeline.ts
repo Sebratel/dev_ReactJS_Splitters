@@ -1,0 +1,106 @@
+import { formatWindow, type GmudWindow } from '@/features/gmud/lib/gmudSchedule'
+
+export type TimelineTone = 'neutral' | 'success' | 'danger' | 'warning' | 'primary'
+
+export type TimelineItem = {
+  at: string
+  title: string
+  detail: string | null
+  actor: string | null
+  tone: TimelineTone
+}
+
+type EventLike = { type: string; actor: string | null; payload: Record<string, unknown> | null; at: string | null }
+
+const EVENT_LABEL: Record<string, { title: string; tone: TimelineTone }> = {
+  criada: { title: 'Registrada na plataforma', tone: 'primary' },
+  pre_aprovada: { title: 'Pré-aprovada (sem aprovação)', tone: 'success' },
+  comite_aprovada: { title: 'Aprovada pelo Comitê', tone: 'success' },
+  comite_negada: { title: 'Negada pelo Comitê', tone: 'danger' },
+  comite_pendente: { title: 'Voltou para pendente no Comitê', tone: 'warning' },
+  execucao_em_execucao: { title: 'Execução iniciada', tone: 'primary' },
+  execucao_concluida: { title: 'Execução concluída', tone: 'success' },
+  execucao_pendente: { title: 'Execução voltou para pendente', tone: 'warning' },
+  encerrada_elleven: { title: 'Protocolo encerrado no Elleven', tone: 'success' },
+  reagendada: { title: 'Janela reagendada', tone: 'warning' },
+  massiva_vinculada: { title: 'Massiva vinculada', tone: 'neutral' },
+  massiva_desvinculada: { title: 'Massiva desvinculada', tone: 'neutral' },
+  anexo_adicionado: { title: 'Anexo incluído', tone: 'neutral' },
+  anexo_removido: { title: 'Anexo removido', tone: 'warning' },
+  fluxograma_criado: { title: 'Fluxograma gerado', tone: 'primary' },
+  fluxograma_atualizado: { title: 'Fluxograma atualizado', tone: 'neutral' },
+  fluxograma_removido: { title: 'Fluxograma removido', tone: 'warning' },
+  area_aprovada: { title: 'Área aprovou', tone: 'success' },
+  area_negada: { title: 'Área negou — GMUD negada', tone: 'danger' },
+  area_aprovada_comite: { title: 'Comitê aprovou em nome da área', tone: 'warning' },
+  cancelamento_elleven_falhou: { title: 'Cancelamento no Elleven não concluído', tone: 'danger' },
+  cor_lista_enviada: { title: 'Lista de clientes enviada ao COR', tone: 'primary' },
+  cor_lembrete_enviado: { title: 'Lembrete da lista de clientes enviado ao COR', tone: 'neutral' },
+}
+
+function isWindow(value: unknown): value is GmudWindow {
+  const w = value as GmudWindow | null
+  return Boolean(w && typeof w.dataInicio === 'string' && typeof w.horaInicio === 'string')
+}
+
+function detailFor(e: EventLike): string | null {
+  const p = e.payload ?? {}
+  if (e.type === 'reagendada' && isWindow(p.previous) && isWindow(p.next)) {
+    return `${formatWindow(p.previous)} → ${formatWindow(p.next)}`
+  }
+  if (e.type === 'massiva_vinculada' || e.type === 'massiva_desvinculada') {
+    return p.massivaProtocol ? `Massiva ${String(p.massivaProtocol)}` : null
+  }
+  if (e.type === 'encerrada_elleven') {
+    return p.motivo === 'negada' ? 'Cancelamento (GMUD negada)' : p.motivo === 'concluida' ? 'Encerramento (GMUD concluída)' : null
+  }
+  if (e.type.startsWith('comite_')) {
+    const parts = [p.dataCab ? `CAB ${String(p.dataCab).split('-').reverse().join('/')}` : null, p.rnc ? `RNC ${String(p.rnc)}` : null]
+    const text = parts.filter(Boolean).join(' · ')
+    return text || null
+  }
+  if (e.type === 'area_aprovada' || e.type === 'area_negada') {
+    const parts = [p.area ? String(p.area) : null, e.type === 'area_negada' && p.motivo ? String(p.motivo) : null]
+    return parts.filter(Boolean).join(' — ') || null
+  }
+  if (e.type === 'area_aprovada_comite') return p.area ? String(p.area) : null
+  if (e.type === 'cancelamento_elleven_falhou') return p.motivo ? String(p.motivo) : 'Cancele o protocolo manualmente.'
+  if (e.type === 'criada' && p.tipo) return String(p.tipo)
+  if ((e.type === 'anexo_adicionado' || e.type === 'anexo_removido') && p.filename) {
+    return String(p.filename)
+  }
+  return null
+}
+
+/**
+ * Linha do tempo da GMUD: abertura e encerramento do protocolo (Voalle) + a trilha da plataforma,
+ * em ordem cronológica.
+ */
+export function buildGmudTimeline(input: {
+  openedAt: string | null
+  conclusionDate: string | null
+  voalleStatus: string
+  events: EventLike[]
+}): TimelineItem[] {
+  const items: TimelineItem[] = []
+  if (input.openedAt) {
+    items.push({ at: input.openedAt, title: 'Protocolo aberto no Elleven', detail: null, actor: null, tone: 'neutral' })
+  }
+  for (const e of input.events) {
+    if (!e.at) continue
+    const meta = EVENT_LABEL[e.type] ?? { title: e.type, tone: 'neutral' as TimelineTone }
+    items.push({ at: e.at, title: meta.title, detail: detailFor(e), actor: e.actor, tone: meta.tone })
+  }
+  const closedByPlatform = input.events.some((e) => e.type === 'encerrada_elleven')
+  if (input.conclusionDate && !closedByPlatform) {
+    const cancelled = /cancel/i.test(input.voalleStatus)
+    items.push({
+      at: input.conclusionDate,
+      title: cancelled ? 'Protocolo cancelado no Elleven' : 'Protocolo encerrado no Elleven',
+      detail: null,
+      actor: null,
+      tone: cancelled ? 'danger' : 'success',
+    })
+  }
+  return items.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+}

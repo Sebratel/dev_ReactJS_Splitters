@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowRightLeft,
+  ClipboardList,
   Cpu,
   LayoutDashboard,
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
 import { cn } from '@/shared/lib/utils'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
 import { useHomeDashboardMassivaOpen } from '@/features/massiva/hooks/useHomeDashboardMassivaOpen'
+import { useGmudPendingCount } from '@/features/gmud/hooks/useGmudApprovals'
 import { BREAKPOINT_PX } from '@/shared/lib/breakpoints'
 import { useMediaQuery } from '@/shared/hooks/useMediaQuery'
 import { prefetchNetworkStats } from '@/features/dashboard/hooks/useNetworkStats'
@@ -38,8 +40,10 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
   const canAccessMassiva = useAccessAuthStore((s) => s.hasPermission('canViewMassiva'))
   const canAccessIntelligence = useAccessAuthStore((s) => s.hasPermission('canViewIntelligence'))
   const canAccessRedistribution = useAccessAuthStore((s) => s.hasPermission('canViewRedistribution'))
+  const canAccessGmud = useAccessAuthStore((s) => s.hasPermission('canViewGmud'))
   const isAdmin = useAccessAuthStore((s) => s.hasPermission('isAdmin'))
   const { openCount } = useHomeDashboardMassivaOpen()
+  const gmudPendingCount = useGmudPendingCount()
 
   const isActive = (to: string) => {
     if (to === '/') return currentPath === '/'
@@ -62,6 +66,16 @@ export function Sidebar({ collapsed, mobileDrawerOpen, onMobileDrawerClose, onNa
             to: '/massiva',
             accent: 'danger' as const,
             badge: openCount > 0 ? openCount : undefined,
+          },
+        ]
+      : []),
+    ...(canAccessGmud || isAdmin
+      ? [
+          {
+            label: 'GMUD',
+            icon: ClipboardList,
+            to: '/gmud',
+            badge: gmudPendingCount > 0 ? gmudPendingCount : undefined,
           },
         ]
       : []),

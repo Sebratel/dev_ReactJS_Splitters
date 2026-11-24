@@ -4,7 +4,21 @@ import { useMassivaLocalPreview } from '@/features/massiva/hooks/useMassivaLocal
 import { useMassivaOpenReadiness } from '@/features/massiva/hooks/useMassivaOpenReadiness'
 import { useMassivaOpenMutation } from '@/features/massiva/hooks/useMassivaOpenMutation'
 import { explainMassivaPostBlocked } from '@/features/massiva/lib/explainMassivaPostBlocked'
+import { buildMassivaSistemaTitle } from '@/features/massiva/lib/buildMassivaSistemaTitle'
+import { MASSIVA_API_GATEWAY_DEFAULTS } from '@/features/massiva/model/massivaApiGatewayConstants'
+import { env } from '@/shared/config/env'
+import {
+  findMassivaSubject,
+  isMassivaSubjectId,
+  type MassivaSubjectId,
+} from '@/features/massiva/model/massivaSubject'
+import {
+  GMUD_SISTEMAS_INTERNOS_OPTIONS,
+  GMUD_SISTEMAS_EXTERNOS_OPTIONS,
+} from '@/features/gmud/model/gmudForm'
+import type { MassivaOpeningPreparationView } from '@/features/massiva/model/massivaOpeningBasis'
 import { BottomActionBar } from '@/features/massiva/ui/BottomActionBar'
+import { MassivaSubjectSelector } from '@/features/massiva/ui/MassivaSubjectSelector'
 import {
   MassivaStepper,
   type MassivaStepId,
@@ -18,6 +32,8 @@ import { StepSplitters } from '@/features/massiva/ui/StepSplitters'
 import { StepValidacao } from '@/features/massiva/ui/StepValidacao'
 import { useMassivaOpenDraftStore } from '@/features/massiva/store/massivaOpenDraftStore'
 import type { MassivaRouteConnectionSelection } from '@/features/massiva/model/massivaLocalPreview'
+
+const MASSIVA_SISTEMA_AP_CODE = env.massivaSistemaApCode
 
 function countConfiguredRoutes(
   connections: ReturnType<typeof useMassivaLocalPreview>['selection']['connections'],
@@ -40,17 +56,22 @@ type MassivaPageProps = {
   canOpenMassiva?: boolean
 }
 
-const MASSIVA_PAGE_UI_STATE_KEY = 'nexaview.massiva.page-ui.v1'
+const MASSIVA_PAGE_UI_STATE_KEY = 'nexaview.massiva.page-ui.v2'
 
-function readMassivaPageUiState(): { currentStep: MassivaStepId } {
+type MassivaPageUiState = {
+  currentStep: MassivaStepId
+  selectedSubjectId: MassivaSubjectId | null
+}
+
+function readMassivaPageUiState(): MassivaPageUiState {
   if (typeof window === 'undefined') {
-    return { currentStep: 'rota' }
+    return { currentStep: 'rota', selectedSubjectId: null }
   }
 
   try {
     const raw = window.sessionStorage.getItem(MASSIVA_PAGE_UI_STATE_KEY)
     if (!raw) throw new Error('empty')
-    const parsed = JSON.parse(raw) as Partial<{ currentStep: MassivaStepId }>
+    const parsed = JSON.parse(raw) as Partial<MassivaPageUiState>
     return {
       currentStep:
         parsed.currentStep === 'rota' ||
@@ -59,16 +80,22 @@ function readMassivaPageUiState(): { currentStep: MassivaStepId } {
         parsed.currentStep === 'abertura'
           ? parsed.currentStep
           : 'rota',
+      selectedSubjectId: isMassivaSubjectId(parsed.selectedSubjectId)
+        ? parsed.selectedSubjectId
+        : null,
     }
   } catch {
-    return { currentStep: 'rota' }
+    return { currentStep: 'rota', selectedSubjectId: null }
   }
 }
 
 export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   const location = useLocation()
   const [pageUiState, setPageUiState] = useState(readMassivaPageUiState)
-  const { currentStep } = pageUiState
+  const { currentStep, selectedSubjectId } = pageUiState
+
+  const selectedSubject = selectedSubjectId ? findMassivaSubject(selectedSubjectId) : undefined
+
   const setCurrentStep = (
     value: MassivaStepId | ((previous: MassivaStepId) => MassivaStepId),
   ) =>
@@ -79,11 +106,72 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
           ? value(previous.currentStep)
           : value,
     }))
+
+  const handleSubjectChange = (id: MassivaSubjectId) => {
+    const subject = findMassivaSubject(id)
+    setPageUiState({
+      selectedSubjectId: id,
+      currentStep: subject?.tipo === 'sistema' ? 'abertura' : 'rota',
+    })
+  }
+
   const enableImpactComputation =
-    currentStep === 'validacao' || currentStep === 'abertura'
-  const localPreview = useMassivaLocalPreview({ enableImpactComputation })
+    selectedSubject?.tipo !== 'sistema' &&
+    (currentStep === 'validacao' || currentStep === 'abertura')
+
+  const localPreview = useMassivaLocalPreview({
+    enableImpactComputation,
+    subjectLabel: selectedSubject?.tipo === 'rede' ? selectedSubject.label : undefined,
+  })
+
+  const sistemaAfetado = useMassivaOpenDraftStore((s) => s.sistemaAfetado)
+
+  // Preparation sintética para assuntos do tipo sistema (sem rota de rede)
+  const sistemaOpeningPreparation = useMemo<MassivaOpeningPreparationView>(() => {
+    if (!selectedSubject || selectedSubject.tipo !== 'sistema') {
+      return { status: 'unavailable', reason: 'connections-loading' }
+    }
+    if (MASSIVA_SISTEMA_AP_CODE.trim() === '') {
+      return {
+        status: 'invalid',
+        issues: [
+          'Código de ponto de acesso para chamados de sistema não configurado (VITE_MASSIVA_SISTEMA_AP_CODE). Contate o administrador.',
+        ],
+      }
+    }
+    return {
+      status: 'prepared',
+      basis: {
+        topology: { routes: [] },
+        collectedClientes: [],
+        previewTotals: { totalAffected: 0, totalPppoes: 0, totalCorporateAffected: 0 },
+        uniqueAuthenticationIdsOnRoute: [],
+        flutterStyleAffectedUsersQuantity: 0,
+      },
+      plan: {
+        apiDefaults: MASSIVA_API_GATEWAY_DEFAULTS,
+        requests: [{
+          authenticationAccessPointCode: MASSIVA_SISTEMA_AP_CODE,
+          assignmentTitle: buildMassivaSistemaTitle(selectedSubject.label, sistemaAfetado),
+        }],
+        pendingBeforePost: ['personId', 'assignmentDescription', 'assignmentFinalDateLocal'],
+        // O gateway rejeita affectedUsersQuantity <= 0; para chamados de sistema usamos 1 como mínimo.
+        affectedUsersQuantityFlutterParity: 1,
+        routeCollectedClientCount: 0,
+        routeUniqueAuthenticationIdCount: 0,
+      },
+    }
+  }, [selectedSubject, sistemaAfetado])
+
+  const isSistema = selectedSubject?.tipo === 'sistema'
+
+  const effectiveOpeningPreparation =
+    isSistema
+      ? sistemaOpeningPreparation
+      : localPreview.openingPreparation
+
   const { readiness, draftFormEnabled, refetchPersonId } =
-    useMassivaOpenReadiness(localPreview.openingPreparation)
+    useMassivaOpenReadiness(effectiveOpeningPreparation, { isSistema })
   const openMutation = useMassivaOpenMutation(readiness)
 
   const configuredRoutes = countConfiguredRoutes(localPreview.selection.connections)
@@ -92,6 +180,14 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   )
 
   const steps = useMemo<MassivaStepItem[]>(() => {
+    if (isSistema) {
+      const aberturaStatus: MassivaStepItem['status'] =
+        readiness.status === 'ready-to-open' ? 'success' : 'current'
+      return [
+        { id: 'abertura', title: 'Abertura direta', description: 'Formulário e envio', status: aberturaStatus },
+      ]
+    }
+
     const rotaStatus: MassivaStepItem['status'] =
       configuredRoutes > 0 ? 'success' : currentStep === 'rota' ? 'current' : 'warning'
 
@@ -156,10 +252,11 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
         status: currentStep === 'abertura' ? 'current' : aberturaStatus,
       },
     ]
-  }, [configuredRoutes, currentStep, localPreview.view.status, readiness.status, routesWithExplicitSplitters])
+  }, [configuredRoutes, currentStep, isSistema, localPreview.view.status, readiness.status, routesWithExplicitSplitters])
 
-  const summary =
-    localPreview.view.status === 'success'
+  const summary = isSistema
+    ? (selectedSubject?.label ?? 'Sistemas')
+    : localPreview.view.status === 'success'
       ? `${localPreview.view.totals.totalAffected} clientes afetados - ${localPreview.view.totals.totalPppoes} PPPoEs - ${localPreview.view.totals.totalCorporateAffected} corporativos`
       : configuredRoutes > 0
         ? `${configuredRoutes} rota(s) configurada(s)`
@@ -172,7 +269,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
   const apTitleByCode = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {}
 
-    if (localPreview.openingPreparation.status === 'prepared') {
+    if (!isSistema && localPreview.openingPreparation.status === 'prepared') {
       for (const route of localPreview.openingPreparation.basis.topology.routes) {
         if (map[route.apCode] == null) {
           map[route.apCode] = route.apDisplayTitle.trim() !== '' ? route.apDisplayTitle : route.apCode
@@ -189,7 +286,7 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
     }
 
     return map
-  }, [localPreview.openingPreparation, readiness])
+  }, [isSistema, localPreview.openingPreparation, readiness])
 
   const didApplyPrefillRef = useRef(false)
   useEffect(() => {
@@ -359,9 +456,25 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
     return (
       <StepAbertura
         readiness={readiness}
-        openingPreparation={localPreview.openingPreparation}
+        openingPreparation={isSistema ? sistemaOpeningPreparation : localPreview.openingPreparation}
         draftFormEnabled={draftFormEnabled}
         onRetryPersonId={refetchPersonId}
+        solicitationTypeLabel={isSistema ? undefined : selectedSubject?.label}
+        hideNetworkFields={isSistema}
+        sistemaOptions={
+          selectedSubjectId === 'sistemas-internos'
+            ? GMUD_SISTEMAS_INTERNOS_OPTIONS
+            : selectedSubjectId === 'sistemas-externos'
+              ? GMUD_SISTEMAS_EXTERNOS_OPTIONS
+              : undefined
+        }
+        sistemaTipo={
+          selectedSubjectId === 'sistemas-internos'
+            ? 'interno'
+            : selectedSubjectId === 'sistemas-externos'
+              ? 'externo'
+              : undefined
+        }
       />
     )
   })()
@@ -371,12 +484,25 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
       <div className="grid min-h-0 gap-4 lg:gap-5 xl:gap-6 min-[1700px]:grid-cols-[minmax(0,7fr)_minmax(380px,3fr)]">
         <section className="flex min-h-0 min-w-0 flex-col rounded-xl bg-surface-container-lowest shadow-[0_2px_12px_-6px_rgba(15,23,42,0.08)] ring-1 ring-neutral-200/70 dark:ring-white/10">
           <div className="space-y-5 px-3 py-4 sm:px-4 sm:py-5 lg:px-5">
-            <MassivaStepper
-              currentStep={currentStep}
-              steps={steps}
-              onStepChange={setCurrentStep}
-            />
-            {(localPreview.isConnectionsLoading || localPreview.isApplyingFilters) ? (
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">
+                Qual é o assunto?
+              </p>
+              <MassivaSubjectSelector
+                value={selectedSubjectId}
+                onChange={handleSubjectChange}
+              />
+            </div>
+
+            {selectedSubjectId && (
+              <MassivaStepper
+                currentStep={currentStep}
+                steps={steps}
+                onStepChange={isSistema ? () => {} : setCurrentStep}
+              />
+            )}
+
+            {!isSistema && (localPreview.isConnectionsLoading || localPreview.isApplyingFilters) && (
               <div
                 className="flex items-center gap-2 rounded-lg border border-sky-200 dark:border-sky-800/50 bg-sky-50 dark:bg-sky-950/40 px-3 py-2 text-sm text-sky-900 dark:text-sky-200"
                 role="status"
@@ -389,23 +515,27 @@ export function MassivaPage({ canOpenMassiva = true }: MassivaPageProps) {
                     : 'Carregando catálogo de rotas/splitters...')
                   : 'Aplicando filtros da rota e atualizando clientes...'}
               </div>
-            ) : null}
-            <div className="min-h-[360px] sm:min-h-[420px]">{activeStep}</div>
+            )}
+            {selectedSubjectId && (
+              <div className="min-h-[360px] sm:min-h-[420px]">{activeStep}</div>
+            )}
           </div>
 
-          <BottomActionBar
-            summary={summary}
-            disabledReason={openPermissionReason ?? explainMassivaPostBlocked(readiness)}
-            canSubmit={canOpenMassiva && openMutation.canSubmitOpen}
-            isPending={openMutation.isPending}
-            isSuccess={openMutation.isSuccess}
-            isError={openMutation.isError}
-            error={openMutation.error}
-            successPayload={openMutation.data}
-            apTitleByCode={apTitleByCode}
-            onSubmit={canOpenMassiva ? openMutation.submitOpen : () => {}}
-            onDismiss={openMutation.dismissMutation}
-          />
+          {selectedSubjectId && (
+            <BottomActionBar
+              summary={summary}
+              disabledReason={openPermissionReason ?? explainMassivaPostBlocked(readiness)}
+              canSubmit={canOpenMassiva && openMutation.canSubmitOpen}
+              isPending={openMutation.isPending}
+              isSuccess={openMutation.isSuccess}
+              isError={openMutation.isError}
+              error={openMutation.error}
+              successPayload={openMutation.data}
+              apTitleByCode={apTitleByCode}
+              onSubmit={canOpenMassiva ? openMutation.submitOpen : () => {}}
+              onDismiss={openMutation.dismissMutation}
+            />
+          )}
         </section>
 
         <RightPanel showProtocolsTab={false} />

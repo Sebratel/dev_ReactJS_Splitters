@@ -1,14 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchUsageSummary } from '@/features/analytics/api/fetchUsageSummary'
+import {
+  fetchUsageSummary,
+  type UsageSummaryQuery,
+} from '@/features/analytics/api/fetchUsageSummary'
 
-export const USAGE_SUMMARY_QUERY_KEY = (days: number, userEmail?: string | null) =>
-  ['usage', 'summary', days, userEmail ?? null] as const
+export const USAGE_SUMMARY_QUERY_KEY = (query: UsageSummaryQuery) =>
+  [
+    'usage',
+    'summary',
+    query.days ?? null,
+    query.start ?? null,
+    query.end ?? null,
+    query.userEmail ?? null,
+  ] as const
 
-/** Radar de uso: sumário agregado por período (dias), opcionalmente de um usuário. */
-export function useUsageAnalytics(days: number, userEmail?: string | null) {
+/** Radar de uso: sumário agregado por preset de dias ou intervalo, opcionalmente de um usuário. */
+export function useUsageAnalytics(query: UsageSummaryQuery) {
   return useQuery({
-    queryKey: USAGE_SUMMARY_QUERY_KEY(days, userEmail),
-    queryFn: () => fetchUsageSummary(days, userEmail),
+    queryKey: USAGE_SUMMARY_QUERY_KEY(query),
+    queryFn: () => fetchUsageSummary(query),
     staleTime: 30_000,
     refetchInterval: 60_000,
   })

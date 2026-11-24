@@ -1328,7 +1328,7 @@ function StatPill({
         'flex flex-col items-center rounded-xl px-5 py-2.5 shadow-sm',
         highlight
           ? 'bg-amber-400 ring-1 ring-amber-300 dark:ring-amber-800/50'
-          : 'bg-surface-container-lowest/90 ring-1 ring-white/50 backdrop-blur-sm',
+          : 'bg-surface-container-lowest/90 ring-1 ring-white/50 dark:ring-white/10 backdrop-blur-sm',
       )}
     >
       <span

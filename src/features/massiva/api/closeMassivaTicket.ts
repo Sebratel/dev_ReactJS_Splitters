@@ -1,3 +1,4 @@
+import { finalizeMassivaOnServer } from '@/features/massiva/api/finalizeMassivaOnServer'
 import { registerClosedMassivaHistoryInLocalDb } from '@/features/massiva/api/registerClosedMassivaHistoryInLocalDb'
 import { bffClient } from '@/shared/api/bffClient'
 import { env } from '@/shared/config/env'
@@ -41,6 +42,26 @@ function affectedUsersCleanupBasePath(): string {
 }
 
 export async function closeMassivaTicket(input: CloseMassivaInput): Promise<CloseMassivaResult> {
+  // Caminho preferido: o backend faz tudo (Elleven, afetados e histórico local) numa só requisição.
+  const onServer = await finalizeMassivaOnServer({
+    mode: 'encerrar',
+    protocol: input.protocol,
+    assignmentId: input.assignmentId,
+    description: input.closeDescription,
+    tipoIncidente: input.tipoIncidente,
+    impacto: input.impacto,
+    area: input.area,
+    tecnologia: input.tecnologia,
+    classificacao: input.classificacao,
+    cnl: input.cnl,
+  })
+  if (onServer.handled) {
+    return onServer.localHistoryWarning !== undefined
+      ? { ok: true, localHistoryWarning: onServer.localHistoryWarning }
+      : { ok: true }
+  }
+
+  // Fallback (backend sem gateway configurado): fluxo antigo, feito pelo navegador.
   const closePath = normalizePath(env.massivaClosePath)
   if (closePath === '') {
     throw new Error('Defina VITE_MASSIVA_CLOSE_PATH para encerrar massivas.')

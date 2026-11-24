@@ -66,8 +66,16 @@ export function getMassivaOpenDraftIssues(
     issues.push('Informe a data prevista de normalização (prazo).')
   } else if (forecastCloseTime.trim() === '') {
     issues.push('Informe a hora prevista de normalização (prazo).')
-  } else if (massivaOpenDraftFinalDateLocal(forecastCloseDate, forecastCloseTime) === null) {
-    issues.push('Data/hora de encerramento inválida.')
+  } else {
+    const localDateTime = massivaOpenDraftFinalDateLocal(forecastCloseDate, forecastCloseTime)
+    if (localDateTime === null) {
+      issues.push('Data/hora de encerramento inválida.')
+    } else {
+      const forecastDate = parseDateTimeLocalToDate(localDateTime.slice(0, 16))
+      if (forecastDate !== null && forecastDate.getTime() <= Date.now()) {
+        issues.push('A previsão de encerramento deve ser uma data/hora futura.')
+      }
+    }
   }
 
   return issues

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { GmudRoute } from '@/features/gmud/ui/GmudTransitions'
 import { createBrowserRouter } from 'react-router-dom'
 import { ProtectedAppLayout } from '@/app/auth/ProtectedAppLayout'
 import { ProtectedRoute } from '@/app/auth/ProtectedRoute'
@@ -48,7 +49,26 @@ const CondoRedistributionPage = lazy(() =>
 const UsageRadarPage = lazy(() =>
   import('@/pages/UsageRadarPage').then((m) => ({ default: m.UsageRadarPage })),
 )
+const GmudPage = lazy(() =>
+  import('@/pages/GmudPage').then((m) => ({ default: m.GmudPage })),
+)
+const GmudNewPage = lazy(() =>
+  import('@/pages/GmudNewPage').then((m) => ({ default: m.GmudNewPage })),
+)
+const GmudIndicatorsPage = lazy(() =>
+  import('@/pages/GmudIndicatorsPage').then((m) => ({ default: m.GmudIndicatorsPage })),
+)
+const GmudAreaApprovalPage = lazy(() =>
+  import('@/pages/GmudAreaApprovalPage').then((m) => ({ default: m.GmudAreaApprovalPage })),
+)
+const GmudDetailPage = lazy(() =>
+  import('@/pages/GmudDetailPage').then((m) => ({ default: m.GmudDetailPage })),
+)
+const GmudConfigPage = lazy(() =>
+  import('@/pages/GmudConfigPage').then((m) => ({ default: m.GmudConfigPage })),
+)
 
+// As telas de GMUD usam GmudRoute (esqueleto no carregamento + transição de página).
 function Page({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
 }
@@ -61,6 +81,11 @@ export const router = createBrowserRouter([
   {
     path: '/callback',
     element: <OidcCallbackPage />,
+  },
+  {
+    // Pública de propósito: a pessoa da área decide pelo link do e-mail, sem login.
+    path: '/gmud/aprovar-area',
+    element: <GmudRoute variant="publica"><GmudAreaApprovalPage /></GmudRoute>,
   },
   {
     // Painel de parede (CGR/COR) — rota isolada, fora do RootLayout/Sidebar de
@@ -128,6 +153,66 @@ export const router = createBrowserRouter([
                 description="Seu perfil não possui acesso ao painel de inteligência."
               >
                 <Page><NetworkIntelligencePage /></Page>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <GmudRoute><GmudPage /></GmudRoute>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/nova',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <GmudRoute animate={false}><GmudNewPage /></GmudRoute>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/indicadores',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <GmudRoute><GmudIndicatorsPage /></GmudRoute>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/configuracoes',
+            element: (
+              <PermissionGuard
+                permission="canConfigureGmud"
+                allowAdmin
+                description="Seu perfil não possui permissão para configurar o módulo de GMUD."
+              >
+                <GmudRoute><GmudConfigPage /></GmudRoute>
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: 'gmud/:protocol',
+            element: (
+              <PermissionGuard
+                permission="canViewGmud"
+                allowAdmin
+                description="Seu perfil não possui acesso ao módulo de GMUD."
+              >
+                <GmudRoute><GmudDetailPage /></GmudRoute>
               </PermissionGuard>
             ),
           },

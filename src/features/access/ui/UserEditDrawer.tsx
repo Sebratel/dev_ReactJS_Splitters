@@ -110,6 +110,8 @@ export function UserEditDrawer({
   }
 
   const canOpenMassivaDisabled = !permissions.canViewMassiva
+  const canApproveGmudDisabled = !permissions.canViewGmud
+  const canOpenGmudPreAprovadaDisabled = !permissions.canViewGmud
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="user-edit-title">
@@ -218,6 +220,37 @@ export function UserEditDrawer({
               checked={permissions.canViewRedistribution}
               disabled={pending}
               onCheckedChange={(v) => patchPermissions({ canViewRedistribution: v })}
+            />
+          </section>
+
+          <section className="mt-6 space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">GMUD</h3>
+            <SwitchRow
+              title="Ver GMUD"
+              description="Módulo de Gestão de Mudança de Rede (requisição, painel e acompanhamento)."
+              checked={permissions.canViewGmud}
+              disabled={pending}
+              onCheckedChange={(v) =>
+                patchPermissions({
+                  canViewGmud: v,
+                  canApproveGmud: v ? permissions.canApproveGmud : false,
+                  canOpenGmudPreAprovada: v ? permissions.canOpenGmudPreAprovada : false,
+                })
+              }
+            />
+            <SwitchRow
+              title="Aprovar GMUD (Comitê)"
+              description="Aprovar ou negar GMUDs no Comitê (depende de ver GMUD)."
+              checked={permissions.canApproveGmud}
+              disabled={pending || canApproveGmudDisabled}
+              onCheckedChange={(v) => patchPermissions({ canApproveGmud: v })}
+            />
+            <SwitchRow
+              title="Abrir GMUD pré-aprovada"
+              description="Pré-aprovada não passa por aprovação (nem das áreas, nem do Comitê). Só quem tem esta permissão consegue abrir esse tipo (depende de ver GMUD)."
+              checked={permissions.canOpenGmudPreAprovada}
+              disabled={pending || canOpenGmudPreAprovadaDisabled}
+              onCheckedChange={(v) => patchPermissions({ canOpenGmudPreAprovada: v })}
             />
           </section>
 

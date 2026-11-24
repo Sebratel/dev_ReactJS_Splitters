@@ -131,7 +131,7 @@ export function PlatformSuggestionsPage() {
               initial={reduceMotion ? false : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24 }}
-              className="rounded-[28px] border border-amber-200/70 dark:border-amber-800/50 bg-gradient-to-br from-white dark:from-surface-container-lowest via-amber-50/35 dark:via-amber-950/20 to-white dark:to-surface-container-lowest p-4 shadow-sm sm:p-5"
+              className="rounded-[28px] border border-amber-200/70 dark:border-white/10 bg-gradient-to-br from-white dark:from-surface-container-lowest via-amber-50/35 dark:via-amber-950/20 to-white dark:to-surface-container-lowest p-4 shadow-sm sm:p-5"
             >
               <div className="flex flex-col gap-3">
                 <div className="flex min-h-[46px] items-center gap-3 rounded-2xl border border-neutral-200 dark:border-white/10 bg-surface-container-lowest px-3 shadow-sm">

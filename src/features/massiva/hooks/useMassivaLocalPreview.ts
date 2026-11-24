@@ -109,6 +109,7 @@ function matchesFilters(
  */
 export function useMassivaLocalPreview(options?: {
   enableImpactComputation?: boolean
+  subjectLabel?: string
 }): {
   view: MassivaLocalPreviewViewState
   openingPreparation: MassivaOpeningPreparationView
@@ -160,6 +161,7 @@ export function useMassivaLocalPreview(options?: {
   }
 } {
   const enableImpactComputation = options?.enableImpactComputation ?? true
+  const subjectLabel = options?.subjectLabel
   const connectionsSelection = useMassivaPreviewSelectionStore(
     (state) => state.connections,
   )
@@ -475,7 +477,7 @@ export function useMassivaLocalPreview(options?: {
           flutterStyleAffectedUsersQuantity: serverCounts.uniqueAuthIds,
         }
       : basis
-    const plan = buildMassivaOpeningPlanDraft(basisWithCounts)
+    const plan = buildMassivaOpeningPlanDraft(basisWithCounts, subjectLabel)
     return {
       basis: basisWithCounts,
       plan,
@@ -493,6 +495,7 @@ export function useMassivaLocalPreview(options?: {
     deferredSelection,
     catalog,
     apDisplayLabel,
+    subjectLabel,
   ])
 
   const searchSplitterOptionsForConnection = (

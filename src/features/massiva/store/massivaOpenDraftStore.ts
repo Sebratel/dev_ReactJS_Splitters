@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { MassivaInfraProtocolSelection } from '@/features/massiva/model/massivaInfraProtocol'
 
-/** Quem identificou / solicitou a abertura do evento de massiva. */
-export type MassivaEventIdentifiedBy = 'tecnico' | 'zabbix' | 'int6'
+/** Quem identificou / solicitou a abertura do evento de massiva. 'gmud' = originada de uma GMUD. */
+export type MassivaEventIdentifiedBy = 'tecnico' | 'zabbix' | 'int6' | 'gmud'
 
 /**
  * Rascunho de abertura: campos do formulário + descrição técnica (template ou editada).
@@ -12,6 +12,17 @@ type MassivaOpenDraftState = {
   assignmentDescription: string
   /** Quando true, a descrição é reescrita pelo modelo ao mudar topologia/campos. */
   descriptionAutoSync: boolean
+
+  /** Sistema afetado (para assuntos de tipo sistema). */
+  sistemaAfetado: string
+  /** Descrição do incidente no sistema (para assuntos de tipo sistema). */
+  sistemaDescricaoIncidente: string
+
+  /**
+   * Clientes que já estão em OUTRO evento aberto ficam de fora do novo (padrão). Marcado, o operador
+   * escolhe incluí-los mesmo assim (ex.: o outro evento é um protocolo esquecido). Não persistido.
+   */
+  includeConflictingClients: boolean
 
   assignmentForecastDate: string
   assignmentForecastTime: string
@@ -22,7 +33,7 @@ type MassivaOpenDraftState = {
   eventIdentifiedTime: string
 
   initialReport: string
-  /** Quem identificou o evento: 'tecnico' | 'zabbix' | 'int6' */
+  /** Quem identificou o evento: 'tecnico' | 'zabbix' | 'int6' | 'gmud' */
   eventIdentifiedBy: MassivaEventIdentifiedBy
   /**
    * Quando definido (ex.: clique em evento AutoISP), substitui a linha “Clientes afetados”
@@ -62,6 +73,9 @@ type MassivaOpenDraftState = {
 
   setAssignmentDescription: (value: string) => void
   setDescriptionAutoSync: (value: boolean) => void
+  setSistemaAfetado: (value: string) => void
+  setSistemaDescricaoIncidente: (value: string) => void
+  setIncludeConflictingClients: (value: boolean) => void
   setAssignmentForecastDate: (value: string) => void
   setAssignmentForecastTime: (value: string) => void
   setEventStartDate: (value: string) => void
@@ -133,6 +147,8 @@ function buildInitialDraft() {
   return {
     assignmentDescription: '',
     descriptionAutoSync: true,
+    sistemaAfetado: '',
+    sistemaDescricaoIncidente: '',
     ...defaultForecastDates(),
     ...nowEventDates(),
     initialReport: '',
@@ -153,6 +169,9 @@ const initial = buildInitialDraft()
 const createInitialState = () => ({
   assignmentDescription: '',
   descriptionAutoSync: true,
+  sistemaAfetado: '',
+  sistemaDescricaoIncidente: '',
+  includeConflictingClients: false,
   assignmentForecastDate: initial.assignmentForecastDate,
   assignmentForecastTime: initial.assignmentForecastTime,
   eventStartDate: initial.eventStartDate,
@@ -178,6 +197,9 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       setAssignmentDescription: (assignmentDescription) =>
         set({ assignmentDescription }),
       setDescriptionAutoSync: (descriptionAutoSync) => set({ descriptionAutoSync }),
+      setSistemaAfetado: (sistemaAfetado) => set({ sistemaAfetado }),
+      setSistemaDescricaoIncidente: (sistemaDescricaoIncidente) => set({ sistemaDescricaoIncidente }),
+      setIncludeConflictingClients: (includeConflictingClients) => set({ includeConflictingClients }),
       setAssignmentForecastDate: (assignmentForecastDate) =>
         set({ assignmentForecastDate }),
       setAssignmentForecastTime: (assignmentForecastTime) =>
@@ -233,11 +255,13 @@ export const useMassivaOpenDraftStore = create<MassivaOpenDraftState>()(
       reset: () => set(buildInitialDraft()),
     }),
     {
-      name: 'nexaview.massiva.open-draft.v3',
+      name: 'nexaview.massiva.open-draft.v4',
       storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         assignmentDescription: state.assignmentDescription,
         descriptionAutoSync: state.descriptionAutoSync,
+        sistemaAfetado: state.sistemaAfetado,
+        sistemaDescricaoIncidente: state.sistemaDescricaoIncidente,
         assignmentForecastDate: state.assignmentForecastDate,
         assignmentForecastTime: state.assignmentForecastTime,
         eventStartDate: state.eventStartDate,

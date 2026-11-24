@@ -148,10 +148,30 @@ export const env = {
   massivaOpenPath: massivaOpenPathResolved(),
   /** DELETE para encerramento de massiva no BFF (paridade `finalizar-chamado-via-api`). */
   massivaClosePath: massivaClosePathResolved(),
+  /** DELETE para encerramento de GMUD no gateway (endpoint dedicado, sem a lógica de vinculados). */
+  gmudClosePath: str(import.meta.env.VITE_GMUD_CLOSE_PATH, '/api/v1/gmud/encerrar-via-api'),
+  /**
+   * Template da URL de um protocolo no Elleven/Voalle (web), para o botão "Abrir no Elleven"
+   * no detalhe da GMUD. `{protocol}` é o placeholder do número. O UUID no caminho é o tenant
+   * da Sebratel (fixo). Sobrescreva por `VITE_ELLEVEN_PROTOCOL_URL` se o tenant/rota mudar.
+   * Vazio = botão oculto.
+   */
+  ellevenProtocolUrlTemplate: str(
+    import.meta.env.VITE_ELLEVEN_PROTOCOL_URL,
+    'https://erp.sebratel.net.br/ui/a856a7d6-67eb-43ed-aa08-e516a1b3e70d/legacy/internal/attendance#/customer-attendance/{protocol}',
+  ),
+  /** POST de relato no protocolo da GMUD (sem encerrar), ex.: reagendamento. */
+  gmudReportPath: str(import.meta.env.VITE_GMUD_REPORT_PATH, '/api/v1/gmud/relato-via-api'),
   /** POST de abertura de protocolo de infraestrutura no BFF (`abrir-protocolo-infra-via-api`). */
   massivaInfraOpenPath: massivaInfraOpenPathResolved(),
   /** POST de afetados no BFF (segunda etapa após abertura). */
   massivaAfetadosPath: massivaAfetadosPathResolved(),
+  /**
+   * Código do ponto de acesso usado em chamados de sistema (sem rota de rede).
+   * Confirmar com a equipe qual authenticationAccessPointCode o Elleven aceita para incidentes
+   * de sistema interno/externo e definir aqui ou em VITE_MASSIVA_SISTEMA_AP_CODE.
+   */
+  massivaSistemaApCode: str(import.meta.env.VITE_MASSIVA_SISTEMA_AP_CODE, ''),
   /**
    * Corpo do DELETE `finalizar-chamado-via-api`: o BFF espera os mesmos campos da integração Elleven
    * (strings), não só assignmentId + description.

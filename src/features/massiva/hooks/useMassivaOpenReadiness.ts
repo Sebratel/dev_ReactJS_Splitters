@@ -35,6 +35,7 @@ function normalizeOpenPath(path: string): string {
  */
 export function useMassivaOpenReadiness(
   openingPreparation: MassivaOpeningPreparationView,
+  options?: { isSistema?: boolean },
 ): {
   readiness: MassivaOpenReadinessView
   draftFormEnabled: boolean
@@ -58,6 +59,7 @@ export function useMassivaOpenReadiness(
   const affectedUsersQuantityAutoIspOverride = useMassivaOpenDraftStore(
     (s) => s.affectedUsersQuantityAutoIspOverride,
   )
+  const includeConflictingClients = useMassivaOpenDraftStore((s) => s.includeConflictingClients)
   const setAssignmentDescription = useMassivaOpenDraftStore((s) => s.setAssignmentDescription)
 
   const firebaseUserFallback =
@@ -98,6 +100,7 @@ export function useMassivaOpenReadiness(
   useEffect(() => {
     if (!descriptionAutoSync) return
     if (openingPreparation.status !== 'prepared') return
+    if (options?.isSistema) return
 
     const requester =
       user?.name?.trim() || user?.email?.trim() || 'Nao informado'
@@ -130,6 +133,7 @@ export function useMassivaOpenReadiness(
     descriptionAutoSync,
     assignmentDescription,
     openingPreparation,
+    options?.isSistema,
     user?.name,
     user?.email,
     initialReport,
@@ -247,6 +251,8 @@ export function useMassivaOpenReadiness(
       massivaAfetadosPath: afetadosPath,
       descriptionAutoSyncEnabled: descriptionAutoSync,
       affectedUsersQuantityOverride: affectedUsersQuantityAutoIspOverride,
+      skipAutoCloseWithoutClients: options?.isSistema === true,
+      includeConflictingClients,
     })
 
     return { status: 'ready-to-open', context }
@@ -268,6 +274,8 @@ export function useMassivaOpenReadiness(
     assignmentForecastTime,
     affectedUsersQuantityAutoIspOverride,
     eventIdentifiedBy,
+    options?.isSistema,
+    includeConflictingClients,
   ])
 
   const refetchPersonId = () => {
