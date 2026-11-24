@@ -4746,6 +4746,32 @@ app.get('/api/gmud/list', async (req, res) => {
  * usuário. Somente leitura; devolve só o necessário para escolher (sem telefone nem endereço).
  */
 const gmudClientesEllevenSearch = createClientesEllevenSearch({ pool });
+// Lista dos POPs/Sites ativos, para o campo de POP/Site abrir já com as opções (sem precisar digitar).
+// São poucas dezenas de linhas; cache de 5 min porque quase não mudam.
+let gmudPopSitesCache = { at: 0, data: [] };
+app.get('/api/gmud/pop-sites', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    if (Date.now() - gmudPopSitesCache.at > 5 * 60_000) {
+      const result = await pool.query(
+        `SELECT id, TRIM(title) AS title, NULLIF(TRIM(city), '') AS city, NULLIF(TRIM(neighborhood), '') AS neighborhood
+           FROM authentication_sites
+          WHERE active IS TRUE AND deleted IS FALSE AND title IS NOT NULL AND TRIM(title) <> ''
+          ORDER BY TRIM(title) ASC
+          LIMIT 500`,
+      );
+      gmudPopSitesCache = { at: Date.now(), data: result.rows ?? [] };
+    }
+    return res.json({ success: true, data: gmudPopSitesCache.data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao listar os POPs/Sites.'),
+    });
+  }
+});
+
 app.get('/api/gmud/clientes-elleven', async (req, res) => {
   try {
     await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
