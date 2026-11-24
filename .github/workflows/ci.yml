@@ -115,6 +115,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # A rede do compose é externa (o host de produção não tem mais pools livres): precisa existir.
+      - name: Criar a rede externa da stack
+        run: docker network create dev_reactjs_splitters_nexaview-network
+
       - name: Construir as imagens
         run: docker compose -f docker-compose.portainer.yml build
 
@@ -168,7 +172,9 @@ jobs:
 
       - name: Derrubar a stack
         if: always()
-        run: docker compose -f docker-compose.portainer.yml down -v
+        run: |
+          docker compose -f docker-compose.portainer.yml down -v
+          docker network rm dev_reactjs_splitters_nexaview-network || true
 
   # Check único para a proteção de branch apontar. `if: always()` ao nível do job, senão
   # é saltado quando um `needs` falha e o check nunca chega a reportar nada.
