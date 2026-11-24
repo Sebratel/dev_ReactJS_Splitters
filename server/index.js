@@ -26,7 +26,7 @@ import { createGmudClientsSource } from './lib/gmudClientsSource.js';
 import { composeClientesTexto, normalizeClientesSemSplitter } from './lib/gmudClientesSemSplitter.js';
 import { createClientesEllevenSearch } from './lib/gmudClientesElleven.js';
 import { createCorListaSender, createGmudCorListaService, startGmudCorListaScheduler } from './lib/gmudCorListaService.js';
-import { isNetworkGmud as isGmudNetwork } from './lib/gmudClientSync.js';
+import { isNetworkGmud as isGmudNetwork, readClientSyncConfig as readGmudClientSyncConfig } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada } from './lib/gmudPreAprovada.js';
 import {
@@ -6302,6 +6302,8 @@ app.post('/api/gmud/clientes-impactados/estimativa', async (req, res) => {
         pronto: true,
         total: found.clients.length,
         corporativos: found.clients.filter((c) => c.corporate).length,
+        // Acima disto o envio ao usuários-afetados não inclui a GMUD (GMUD_CLIENTES_SYNC_MAX_CLIENTES).
+        limite: readGmudClientSyncConfig(process.env).maxClientsPerGmud,
       },
     });
   } catch (error) {

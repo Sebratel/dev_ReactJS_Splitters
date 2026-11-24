@@ -49,6 +49,8 @@ export type GmudClientImpactEstimate = {
   pronto: boolean
   total?: number
   corporativos?: number
+  /** Máximo de clientes por GMUD no envio aos afetados; acima disso a GMUD não é incluída. */
+  limite?: number
   erro?: string
 }
 
