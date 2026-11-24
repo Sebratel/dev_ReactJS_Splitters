@@ -46,6 +46,13 @@ type SessionState = {
   sessionToken: string | null
   tokenExpiresAtMs: number | null
   user: SessionUser | null
+  /**
+   * Sessão aberta pelo Hub Apps (token personalizado do Firebase, ver `lib/hubSso.ts`).
+   * O Bearer passa a ser o ID token do Firebase e o refresh pelo Google fica desligado:
+   * o redirecionamento ao Google não abre dentro do iframe do Hub.
+   */
+  viaHub: boolean
+  setViaHub: (viaHub: boolean) => void
   setSessionToken: (token: string | null) => void
   setSessionTokenWithExpiry: (token: string | null, tokenExpiresAtMs?: number | null) => void
   setAuthStatus: (status: AuthStatus) => void
@@ -60,7 +67,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sessionToken: null,
   tokenExpiresAtMs: null,
   user: null,
+  viaHub: false,
 
+  setViaHub: (viaHub) => set({ viaHub }),
   setSessionToken: (sessionToken) => set({ sessionToken }),
   setSessionTokenWithExpiry: (sessionToken, tokenExpiresAtMs = null) =>
     set({ sessionToken, tokenExpiresAtMs }),
@@ -162,6 +171,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       sessionToken: null,
       tokenExpiresAtMs: null,
       user: null,
+      viaHub: false,
       status: 'unauthenticated',
     })
   },

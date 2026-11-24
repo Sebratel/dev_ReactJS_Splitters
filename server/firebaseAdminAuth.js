@@ -3,6 +3,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import logger from './logger.js';
+import { hubOnlyActive, isHubOnlyBypassEmail } from './hubSso.js';
 
 const FIRESTORE_USERS_COLLECTION = 'splitters_users';
 
@@ -204,7 +205,35 @@ async function verifyFirebaseIdToken(idToken) {
     googleSubject: toCleanString(decoded.uid),
     email,
     name: toCleanString(decoded.name),
+    // Marca gravada só por mintHubFirebaseCustomToken (Admin SDK): o cliente não consegue
+    // forjar uma claim de token personalizado.
+    viaHub: decoded.hub === true,
   };
+}
+
+/**
+ * Entrada pelo Hub Apps: devolve um token personalizado do Firebase para a pessoa que o Hub
+ * acabou de identificar (ver hubSso.js). Usa a conta do Firebase que já existe para o e-mail —
+ * assim o perfil em splitters_users (chaveado pelo uid) é o mesmo do login pelo Google. Quem
+ * nunca entrou ganha a conta aqui, já com o e-mail, que a tela exige.
+ */
+export async function mintHubFirebaseCustomToken({ email, name }) {
+  const auth = getFirebaseAdminAuthClient();
+  const normalized = normalizeEmail(email);
+  let uid;
+  try {
+    uid = (await auth.getUserByEmail(normalized)).uid;
+  } catch (error) {
+    if (error?.code !== 'auth/user-not-found') throw error;
+    const created = await auth.createUser({
+      email: normalized,
+      emailVerified: true,
+      displayName: toCleanString(name) || undefined,
+    });
+    uid = created.uid;
+    logger.info('hub_firebase_user_created', { uid });
+  }
+  return auth.createCustomToken(uid, { hub: true });
 }
 
 async function resolveIdentityFromHubSession(authorizationHeader) {
@@ -281,6 +310,22 @@ async function fetchSplittersProfileByEmail(email) {
   };
 }
 
+/**
+ * HUB_ONLY: quem não entrou pelo Hub (ID token sem a marca `hub`) é recusado, exceto os
+ * e-mails de HUB_ONLY_BYPASS_EMAILS. Sem HUB_SSO_SECRET + HUB_APP_ID o HUB_ONLY não vale.
+ */
+export function assertHubOnlyAllows(identity) {
+  if (!hubOnlyActive()) return;
+  if (identity?.viaHub === true) return;
+  if (isHubOnlyBypassEmail(identity?.email)) return;
+  const error = buildError(
+    'O Splitters agora abre somente pelo Hub Apps. Entre pelo Hub para continuar.',
+    403,
+  );
+  error.code = 'HUB_ONLY';
+  throw error;
+}
+
 export async function requireAuthenticatedSplittersUser(req) {
   // Bypass SOMENTE para desenvolvimento local: quando o BFF local não consegue
   // validar o token da sessão (falta GOOGLE_CLIENT_ID/Hub/Firebase Admin do ambiente
@@ -345,6 +390,8 @@ export async function requireAuthenticatedSplittersUser(req) {
   if (!identity?.email) {
     throw buildError('Sessao expirada ou nao autorizada.', 401);
   }
+
+  assertHubOnlyAllows(identity);
 
   const profile = await fetchSplittersProfileByEmail(identity.email);
 

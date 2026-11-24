@@ -5,6 +5,7 @@ import {
   parseLoginBackgroundVariant,
 } from '@/features/access/ui/login/ModernLoginScreen'
 import { useAccessAuthStore } from '@/features/access/store/accessAuthStore'
+import { fetchAuthConfig, getHubSsoError, isInsideIframe } from '@/features/session/lib/hubSso'
 import { env, isFirebaseAuthConfigured } from '@/shared/config/env'
 
 function loginBackgroundFromEnv(): string {
@@ -24,6 +25,18 @@ export function LoginPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [hubOnly, setHubOnly] = useState(false)
+  const embedded = useMemo(() => isInsideIframe(), [])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchAuthConfig().then((c) => {
+      if (!cancelled) setHubOnly(c.hubOnly)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const bgVariant = useMemo(() => {
     const fromQuery = searchParams.get('bg')
@@ -90,12 +103,14 @@ export function LoginPage() {
       backgroundVariant={bgVariant}
       submitting={submitting}
       authBusy={status === 'loading'}
-      localError={localError}
+      localError={localError ?? getHubSsoError()}
       storeError={error}
       onGoogleSignIn={handleGoogleSignIn}
       domainPill={domainPill}
       emailsWhitelistLabel={emailsWhitelistLabel}
       authSuccess={status === 'authenticated'}
+      hubUrl={hubOnly || embedded ? env.hubOrigin : null}
+      hideGoogleSignIn={embedded}
     />
   )
 }
