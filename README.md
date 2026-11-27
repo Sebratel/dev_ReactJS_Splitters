@@ -18,7 +18,7 @@ O Hub abre o Splitters dentro dele com `?sso_token=<JWT de 5 min>`. Antes do Rea
 
 - Stack: `HUB_SSO_SECRET` (= `SSO_JWT_SECRET` do Hub) e `HUB_APP_ID` (id do app no `DB_Hub_Apps`; padrão `app-splitters-sebratel`).
 - Hub (Administração › Apps): marcar **SSO — passar token** e **Abrir dentro do Hub**.
-- `HUB_ONLY=true` recusa o login direto (tela e rotas autenticadas do BFF), exceto os e-mails de `HUB_ONLY_BYPASS_EMAILS` — a rota de emergência se o Hub cair. Ligar só depois de testar a entrada pelo Hub.
+- `HUB_ONLY=true` recusa o login direto (tela e rotas autenticadas do BFF) para todo mundo, sem exceção — nem admin master. A tela de login passa a mostrar só o botão "Abrir o Hub Apps". Ligar só depois de testar a entrada pelo Hub.
 - O nginx do frontend libera o iframe só para o Hub (`frame-ancestors` em `nginx.conf.template`).
 
 ## Docker / Portainer

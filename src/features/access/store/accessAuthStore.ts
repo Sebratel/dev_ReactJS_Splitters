@@ -7,7 +7,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { checkHubOnlyAccess, fetchAuthConfig } from '@/features/session/lib/hubSso'
+import { fetchAuthConfig } from '@/features/session/lib/hubSso'
 import {
   beginGoogleLoginRedirect,
   clearSilentRefreshFailure,
@@ -61,6 +61,8 @@ let unsubscribeHubTokenListener: null | (() => void) = null
  */
 let signOutReason: string | null = null
 const googleProvider = new GoogleAuthProvider()
+
+const HUB_ONLY_MESSAGE = 'O Splitters agora abre somente pelo Hub Apps. Entre pelo Hub para continuar.'
 
 /**
  * Sessão aberta pelo Hub (claim `hub` do token personalizado): o Bearer das chamadas passa a
@@ -198,21 +200,18 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
         if (viaHub) {
           adoptHubFirebaseSession(tokenResult.token, tokenResult.expirationTime)
         } else if ((await fetchAuthConfig()).hubOnly) {
-          // Login direto com HUB_ONLY ligado: só os e-mails de emergência da stack seguem.
-          const access = await checkHubOnlyAccess(tokenResult.token)
-          if (access.blocked) {
-            signOutReason = access.message
-            if (firebaseAuth) await signOut(firebaseAuth)
-            useSessionStore.getState().clearSession()
-            set({
-              initialized: true,
-              status: 'unauthenticated',
-              user: null,
-              profile: null,
-              error: access.message,
-            })
-            return
-          }
+          // Login direto com HUB_ONLY ligado: ninguém segue, sem exceção (o BFF também recusa).
+          signOutReason = HUB_ONLY_MESSAGE
+          if (firebaseAuth) await signOut(firebaseAuth)
+          useSessionStore.getState().clearSession()
+          set({
+            initialized: true,
+            status: 'unauthenticated',
+            user: null,
+            profile: null,
+            error: HUB_ONLY_MESSAGE,
+          })
+          return
         }
 
         if (profile.isActive && !viaHub) {
@@ -241,6 +240,10 @@ export const useAccessAuthStore = create<AccessAuthState>((set, get) => ({
   signInWithGoogle: async () => {
     if (!firebaseAuth) {
       throw new Error('Firebase Auth nao configurado.')
+    }
+    // HUB_ONLY: nem abre o popup/redirect do Google — a entrada é só pelo Hub Apps.
+    if ((await fetchAuthConfig()).hubOnly) {
+      throw new Error(HUB_ONLY_MESSAGE)
     }
 
     signOutReason = null

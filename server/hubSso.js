@@ -19,8 +19,7 @@
 // HUB_ONLY. As permissões continuam vindo do Firestore, nunca do token.
 //
 // HUB_ONLY liga o "só pelo Hub": login direto pelo Google passa a ser
-// recusado, exceto para os e-mails de HUB_ONLY_BYPASS_EMAILS — a rota de
-// emergência se o Hub cair.
+// recusado para todo mundo, sem exceção (nem admin master).
 // ─────────────────────────────────────────────────────────────────────────
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -57,19 +56,6 @@ export function hubSsoConfigured() {
  */
 export function hubOnlyActive() {
   return /^(1|true|yes|sim)$/i.test(envValue('HUB_ONLY')) && hubSsoConfigured();
-}
-
-/** E-mails que seguem entrando direto com HUB_ONLY ligado (rota de emergência). */
-export function hubOnlyBypassEmails() {
-  return envValue('HUB_ONLY_BYPASS_EMAILS')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-export function isHubOnlyBypassEmail(email) {
-  const e = String(email ?? '').trim().toLowerCase();
-  return e !== '' && hubOnlyBypassEmails().includes(e);
 }
 
 /** Confere forma, algoritmo e assinatura de um JWT HS256. Devolve o payload ou null. */

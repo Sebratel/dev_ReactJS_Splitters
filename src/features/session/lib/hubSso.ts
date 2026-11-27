@@ -86,29 +86,3 @@ export function fetchAuthConfig(): Promise<AuthConfig> {
     .catch(() => AUTH_CONFIG_FALLBACK)
   return authConfigPromise
 }
-
-/**
- * HUB_ONLY: pergunta ao BFF se este login direto pode seguir. Só um 403 com
- * `code: 'HUB_ONLY'` bloqueia; qualquer outra falha deixa a tela seguir.
- */
-export async function checkHubOnlyAccess(
-  idToken: string,
-): Promise<{ blocked: false } | { blocked: true; message: string }> {
-  try {
-    const response = await fetch(`${env.localBffUrl}/api/auth/access`, {
-      headers: { Accept: 'application/json', Authorization: `Bearer ${idToken}` },
-    })
-    if (response.status !== 403) return { blocked: false }
-    const body = (await response.json().catch(() => null)) as {
-      code?: string
-      message?: string
-    } | null
-    if (body?.code !== 'HUB_ONLY') return { blocked: false }
-    return {
-      blocked: true,
-      message: body.message ?? 'O Splitters agora abre somente pelo Hub Apps.',
-    }
-  } catch {
-    return { blocked: false }
-  }
-}

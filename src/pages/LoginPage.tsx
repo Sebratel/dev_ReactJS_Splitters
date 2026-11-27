@@ -25,7 +25,8 @@ export function LoginPage() {
 
   const [submitting, setSubmitting] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
-  const [hubOnly, setHubOnly] = useState(false)
+  // null = config ainda não chegou: nenhum botão de login aparece até saber se é HUB_ONLY.
+  const [hubOnly, setHubOnly] = useState<boolean | null>(null)
   const embedded = useMemo(() => isInsideIframe(), [])
 
   useEffect(() => {
@@ -109,8 +110,9 @@ export function LoginPage() {
       domainPill={domainPill}
       emailsWhitelistLabel={emailsWhitelistLabel}
       authSuccess={status === 'authenticated'}
-      hubUrl={hubOnly || embedded ? env.hubOrigin : null}
-      hideGoogleSignIn={embedded}
+      hubUrl={hubOnly === true || embedded ? env.hubOrigin : null}
+      hubOnly={hubOnly === true}
+      hideGoogleSignIn={embedded || hubOnly !== false}
     />
   )
 }

@@ -5,7 +5,6 @@ import {
   __resetHubReplayForTest,
   hubOnlyActive,
   hubSsoConfigured,
-  isHubOnlyBypassEmail,
   verifyHubLaunchToken,
 } from './hubSso.js';
 import { assertHubOnlyAllows } from './firebaseAdminAuth.js';
@@ -124,13 +123,6 @@ describe('HUB_ONLY', () => {
     assert.equal(verifyHubLaunchToken(hubToken()).ok, true);
   });
 
-  it('lista de emergência ignora caixa e espaços', () => {
-    process.env.HUB_ONLY_BYPASS_EMAILS = ' Master@Sebratel.com.br , outro@sebratel.com.br';
-    assert.equal(isHubOnlyBypassEmail('master@sebratel.com.br'), true);
-    assert.equal(isHubOnlyBypassEmail('ninguem@sebratel.com.br'), false);
-    assert.equal(isHubOnlyBypassEmail(''), false);
-  });
-
   it('desligado: login direto passa', () => {
     assert.doesNotThrow(() => assertHubOnlyAllows({ email: 'pessoa@sebratel.com.br', viaHub: false }));
   });
@@ -144,9 +136,12 @@ describe('HUB_ONLY', () => {
     );
   });
 
-  it('ligado: e-mail de emergência entra direto', () => {
+  it('ligado: nenhum e-mail entra direto (variável antiga de exceção é ignorada)', () => {
     process.env.HUB_ONLY = 'true';
     process.env.HUB_ONLY_BYPASS_EMAILS = 'master@sebratel.com.br';
-    assert.doesNotThrow(() => assertHubOnlyAllows({ email: 'master@sebratel.com.br', viaHub: false }));
+    assert.throws(
+      () => assertHubOnlyAllows({ email: 'master@sebratel.com.br', viaHub: false }),
+      (error) => error.statusCode === 403 && error.code === 'HUB_ONLY',
+    );
   });
 });

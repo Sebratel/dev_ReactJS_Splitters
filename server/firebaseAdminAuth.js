@@ -3,7 +3,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth as getFirebaseAdminAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import logger from './logger.js';
-import { hubOnlyActive, isHubOnlyBypassEmail } from './hubSso.js';
+import { hubOnlyActive } from './hubSso.js';
 
 const FIRESTORE_USERS_COLLECTION = 'splitters_users';
 
@@ -311,13 +311,12 @@ async function fetchSplittersProfileByEmail(email) {
 }
 
 /**
- * HUB_ONLY: quem não entrou pelo Hub (ID token sem a marca `hub`) é recusado, exceto os
- * e-mails de HUB_ONLY_BYPASS_EMAILS. Sem HUB_SSO_SECRET + HUB_APP_ID o HUB_ONLY não vale.
+ * HUB_ONLY: quem não entrou pelo Hub (ID token sem a marca `hub`) é recusado, sem exceção
+ * de e-mail. Sem HUB_SSO_SECRET + HUB_APP_ID o HUB_ONLY não vale.
  */
 export function assertHubOnlyAllows(identity) {
   if (!hubOnlyActive()) return;
   if (identity?.viaHub === true) return;
-  if (isHubOnlyBypassEmail(identity?.email)) return;
   const error = buildError(
     'O Splitters agora abre somente pelo Hub Apps. Entre pelo Hub para continuar.',
     403,

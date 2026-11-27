@@ -115,6 +115,8 @@ export type ModernLoginScreenProps = {
   authSuccess?: boolean
   /** Endereço do Hub Apps: mostra "Entrar pelo Hub Apps" (HUB_ONLY ligado ou tela dentro do Hub). */
   hubUrl?: string | null
+  /** HUB_ONLY ligado: o cartão só aponta para o Hub (sem login direto, sem exceção). */
+  hubOnly?: boolean
   /** Dentro do iframe do Hub o login do Google não funciona (popup/redirect): esconde o botão. */
   hideGoogleSignIn?: boolean
 }
@@ -128,12 +130,14 @@ export function ModernLoginScreen({
   domainPill,
   emailsWhitelistLabel,
   hubUrl = null,
+  hubOnly = false,
   hideGoogleSignIn = false,
 }: ModernLoginScreenProps) {
   const busy = submitting || authBusy
   const displayError = localError ?? storeError
   const [showHelp, setShowHelp] = useState(false)
   const domainText = domainPill ?? emailsWhitelistLabel
+  const showGoogleSignIn = !hideGoogleSignIn && !hubOnly
 
   return (
     <div
@@ -233,13 +237,21 @@ export function ModernLoginScreen({
             {/* Título */}
             <div className="text-center">
               <h2 className="text-[1.75rem] font-black leading-tight tracking-tight text-[#1a0f00]">
-                Acessar plataforma
+                {hubOnly ? 'Acesse pelo Hub Apps' : 'Acessar plataforma'}
               </h2>
-              <p className="mt-2 text-sm leading-snug text-[#7a6a55]">
-                Acesso com conta Google para controle de
-                <br />
-                permissões por módulo.
-              </p>
+              {hubOnly ? (
+                <p className="mt-2 text-sm leading-snug text-[#7a6a55]">
+                  O Monitoramento de Splitters abre
+                  <br />
+                  somente pelo Hub Apps.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm leading-snug text-[#7a6a55]">
+                  Acesso com conta Google para controle de
+                  <br />
+                  permissões por módulo.
+                </p>
+              )}
             </div>
 
             {/* Cartão de domínio */}
@@ -291,12 +303,12 @@ export function ModernLoginScreen({
                   boxShadow: '0 4px 18px rgba(255,176,0,0.45), 0 1px 4px rgba(0,0,0,0.12)',
                 }}
               >
-                Entrar pelo Hub Apps
+                {hubOnly ? 'Abrir o Hub Apps' : 'Entrar pelo Hub Apps'}
               </a>
             ) : null}
 
             {/* CTA Google (com o Hub em destaque, vira a rota de emergência) */}
-            {hideGoogleSignIn ? null : (
+            {showGoogleSignIn ? (
               <button
                 type="button"
                 onClick={() => void onGoogleSignIn()}
@@ -315,14 +327,16 @@ export function ModernLoginScreen({
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <GoogleMark />}
                 {busy ? 'Autenticando…' : 'Entrar com Google'}
               </button>
-            )}
+            ) : null}
 
-            {/* Divisor "ou" */}
-            <div className="flex w-full items-center gap-3">
-              <div className="h-px flex-1 bg-[#d8cfc0]" />
-              <span className="text-[11px] font-semibold tracking-widest text-[#a0917d]">ou</span>
-              <div className="h-px flex-1 bg-[#d8cfc0]" />
-            </div>
+            {/* Divisor "ou" (só faz sentido com o botão do Google na tela) */}
+            {showGoogleSignIn ? (
+              <div className="flex w-full items-center gap-3">
+                <div className="h-px flex-1 bg-[#d8cfc0]" />
+                <span className="text-[11px] font-semibold tracking-widest text-[#a0917d]">ou</span>
+                <div className="h-px flex-1 bg-[#d8cfc0]" />
+              </div>
+            ) : null}
 
             {/* Ajuda / suporte (o app é Google-only; sem login por e-mail/senha) */}
             <button
@@ -336,7 +350,16 @@ export function ModernLoginScreen({
             </button>
             {showHelp ? (
               <div className="w-full animate-in fade-in slide-in-from-top-2 rounded-xl bg-white/70 px-4 py-3 text-center text-xs leading-relaxed text-[#7a6a55] ring-1 ring-[#d8cfc0] duration-200">
-                O acesso é exclusivo por <span className="font-semibold text-[#1a0f00]">conta Google</span>{' '}
+                {hubOnly ? (
+                  <>
+                    O acesso é exclusivo pelo <span className="font-semibold text-[#1a0f00]">Hub Apps</span>, com a
+                    conta Google{' '}
+                  </>
+                ) : (
+                  <>
+                    O acesso é exclusivo por <span className="font-semibold text-[#1a0f00]">conta Google</span>{' '}
+                  </>
+                )}
                 {domainText ? (
                   <>
                     do domínio <span className="font-semibold text-[#1a0f00]">{domainText}</span>.
