@@ -67,7 +67,7 @@ export function GmudClientesImpactadosModal({ escopo, onClose }: { escopo: Escop
             <Loader2 size={16} className="animate-spin" aria-hidden /> Buscando os clientes…
           </p>
         ) : falhou ? (
-          <p role="alert" className="p-6 text-sm text-error">
+          <p role="alert" className="p-6 text-sm text-red-600 dark:text-red-400">
             Não foi possível listar os clientes agora{data?.erro ? ` — ${data.erro}` : ''}.
           </p>
         ) : (
@@ -88,7 +88,7 @@ export function GmudClientesImpactadosModal({ escopo, onClose }: { escopo: Escop
                   role="tab"
                   aria-selected={aba === 'corporativos'}
                   onClick={() => trocarAba('corporativos')}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${aba === 'corporativos' ? 'bg-error text-on-error' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${aba === 'corporativos' ? 'bg-red-600 text-white' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container'}`}
                 >
                   <Building2 size={13} aria-hidden /> Corporativos · {fmt(grupos.corporativos.length)}
                 </button>

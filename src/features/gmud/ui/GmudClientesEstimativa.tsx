@@ -105,7 +105,7 @@ export function GmudClientesEstimativa(props: Escopo) {
           )}
         </div>
         {data?.pronto && corporativos > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-error motion-safe:animate-pulse">
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-600 dark:text-red-400 motion-safe:animate-pulse">
             <Building2 size={12} aria-hidden /> {fmt(corporativos)} {corporativos === 1 ? 'corporativo' : 'corporativos'}
           </span>
         ) : null}
@@ -119,7 +119,7 @@ export function GmudClientesEstimativa(props: Escopo) {
         <div className="mt-3">
           <div className="flex h-2 overflow-hidden rounded-full bg-surface-container-low" aria-hidden>
             <div className="h-full bg-primary/70 transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${100 - pctCorp}%` }} />
-            <div className="h-full bg-error transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${corporativos > 0 ? Math.max(pctCorp, 2) : 0}%` }} />
+            <div className="h-full bg-red-500 transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${corporativos > 0 ? Math.max(pctCorp, 2) : 0}%` }} />
           </div>
           <div className="mt-1 flex justify-between text-[11px] text-on-surface-variant">
             <span>Residenciais · {fmt(total - corporativos)}</span>
@@ -129,7 +129,7 @@ export function GmudClientesEstimativa(props: Escopo) {
       ) : null}
 
       {acimaDoLimite ? (
-        <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+        <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
           <span>
             Acima de {fmt(limite)} clientes a GMUD não é enviada ao banco de usuários afetados. Afunile o escopo por
