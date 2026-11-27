@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Building2, Loader2, Users } from 'lucide-react'
+import { AlertTriangle, Building2, ListChecks, Loader2, Users } from 'lucide-react'
 import { useGmudClientImpactEstimate } from '@/features/gmud/hooks/useGmudClients'
+import { GmudClientesImpactadosModal } from '@/features/gmud/ui/GmudClientesImpactadosModal'
 
 const DEBOUNCE_MS = 600
 const COUNT_UP_MS = 700
@@ -60,6 +61,7 @@ export function GmudClientesEstimativa(props: Escopo) {
   const corporativos = data?.pronto ? (data.corporativos ?? 0) : 0
   const limite = data?.limite ?? 0
   const animado = useContagemAnimada(total)
+  const [verLista, setVerLista] = useState(false)
 
   if (props.popSite.trim() === '') return null
 
@@ -84,13 +86,26 @@ export function GmudClientesEstimativa(props: Escopo) {
               Não foi possível estimar agora{data?.erro ? ` — ${data.erro}` : ''}.
             </p>
           ) : data?.pronto ? (
-            <p className="text-3xl font-extrabold leading-none tabular-nums text-on-surface">{fmt(animado)}</p>
+            <p className="flex items-center gap-2">
+              <span className="text-3xl font-extrabold leading-none tabular-nums text-on-surface">{fmt(animado)}</span>
+              {total > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setVerLista(true)}
+                  className="rounded-lg p-1.5 text-primary transition hover:bg-primary/10"
+                  aria-label="Ver clientes impactados"
+                  title="Ver clientes impactados"
+                >
+                  <ListChecks size={18} aria-hidden />
+                </button>
+              ) : null}
+            </p>
           ) : (
             <p className="text-xs text-on-surface-variant">Calculando…</p>
           )}
         </div>
         {data?.pronto && corporativos > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-error/10 px-2.5 py-1 text-xs font-semibold text-error motion-safe:animate-pulse">
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-red-600 dark:text-red-400 motion-safe:animate-pulse">
             <Building2 size={12} aria-hidden /> {fmt(corporativos)} {corporativos === 1 ? 'corporativo' : 'corporativos'}
           </span>
         ) : null}
@@ -104,7 +119,7 @@ export function GmudClientesEstimativa(props: Escopo) {
         <div className="mt-3">
           <div className="flex h-2 overflow-hidden rounded-full bg-surface-container-low" aria-hidden>
             <div className="h-full bg-primary/70 transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${100 - pctCorp}%` }} />
-            <div className="h-full bg-error transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${corporativos > 0 ? Math.max(pctCorp, 2) : 0}%` }} />
+            <div className="h-full bg-red-500 transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${corporativos > 0 ? Math.max(pctCorp, 2) : 0}%` }} />
           </div>
           <div className="mt-1 flex justify-between text-[11px] text-on-surface-variant">
             <span>Residenciais · {fmt(total - corporativos)}</span>
@@ -114,7 +129,7 @@ export function GmudClientesEstimativa(props: Escopo) {
       ) : null}
 
       {acimaDoLimite ? (
-        <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-medium text-error">
+        <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
           <span>
             Acima de {fmt(limite)} clientes a GMUD não é enviada ao banco de usuários afetados. Afunile o escopo por
@@ -122,6 +137,8 @@ export function GmudClientesEstimativa(props: Escopo) {
           </span>
         </p>
       ) : null}
+
+      {verLista ? <GmudClientesImpactadosModal escopo={escopo} onClose={() => setVerLista(false)} /> : null}
     </section>
   )
 }

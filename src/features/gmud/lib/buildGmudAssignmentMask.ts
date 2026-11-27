@@ -135,11 +135,26 @@ function pushRodape(out: string[], form: GmudFormState) {
 // Relato — Rede Externa
 // ---------------------------------------------------------------------------
 
-function buildGmudDescriptionRedeExterna(form: GmudFormState): string {
+/** Total de clientes que a GMUD impacta (estimado pelo escopo) e quantos são corporativos. */
+export type GmudImpactoClientes = { total: number; corporativos: number }
+
+const fmtQtd = (n: number) => Math.round(n).toLocaleString('pt-BR')
+
+/** "👥 Clientes impactados: 2.116 (2.092 residenciais · 24 corporativos)"; some sem estimativa. */
+function linhaClientesImpactados(impacto?: GmudImpactoClientes | null): string | null {
+  if (!impacto || !Number.isFinite(impacto.total) || impacto.total <= 0) return null
+  const corp = Math.max(0, Math.min(impacto.corporativos, impacto.total))
+  const detalhe = corp > 0 ? ` (${fmtQtd(impacto.total - corp)} residenciais · ${fmtQtd(corp)} corporativos)` : ''
+  return `👥 Clientes impactados: ${fmtQtd(impacto.total)}${detalhe}`
+}
+
+function buildGmudDescriptionRedeExterna(form: GmudFormState, impacto?: GmudImpactoClientes | null): string {
   const out: string[] = []
 
   out.push(tituloRelato(form, form.popSite))
   pushResumo(out, form, formatEscopoRotas(form.escopoRotas))
+  const clientes = linhaClientesImpactados(impacto)
+  if (clientes) out.push(clientes)
 
   out.push('')
   out.push(SEP_DETALHES)
@@ -252,6 +267,7 @@ export function buildGmudDescription(
   form: GmudFormState,
   siData?: GmudSistemasInternosData | null,
   seData?: GmudSistemasExternosData | null,
+  impacto?: GmudImpactoClientes | null,
 ): string {
   if (form.categoria === 'sistemas_internos' && siData) {
     return buildGmudDescriptionSistemasInternos(form, siData)
@@ -260,5 +276,5 @@ export function buildGmudDescription(
     return buildGmudDescriptionSistemasExternos(form, seData)
   }
   // Rede Externa — ou fallback para categorias desconhecidas (retrocompat)
-  return buildGmudDescriptionRedeExterna(form)
+  return buildGmudDescriptionRedeExterna(form, impacto)
 }

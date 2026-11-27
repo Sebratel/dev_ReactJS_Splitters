@@ -4,6 +4,7 @@ import {
   estimateGmudClientImpact,
   fetchGmudActiveClients,
   fetchGmudClientImpact,
+  fetchGmudImpactedClients,
   type GmudActiveClient,
 } from '@/features/gmud/api/gmudClients'
 
@@ -33,6 +34,21 @@ export function useGmudClientImpactEstimate(
     staleTime: 60_000,
     retry: false,
     placeholderData: (previous) => previous,
+  })
+}
+
+/** Lista de quem seria impactado pelo escopo; só busca quando o popup está aberto (`enabled`). */
+export function useGmudImpactedClients(
+  input: { popSite: string; escopoRotas: unknown[]; clientesSemSplitter: unknown[] },
+  enabled: boolean,
+) {
+  const popSite = input.popSite.trim()
+  return useQuery({
+    queryKey: ['gmud', 'client-impact-list', popSite, JSON.stringify(input.escopoRotas), JSON.stringify(input.clientesSemSplitter)],
+    queryFn: ({ signal }) => fetchGmudImpactedClients({ ...input, popSite }, signal),
+    enabled: enabled && popSite !== '',
+    staleTime: 60_000,
+    retry: false,
   })
 }
 

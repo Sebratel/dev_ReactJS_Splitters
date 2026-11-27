@@ -32,6 +32,30 @@ describe('relato da GMUD no protocolo', () => {
     expect(t).not.toContain('>>')
   })
 
+  it('Rede Externa: clientes impactados aparecem no resumo, logo abaixo do impacto', () => {
+    const t = buildGmudDescription({ ...base, impactoParada: 'Não', categoria: 'rede_externa' }, null, null, { total: 2116, corporativos: 24 })
+    const linhas = t.split('\n')
+    expect(linhas[2]).toBe('🟢 Impacto: SEM PARADA DE SERVIÇO')
+    expect(linhas[3]).toBe('👥 Clientes impactados: 2.116 (2.092 residenciais · 24 corporativos)')
+  })
+
+  it('sem corporativos não mostra a divisão; sem estimativa a linha some', () => {
+    const f = { ...base, impactoParada: 'Não' as const, categoria: 'rede_externa' as const }
+    expect(buildGmudDescription(f, null, null, { total: 10, corporativos: 0 })).toContain('👥 Clientes impactados: 10\n')
+    expect(buildGmudDescription(f, null, null, null)).not.toContain('Clientes impactados')
+    expect(buildGmudDescription(f, null, null, { total: 0, corporativos: 0 })).not.toContain('Clientes impactados')
+  })
+
+  it('categorias sem clientes ignoram a estimativa', () => {
+    const t = buildGmudDescription(
+      { ...base, categoria: 'sistemas_internos' },
+      emptyGmudSistemasInternosData(),
+      null,
+      { total: 50, corporativos: 1 },
+    )
+    expect(t).not.toContain('Clientes impactados')
+  })
+
   it('impacto com parada fica vermelho', () => {
     const t = buildGmudDescription({ ...base, impactoParada: 'Sim', categoria: 'rede_externa' })
     expect(t).toContain('🔴 Impacto: COM PARADA DE SERVIÇO')

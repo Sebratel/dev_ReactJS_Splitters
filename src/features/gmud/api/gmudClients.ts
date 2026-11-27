@@ -72,3 +72,33 @@ export async function fetchGmudActiveClients(): Promise<GmudActiveClient[]> {
   const data = await parse<{ items: GmudActiveClient[] }>(response, 'Falha ao carregar os clientes de GMUD.')
   return Array.isArray(data.items) ? data.items : []
 }
+
+/** Cliente da lista do popup "Clientes impactados" (sem PPPoE, só o que ajuda a conferir). */
+export type GmudImpactedClient = {
+  contractId: number
+  nome: string
+  corporativo: boolean
+  pontoAcesso: string
+}
+
+export type GmudImpactedClientsList = {
+  pronto: boolean
+  total: number
+  /** true quando a lista foi cortada no teto de segurança do servidor. */
+  truncado: boolean
+  clientes: GmudImpactedClient[]
+  erro?: string
+}
+
+export async function fetchGmudImpactedClients(
+  input: { popSite: string; escopoRotas: unknown[]; clientesSemSplitter: unknown[] },
+  signal?: AbortSignal,
+): Promise<GmudImpactedClientsList> {
+  const response = await fetchWithSessionAuth(`${env.localBffUrl}/api/gmud/clientes-impactados/lista`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    signal,
+  })
+  return parse<GmudImpactedClientsList>(response, 'Falha ao listar os clientes impactados.')
+}

@@ -29,6 +29,7 @@ import { createCorListaSender, createGmudCorListaService, startGmudCorListaSched
 import { isNetworkGmud as isGmudNetwork, readClientSyncConfig as readGmudClientSyncConfig } from './lib/gmudClientSync.js';
 import { createEventSuppressedStore } from './eventSuppressedStore.js';
 import { isPreAprovada, podeAbrirPreAprovada, MSG_SEM_PERMISSAO_PRE_APROVADA } from './lib/gmudPreAprovada.js';
+import { serializeClientesLista } from './lib/gmudClientesLista.js';
 import {
   GMUD_OPEN_SQL,
   buildGmudSummarySql,
@@ -6423,6 +6424,32 @@ app.post('/api/gmud/clientes-impactados/estimativa', async (req, res) => {
     return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
       success: false,
       message: safeErrorMessage(error, 'Falha ao estimar os clientes impactados.'),
+    });
+  }
+});
+
+// Lista dos clientes impactados (popup do formulário): mesmo escopo da estimativa, mas devolve quem são.
+app.post('/api/gmud/clientes-impactados/lista', async (req, res) => {
+  try {
+    await requireSplittersPermission(req, 'canViewGmud', 'Voce nao tem permissao para ver as GMUDs.');
+    const body = req.body ?? {};
+    const popSite = typeof body.popSite === 'string' ? body.popSite.trim() : '';
+    if (popSite === '') return res.json({ success: true, data: { pronto: false, total: 0, truncado: false, clientes: [] } });
+    const { clientsSource } = getGmudClientSync();
+    const found = await clientsSource.listClients({
+      popSite,
+      categoriaData: {
+        escopoRotas: Array.isArray(body.escopoRotas) ? body.escopoRotas : [],
+        clientesSemSplitter: Array.isArray(body.clientesSemSplitter) ? body.clientesSemSplitter : [],
+      },
+    });
+    if (!found.ok) return res.json({ success: true, data: { pronto: false, total: 0, truncado: false, clientes: [], erro: found.reason } });
+    return res.json({ success: true, data: { pronto: true, ...serializeClientesLista(found.clients) } });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode ?? 500);
+    return res.status(Number.isFinite(statusCode) ? statusCode : 500).json({
+      success: false,
+      message: safeErrorMessage(error, 'Falha ao listar os clientes impactados.'),
     });
   }
 });
